@@ -1,0 +1,156 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  overflow-x: hidden;
+  background: #050505;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a,
+input,
+select {
+  touch-action: manipulation;
+}
+
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+:fullscreen,
+:-webkit-full-screen {
+  background: #000;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+  html {
+    scroll-padding-top: 5rem;
+  }
+}
+
+.jash-vibes-logo {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 950;
+  letter-spacing: 0.035em;
+  color: #f8fafc;
+  text-shadow:
+    0 1px 0 #7f1d1d,
+    0 3px 0 #450a0a,
+    0 0 18px rgba(250, 204, 21, 0.24),
+    0 0 34px rgba(220, 38, 38, 0.32);
+}
+
+.jash-vibes-logo::first-letter {
+  color: #facc15;
+  text-shadow:
+    0 1px 0 #7f1d1d,
+    0 0 16px rgba(250, 204, 21, 0.68),
+    0 0 38px rgba(239, 68, 68, 0.45);
+}
+
+/* Global day/night theme helpers */
+html.day-mode {
+  color-scheme: light;
+}
+
+html.day-mode body {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+html.day-mode main {
+  color: #102018 !important;
+}
+
+html.day-mode .day-night-toggle {
+  border-color: rgba(15, 23, 42, 0.14) !important;
+  background: rgba(255, 255, 255, 0.86) !important;
+  color: #0f172a !important;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12) !important;
+}
+
+/* Palette accents */
+.palette-deepsea {
+  --palette-accent: #22d3ee;
+  --palette-accent-2: #14b8a6;
+}
+
+.palette-nordic {
+  --palette-accent: #86efac;
+  --palette-accent-2: #2f6f4e;
+}
+
+.palette-cybergrape {
+  --palette-accent: #c084fc;
+  --palette-accent-2: #7c3aed;
+}
+
+.palette-music-magenta {
+  --palette-accent: #f0abfc;
+  --palette-accent-2: #d946ef;
+}
+
+html.day-mode .palette-deepsea {
+  background: linear-gradient(180deg, #e0f7ff 0%, #eefcff 45%, #f8fafc 100%) !important;
+  color: #073642 !important;
+}
+
+html.day-mode .palette-nordic {
+  background: linear-gradient(180deg, #edf7ef 0%, #f6fbf4 45%, #fbfdf8 100%) !important;
+  color: #102018 !important;
+}
+
+html.day-mode .palette-cybergrape {
+  background: linear-gradient(180deg, #f3e8ff 0%, #faf5ff 45%, #fff7ed 100%) !important;
+  color: #24113d !important;
+}
+
+html.day-mode .palette-music-magenta {
+  background: linear-gradient(180deg, #fff1fb 0%, #fff7fd 45%, #fdf2f8 100%) !important;
+  color: #3b0a31 !important;
+}
+
+html.day-mode [class*="bg-zinc-950"],
+html.day-mode [class*="bg-zinc-900"],
+html.day-mode [class*="bg-black"],
+html.day-mode [class*="bg-\[\#050505\]"],
+html.day-mode [class*="bg-\[\#080808\]"],
+html.day-mode [class*="bg-\[\#080008\]"] {
+  background-color: rgba(255, 255, 255, 0.76) !important;
+  color: #0f172a !important;
+}
+
+html.day-mode [class*="text-white"],
+html.day-mode [class*="text-zinc-100"],
+html.day-mode [class*="text-zinc-200"],
+html.day-mode [class*="text-zinc-300"] {
+  color: #0f172a !important;
+}
+
+html.day-mode [class*="text-zinc-400"],
+html.day-mode [class*="text-zinc-500"],
+html.day-mode [class*="text-zinc-600"] {
+  color: #475569 !important;
+}
+
+html.day-mode [class*="border-white/10"] {
+  border-color: rgba(15, 23, 42, 0.12) !important;
+}
