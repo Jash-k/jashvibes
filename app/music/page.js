@@ -287,6 +287,7 @@ export default function MusicPage() {
   const [lyrics, setLyrics] = useState('');
   const [lyricsStatus, setLyricsStatus] = useState('idle');
   const [error, setError] = useState('');
+  const [homeWarning, setHomeWarning] = useState('');
   const [favorites, setFavorites] = useState([]);
   const [recents, setRecents] = useState([]);
 
@@ -306,6 +307,25 @@ export default function MusicPage() {
     } catch {}
   }, []);
 
+  const loadHome = useCallback(async () => {
+    try {
+      setStatus('loading');
+      setError('');
+      setHomeWarning('');
+      const response = await fetch('/api/music/home', { cache: 'no-store' });
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) throw new Error('Music API returned a non-JSON response. The host may still be waking up.');
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || data?.warning || 'Music home failed');
+      setHome(data);
+      setHomeWarning(data.warning || data.warnings?.[0] || '');
+      setStatus('ready');
+    } catch (err) {
+      setError(err.message || 'Unable to load music');
+      setStatus('error');
+    }
+  }, []);
+
   useEffect(() => {
     const cached = readSessionCache(MUSIC_CACHE_KEY);
     if (cached?.home?.sections?.length) {
@@ -322,30 +342,18 @@ export default function MusicPage() {
       setRepeatMode(cached.repeatMode || 'off');
       setShowLyrics(Boolean(cached.showLyrics));
       setLyrics(cached.lyrics || '');
+      setHomeWarning(cached.homeWarning || cached.home?.warning || cached.home?.warnings?.[0] || '');
       setStatus(cached.status || 'ready');
       restoreScroll(MUSIC_CACHE_KEY);
       return;
     }
 
-    async function loadHome() {
-      try {
-        setStatus('loading');
-        const response = await fetch('/api/music/home', { cache: 'no-store' });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data?.error || 'Music home failed');
-        setHome(data);
-        setStatus('ready');
-      } catch (err) {
-        setError(err.message || 'Unable to load music');
-        setStatus('error');
-      }
-    }
     loadHome();
-  }, []);
+  }, [loadHome]);
 
   useEffect(() => {
-    writeSessionCache(MUSIC_CACHE_KEY, { home, view, query, searchResults, selectedCollection, queue, active, activeDetail, quality, shuffleEnabled, repeatMode, showLyrics, lyrics, status });
-  }, [home, view, query, searchResults, selectedCollection, queue, active, activeDetail, quality, shuffleEnabled, repeatMode, showLyrics, lyrics, status]);
+    writeSessionCache(MUSIC_CACHE_KEY, { home, homeWarning, view, query, searchResults, selectedCollection, queue, active, activeDetail, quality, shuffleEnabled, repeatMode, showLyrics, lyrics, status });
+  }, [home, homeWarning, view, query, searchResults, selectedCollection, queue, active, activeDetail, quality, shuffleEnabled, repeatMode, showLyrics, lyrics, status]);
 
   useEffect(() => {
     const onScroll = () => saveScroll(MUSIC_CACHE_KEY);
@@ -674,7 +682,9 @@ export default function MusicPage() {
     ['recent', '◴', 'Recent'],
   ];
 
-  const mainSections = home.sections || [];
+  const rawSections = home.sections || [];
+  const mainSections = rawSections.filter((section) => (section.items || []).length);
+  const homeHasAnySongCards = mainSections.length || home.releases?.tracks?.length || home.releases?.albums?.length;
   const activeKeyValue = activeKey;
   const searchSongsList = searchResults.songs || [];
   const searchAlbumsList = searchResults.albums || [];
@@ -732,7 +742,9 @@ export default function MusicPage() {
             ) : null}
 
             {status === 'loading' ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-8 text-center text-zinc-400">Loading music...</div> : null}
-            {status === 'error' ? <div className="rounded-3xl border border-red-500/30 bg-red-950/20 p-6 text-red-200">{error}</div> : null}
+            {status === 'error' ? <div className="rounded-3xl border border-red-500/30 bg-red-950/20 p-6 text-red-200"><p>{error}</p><button type="button" onClick={loadHome} className="mt-4 rounded-full border border-red-300/30 bg-red-500/10 px-4 py-2 text-xs font-black text-red-100">Retry Music</button></div> : null}
+            {status === 'ready' && homeWarning ? <div className="rounded-3xl border border-yellow-400/20 bg-yellow-500/10 p-4 text-sm leading-6 text-yellow-100"><p className="font-bold">Music source warning</p><p className="text-yellow-100/80">{homeWarning}</p><button type="button" onClick={loadHome} className="mt-3 rounded-full border border-yellow-300/30 px-4 py-2 text-xs font-black text-yellow-50">Retry</button></div> : null}
+            {status === 'ready' && view === 'home' && !homeHasAnySongCards ? <div className="rounded-3xl border border-fuchsia-400/20 bg-fuchsia-500/10 p-5 text-sm leading-6 text-fuchsia-100"><p className="font-black">No song cards loaded yet.</p><p className="mt-1 text-fuchsia-100/75">JioSaavn may be asleep or your SAAVN env is wrong. Artists below still open search/fallback pages. Check <code className="rounded bg-black/40 px-1">/api/music/home</code> and set <code className="rounded bg-black/40 px-1">SAAVN=https://saavnapi.onrender.com</code>.</p><button type="button" onClick={loadHome} className="mt-3 rounded-full border border-fuchsia-300/30 bg-black/20 px-4 py-2 text-xs font-black">Retry JioSaavn</button></div> : null}
 
             {selectedCollection && ['artists', 'albums', 'playlists'].includes(view) ? (
               <section className="min-w-0 overflow-hidden rounded-[2rem] border border-fuchsia-400/15 bg-white/[0.045] p-4 sm:p-5">

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getMusicHome } from '@/lib/musicApi';
+import { getFallbackTamilArtists, getMusicHome } from '@/lib/musicApi';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,7 +13,7 @@ export async function GET() {
     return NextResponse.json({
       warning: error.message || 'Music home failed',
       sections: [],
-      artists: [],
+      artists: getFallbackTamilArtists(),
       playlists: [],
       releases: { tracks: [], albums: [] },
     }, { headers: { 'Cache-Control': 'no-store' } });

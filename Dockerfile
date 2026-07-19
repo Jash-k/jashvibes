@@ -6,6 +6,8 @@ WORKDIR /app
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=7860
+# Keep V8 heap inside typical free-tier 512 MB containers while avoiding the default ~256 MB heap OOM.
+ENV NODE_OPTIONS=--max-old-space-size=384
 
 # Copy package files first for better Docker layer caching.
 COPY package.json package-lock.json* ./

@@ -1,16 +1,17 @@
-# JaSH Theatre Environment Variables - Short Setup
+JaSH Theatre Environment Variables - Short Setup
+Use only these 3 required Hugging Face secrets for normal deployment:
 
-Use only these **3 required** Hugging Face secrets for normal deployment:
+env
 
-```env
 DB=mongodb+srv://USERNAME:PASSWORD@CLUSTER.mongodb.net/jash_theatre?retryWrites=true&w=majority
 TMDB=your_tmdb_v3_api_key
+# or multiple TMDB v3 keys:
+TMDB_KEYS=key_1,key_2,key_3
 PASS=choose_your_private_theatre_password
-```
-
 Optional:
 
-```env
+env
+
 PROVIDERS=tamilott,screenscape,vidlink,vidnest,videasy,vidzee,vidrock,vixsrc,oneembed,vidsrcsbs,vidsrc
 TAMILMV=https://www.1tamilmv.report/
 TAMILMV_CACHE_LIMIT=90
@@ -38,24 +39,21 @@ VOD=ErosNow|https://raw.githubusercontent.com/USER/REPO/main/VOD_ErosNow.m3u,Aha
 # or separate:
 VOD_EROS=https://raw.githubusercontent.com/USER/REPO/main/VOD_ErosNow.m3u
 VOD_AHA=https://raw.githubusercontent.com/USER/REPO/main/VOD_Aha.m3u
-```
-
 Backward-compatible old names still work:
 
-| Short | Old names also accepted |
-|---|---|
-| `DB` | `MONGODB_URI`, `DB_URI` |
-| `TMDB` | `TMDB_API_KEY` |
-| `TMDB_TOKEN` | `TMDB_BEARER_TOKEN` |
-| `PASS` | `SPACE_PASSWORD`, `APP_PASSWORD` |
-| `PROVIDERS` | `EMBED_PROVIDER_PRIORITY` |
-| `TAMILMV` | `TAMILMV_BASE_URL` |
-| `OTT` | `TAMILOTT_JSON_URL` |
-| `OVERRIDES` | `TAMILMV_TMDB_OVERRIDES` |
-| `SCRAPE` | `SCRAPE_TOKEN` |
-| `CRON` | `CRON_SECRET` |
-| `EMBED` | `CLEAN_EMBED_URL`, `EXTERNAL_SITE_URL`, `SITE_URL` |
-| `ELABEL` | `CLEAN_EMBED_LABEL`, `EXTERNAL_SITE_LABEL`, `SITE_LABEL` |
-| `EMBEDS` | `CLEAN_EMBED_SITES`, `EMBED_SITES` |
-
+Short	Old names also accepted
+DB	MONGODB_URI, DB_URI
+TMDB	TMDB_API_KEY, TMDB_KEY, TMDB_V3_API_KEY
+TMDB_KEYS	TMDB_API_KEYS, TMDB_V3_KEYS
+TMDB_TOKEN	TMDB_TOKENS, TMDB_BEARER_TOKEN, TMDB_BEARER_TOKENS
+PASS	SPACE_PASSWORD, APP_PASSWORD
+PROVIDERS	EMBED_PROVIDER_PRIORITY
+TAMILMV	TAMILMV_BASE_URL
+OTT	TAMILOTT_JSON_URL
+OVERRIDES	TAMILMV_TMDB_OVERRIDES
+SCRAPE	SCRAPE_TOKEN
+CRON	CRON_SECRET
+EMBED	CLEAN_EMBED_URL, EXTERNAL_SITE_URL, SITE_URL
+ELABEL	CLEAN_EMBED_LABEL, EXTERNAL_SITE_LABEL, SITE_LABEL
+EMBEDS	CLEAN_EMBED_SITES, EMBED_SITES
 All provider domains have safe defaults, so you do not need to add VidSrc/VidLink/VidNest/Videasy/VidZee/VidRock variables unless a domain changes.
