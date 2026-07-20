@@ -6,6 +6,7 @@ import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '
 
 const FAVORITES_KEY = 'jash_music_favorites';
 const RECENTS_KEY = 'jash_music_recents';
+const AUTH_STORAGE_KEY = 'jash_theatre_access_token';
 const VOLUME_KEY = 'jash_music_volume';
 const MUTED_KEY = 'jash_music_muted';
 const MUSIC_CACHE_KEY = 'jash:music:v6';
@@ -323,6 +324,9 @@ export default function MusicPage() {
   const [homeWarning, setHomeWarning] = useState('');
   const [favorites, setFavorites] = useState([]);
   const [recents, setRecents] = useState([]);
+  const [importText, setImportText] = useState('');
+  const [importStatus, setImportStatus] = useState('idle');
+  const [importMessage, setImportMessage] = useState('');
 
   useEffect(() => {
     try {
@@ -735,6 +739,110 @@ export default function MusicPage() {
     } catch (err) { setCollectionStatus('error'); setError(err.message || 'Unable to load playlist'); }
   }
 
+  function authHeaders() {
+    const token = typeof window !== 'undefined' ? window.localStorage.getItem(AUTH_STORAGE_KEY) : '';
+    return token ? { 'x-jash-token': token } : {};
+  }
+
+  async function refreshImportedPlaylists() {
+    const response = await fetch('/api/music/playlists', { cache: 'no-store' });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error || 'Unable to load playlists');
+    setHome((current) => ({ ...current, playlists: data.items || [], importedPlaylists: data.items || [] }));
+    return data.items || [];
+  }
+
+  async function importSpotifyPlaylists() {
+    const raw = importText.trim();
+    if (!raw) { setImportMessage('Paste one or more public Spotify playlist links first.'); return; }
+    try {
+      setImportStatus('importing');
+      setImportMessage('Importing Spotify playlists and matching songs on JioSaavn...');
+      const response = await fetch('/api/music/playlists', {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ urlsText: raw }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Spotify import failed');
+      await refreshImportedPlaylists();
+      setImportText('');
+      setImportStatus(data.ok ? 'done' : 'error');
+      const imported = data.imported || [];
+      const failed = data.failed || 0;
+      setImportMessage(`Imported ${imported.length} playlist${imported.length === 1 ? '' : 's'}${failed ? ` • ${failed} failed` : ''}.`);
+    } catch (err) {
+      setImportStatus('error');
+      setImportMessage(err.message || 'Spotify import failed');
+    }
+  }
+
+  async function renameImportedPlaylist(playlist) {
+    const title = window.prompt('Playlist name', playlist.title || '');
+    if (!title || title.trim() === playlist.title) return;
+    try {
+      setImportStatus('saving');
+      const response = await fetch('/api/music/playlists', {
+        method: 'PATCH',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ id: playlist.id, title: title.trim() }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Rename failed');
+      await refreshImportedPlaylists();
+      setImportStatus('done');
+      setImportMessage('Playlist renamed.');
+    } catch (err) {
+      setImportStatus('error');
+      setImportMessage(err.message || 'Rename failed');
+    }
+  }
+
+  async function deleteImportedPlaylist(playlist) {
+    if (!window.confirm(`Delete playlist “${playlist.title}”?`)) return;
+    try {
+      setImportStatus('saving');
+      const response = await fetch(`/api/music/playlists?id=${encodeURIComponent(playlist.id)}`, {
+        method: 'DELETE',
+        cache: 'no-store',
+        headers: authHeaders(),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Delete failed');
+      await refreshImportedPlaylists();
+      setImportStatus('done');
+      setImportMessage('Playlist deleted.');
+      if (selectedCollection?.type === 'playlist' && selectedCollection.title === playlist.title) setSelectedCollection(null);
+    } catch (err) {
+      setImportStatus('error');
+      setImportMessage(err.message || 'Delete failed');
+    }
+  }
+
+  async function resyncImportedPlaylist(playlist) {
+    if (!playlist?.sourceUrl) return;
+    try {
+      setImportStatus('importing');
+      setImportMessage(`Refreshing ${playlist.title} from Spotify...`);
+      const response = await fetch('/api/music/playlists', {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ url: playlist.sourceUrl }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Refresh failed');
+      await refreshImportedPlaylists();
+      setImportStatus('done');
+      setImportMessage(`Refreshed ${playlist.title}.`);
+    } catch (err) {
+      setImportStatus('error');
+      setImportMessage(err.message || 'Refresh failed');
+    }
+  }
+
   const navItems = [
     ['home', '⌂', 'Home'],
     ['search', '⌕', 'Search'],
@@ -747,6 +855,7 @@ export default function MusicPage() {
 
   const rawSections = home.sections || [];
   const mainSections = rawSections.filter((section) => (section.items || []).length);
+  const importedPlaylists = home.playlists || [];
   const homeHasAnySongCards = mainSections.length || home.releases?.tracks?.length || home.releases?.albums?.length;
   const activeKeyValue = activeKey;
   const searchSongsList = searchResults.songs || [];
@@ -825,6 +934,37 @@ export default function MusicPage() {
             {status === 'ready' && homeWarning ? <div className="rounded-3xl border border-yellow-400/20 bg-yellow-500/10 p-4 text-sm leading-6 text-yellow-100"><p className="font-bold">Music source warning</p><p className="text-yellow-100/80">{homeWarning}</p><button type="button" onClick={loadHome} className="mt-3 rounded-full border border-yellow-300/30 px-4 py-2 text-xs font-black text-yellow-50">Retry</button></div> : null}
             {status === 'ready' && view === 'home' && !homeHasAnySongCards ? <div className="rounded-3xl border border-fuchsia-400/20 bg-fuchsia-500/10 p-5 text-sm leading-6 text-fuchsia-100"><p className="font-black">No song cards loaded yet.</p><p className="mt-1 text-fuchsia-100/75">JioSaavn may be asleep or your SAAVN env is wrong. Artists below still open search/fallback pages. Check <code className="rounded bg-black/40 px-1">/api/music/home</code> and set <code className="rounded bg-black/40 px-1">SAAVN=https://saavnapi.onrender.com</code>.</p><button type="button" onClick={loadHome} className="mt-3 rounded-full border border-fuchsia-300/30 bg-black/20 px-4 py-2 text-xs font-black">Retry JioSaavn</button></div> : null}
 
+            {view === 'playlists' ? (
+              <section className="rounded-[2rem] border border-fuchsia-400/15 bg-white/[0.04] p-4 sm:p-5">
+                <SectionHeader title="Spotify Playlist Sync" subtitle="Paste public Spotify playlists. Tracks are matched and played through JioSaavn only." action={<button type="button" onClick={refreshImportedPlaylists} className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-zinc-200 hover:border-fuchsia-300/40">Refresh</button>} />
+                <textarea
+                  value={importText}
+                  onChange={(event) => setImportText(event.target.value)}
+                  placeholder="Paste Spotify playlist links, one per line or comma separated..."
+                  className="min-h-28 w-full rounded-3xl border border-white/10 bg-black/50 p-4 text-sm font-semibold text-white outline-none placeholder:text-zinc-600 focus:border-fuchsia-300"
+                />
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={importSpotifyPlaylists} disabled={importStatus === 'importing'} className="rounded-full bg-fuchsia-400 px-5 py-2.5 text-xs font-black text-black shadow-lg shadow-fuchsia-950/30 disabled:opacity-60">{importStatus === 'importing' ? 'Importing...' : 'Add / Sync Playlists'}</button>
+                  <span className={`text-xs font-semibold ${importStatus === 'error' ? 'text-red-300' : importStatus === 'done' ? 'text-green-300' : 'text-zinc-500'}`}>{importMessage}</span>
+                </div>
+                {importedPlaylists.length ? (
+                  <div className="mt-5 grid gap-2">
+                    {importedPlaylists.map((playlist) => (
+                      <div key={playlist.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/25 p-2.5">
+                        <button type="button" onClick={() => openPlaylist(playlist)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-zinc-900">{playlist.image ? <img src={playlist.image} alt="" className="h-full w-full object-cover" /> : null}</div>
+                          <div className="min-w-0"><p className="truncate text-sm font-black text-white">{playlist.title}</p><p className="truncate text-xs text-zinc-500">{playlist.subtitle || `${playlist.songCount || 0} songs`}</p></div>
+                        </button>
+                        <button type="button" onClick={() => resyncImportedPlaylist(playlist)} className="rounded-full border border-white/10 px-3 py-1.5 text-[11px] font-black text-zinc-300 hover:border-fuchsia-300/40">Sync</button>
+                        <button type="button" onClick={() => renameImportedPlaylist(playlist)} className="rounded-full border border-white/10 px-3 py-1.5 text-[11px] font-black text-zinc-300 hover:border-fuchsia-300/40">Edit</button>
+                        <button type="button" onClick={() => deleteImportedPlaylist(playlist)} className="rounded-full border border-red-400/20 px-3 py-1.5 text-[11px] font-black text-red-200 hover:border-red-300/60">Delete</button>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="mt-4 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm text-zinc-400">No imported playlists yet. Add your public Spotify playlist links above.</p>}
+              </section>
+            ) : null}
+
             {selectedCollection && ['artists', 'albums', 'playlists'].includes(view) ? (
               <section className="min-w-0 overflow-hidden rounded-[2rem] border border-fuchsia-400/15 bg-white/[0.045] p-4 sm:p-5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -850,7 +990,7 @@ export default function MusicPage() {
             {view === 'home' && home.releases?.tracks?.length ? <section><SectionHeader title="New Tamil Releases" /><HorizontalRow>{home.releases.tracks.map((track) => <TrackTile key={trackKey(track)} track={track} active={activeKeyValue === trackKey(track)} favorite={favoriteSet.has(trackKey(track))} onPlay={(song) => playTrack(song, home.releases.tracks, true)} onFavorite={toggleFavorite} />)}</HorizontalRow></section> : null}
             {(view === 'home' || view === 'artists') && home.artists?.length ? <section><SectionHeader title="Top Tamil Music Directors" /><HorizontalRow>{home.artists.map((artist) => <ArtistTile key={artist.id || artist.name} artist={artist} onOpen={openArtist} />)}</HorizontalRow></section> : null}
             {(view === 'home' || view === 'albums') && home.releases?.albums?.length ? <section><SectionHeader title="Tamil Albums" /><HorizontalRow>{home.releases.albums.map((album) => <AlbumTile key={album.id} album={album} onOpen={openAlbum} />)}</HorizontalRow></section> : null}
-            {(view === 'home' || view === 'playlists') && home.playlists?.length ? <section><SectionHeader title="Tamil Playlists" /><HorizontalRow>{home.playlists.map((item) => <PlaylistTile key={item.id} item={item} onOpen={openPlaylist} />)}</HorizontalRow></section> : null}
+            {(view === 'home' || view === 'playlists') && home.playlists?.length ? <section><SectionHeader title="Imported Spotify Playlists" /><HorizontalRow>{home.playlists.map((item) => <PlaylistTile key={item.id} item={item} onOpen={openPlaylist} />)}</HorizontalRow></section> : null}
             {view === 'favorites' ? <section><SectionHeader title="Favorites" subtitle="Saved on this device" /><TrackList tracks={favoriteTracks} activeKey={activeKeyValue} favoriteSet={favoriteSet} onPlay={(track) => playTrack(track, favoriteTracks, true)} onFavorite={toggleFavorite} /></section> : null}
             {view === 'recent' ? <section><SectionHeader title="Recently Played" /><TrackList tracks={recents} activeKey={activeKeyValue} favoriteSet={favoriteSet} onPlay={(track) => playTrack(track, recents, true)} onFavorite={toggleFavorite} /></section> : null}
           </div>

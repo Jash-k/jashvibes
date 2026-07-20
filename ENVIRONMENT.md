@@ -22,13 +22,18 @@ OTT_DUBBED=https://tamilott.vercel.app/tamil_dubbed.json
 # Music / ராக வானம் (JioSaavn only)
 SAAVN=https://saavnapi.onrender.com
 MUSIC_LANG=Tamil
+LYRICS_API=https://lrclib.net
+SPOTIFY_PROXY=https://spotubedl-api.onrender.com/api/metadata
+SPOTIFY_IMPORT_MAX_TRACKS=120
+SPOTIFY_IMPORT_CONCURRENCY=2
+SPOTIFY_IMPORT_MAX_PLAYLISTS=25
 
 # Clean Embed Browser - one site
 EMBED=https://piratexplay.cc/language/tamil/
 ELABEL=PirateXPlay Tamil
 
 # Clean Embed Browser - multiple sites
-EMBEDS=PirateXPlay Tamil|https://piratexplay.cc/language/tamil/,Example|https://example.com
+EMBEDS=PirateXPlay Tamil|https://piratexplay.cc/language/tamil/
 
 # Live TV custom source list, optional. If unset, built-in Tamil-preferred sources are used.
 TV=Jio Tamil|https://jtvxweb.pages.dev/jstr4web.json,StreamLive|https://raw.githubusercontent.com/margabantheshwar/Streamliveplatlist.m3u/refs/heads/main/streamlive.m3u
