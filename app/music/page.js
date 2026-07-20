@@ -731,7 +731,7 @@ export default function MusicPage() {
       if (!response.ok) throw new Error(data?.error || 'Playlist failed');
       const item = data.item;
       const tracks = item.songs || [];
-      setSelectedCollection({ type: 'playlist', title: item.title, subtitle: `${item.songCount || tracks.length || 0} songs`, image: item.image, tracks, albums: [] });
+      setSelectedCollection({ type: 'playlist', id: item.id || playlist.id, isImported: Boolean(item.isImported || playlist.isImported), sourceUrl: item.sourceUrl || playlist.sourceUrl || '', title: item.title, subtitle: `${item.songCount || tracks.length || 0} songs`, image: item.image, tracks, albums: [] });
       setQueue(tracks);
       setView('playlists');
       setCollectionStatus('ready');
@@ -844,6 +844,59 @@ export default function MusicPage() {
     }
   }
 
+  async function mutateImportedPlaylistTrack(action, track = null, query = '') {
+    if (!selectedCollection?.id) return;
+    try {
+      setImportStatus('saving');
+      const response = await fetch('/api/music/playlist/tracks', {
+        method: 'PATCH',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({
+          playlistId: selectedCollection.id,
+          action,
+          trackKey: track ? trackKey(track) : '',
+          query,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Track update failed');
+      const item = data.item;
+      const tracks = item.songs || item.tracks || [];
+      setSelectedCollection((current) => ({
+        ...(current || {}),
+        title: item.title || current?.title,
+        subtitle: `${item.songCount || tracks.length || 0} songs`,
+        image: item.image || current?.image,
+        tracks,
+      }));
+      setQueue(tracks);
+      await refreshImportedPlaylists().catch(() => []);
+      setImportStatus('done');
+      setImportMessage(action === 'remove' ? 'Track removed.' : action === 'replace' ? 'Track replaced.' : 'Track added.');
+    } catch (err) {
+      setImportStatus('error');
+      setImportMessage(err.message || 'Track update failed');
+    }
+  }
+
+  function removeImportedTrack(track) {
+    if (!window.confirm(`Remove “${track?.title || 'this song'}” from this playlist?`)) return;
+    mutateImportedPlaylistTrack('remove', track);
+  }
+
+  function replaceImportedTrack(track) {
+    const query = window.prompt('Search JioSaavn replacement', `${track?.spotify?.title || track?.title || ''} ${track?.spotify?.album || track?.album || ''}`.trim());
+    if (!query) return;
+    mutateImportedPlaylistTrack('replace', track, query);
+  }
+
+  function addImportedTrack() {
+    const query = window.prompt('Search and add JioSaavn song');
+    if (!query) return;
+    mutateImportedPlaylistTrack('add', null, query);
+  }
+
   const navItems = [
     ['home', '⌂', 'Home'],
     ['search', '⌕', 'Search'],
@@ -936,18 +989,48 @@ export default function MusicPage() {
             {status === 'ready' && view === 'home' && !homeHasAnySongCards ? <div className="rounded-3xl border border-fuchsia-400/20 bg-fuchsia-500/10 p-5 text-sm leading-6 text-fuchsia-100"><p className="font-black">No song cards loaded yet.</p><p className="mt-1 text-fuchsia-100/75">JioSaavn may be asleep or your SAAVN env is wrong. Artists below still open search/fallback pages. Check <code className="rounded bg-black/40 px-1">/api/music/home</code> and set <code className="rounded bg-black/40 px-1">SAAVN=https://saavnapi.onrender.com</code>.</p><button type="button" onClick={loadHome} className="mt-3 rounded-full border border-fuchsia-300/30 bg-black/20 px-4 py-2 text-xs font-black">Retry JioSaavn</button></div> : null}
 
             {view === 'playlists' ? (
+              selectedCollection?.type === 'playlist' ? (
+                <section className="min-w-0 overflow-hidden rounded-[2rem] border border-fuchsia-400/15 bg-white/[0.045] p-4 sm:p-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                    <div className="flex min-w-0 gap-4">
+                      <div className="h-24 w-24 shrink-0 overflow-hidden rounded-3xl bg-zinc-900 sm:h-32 sm:w-32">{selectedCollection.image ? <img src={selectedCollection.image} alt="" className="h-full w-full object-cover" /> : null}</div>
+                      <div className="min-w-0 self-center"><p className="text-[10px] font-black uppercase tracking-[0.28em] text-fuchsia-300/80">Current Playlist</p><h2 className="mt-2 line-clamp-2 text-3xl font-black text-white sm:text-5xl">{selectedCollection.title}</h2>{selectedCollection.subtitle ? <p className="mt-2 text-sm text-zinc-400">{selectedCollection.subtitle}</p> : null}</div>
+                    </div>
+                    <button onClick={() => setSelectedCollection(null)} className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-zinc-300 hover:border-fuchsia-400/40">Close</button>
+                  </div>
+                  {collectionStatus === 'loading' ? <div className="mt-5 rounded-2xl bg-black/40 p-5 text-sm text-zinc-400">Loading playlist...</div> : null}
+                  {selectedCollection.tracks?.length ? <div className="mt-6"><SectionHeader title="Playlist Songs" subtitle={`${selectedCollection.tracks.length} songs`} action={selectedCollection.isImported ? <button type="button" onClick={addImportedTrack} className="rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-4 py-2 text-xs font-black text-fuchsia-100">Add Song</button> : null} /><HorizontalRow>{selectedCollection.tracks.map((track) => <TrackTile key={trackKey(track)} track={track} active={activeKeyValue === trackKey(track)} favorite={favoriteSet.has(trackKey(track))} onPlay={(song) => playTrack(song, selectedCollection.tracks, true)} onFavorite={toggleFavorite} />)}</HorizontalRow></div> : null}
+                  {selectedCollection.isImported ? (
+                    <div className="mt-6 rounded-3xl border border-white/10 bg-black/25 p-3 sm:p-4">
+                      <div className="mb-3 flex items-center justify-between gap-3"><h3 className="text-sm font-black uppercase tracking-[0.22em] text-fuchsia-200">Song CRUD</h3><button type="button" onClick={addImportedTrack} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-black text-zinc-200 hover:border-fuchsia-300/40">Add</button></div>
+                      <div className="grid gap-2">
+                        {(selectedCollection.tracks || []).map((track, index) => (
+                          <div key={`${trackKey(track)}-manage-top-${index}`} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-2.5">
+                            <button type="button" onClick={() => playTrack(track, selectedCollection.tracks, true)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                              <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-zinc-900">{track.image ? <img src={track.image} alt="" className="h-full w-full object-cover" /> : null}</div>
+                              <div className="min-w-0"><p className="truncate text-sm font-black text-white">{track.title}</p><p className="truncate text-xs text-zinc-500">{track.artists || track.album || 'JioSaavn'}{track.language ? ` • ${track.language}` : ''}</p></div>
+                            </button>
+                            <span className="hidden rounded-full border border-white/10 px-2 py-1 text-[10px] font-bold text-zinc-500 sm:inline">{track.importScore || 0}</span>
+                            <button type="button" onClick={() => replaceImportedTrack(track)} className="rounded-full border border-white/10 px-3 py-1.5 text-[11px] font-black text-zinc-300 hover:border-fuchsia-300/40">Replace</button>
+                            <button type="button" onClick={() => removeImportedTrack(track)} className="rounded-full border border-red-400/20 px-3 py-1.5 text-[11px] font-black text-red-200 hover:border-red-300/60">Remove</button>
+                          </div>
+                        ))}
+                      </div>
+                      {importMessage ? <p className={`mt-3 text-xs font-semibold ${importStatus === 'error' ? 'text-red-300' : 'text-zinc-500'}`}>{importMessage}</p> : null}
+                    </div>
+                  ) : null}
+                </section>
+              ) : (
+                <section className="rounded-[2rem] border border-fuchsia-400/15 bg-white/[0.035] p-5 text-sm text-zinc-400">
+                  <SectionHeader title="Current Playlist" subtitle="Open an imported playlist below. It will appear here with song controls." />
+                  <p>Select any playlist from Imported Playlists to view songs, play, replace, remove, or add tracks.</p>
+                </section>
+              )
+            ) : null}
+
+            {view === 'playlists' ? (
               <section className="rounded-[2rem] border border-fuchsia-400/15 bg-white/[0.04] p-4 sm:p-5">
-                <SectionHeader title="Spotify Playlist Sync" subtitle="Paste public Spotify playlists. Tracks are matched and played through JioSaavn only." action={<button type="button" onClick={refreshImportedPlaylists} className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-zinc-200 hover:border-fuchsia-300/40">Refresh</button>} />
-                <textarea
-                  value={importText}
-                  onChange={(event) => setImportText(event.target.value)}
-                  placeholder="Paste Spotify playlist links, one per line or comma separated..."
-                  className="min-h-28 w-full rounded-3xl border border-white/10 bg-black/50 p-4 text-sm font-semibold text-white outline-none placeholder:text-zinc-600 focus:border-fuchsia-300"
-                />
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={importSpotifyPlaylists} disabled={importStatus === 'importing'} className="rounded-full bg-fuchsia-400 px-5 py-2.5 text-xs font-black text-black shadow-lg shadow-fuchsia-950/30 disabled:opacity-60">{importStatus === 'importing' ? 'Importing...' : 'Add / Sync Playlists'}</button>
-                  <span className={`text-xs font-semibold ${importStatus === 'error' ? 'text-red-300' : importStatus === 'done' ? 'text-green-300' : 'text-zinc-500'}`}>{importMessage}</span>
-                </div>
+                <SectionHeader title="Imported Spotify Playlists" subtitle={`${importedPlaylists.length} playlist${importedPlaylists.length === 1 ? '' : 's'} saved in MongoDB`} action={<button type="button" onClick={refreshImportedPlaylists} className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-zinc-200 hover:border-fuchsia-300/40">Refresh</button>} />
                 {importedPlaylists.length ? (
                   <div className="mt-5 grid gap-2">
                     {importedPlaylists.map((playlist) => (
@@ -962,11 +1045,27 @@ export default function MusicPage() {
                       </div>
                     ))}
                   </div>
-                ) : <p className="mt-4 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm text-zinc-400">No imported playlists yet. Add your public Spotify playlist links above.</p>}
+                ) : <p className="mt-4 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm text-zinc-400">No imported playlists yet. Add your public Spotify playlist links in the sync box below.</p>}
               </section>
             ) : null}
 
-            {selectedCollection && ['artists', 'albums', 'playlists'].includes(view) ? (
+            {view === 'playlists' ? (
+              <section className="rounded-[2rem] border border-fuchsia-400/15 bg-white/[0.04] p-4 sm:p-5">
+                <SectionHeader title="Spotify Playlist Sync" subtitle="Paste public Spotify playlists. Tracks are matched and played through JioSaavn only." />
+                <textarea
+                  value={importText}
+                  onChange={(event) => setImportText(event.target.value)}
+                  placeholder="Paste Spotify playlist links, one per line or comma separated..."
+                  className="min-h-28 w-full rounded-3xl border border-white/10 bg-black/50 p-4 text-sm font-semibold text-white outline-none placeholder:text-zinc-600 focus:border-fuchsia-300"
+                />
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={importSpotifyPlaylists} disabled={importStatus === 'importing'} className="rounded-full bg-fuchsia-400 px-5 py-2.5 text-xs font-black text-black shadow-lg shadow-fuchsia-950/30 disabled:opacity-60">{importStatus === 'importing' ? 'Importing...' : 'Add / Sync Playlists'}</button>
+                  <span className={`text-xs font-semibold ${importStatus === 'error' ? 'text-red-300' : importStatus === 'done' ? 'text-green-300' : 'text-zinc-500'}`}>{importMessage}</span>
+                </div>
+              </section>
+            ) : null}
+
+            {selectedCollection && ['artists', 'albums', 'playlists'].includes(view) && !(view === 'playlists' && selectedCollection.type === 'playlist') ? (
               <section className="min-w-0 overflow-hidden rounded-[2rem] border border-fuchsia-400/15 bg-white/[0.045] p-4 sm:p-5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                   <div className="flex min-w-0 gap-4">
@@ -977,7 +1076,26 @@ export default function MusicPage() {
                 </div>
                 {collectionStatus === 'loading' ? <div className="mt-5 rounded-2xl bg-black/40 p-5 text-sm text-zinc-400">Loading {selectedCollection.type}...</div> : null}
                 {selectedCollection.albums?.length ? <div className="mt-6"><SectionHeader title="Albums" action={selectedCollection.type === 'artist' && !selectedCollection.albumsExpanded ? <button type="button" onClick={loadAllArtistAlbums} className="rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-4 py-2 text-xs font-black text-fuchsia-100">See all</button> : null} /><HorizontalRow>{selectedCollection.albums.map((album) => <AlbumTile key={album.id} album={album} onOpen={openAlbum} />)}</HorizontalRow></div> : null}
-                {selectedCollection.tracks?.length ? <div className="mt-6"><SectionHeader title={selectedCollection.type === 'album' ? 'Album Tracks' : selectedCollection.type === 'playlist' ? 'Playlist Songs' : 'Top Songs'} subtitle={`${selectedCollection.tracks.length} songs`} /><HorizontalRow>{selectedCollection.tracks.map((track) => <TrackTile key={trackKey(track)} track={track} active={activeKeyValue === trackKey(track)} favorite={favoriteSet.has(trackKey(track))} onPlay={(song) => playTrack(song, selectedCollection.tracks, true)} onFavorite={toggleFavorite} />)}</HorizontalRow></div> : null}
+                {selectedCollection.tracks?.length ? <div className="mt-6"><SectionHeader title={selectedCollection.type === 'album' ? 'Album Tracks' : selectedCollection.type === 'playlist' ? 'Playlist Songs' : 'Top Songs'} subtitle={`${selectedCollection.tracks.length} songs`} action={selectedCollection.isImported ? <button type="button" onClick={addImportedTrack} className="rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-4 py-2 text-xs font-black text-fuchsia-100">Add Song</button> : null} /><HorizontalRow>{selectedCollection.tracks.map((track) => <TrackTile key={trackKey(track)} track={track} active={activeKeyValue === trackKey(track)} favorite={favoriteSet.has(trackKey(track))} onPlay={(song) => playTrack(song, selectedCollection.tracks, true)} onFavorite={toggleFavorite} />)}</HorizontalRow></div> : null}
+                {selectedCollection.isImported ? (
+                  <div className="mt-6 rounded-3xl border border-white/10 bg-black/25 p-3 sm:p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3"><h3 className="text-sm font-black uppercase tracking-[0.22em] text-fuchsia-200">Song CRUD</h3><button type="button" onClick={addImportedTrack} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-black text-zinc-200 hover:border-fuchsia-300/40">Add</button></div>
+                    <div className="grid gap-2">
+                      {(selectedCollection.tracks || []).map((track, index) => (
+                        <div key={`${trackKey(track)}-manage-${index}`} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-2.5">
+                          <button type="button" onClick={() => playTrack(track, selectedCollection.tracks, true)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                            <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-zinc-900">{track.image ? <img src={track.image} alt="" className="h-full w-full object-cover" /> : null}</div>
+                            <div className="min-w-0"><p className="truncate text-sm font-black text-white">{track.title}</p><p className="truncate text-xs text-zinc-500">{track.artists || track.album || 'JioSaavn'}{track.language ? ` • ${track.language}` : ''}</p></div>
+                          </button>
+                          <span className="hidden rounded-full border border-white/10 px-2 py-1 text-[10px] font-bold text-zinc-500 sm:inline">{track.importScore || 0}</span>
+                          <button type="button" onClick={() => replaceImportedTrack(track)} className="rounded-full border border-white/10 px-3 py-1.5 text-[11px] font-black text-zinc-300 hover:border-fuchsia-300/40">Replace</button>
+                          <button type="button" onClick={() => removeImportedTrack(track)} className="rounded-full border border-red-400/20 px-3 py-1.5 text-[11px] font-black text-red-200 hover:border-red-300/60">Remove</button>
+                        </div>
+                      ))}
+                    </div>
+                    {importMessage ? <p className={`mt-3 text-xs font-semibold ${importStatus === 'error' ? 'text-red-300' : 'text-zinc-500'}`}>{importMessage}</p> : null}
+                  </div>
+                ) : null}
               </section>
             ) : null}
 
@@ -991,7 +1109,7 @@ export default function MusicPage() {
             {view === 'home' && home.releases?.tracks?.length ? <section><SectionHeader title="New Tamil Releases" /><HorizontalRow>{home.releases.tracks.map((track) => <TrackTile key={trackKey(track)} track={track} active={activeKeyValue === trackKey(track)} favorite={favoriteSet.has(trackKey(track))} onPlay={(song) => playTrack(song, home.releases.tracks, true)} onFavorite={toggleFavorite} />)}</HorizontalRow></section> : null}
             {(view === 'home' || view === 'artists') && home.artists?.length ? <section><SectionHeader title="Top Tamil Music Directors" /><HorizontalRow>{home.artists.map((artist) => <ArtistTile key={artist.id || artist.name} artist={artist} onOpen={openArtist} />)}</HorizontalRow></section> : null}
             {(view === 'home' || view === 'albums') && home.releases?.albums?.length ? <section><SectionHeader title="Tamil Albums" /><HorizontalRow>{home.releases.albums.map((album) => <AlbumTile key={album.id} album={album} onOpen={openAlbum} />)}</HorizontalRow></section> : null}
-            {(view === 'home' || view === 'playlists') && home.playlists?.length ? <section><SectionHeader title="Imported Spotify Playlists" /><HorizontalRow>{home.playlists.map((item) => <PlaylistTile key={item.id} item={item} onOpen={openPlaylist} />)}</HorizontalRow></section> : null}
+            {view === 'home' && home.playlists?.length ? <section><SectionHeader title="Imported Spotify Playlists" /><HorizontalRow>{home.playlists.map((item) => <PlaylistTile key={item.id} item={item} onOpen={openPlaylist} />)}</HorizontalRow></section> : null}
             {view === 'favorites' ? <section><SectionHeader title="Favorites" subtitle="Saved on this device" /><TrackList tracks={favoriteTracks} activeKey={activeKeyValue} favoriteSet={favoriteSet} onPlay={(track) => playTrack(track, favoriteTracks, true)} onFavorite={toggleFavorite} /></section> : null}
             {view === 'recent' ? <section><SectionHeader title="Recently Played" /><TrackList tracks={recents} activeKey={activeKeyValue} favoriteSet={favoriteSet} onPlay={(track) => playTrack(track, recents, true)} onFavorite={toggleFavorite} /></section> : null}
           </div>
