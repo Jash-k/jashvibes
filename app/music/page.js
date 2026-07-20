@@ -771,7 +771,8 @@ export default function MusicPage() {
       setImportStatus(data.ok ? 'done' : 'error');
       const imported = data.imported || [];
       const failed = data.failed || 0;
-      setImportMessage(`Imported ${imported.length} playlist${imported.length === 1 ? '' : 's'}${failed ? ` • ${failed} failed` : ''}.`);
+      const firstError = (data.results || []).find((item) => !item.ok)?.error || '';
+      setImportMessage(`Imported ${imported.length} playlist${imported.length === 1 ? '' : 's'}${failed ? ` • ${failed} failed${firstError ? `: ${firstError}` : ''}` : ''}.`);
     } catch (err) {
       setImportStatus('error');
       setImportMessage(err.message || 'Spotify import failed');
