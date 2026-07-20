@@ -175,15 +175,39 @@ async function lookupLrclibLyrics({ title = '', artist = '', album = '', duratio
   if (cleanDuration) searchUrl.searchParams.set('duration', String(cleanDuration));
 
   const results = await fetchJson(searchUrl.toString());
-  if (!Array.isArray(results) || !results.length) return null;
+  if (Array.isArray(results) && results.length) {
+    const best = results
+      .filter((item) => item?.plainLyrics || item?.syncedLyrics)
+      .map((item) => ({ item, score: scoreLrclibResult(item, wanted) }))
+      .sort((a, b) => b.score - a.score)[0];
 
-  const best = results
-    .filter((item) => item?.plainLyrics || item?.syncedLyrics)
-    .map((item) => ({ item, score: scoreLrclibResult(item, wanted) }))
-    .sort((a, b) => b.score - a.score)[0];
+    if (best && best.score >= 55) return mapLrclibItem(best.item, searchUrl.toString(), wanted);
+  }
 
-  if (!best || best.score < 55) return null;
-  return mapLrclibItem(best.item, searchUrl.toString(), wanted);
+  // Some Tamil old songs fail LRCLIB's structured artist search because Saavn
+  // returns many artist/composer/actor names. MusicSync-style lookup works by
+  // falling back to a broad title query, then scoring locally.
+  const genericQueries = [
+    cleanTitle,
+    cleanTitle.replace(/\b\(.*?\)\b/g, '').trim(),
+    cleanAlbum ? `${cleanTitle} ${cleanAlbum}` : '',
+  ].filter(Boolean);
+
+  for (const query of [...new Set(genericQueries)]) {
+    const genericUrl = new URL('/api/search', `${base}/`);
+    genericUrl.searchParams.set('q', query);
+    const genericResults = await fetchJson(genericUrl.toString());
+    if (!Array.isArray(genericResults) || !genericResults.length) continue;
+
+    const best = genericResults
+      .filter((item) => item?.plainLyrics || item?.syncedLyrics)
+      .map((item) => ({ item, score: scoreLrclibResult(item, wanted) }))
+      .sort((a, b) => b.score - a.score)[0];
+
+    if (best && best.score >= 55) return mapLrclibItem(best.item, genericUrl.toString(), wanted);
+  }
+
+  return null;
 }
 
 export async function GET(request) {
