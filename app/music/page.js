@@ -305,6 +305,8 @@ export default function MusicPage() {
   const songCacheRef = useRef(new Map());
   const prefetchingRef = useRef(new Set());
   const autoAdvanceRef = useRef(false);
+  const wakeLockRef = useRef(null);
+  const unlockHoldTimerRef = useRef(null);
   const activeLyricRef = useRef(null);
   const [view, setView] = useState('home');
   const [query, setQuery] = useState('');
@@ -317,6 +319,8 @@ export default function MusicPage() {
   const [showMiniPlayer, setShowMiniPlayer] = useState(false);
   const [showSongCrud, setShowSongCrud] = useState(false);
   const [showSleepMenu, setShowSleepMenu] = useState(false);
+  const [listeningMode, setListeningMode] = useState(false);
+  const [wakeLockStatus, setWakeLockStatus] = useState('idle');
   const [sleepEndAt, setSleepEndAt] = useState(0);
   const [sleepDurationMs, setSleepDurationMs] = useState(0);
   const [sleepRemainingMs, setSleepRemainingMs] = useState(0);
@@ -447,6 +451,21 @@ export default function MusicPage() {
   useEffect(() => {
     if (!active && showMiniPlayer) setShowMiniPlayer(false);
   }, [active, showMiniPlayer]);
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && listeningMode) requestWakeLock();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [listeningMode]);
+
+  useEffect(() => {
+    return () => {
+      try { wakeLockRef.current?.release?.(); } catch {}
+      if (unlockHoldTimerRef.current) window.clearTimeout(unlockHoldTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const detail = activeDetail || active;
@@ -791,6 +810,67 @@ export default function MusicPage() {
     } else setMuted(true);
   }
 
+  async function requestWakeLock() {
+    if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) {
+      setWakeLockStatus('unsupported');
+      return false;
+    }
+    try {
+      if (wakeLockRef.current && !wakeLockRef.current.released) return true;
+      const lock = await navigator.wakeLock.request('screen');
+      wakeLockRef.current = lock;
+      setWakeLockStatus('active');
+      lock.addEventListener?.('release', () => {
+        if (listeningMode && document.visibilityState === 'visible') setWakeLockStatus('released');
+      });
+      return true;
+    } catch (error) {
+      setWakeLockStatus(error?.name === 'NotAllowedError' ? 'blocked' : 'error');
+      return false;
+    }
+  }
+
+  async function enableListeningMode() {
+    setListeningMode(true);
+    setWakeLockStatus('requesting');
+    setShowSleepMenu(false);
+    await requestWakeLock();
+  }
+
+  async function disableListeningMode() {
+    setListeningMode(false);
+    setWakeLockStatus('idle');
+    if (unlockHoldTimerRef.current) window.clearTimeout(unlockHoldTimerRef.current);
+    unlockHoldTimerRef.current = null;
+    try { await wakeLockRef.current?.release?.(); } catch {}
+    wakeLockRef.current = null;
+  }
+
+  function toggleListeningMode() {
+    if (listeningMode) disableListeningMode();
+    else enableListeningMode();
+  }
+
+  function startUnlockHold() {
+    if (unlockHoldTimerRef.current) window.clearTimeout(unlockHoldTimerRef.current);
+    unlockHoldTimerRef.current = window.setTimeout(() => disableListeningMode(), 1500);
+  }
+
+  function cancelUnlockHold() {
+    if (unlockHoldTimerRef.current) window.clearTimeout(unlockHoldTimerRef.current);
+    unlockHoldTimerRef.current = null;
+  }
+
+  function wakeLockStatusText() {
+    if (wakeLockStatus === 'active') return 'Screen awake is active';
+    if (wakeLockStatus === 'requesting') return 'Requesting screen wake lock...';
+    if (wakeLockStatus === 'unsupported') return 'Wake Lock is not supported here, but touch lock is active';
+    if (wakeLockStatus === 'blocked') return 'Wake Lock blocked by browser/battery settings, touch lock is active';
+    if (wakeLockStatus === 'released') return 'Wake Lock was released; keep app visible to reactivate';
+    if (wakeLockStatus === 'error') return 'Wake Lock failed, touch lock is active';
+    return 'Touch lock active';
+  }
+
   function startSleepTimer(minutes) {
     const durationMs = Math.max(1, Number(minutes || 0)) * 60 * 1000;
     const endAt = Date.now() + durationMs;
@@ -833,6 +913,7 @@ export default function MusicPage() {
     setSleepDurationMs(0);
     setSleepRemainingMs(0);
     setShowSleepMenu(false);
+    if (listeningMode) disableListeningMode();
     setSleepOverlay(true);
     try { window.localStorage.removeItem(SLEEP_TIMER_KEY); } catch {}
     setTimeout(() => { try { window.close(); } catch {} }, 350);
@@ -1327,6 +1408,32 @@ export default function MusicPage() {
         </section>
       </div>
 
+      {listeningMode ? (
+        <div
+          className="fixed inset-0 z-[85] flex items-center justify-center bg-black/88 p-6 text-center text-white backdrop-blur-xl"
+          onDoubleClick={disableListeningMode}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <div className="max-w-sm rounded-[2rem] border border-fuchsia-300/25 bg-[#120012]/90 p-6 shadow-2xl shadow-fuchsia-950/50">
+            <div className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-fuchsia-300/30 bg-fuchsia-500/10 text-4xl">🎧</div>
+            <h2 className="mt-5 text-3xl font-black">Listening Mode</h2>
+            <p className="mt-2 text-sm leading-6 text-zinc-300">Screen stays awake and touches are locked to prevent accidental taps.</p>
+            <p className="mt-3 rounded-2xl border border-white/10 bg-white/[0.05] p-3 text-xs font-bold text-fuchsia-100">{wakeLockStatusText()}</p>
+            <button
+              type="button"
+              onPointerDown={startUnlockHold}
+              onPointerUp={cancelUnlockHold}
+              onPointerCancel={cancelUnlockHold}
+              onPointerLeave={cancelUnlockHold}
+              className="mt-5 w-full rounded-2xl border border-fuchsia-300/30 bg-fuchsia-400 px-5 py-4 text-sm font-black text-black shadow-lg shadow-fuchsia-950/30"
+            >
+              Hold 1.5s to unlock
+            </button>
+            <button type="button" onClick={disableListeningMode} className="mt-3 rounded-full border border-white/10 px-4 py-2 text-xs font-bold text-zinc-400">or tap here to unlock</button>
+          </div>
+        </div>
+      ) : null}
+
       {sleepOverlay ? (
         <div className="fixed inset-0 z-[90] grid place-items-center bg-black p-6 text-center text-white" onClick={() => setSleepOverlay(false)}>
           <div>
@@ -1394,6 +1501,7 @@ export default function MusicPage() {
             <div className="mt-4 flex items-center justify-center gap-2">
               <button type="button" onClick={() => { setShowMiniPlayer(false); openLyrics(); }} className="rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-xs font-black text-zinc-200 transition hover:border-fuchsia-300/40 hover:text-white">Lyrics</button>
               <button type="button" onClick={() => setShowSleepMenu((value) => !value)} className="rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-xs font-black text-zinc-200 transition hover:border-fuchsia-300/40 hover:text-white">Sleep</button>
+              <button type="button" onClick={toggleListeningMode} className={`rounded-full border px-4 py-2 text-xs font-black transition ${listeningMode ? 'border-fuchsia-300 bg-fuchsia-500/20 text-fuchsia-100' : 'border-white/10 bg-white/[0.05] text-zinc-200 hover:border-fuchsia-300/40 hover:text-white'}`}>🎧</button>
               <button type="button" onClick={() => toggleFavorite(playingTrack)} className={`rounded-full border px-4 py-2 text-xs font-black transition ${favoriteSet.has(trackKey(playingTrack)) ? 'border-yellow-300 bg-yellow-300/15 text-yellow-100' : 'border-white/10 bg-white/[0.05] text-zinc-200 hover:border-yellow-300/40'}`}>{favoriteSet.has(trackKey(playingTrack)) ? '★ Saved' : '☆ Save'}</button>
             </div>
 
@@ -1404,13 +1512,21 @@ export default function MusicPage() {
       ) : null}
 
       {showLyrics ? (
-        <div className="fixed inset-x-3 bottom-28 z-50 max-h-[45dvh] overflow-y-auto rounded-3xl border border-fuchsia-400/20 bg-[#120012]/95 p-4 shadow-2xl shadow-fuchsia-950/40 backdrop-blur-xl sm:left-auto sm:right-5 sm:w-[28rem]">
+        <div className="lyrics-panel fixed inset-x-3 bottom-28 z-50 max-h-[45dvh] overflow-y-auto rounded-3xl border border-fuchsia-400/20 bg-[#120012]/95 p-4 pr-12 shadow-2xl shadow-fuchsia-950/40 backdrop-blur-xl sm:left-auto sm:right-5 sm:w-[28rem]">
+          <button
+            type="button"
+            onClick={() => setShowLyrics(false)}
+            className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-black/35 text-lg font-black text-zinc-100 shadow-lg shadow-black/20 transition hover:border-fuchsia-300/50 hover:text-white"
+            aria-label="Close lyrics"
+            title="Close lyrics"
+          >
+            ×
+          </button>
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-black uppercase tracking-[0.25em] text-fuchsia-200">Lyrics</h3>
               {lyricsData?.source ? <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-600">{lyricsData.source === 'lrclib' ? 'LRCLIB' : lyricsData.source}</p> : null}
             </div>
-            <button onClick={() => setShowLyrics(false)} className="rounded-full border border-white/10 px-3 py-1 text-xs font-bold text-zinc-300">Close</button>
           </div>
           {lyricsStatus === 'loading' ? <p className="text-sm leading-7 text-zinc-200">Loading lyrics...</p> : null}
           {lyricsStatus !== 'loading' && syncedLyricLines.length ? (
@@ -1477,6 +1593,7 @@ export default function MusicPage() {
               {playerStatus === 'loading' ? <p className="text-[11px] text-fuchsia-300">Loading stream...</p> : null}
               {playerStatus === 'error' ? <p className="truncate text-[11px] text-red-300">{error}</p> : null}
             </div>
+            <button type="button" onClick={toggleListeningMode} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border text-sm font-black transition sm:h-11 sm:w-11 ${listeningMode ? 'border-fuchsia-300 bg-fuchsia-500/20 text-fuchsia-100 shadow-lg shadow-fuchsia-950/30' : 'border-white/10 bg-white/[0.04] text-zinc-400 hover:border-fuchsia-400/40 hover:text-white'}`} title="Listening mode" aria-label="Listening mode">🎧</button>
             <button type="button" onClick={() => setShowSleepMenu((value) => !value)} className={`relative hidden h-11 w-11 shrink-0 place-items-center rounded-full border text-sm font-black transition sm:grid ${sleepActive ? 'border-fuchsia-300 bg-fuchsia-500/15 text-fuchsia-100' : 'border-white/10 bg-white/[0.04] text-zinc-400 hover:border-fuchsia-400/40 hover:text-white'}`} title={sleepActive ? `Sleep ${formatCountdown(sleepRemainingMs)}` : 'Sleep timer'} aria-label="Sleep timer">
               <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="3" /><circle cx="20" cy="20" r="17" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeDasharray={sleepCircle} strokeDashoffset={sleepCircle * (1 - sleepProgress)} /></svg>
               <span className="relative">⏱</span>

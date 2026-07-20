@@ -293,3 +293,27 @@ html.day-mode input::placeholder,
 html.day-mode textarea::placeholder {
   color: #64748b !important;
 }
+
+html.day-mode .lyrics-panel {
+  background: rgba(255, 255, 255, 0.96) !important;
+  color: #0f172a !important;
+  border-color: rgba(134, 25, 143, 0.24) !important;
+  box-shadow: 0 24px 80px rgba(134, 25, 143, 0.18) !important;
+}
+
+html.day-mode .lyrics-panel button[aria-label="Close lyrics"] {
+  background: rgba(15, 23, 42, 0.08) !important;
+  color: #0f172a !important;
+  border-color: rgba(15, 23, 42, 0.14) !important;
+}
+
+html.day-mode .lyrics-panel [class*="text-zinc-200"],
+html.day-mode .lyrics-panel [class*="text-zinc-300"],
+html.day-mode .lyrics-panel [class*="text-zinc-400"] {
+  color: #1e293b !important;
+}
+
+html.day-mode .lyrics-panel [class*="text-zinc-500"],
+html.day-mode .lyrics-panel [class*="text-zinc-600"] {
+  color: #64748b !important;
+}
