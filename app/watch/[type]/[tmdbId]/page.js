@@ -137,9 +137,8 @@ export default function WatchByTMDBPage() {
   const [episode, setEpisode] = useState(initialEpisode);
   const [seriesMeta, setSeriesMeta] = useState(null);
   const [seriesMetaStatus, setSeriesMetaStatus] = useState('idle');
-  const [language, setLanguage] = useState('tam');
+  const language = 'tam';
   const [provider, setProvider] = useState(isOttTitleOnly ? 'tamilott' : 'auto');
-  const [tvMode, setTvMode] = useState(true);
   const [popupBlocker, setPopupBlocker] = useState(true);
   const [streamUrl, setStreamUrl] = useState('');
   const [streamFallbacks, setStreamFallbacks] = useState([]);
@@ -189,7 +188,7 @@ export default function WatchByTMDBPage() {
     }
 
     return `/api/resolve?${params.toString()}`;
-  }, [type, tmdbId, language, provider, isSeries, season, episode, selectedOttStreamId, isOttTitleOnly, ottTitle, ottYear]);
+  }, [type, tmdbId, provider, isSeries, season, episode, selectedOttStreamId, isOttTitleOnly, ottTitle, ottYear]);
 
   const shouldShowOttStreamPicker = isOttTitleOnly || provider === 'tamilott' || resolveMode === 'tamilott-json-provider' || ottStreams.length > 0;
 
@@ -422,34 +421,11 @@ export default function WatchByTMDBPage() {
             <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-black px-3 py-2 text-sm text-zinc-300">
               <input
                 type="checkbox"
-                checked={tvMode}
-                onChange={(event) => setTvMode(event.target.checked)}
-                className="h-4 w-4 accent-red-600"
-              />
-              Samsung TV Mode
-            </label>
-            <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-black px-3 py-2 text-sm text-zinc-300">
-              <input
-                type="checkbox"
                 checked={popupBlocker}
                 onChange={(event) => setPopupBlocker(event.target.checked)}
                 className="h-4 w-4 accent-red-600"
               />
               Block Popups
-            </label>
-            <label className="col-span-2 text-sm text-zinc-400 sm:col-span-1">
-              Language
-              <select
-                value={language}
-                onChange={(event) => setLanguage(event.target.value)}
-                className="mt-1 w-full rounded-xl border border-white/10 bg-black px-3 py-2 text-white outline-none focus:border-red-500"
-              >
-                <option value="tam">Tamil</option>
-                <option value="eng">English</option>
-                <option value="hin">Hindi</option>
-                <option value="tel">Telugu</option>
-                <option value="mal">Malayalam</option>
-              </select>
             </label>
             {shouldShowOttStreamPicker ? (
               <label className="col-span-2 text-sm text-zinc-400 sm:col-span-4">
@@ -487,7 +463,7 @@ export default function WatchByTMDBPage() {
                 <div className="h-12 w-12 animate-spin rounded-full border-4 border-zinc-700 border-t-red-600" />
                 <div>
                   <p className="font-semibold text-white">Resolving embed provider...</p>
-                  <p className="mt-2 text-sm text-zinc-400">{isOttTitleOnly ? 'Matching TamilOTT by scraped title...' : 'Playback uses local provider modules with TMDB ID.'}</p>
+                  <p className="mt-2 text-sm text-zinc-400">{isOttTitleOnly ? 'Matching TamilOTT by scraped title...' : provider === 'auto' ? 'Checking TamilOTT first with a fast recent-window scan, then falling back if needed.' : 'Generating direct embed URL from TMDB ID.'}</p>
                 </div>
               </div>
             ) : null}
@@ -592,7 +568,7 @@ export default function WatchByTMDBPage() {
             </div>
             <div className="flex flex-wrap gap-2">
               <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-zinc-400">
-                {isOttTitleOnly ? `TamilOTT title: ${ottTitle || 'Unknown'}` : `TMDB ID: ${tmdbId}`} • {isSeries ? `TV S${season} E${episode}` : 'Movie'} • {language} • {playerMode === 'trailer' ? 'Trailer' : (isOttTitleOnly ? 'tamilott' : provider)}
+                {isOttTitleOnly ? `TamilOTT title: ${ottTitle || 'Unknown'}` : `TMDB ID: ${tmdbId}`} • {isSeries ? `TV S${season} E${episode}` : 'Movie'} • {playerMode === 'trailer' ? 'Trailer' : (isOttTitleOnly ? 'tamilott' : provider)}
               </span>
               {resolveMode ? (
                 <span className="rounded-full border border-blue-500/30 bg-blue-950/20 px-3 py-1 text-xs text-blue-300">

@@ -154,3 +154,73 @@ html.day-mode [class*="text-zinc-600"] {
 html.day-mode [class*="border-white/10"] {
   border-color: rgba(15, 23, 42, 0.12) !important;
 }
+
+/* Median/Android WebView fullscreen safety: force our video shells to use the actual viewport. */
+#live-player-shell:fullscreen,
+#live-player-shell:-webkit-full-screen,
+.classics-player-shell:fullscreen,
+.classics-player-shell:-webkit-full-screen {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100dvw !important;
+  height: 100dvh !important;
+  max-width: 100dvw !important;
+  max-height: 100dvh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #000 !important;
+}
+
+#live-player-shell:fullscreen video,
+#live-player-shell:-webkit-full-screen video,
+.classics-player-shell:fullscreen video,
+.classics-player-shell:-webkit-full-screen video {
+  width: 100dvw !important;
+  height: 100dvh !important;
+  max-width: 100dvw !important;
+  max-height: 100dvh !important;
+  object-fit: contain !important;
+  background: #000 !important;
+}
+
+#live-player-shell:fullscreen [data-shaka-player-container],
+#live-player-shell:-webkit-full-screen [data-shaka-player-container],
+.classics-player-shell:fullscreen > div,
+.classics-player-shell:-webkit-full-screen > div {
+  width: 100dvw !important;
+  height: 100dvh !important;
+  max-width: 100dvw !important;
+  max-height: 100dvh !important;
+}
+
+/* Shaka's built-in fullscreen button fullscreens the data-shaka-player-container,
+   not our outer shell. Keep that path viewport-correct too, especially in Android WebView/Median. */
+[data-shaka-player-container]:fullscreen,
+[data-shaka-player-container]:-webkit-full-screen,
+.classics-player-shell > div:fullscreen,
+.classics-player-shell > div:-webkit-full-screen,
+video:fullscreen,
+video:-webkit-full-screen {
+  width: 100dvw !important;
+  height: 100dvh !important;
+  max-width: 100dvw !important;
+  max-height: 100dvh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: #000 !important;
+  object-fit: contain !important;
+}
+
+[data-shaka-player-container]:fullscreen video,
+[data-shaka-player-container]:-webkit-full-screen video,
+.classics-player-shell > div:fullscreen video,
+.classics-player-shell > div:-webkit-full-screen video {
+  width: 100dvw !important;
+  height: 100dvh !important;
+  max-width: 100dvw !important;
+  max-height: 100dvh !important;
+  object-fit: contain !important;
+  background: #000 !important;
+}

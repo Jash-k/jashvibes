@@ -436,17 +436,17 @@ export default function LiveTVPage() {
 
       <section className="mx-auto grid max-w-7xl gap-3 px-3 py-3 sm:gap-4 sm:px-6 sm:py-5 lg:grid-cols-[1.45fr_0.9fr] lg:px-8">
         <div className="space-y-3 sm:space-y-4 lg:sticky lg:top-24 lg:self-start">
-          <div id="live-player-shell" className="overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black/50 fullscreen:h-screen fullscreen:rounded-none fullscreen:border-0 sm:rounded-3xl">
+          <div id="live-player-shell" className="overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black/50 fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0 sm:rounded-3xl">
             <div
               ref={playerContainerRef}
-              className="relative aspect-video bg-black fullscreen:h-screen fullscreen:aspect-auto"
+              className="relative aspect-video h-full w-full bg-black fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:aspect-auto"
               data-shaka-player-container
             >
               {active?.playable ? (
                 <video
                   key={active.id}
                   ref={videoRef}
-                  className="h-full w-full bg-black object-contain"
+                  className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-contain"
                   data-shaka-player
                   playsInline
                   autoPlay
@@ -499,8 +499,6 @@ export default function LiveTVPage() {
             <div className="mt-4 space-y-3">
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                 <button onClick={enterFullscreen} className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-bold text-white transition hover:border-red-500/50">Fullscreen</button>
-                <button onClick={pictureInPicture} className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-bold text-white transition hover:border-red-500/50">PiP</button>
-                <button onClick={copyUrl} className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-bold text-white transition hover:border-red-500/50">Copy URL</button>
                 {active?.url ? <a href={active.url} target="_blank" rel="noreferrer" className="rounded-2xl bg-red-600 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-red-500">Open Directly</a> : null}
               </div>
             </div>

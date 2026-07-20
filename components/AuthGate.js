@@ -163,14 +163,6 @@ export default function AuthGate({ children }) {
       <>
         {children}
         <DayNightToggle />
-        <button
-          type="button"
-          onClick={resetAccess}
-          className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-50 rounded-full border border-white/10 bg-black/70 px-3 py-2 text-xs font-semibold text-zinc-400 backdrop-blur transition hover:border-red-500 hover:text-white"
-          title="Forget saved access on this device"
-        >
-          Lock
-        </button>
       </>
     );
   }
