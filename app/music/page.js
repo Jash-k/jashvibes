@@ -314,6 +314,7 @@ export default function MusicPage() {
   const [active, setActive] = useState(null);
   const [activeDetail, setActiveDetail] = useState(null);
   const [showMiniPlayer, setShowMiniPlayer] = useState(false);
+  const [showSongCrud, setShowSongCrud] = useState(false);
   const [showSleepMenu, setShowSleepMenu] = useState(false);
   const [sleepEndAt, setSleepEndAt] = useState(0);
   const [sleepDurationMs, setSleepDurationMs] = useState(0);
@@ -906,6 +907,7 @@ export default function MusicPage() {
     if (!playlist?.id) return;
     try {
       setCollectionStatus('loading');
+      setShowSongCrud(false);
       setSelectedCollection({ type: 'playlist', title: playlist.title, image: playlist.image, tracks: [], albums: [] });
       const response = await fetch(`/api/music/playlist?id=${encodeURIComponent(playlist.id)}&title=${encodeURIComponent(playlist.title || '')}`, { cache: 'no-store' });
       const data = await response.json();
@@ -1180,13 +1182,18 @@ export default function MusicPage() {
                       <div className="h-24 w-24 shrink-0 overflow-hidden rounded-3xl bg-zinc-900 sm:h-32 sm:w-32">{selectedCollection.image ? <img src={selectedCollection.image} alt="" className="h-full w-full object-cover" /> : null}</div>
                       <div className="min-w-0 self-center"><p className="text-[10px] font-black uppercase tracking-[0.28em] text-fuchsia-300/80">Current Playlist</p><h2 className="mt-2 line-clamp-2 text-3xl font-black text-white sm:text-5xl">{selectedCollection.title}</h2>{selectedCollection.subtitle ? <p className="mt-2 text-sm text-zinc-400">{selectedCollection.subtitle}</p> : null}</div>
                     </div>
-                    <button onClick={() => setSelectedCollection(null)} className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-zinc-300 hover:border-fuchsia-400/40">Close</button>
+                    <button onClick={() => { setSelectedCollection(null); setShowSongCrud(false); }} className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-zinc-300 hover:border-fuchsia-400/40">Close</button>
                   </div>
                   {collectionStatus === 'loading' ? <div className="mt-5 rounded-2xl bg-black/40 p-5 text-sm text-zinc-400">Loading playlist...</div> : null}
-                  {selectedCollection.tracks?.length ? <div className="mt-6"><SectionHeader title="Playlist Songs" subtitle={`${selectedCollection.tracks.length} songs`} action={selectedCollection.isImported ? <button type="button" onClick={addImportedTrack} className="rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-4 py-2 text-xs font-black text-fuchsia-100">Add Song</button> : null} /><HorizontalRow>{selectedCollection.tracks.map((track) => <TrackTile key={trackKey(track)} track={track} active={activeKeyValue === trackKey(track)} favorite={favoriteSet.has(trackKey(track))} onPlay={(song) => playTrack(song, selectedCollection.tracks, true)} onFavorite={toggleFavorite} />)}</HorizontalRow></div> : null}
-                  {selectedCollection.isImported ? (
+                  {selectedCollection.tracks?.length ? <div className="mt-6"><SectionHeader title="Playlist Songs" subtitle={`${selectedCollection.tracks.length} songs`} action={selectedCollection.isImported ? <button type="button" onClick={() => setShowSongCrud((value) => !value)} className="rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-4 py-2 text-xs font-black text-fuchsia-100">{showSongCrud ? 'Hide Song CRUD' : 'Expand Song CRUD'}</button> : null} /><HorizontalRow>{selectedCollection.tracks.map((track) => <TrackTile key={trackKey(track)} track={track} active={activeKeyValue === trackKey(track)} favorite={favoriteSet.has(trackKey(track))} onPlay={(song) => playTrack(song, selectedCollection.tracks, true)} onFavorite={toggleFavorite} />)}</HorizontalRow></div> : null}
+                  {selectedCollection.isImported && !showSongCrud ? (
+                    <button type="button" onClick={() => setShowSongCrud(true)} className="mt-6 flex w-full items-center justify-between gap-3 rounded-3xl border border-white/10 bg-black/25 p-4 text-left transition hover:border-fuchsia-300/35 hover:bg-fuchsia-500/10">
+                      <div><h3 className="text-sm font-black uppercase tracking-[0.22em] text-fuchsia-200">Song CRUD minimized</h3><p className="mt-1 text-xs leading-5 text-zinc-500">Tap to expand the full add / replace / remove song list.</p></div><span className="rounded-full border border-fuchsia-300/30 px-3 py-1 text-xs font-black text-fuchsia-100">Expand</span>
+                    </button>
+                  ) : null}
+                  {selectedCollection.isImported && showSongCrud ? (
                     <div className="mt-6 rounded-3xl border border-white/10 bg-black/25 p-3 sm:p-4">
-                      <div className="mb-3 flex items-center justify-between gap-3"><h3 className="text-sm font-black uppercase tracking-[0.22em] text-fuchsia-200">Song CRUD</h3><button type="button" onClick={addImportedTrack} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-black text-zinc-200 hover:border-fuchsia-300/40">Add</button></div>
+                      <div className="mb-3 flex items-center justify-between gap-3"><h3 className="text-sm font-black uppercase tracking-[0.22em] text-fuchsia-200">Song CRUD</h3><div className="flex gap-2"><button type="button" onClick={addImportedTrack} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-black text-zinc-200 hover:border-fuchsia-300/40">Add</button><button type="button" onClick={() => setShowSongCrud(false)} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-black text-zinc-400 hover:border-fuchsia-300/40">Minimize</button></div></div>
                       <div className="grid gap-2">
                         {(selectedCollection.tracks || []).map((track, index) => (
                           <div key={`${trackKey(track)}-manage-top-${index}`} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-2.5">
