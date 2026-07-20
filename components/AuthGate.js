@@ -52,10 +52,10 @@ async function fetchJsonWithRetry(url, options = {}, retries = 2) {
 }
 
 function DayNightToggle() {
-  const [mode, setMode] = useState('night');
+  const [mode, setMode] = useState('day');
 
   useEffect(() => {
-    const saved = window.localStorage.getItem('jash_theme_mode') || 'night';
+    const saved = window.localStorage.getItem('jash_theme_mode') || 'day';
     setMode(saved);
     document.documentElement.classList.toggle('day-mode', saved === 'day');
   }, []);

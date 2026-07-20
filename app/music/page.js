@@ -304,6 +304,7 @@ export default function MusicPage() {
   const playerRef = useRef(null);
   const songCacheRef = useRef(new Map());
   const prefetchingRef = useRef(new Set());
+  const autoAdvanceRef = useRef(false);
   const activeLyricRef = useRef(null);
   const [view, setView] = useState('home');
   const [query, setQuery] = useState('');
@@ -533,6 +534,7 @@ export default function MusicPage() {
   const playTrack = useCallback((track, nextQueue = null, autoplay = true) => {
     if (!track) return;
     if (Array.isArray(nextQueue) && nextQueue.length) setQueue(dedupeQueue(nextQueue));
+    autoAdvanceRef.current = false;
     setShouldAutoplay(autoplay);
     setActive(track);
     if (track.streamUrls && Object.values(track.streamUrls).some(Boolean)) {
@@ -593,7 +595,7 @@ export default function MusicPage() {
         video.addEventListener('canplay', onCanPlay, { once: true });
         video.addEventListener('loadedmetadata', onCanPlay, { once: true });
         video.addEventListener('error', onError, { once: true });
-        if (!isHlsUrl(url)) { video.src = url; video.load(); return; }
+        if (!isHlsUrl(url)) { video.src = url; video.preload = 'auto'; video.autoplay = Boolean(shouldAutoplay); video.load(); if (shouldAutoplay) video.play().catch(() => {}); return; }
         const shakaModule = await import('shaka-player/dist/shaka-player.compiled.js');
         const shaka = shakaModule.default || window.shaka || shakaModule;
         shaka.polyfill?.installAll?.();
@@ -660,11 +662,29 @@ export default function MusicPage() {
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    const onTime = () => setCurrentTime(video.currentTime || 0);
+    const onTime = () => {
+      const now = video.currentTime || 0;
+      const total = Number.isFinite(video.duration) ? video.duration : 0;
+      setCurrentTime(now);
+
+      // Android/Chrome can suspend page JS exactly when a hidden media element
+      // reaches ended while the phone is locked. Advance just before the end so
+      // the next source is prepared while the current media session is still alive.
+      if (
+        total > 20 &&
+        repeatMode !== 'one' &&
+        !autoAdvanceRef.current &&
+        total - now <= 0.9 &&
+        queueTracks.length > 1
+      ) {
+        autoAdvanceRef.current = true;
+        playNext(true);
+      }
+    };
     const onDuration = () => setDuration(Number.isFinite(video.duration) ? video.duration : 0);
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
-    const onEnded = () => playNext(true);
+    const onEnded = () => { if (!autoAdvanceRef.current) playNext(true); };
     video.addEventListener('timeupdate', onTime);
     video.addEventListener('durationchange', onDuration);
     video.addEventListener('loadedmetadata', onDuration);
@@ -1462,7 +1482,7 @@ export default function MusicPage() {
               <span className="relative">⏱</span>
             </button>
             <button type="button" onClick={() => setShowSleepMenu((value) => !value)} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border text-sm font-black transition sm:hidden ${sleepActive ? 'border-fuchsia-300 bg-fuchsia-500/15 text-fuchsia-100' : 'border-white/10 bg-white/[0.04] text-zinc-400'}`} title={sleepActive ? `Sleep ${formatCountdown(sleepRemainingMs)}` : 'Sleep timer'}>⏱</button>
-            <video ref={videoRef} className="hidden" playsInline poster={activeDetail?.image || active?.image || undefined} />
+            <audio ref={videoRef} className="hidden" preload="auto" />
             <div className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-2.5 py-2 lg:flex" title="Volume">
               <button type="button" onClick={toggleMute} className="grid h-7 w-7 place-items-center rounded-lg text-sm transition hover:bg-fuchsia-400/15" aria-label={effectiveVolume === 0 ? 'Unmute' : 'Mute'}>{volumeIcon}</button>
               <input type="range" min="0" max="1" step="0.01" value={effectiveVolume} onChange={(event) => changeVolume(event.target.value)} className="h-1 w-24 accent-fuchsia-400" aria-label="Volume" />
