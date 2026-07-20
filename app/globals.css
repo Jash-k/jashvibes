@@ -224,3 +224,72 @@ video:-webkit-full-screen {
   object-fit: contain !important;
   background: #000 !important;
 }
+
+/* Day mode readability fixes for light/accent Tailwind text and custom logo text. */
+html.day-mode .jash-vibes-logo {
+  color: #4c0519 !important;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.75),
+    0 0 18px rgba(217, 70, 239, 0.16) !important;
+}
+
+html.day-mode .jash-vibes-logo::first-letter {
+  color: #b45309 !important;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.85),
+    0 0 16px rgba(180, 83, 9, 0.24) !important;
+}
+
+html.day-mode [class*="text-fuchsia-"],
+html.day-mode [class*="text-pink-"],
+html.day-mode [class*="text-purple-"] {
+  color: #86198f !important;
+}
+
+html.day-mode [class*="text-red-"],
+html.day-mode [class*="text-rose-"] {
+  color: #991b1b !important;
+}
+
+html.day-mode [class*="text-yellow-"],
+html.day-mode [class*="text-amber-"] {
+  color: #854d0e !important;
+}
+
+html.day-mode [class*="text-green-"],
+html.day-mode [class*="text-emerald-"] {
+  color: #166534 !important;
+}
+
+html.day-mode [class*="text-cyan-"],
+html.day-mode [class*="text-sky-"],
+html.day-mode [class*="text-blue-"] {
+  color: #075985 !important;
+}
+
+html.day-mode [class*="text-orange-"] {
+  color: #9a3412 !important;
+}
+
+html.day-mode [class*="text-black"] {
+  color: #020617 !important;
+}
+
+html.day-mode [class*="bg-white/["],
+html.day-mode [class*="bg-white\\/["],
+html.day-mode [class*="bg-white/10"],
+html.day-mode [class*="bg-white/20"] {
+  background-color: rgba(255, 255, 255, 0.68) !important;
+}
+
+html.day-mode input,
+html.day-mode select,
+html.day-mode textarea {
+  color: #0f172a !important;
+  background-color: rgba(255, 255, 255, 0.86) !important;
+}
+
+html.day-mode input::placeholder,
+html.day-mode textarea::placeholder {
+  color: #64748b !important;
+}
