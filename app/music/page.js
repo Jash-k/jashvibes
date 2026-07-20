@@ -8,7 +8,7 @@ const FAVORITES_KEY = 'jash_music_favorites';
 const RECENTS_KEY = 'jash_music_recents';
 const VOLUME_KEY = 'jash_music_volume';
 const MUTED_KEY = 'jash_music_muted';
-const MUSIC_CACHE_KEY = 'jash:music:v5';
+const MUSIC_CACHE_KEY = 'jash:music:v6';
 const SONG_DETAIL_CACHE_KEY = 'jash:music:songs:v1';
 
 const QUALITY_LABELS = {
@@ -95,6 +95,37 @@ function artistChipsFromTrack(track) {
       return true;
     })
     .slice(0, 6);
+}
+
+function parseLrcTimestamp(value = '') {
+  const match = String(value).match(/(\d{1,2}):(\d{1,2})(?:\.(\d{1,3}))?/);
+  if (!match) return null;
+  const minutes = Number(match[1] || 0);
+  const seconds = Number(match[2] || 0);
+  const millis = Number(String(match[3] || '0').padEnd(3, '0').slice(0, 3));
+  return minutes * 60 + seconds + millis / 1000;
+}
+
+function parseSyncedLyrics(value = '') {
+  return String(value || '')
+    .split(/\r?\n/)
+    .flatMap((line) => {
+      const stamps = [...line.matchAll(/\[(\d{1,2}:\d{1,2}(?:\.\d{1,3})?)\]/g)];
+      if (!stamps.length) return [];
+      const text = line.replace(/\[[^\]]+\]/g, '').trim();
+      return stamps
+        .map((stamp) => ({ time: parseLrcTimestamp(stamp[1]), text }))
+        .filter((item) => item.time !== null && item.text);
+    })
+    .sort((a, b) => a.time - b.time);
+}
+
+function plainFromSyncedLyrics(value = '') {
+  return String(value || '')
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\[[^\]]+\]/g, '').trim())
+    .filter(Boolean)
+    .join('\n');
 }
 
 function IconButton({ active = false, children, onClick, title }) {
@@ -261,6 +292,7 @@ export default function MusicPage() {
   const playerRef = useRef(null);
   const songCacheRef = useRef(new Map());
   const prefetchingRef = useRef(new Set());
+  const activeLyricRef = useRef(null);
   const [view, setView] = useState('home');
   const [query, setQuery] = useState('');
   const [home, setHome] = useState({ sections: [], artists: [], playlists: [], releases: { tracks: [], albums: [] } });
@@ -285,6 +317,7 @@ export default function MusicPage() {
   const [muted, setMuted] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
   const [lyrics, setLyrics] = useState('');
+  const [lyricsData, setLyricsData] = useState({});
   const [lyricsStatus, setLyricsStatus] = useState('idle');
   const [error, setError] = useState('');
   const [homeWarning, setHomeWarning] = useState('');
@@ -328,7 +361,13 @@ export default function MusicPage() {
 
   useEffect(() => {
     const cached = readSessionCache(MUSIC_CACHE_KEY);
-    if (cached?.home?.sections?.length) {
+    const cachedHasCards = Boolean(
+      cached?.home?.sections?.some((section) => (section.items || []).length) ||
+        cached?.home?.releases?.tracks?.length ||
+        cached?.home?.releases?.albums?.length ||
+        cached?.home?.artists?.length,
+    );
+    if (cachedHasCards) {
       setHome(cached.home);
       setView(cached.view || 'home');
       setQuery(cached.query || '');
@@ -342,6 +381,7 @@ export default function MusicPage() {
       setRepeatMode(cached.repeatMode || 'off');
       setShowLyrics(Boolean(cached.showLyrics));
       setLyrics(cached.lyrics || '');
+      setLyricsData(cached.lyricsData || {});
       setHomeWarning(cached.homeWarning || cached.home?.warning || cached.home?.warnings?.[0] || '');
       setStatus(cached.status || 'ready');
       restoreScroll(MUSIC_CACHE_KEY);
@@ -352,8 +392,8 @@ export default function MusicPage() {
   }, [loadHome]);
 
   useEffect(() => {
-    writeSessionCache(MUSIC_CACHE_KEY, { home, homeWarning, view, query, searchResults, selectedCollection, queue, active, activeDetail, quality, shuffleEnabled, repeatMode, showLyrics, lyrics, status });
-  }, [home, homeWarning, view, query, searchResults, selectedCollection, queue, active, activeDetail, quality, shuffleEnabled, repeatMode, showLyrics, lyrics, status]);
+    writeSessionCache(MUSIC_CACHE_KEY, { home, homeWarning, view, query, searchResults, selectedCollection, queue, active, activeDetail, quality, shuffleEnabled, repeatMode, showLyrics, lyrics, lyricsData, status });
+  }, [home, homeWarning, view, query, searchResults, selectedCollection, queue, active, activeDetail, quality, shuffleEnabled, repeatMode, showLyrics, lyrics, lyricsData, status]);
 
   useEffect(() => {
     const onScroll = () => saveScroll(MUSIC_CACHE_KEY);
@@ -439,6 +479,7 @@ export default function MusicPage() {
         setPlayerStatus('loading');
         setError('');
         setLyrics('');
+        setLyricsData({});
         setLyricsStatus('idle');
         setShowLyrics(false);
         const detail = await getTrackDetail(active);
@@ -593,15 +634,37 @@ export default function MusicPage() {
 
   async function openLyrics() {
     setShowLyrics((value) => !value);
-    if (lyrics || !activeDetail?.trackId) return;
+    const detail = activeDetail || active;
+    const loadedFor = lyricsData?.loadedFor;
+    const currentKey = trackKey(detail);
+    if ((lyrics || lyricsData?.plainLyrics || lyricsData?.syncedLyrics) && loadedFor === currentKey) return;
+    if (!detail?.trackId && !detail?.title) {
+      setLyrics('Select a song first.');
+      setLyricsStatus('error');
+      return;
+    }
     try {
       setLyricsStatus('loading');
-      const response = await fetch(`/api/music/lyrics?id=${encodeURIComponent(activeDetail.trackId)}&seokey=${encodeURIComponent(activeDetail.seokey || '')}`, { cache: 'no-store' });
+      const params = new URLSearchParams();
+      if (detail.trackId) params.set('id', detail.trackId);
+      if (detail.seokey) params.set('seokey', detail.seokey);
+      if (detail.title) params.set('title', detail.title);
+      if (detail.artists) params.set('artist', detail.artists);
+      if (detail.album) params.set('album', detail.album);
+      if (detail.duration) params.set('duration', detail.duration);
+      const response = await fetch(`/api/music/lyrics?${params.toString()}`, { cache: 'no-store' });
       const data = await response.json();
-      if (!response.ok) throw new Error(data?.error || 'Lyrics unavailable');
-      setLyrics(data.lyrics || 'Lyrics unavailable for this song.');
-      setLyricsStatus('ready');
-    } catch (error) { setLyrics(error.message || 'Lyrics unavailable for this song.'); setLyricsStatus('error'); }
+      if (!response.ok) throw new Error(data?.error || data?.message || 'Lyrics unavailable');
+      const plainText = data.plainLyrics || data.lyrics || plainFromSyncedLyrics(data.syncedLyrics || '');
+      const nextLyricsData = { ...data, loadedFor: currentKey };
+      setLyricsData(nextLyricsData);
+      setLyrics(plainText || data.message || 'Lyrics unavailable for this song.');
+      setLyricsStatus(data.lyrics || data.plainLyrics || data.syncedLyrics ? 'ready' : 'error');
+    } catch (error) {
+      setLyricsData({ loadedFor: currentKey, source: 'error' });
+      setLyrics(error.message || 'Lyrics unavailable for this song.');
+      setLyricsStatus('error');
+    }
   }
 
   async function openArtist(artist) {
@@ -694,8 +757,24 @@ export default function MusicPage() {
   const playingTrack = activeDetail || active;
   const currentArtistChips = artistChipsFromTrack(playingTrack);
   const playingImage = playingTrack?.image || '';
+  const syncedLyricLines = useMemo(() => parseSyncedLyrics(lyricsData?.syncedLyrics || ''), [lyricsData?.syncedLyrics]);
+  const activeLyricLineIndex = useMemo(() => {
+    if (!syncedLyricLines.length) return -1;
+    let index = 0;
+    for (let i = 0; i < syncedLyricLines.length; i += 1) {
+      if (currentTime + 0.25 >= syncedLyricLines[i].time) index = i;
+      else break;
+    }
+    return index;
+  }, [syncedLyricLines, currentTime]);
   const effectiveVolume = muted ? 0 : Math.min(1, Math.max(0, Number(volume) || 0));
   const volumeIcon = effectiveVolume === 0 ? '🔇' : effectiveVolume < 0.45 ? '🔉' : '🔊';
+
+  useEffect(() => {
+    if (showLyrics && activeLyricRef.current) {
+      activeLyricRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, [showLyrics, activeLyricLineIndex]);
 
   return (
     <main className="palette-music-magenta min-h-dvh overflow-x-hidden bg-[#050012] pb-28 text-zinc-100">
@@ -843,7 +922,33 @@ export default function MusicPage() {
         </div>
       ) : null}
 
-      {showLyrics ? <div className="fixed inset-x-3 bottom-28 z-50 max-h-[45dvh] overflow-y-auto rounded-3xl border border-fuchsia-400/20 bg-[#120012]/95 p-4 shadow-2xl shadow-fuchsia-950/40 backdrop-blur-xl sm:left-auto sm:right-5 sm:w-[28rem]"><div className="mb-3 flex items-center justify-between gap-3"><h3 className="text-sm font-black uppercase tracking-[0.25em] text-fuchsia-200">Lyrics</h3><button onClick={() => setShowLyrics(false)} className="rounded-full border border-white/10 px-3 py-1 text-xs font-bold text-zinc-300">Close</button></div><p className="whitespace-pre-wrap text-sm leading-7 text-zinc-200">{lyricsStatus === 'loading' ? 'Loading lyrics...' : lyrics || 'Lyrics unavailable for this song.'}</p></div> : null}
+      {showLyrics ? (
+        <div className="fixed inset-x-3 bottom-28 z-50 max-h-[45dvh] overflow-y-auto rounded-3xl border border-fuchsia-400/20 bg-[#120012]/95 p-4 shadow-2xl shadow-fuchsia-950/40 backdrop-blur-xl sm:left-auto sm:right-5 sm:w-[28rem]">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-[0.25em] text-fuchsia-200">Lyrics</h3>
+              {lyricsData?.source ? <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-600">{lyricsData.source === 'lrclib' ? 'LRCLIB' : lyricsData.source}</p> : null}
+            </div>
+            <button onClick={() => setShowLyrics(false)} className="rounded-full border border-white/10 px-3 py-1 text-xs font-bold text-zinc-300">Close</button>
+          </div>
+          {lyricsStatus === 'loading' ? <p className="text-sm leading-7 text-zinc-200">Loading lyrics...</p> : null}
+          {lyricsStatus !== 'loading' && syncedLyricLines.length ? (
+            <div className="space-y-2 py-2">
+              {syncedLyricLines.map((line, index) => (
+                <p
+                  key={`${line.time}-${index}`}
+                  ref={index === activeLyricLineIndex ? activeLyricRef : null}
+                  className={`rounded-2xl px-3 py-2 text-sm leading-6 transition ${index === activeLyricLineIndex ? 'bg-fuchsia-400/15 text-fuchsia-50 shadow-lg shadow-fuchsia-950/20' : index < activeLyricLineIndex ? 'text-zinc-500' : 'text-zinc-200'}`}
+                >
+                  {line.text}
+                </p>
+              ))}
+            </div>
+          ) : null}
+          {lyricsStatus !== 'loading' && !syncedLyricLines.length ? <p className="whitespace-pre-wrap text-sm leading-7 text-zinc-200">{lyrics || 'Lyrics unavailable for this song.'}</p> : null}
+          {lyricsData?.matched ? <p className="mt-3 border-t border-white/10 pt-3 text-[11px] leading-5 text-zinc-500">Matched: {lyricsData.matched.trackName} • {lyricsData.matched.artistName}</p> : null}
+        </div>
+      ) : null}
 
       <div className="fixed inset-x-0 bottom-0 z-50 border-t border-fuchsia-400/20 bg-[#080008]/95 px-3 py-3 shadow-2xl shadow-fuchsia-950/30 backdrop-blur-xl sm:px-5">
         <div className="mx-auto max-w-7xl">
