@@ -11,6 +11,8 @@ const VOLUME_KEY = 'jash_music_volume';
 const MUTED_KEY = 'jash_music_muted';
 const MUSIC_CACHE_KEY = 'jash:music:v6';
 const SONG_DETAIL_CACHE_KEY = 'jash:music:songs:v1';
+const SLEEP_TIMER_KEY = 'jash_music_sleep_timer';
+const SLEEP_PRESETS = [5, 10, 15, 30, 45, 60];
 
 const QUALITY_LABELS = {
   '320kbps': '320k',
@@ -40,6 +42,15 @@ function formatTime(value = 0) {
   const min = Math.floor(seconds / 60);
   const sec = String(seconds % 60).padStart(2, '0');
   return `${min}:${sec}`;
+}
+
+function formatCountdown(ms = 0) {
+  const totalSeconds = Math.max(0, Math.ceil(Number(ms || 0) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
 function dedupeQueue(tracks = []) {
@@ -303,6 +314,11 @@ export default function MusicPage() {
   const [active, setActive] = useState(null);
   const [activeDetail, setActiveDetail] = useState(null);
   const [showMiniPlayer, setShowMiniPlayer] = useState(false);
+  const [showSleepMenu, setShowSleepMenu] = useState(false);
+  const [sleepEndAt, setSleepEndAt] = useState(0);
+  const [sleepDurationMs, setSleepDurationMs] = useState(0);
+  const [sleepRemainingMs, setSleepRemainingMs] = useState(0);
+  const [sleepOverlay, setSleepOverlay] = useState(false);
   const [quality, setQuality] = useState('');
   const [status, setStatus] = useState('loading');
   const [searchStatus, setSearchStatus] = useState('idle');
@@ -341,6 +357,14 @@ export default function MusicPage() {
       window.localStorage.setItem(MUTED_KEY, '0');
       const cachedSongs = JSON.parse(window.sessionStorage.getItem(SONG_DETAIL_CACHE_KEY) || '{}');
       Object.entries(cachedSongs).forEach(([key, value]) => songCacheRef.current.set(key, value));
+      const savedSleep = JSON.parse(window.localStorage.getItem(SLEEP_TIMER_KEY) || '{}');
+      if (savedSleep?.endAt && Number(savedSleep.endAt) > Date.now()) {
+        setSleepEndAt(Number(savedSleep.endAt));
+        setSleepDurationMs(Number(savedSleep.durationMs || Math.max(0, Number(savedSleep.endAt) - Date.now())));
+        setSleepRemainingMs(Math.max(0, Number(savedSleep.endAt) - Date.now()));
+      } else {
+        window.localStorage.removeItem(SLEEP_TIMER_KEY);
+      }
     } catch {}
   }, []);
 
@@ -421,6 +445,47 @@ export default function MusicPage() {
   useEffect(() => {
     if (!active && showMiniPlayer) setShowMiniPlayer(false);
   }, [active, showMiniPlayer]);
+
+  useEffect(() => {
+    const detail = activeDetail || active;
+    const url = activeDetail?.streamUrls?.[quality] || '';
+    window.getPlayerStatus = () => ({
+      currentTime: Math.round((videoRef.current?.currentTime || 0) * 1000),
+      isPaused: videoRef.current ? videoRef.current.paused : !isPlaying,
+      album: detail?.album || 'JaSH ViBeS',
+      artist: detail?.artists || 'Tamil Music',
+      title: detail?.title || 'JaSH ViBeS',
+      artwork: detail?.image || '',
+      url,
+    });
+    window.updatePlayerStatus = (mediaPlayerStatus = {}) => {
+      const video = videoRef.current;
+      if (!video) return;
+      if (Number(mediaPlayerStatus.currentTime) > 0) video.currentTime = Number(mediaPlayerStatus.currentTime) / 1000;
+      if (mediaPlayerStatus.isPaused && !video.paused) video.pause();
+      else if (mediaPlayerStatus.isPaused === false && video.paused) video.play().catch(() => {});
+    };
+    return () => {
+      if (window.getPlayerStatus) delete window.getPlayerStatus;
+      if (window.updatePlayerStatus) delete window.updatePlayerStatus;
+    };
+  }, [activeDetail, active, quality, isPlaying]);
+
+  useEffect(() => {
+    if (!sleepEndAt) return;
+    let cancelled = false;
+    const tick = () => {
+      if (cancelled) return;
+      const remaining = Math.max(0, sleepEndAt - Date.now());
+      setSleepRemainingMs(remaining);
+      if (remaining <= 0) {
+        stopForSleepTimer();
+      }
+    };
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [sleepEndAt]);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -608,6 +673,75 @@ export default function MusicPage() {
     return () => { video.removeEventListener('timeupdate', onTime); video.removeEventListener('durationchange', onDuration); video.removeEventListener('loadedmetadata', onDuration); video.removeEventListener('play', onPlay); video.removeEventListener('pause', onPause); video.removeEventListener('ended', onEnded); };
   }, [activeKey, repeatMode, shuffleEnabled, queueTracks]);
 
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+    const detail = activeDetail || active;
+    if (!detail) return;
+
+    try {
+      const artwork = detail.image
+        ? [
+            { src: detail.image, sizes: '96x96' },
+            { src: detail.image, sizes: '192x192' },
+            { src: detail.image, sizes: '512x512' },
+          ]
+        : [];
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: detail.title || 'JaSH ViBeS',
+        artist: detail.artists || 'Tamil Music',
+        album: detail.album || 'JaSH ViBeS',
+        artwork,
+      });
+    } catch {}
+
+    const video = videoRef.current;
+    const handlers = {
+      play: () => { setShouldAutoplay(true); videoRef.current?.play?.().catch(() => {}); },
+      pause: () => videoRef.current?.pause?.(),
+      previoustrack: () => playPrevious(),
+      nexttrack: () => playNext(false),
+      seekbackward: (event) => {
+        const node = videoRef.current;
+        if (!node) return;
+        seekTo(Math.max(0, (node.currentTime || 0) - (event.seekOffset || 10)));
+      },
+      seekforward: (event) => {
+        const node = videoRef.current;
+        if (!node) return;
+        seekTo(Math.min(duration || Number.MAX_SAFE_INTEGER, (node.currentTime || 0) + (event.seekOffset || 10)));
+      },
+      seekto: (event) => {
+        if (event.seekTime === undefined) return;
+        const node = videoRef.current;
+        if (event.fastSeek && node?.fastSeek) node.fastSeek(event.seekTime);
+        else seekTo(event.seekTime);
+      },
+    };
+
+    Object.entries(handlers).forEach(([action, handler]) => {
+      try { navigator.mediaSession.setActionHandler(action, handler); } catch {}
+    });
+    try { navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused'; } catch {}
+
+    return () => {
+      Object.keys(handlers).forEach((action) => {
+        try { navigator.mediaSession.setActionHandler(action, null); } catch {}
+      });
+    };
+  }, [activeDetail?.seokey, active?.seokey, isPlaying, duration, repeatMode, shuffleEnabled, queueTracks]);
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.mediaSession?.setPositionState) return;
+    if (!duration || !Number.isFinite(duration)) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration,
+        playbackRate: videoRef.current?.playbackRate || 1,
+        position: Math.min(currentTime || 0, duration),
+      });
+    } catch {}
+  }, [currentTime, duration]);
+
   function toggleFavorite(track) {
     const key = trackKey(track);
     const next = favoriteSet.has(key) ? favorites.filter((item) => item !== key) : [...favorites, key];
@@ -634,6 +768,53 @@ export default function MusicPage() {
       if (volume === 0) setVolume(0.7);
       setMuted(false);
     } else setMuted(true);
+  }
+
+  function startSleepTimer(minutes) {
+    const durationMs = Math.max(1, Number(minutes || 0)) * 60 * 1000;
+    const endAt = Date.now() + durationMs;
+    setSleepEndAt(endAt);
+    setSleepDurationMs(durationMs);
+    setSleepRemainingMs(durationMs);
+    setSleepOverlay(false);
+    setShowSleepMenu(false);
+    try { window.localStorage.setItem(SLEEP_TIMER_KEY, JSON.stringify({ endAt, durationMs })); } catch {}
+  }
+
+  function cancelSleepTimer() {
+    setSleepEndAt(0);
+    setSleepDurationMs(0);
+    setSleepRemainingMs(0);
+    setSleepOverlay(false);
+    setShowSleepMenu(false);
+    try { window.localStorage.removeItem(SLEEP_TIMER_KEY); } catch {}
+  }
+
+  function stopMedianBackgroundMedia() {
+    try { window.median?.backgroundMedia?.stop?.(); } catch {}
+    try { window.gonative?.backgroundMedia?.stop?.(); } catch {}
+  }
+
+  function stopForSleepTimer() {
+    if (!sleepEndAt) return;
+    const video = videoRef.current;
+    try { video?.pause?.(); } catch {}
+    try { video?.removeAttribute?.('src'); video?.load?.(); } catch {}
+    try { playerRef.current?.destroy?.(); playerRef.current = null; } catch {}
+    stopMedianBackgroundMedia();
+    setIsPlaying(false);
+    setShouldAutoplay(false);
+    setPlayerStatus('idle');
+    setActive(null);
+    setActiveDetail(null);
+    setQuality('');
+    setSleepEndAt(0);
+    setSleepDurationMs(0);
+    setSleepRemainingMs(0);
+    setShowSleepMenu(false);
+    setSleepOverlay(true);
+    try { window.localStorage.removeItem(SLEEP_TIMER_KEY); } catch {}
+    setTimeout(() => { try { window.close(); } catch {} }, 350);
   }
 
   async function openLyrics() {
@@ -932,6 +1113,9 @@ export default function MusicPage() {
   }, [syncedLyricLines, currentTime]);
   const effectiveVolume = muted ? 0 : Math.min(1, Math.max(0, Number(volume) || 0));
   const volumeIcon = effectiveVolume === 0 ? '🔇' : effectiveVolume < 0.45 ? '🔉' : '🔊';
+  const sleepActive = sleepEndAt > 0 && sleepRemainingMs > 0;
+  const sleepProgress = sleepActive && sleepDurationMs ? Math.max(0, Math.min(1, sleepRemainingMs / sleepDurationMs)) : 0;
+  const sleepCircle = 2 * Math.PI * 17;
 
   useEffect(() => {
     if (showLyrics && activeLyricRef.current) {
@@ -1116,6 +1300,16 @@ export default function MusicPage() {
         </section>
       </div>
 
+      {sleepOverlay ? (
+        <div className="fixed inset-0 z-[90] grid place-items-center bg-black p-6 text-center text-white" onClick={() => setSleepOverlay(false)}>
+          <div>
+            <div className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-fuchsia-300/30 bg-fuchsia-500/10 text-4xl">☾</div>
+            <h2 className="mt-5 text-3xl font-black">Sleep timer ended</h2>
+            <p className="mt-2 text-sm text-zinc-400">Music stopped. Tap anywhere to wake the app.</p>
+          </div>
+        </div>
+      ) : null}
+
       {showMiniPlayer && playingTrack ? (
         <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/70 p-3 pb-28 backdrop-blur-xl sm:items-center sm:p-5" onClick={() => setShowMiniPlayer(false)}>
           <section
@@ -1172,6 +1366,7 @@ export default function MusicPage() {
 
             <div className="mt-4 flex items-center justify-center gap-2">
               <button type="button" onClick={() => { setShowMiniPlayer(false); openLyrics(); }} className="rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-xs font-black text-zinc-200 transition hover:border-fuchsia-300/40 hover:text-white">Lyrics</button>
+              <button type="button" onClick={() => setShowSleepMenu((value) => !value)} className="rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-xs font-black text-zinc-200 transition hover:border-fuchsia-300/40 hover:text-white">Sleep</button>
               <button type="button" onClick={() => toggleFavorite(playingTrack)} className={`rounded-full border px-4 py-2 text-xs font-black transition ${favoriteSet.has(trackKey(playingTrack)) ? 'border-yellow-300 bg-yellow-300/15 text-yellow-100' : 'border-white/10 bg-white/[0.05] text-zinc-200 hover:border-yellow-300/40'}`}>{favoriteSet.has(trackKey(playingTrack)) ? '★ Saved' : '☆ Save'}</button>
             </div>
 
@@ -1209,6 +1404,18 @@ export default function MusicPage() {
         </div>
       ) : null}
 
+      {showSleepMenu ? (
+        <div className="fixed inset-x-3 bottom-28 z-[65] rounded-3xl border border-fuchsia-400/20 bg-[#120012]/95 p-4 shadow-2xl shadow-fuchsia-950/40 backdrop-blur-xl sm:left-auto sm:right-5 sm:w-[24rem]">
+          <div className="mb-3 flex items-center justify-between gap-3"><h3 className="text-sm font-black uppercase tracking-[0.24em] text-fuchsia-200">Sleep Timer</h3><button type="button" onClick={() => setShowSleepMenu(false)} className="rounded-full border border-white/10 px-3 py-1 text-xs font-bold text-zinc-300">Close</button></div>
+          {sleepActive ? <p className="mb-3 rounded-2xl border border-fuchsia-300/20 bg-fuchsia-500/10 p-3 text-sm font-bold text-fuchsia-100">Stopping in {formatCountdown(sleepRemainingMs)}</p> : null}
+          <div className="grid grid-cols-3 gap-2">
+            {SLEEP_PRESETS.map((minutes) => <button key={minutes} type="button" onClick={() => startSleepTimer(minutes)} className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 text-sm font-black text-white hover:border-fuchsia-300/40">{minutes}m</button>)}
+          </div>
+          <div className="mt-3 flex gap-2"><button type="button" onClick={() => { const custom = window.prompt('Sleep timer minutes', '20'); if (custom) startSleepTimer(Number(custom)); }} className="flex-1 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 text-sm font-black text-white hover:border-fuchsia-300/40">Custom</button><button type="button" onClick={cancelSleepTimer} className="flex-1 rounded-2xl border border-red-400/20 bg-red-500/10 px-3 py-3 text-sm font-black text-red-100 hover:border-red-300/60">Off</button></div>
+          <p className="mt-3 text-xs leading-5 text-zinc-500">At zero, music stops and the app tries to close. If Android blocks closing, a black sleep screen is shown.</p>
+        </div>
+      ) : null}
+
       <div className="fixed inset-x-0 bottom-0 z-50 border-t border-fuchsia-400/20 bg-[#080008]/95 px-3 py-3 shadow-2xl shadow-fuchsia-950/30 backdrop-blur-xl sm:px-5">
         <div className="mx-auto max-w-7xl">
           <input type="range" min="0" max={Math.max(duration, 0)} value={Math.min(currentTime, duration || currentTime || 0)} onChange={(event) => seekTo(event.target.value)} className="mb-3 h-1 w-full accent-fuchsia-400" aria-label="Seek" />
@@ -1243,6 +1450,11 @@ export default function MusicPage() {
               {playerStatus === 'loading' ? <p className="text-[11px] text-fuchsia-300">Loading stream...</p> : null}
               {playerStatus === 'error' ? <p className="truncate text-[11px] text-red-300">{error}</p> : null}
             </div>
+            <button type="button" onClick={() => setShowSleepMenu((value) => !value)} className={`relative hidden h-11 w-11 shrink-0 place-items-center rounded-full border text-sm font-black transition sm:grid ${sleepActive ? 'border-fuchsia-300 bg-fuchsia-500/15 text-fuchsia-100' : 'border-white/10 bg-white/[0.04] text-zinc-400 hover:border-fuchsia-400/40 hover:text-white'}`} title={sleepActive ? `Sleep ${formatCountdown(sleepRemainingMs)}` : 'Sleep timer'} aria-label="Sleep timer">
+              <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="3" /><circle cx="20" cy="20" r="17" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeDasharray={sleepCircle} strokeDashoffset={sleepCircle * (1 - sleepProgress)} /></svg>
+              <span className="relative">⏱</span>
+            </button>
+            <button type="button" onClick={() => setShowSleepMenu((value) => !value)} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border text-sm font-black transition sm:hidden ${sleepActive ? 'border-fuchsia-300 bg-fuchsia-500/15 text-fuchsia-100' : 'border-white/10 bg-white/[0.04] text-zinc-400'}`} title={sleepActive ? `Sleep ${formatCountdown(sleepRemainingMs)}` : 'Sleep timer'}>⏱</button>
             <video ref={videoRef} className="hidden" playsInline poster={activeDetail?.image || active?.image || undefined} />
             <div className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-2.5 py-2 lg:flex" title="Volume">
               <button type="button" onClick={toggleMute} className="grid h-7 w-7 place-items-center rounded-lg text-sm transition hover:bg-fuchsia-400/15" aria-label={effectiveVolume === 0 ? 'Unmute' : 'Mute'}>{volumeIcon}</button>

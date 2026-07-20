@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#050012" />
+    <title>JaSH ViBeS Offline</title>
+    <style>
+      html, body { margin: 0; min-height: 100%; background: #050012; color: #f8fafc; font-family: system-ui, -apple-system, Segoe UI, sans-serif; }
+      main { min-height: 100dvh; display: grid; place-items: center; padding: 24px; text-align: center; }
+      .card { max-width: 420px; border: 1px solid rgba(217, 70, 239, .25); border-radius: 28px; padding: 28px; background: radial-gradient(circle at 20% 0%, rgba(217,70,239,.22), transparent 34%), rgba(255,255,255,.04); box-shadow: 0 24px 80px rgba(0,0,0,.38); }
+      h1 { margin: 0; font-size: 34px; letter-spacing: .03em; }
+      p { color: #a1a1aa; line-height: 1.7; }
+      button { border: 1px solid rgba(255,255,255,.15); background: #d946ef; color: #050012; border-radius: 999px; padding: 12px 18px; font-weight: 900; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="card">
+        <h1>JaSH ViBeS</h1>
+        <p>You are offline or the app server is waking up. Reconnect and try again.</p>
+        <button onclick="location.reload()">Retry</button>
+      </section>
+    </main>
+  </body>
+</html>
