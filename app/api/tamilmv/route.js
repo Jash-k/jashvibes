@@ -22,6 +22,24 @@ function getMaxCacheLimit() {
   return clampNumber(process.env.TAMILMV_CACHE_LIMIT, DEFAULT_MAX_CACHE_LIMIT, DEFAULT_PAGE_LIMIT, 300);
 }
 
+function hasTMDBConfig() {
+  return Boolean(
+    process.env.TMDB ||
+      process.env.TMDB_KEYS ||
+      process.env.TMDB_API_KEYS ||
+      process.env.TMDB_API_KEY ||
+      process.env.TMDB_KEY ||
+      process.env.TMDB_TOKEN ||
+      process.env.TMDB_TOKENS ||
+      process.env.TMDB_BEARER_TOKEN ||
+      process.env.TMDB_BEARER_TOKENS ||
+      process.env.TMDB_ACCESS_TOKEN ||
+      process.env.TMDB_READ_ACCESS_TOKEN ||
+      process.env.TMDB_V4_TOKEN ||
+      process.env.TMDB_V4_BEARER_TOKEN,
+  );
+}
+
 function isAuthorized(request) {
   const token = new URL(request.url).searchParams.get('token') || request.headers.get('x-scrape-token') || '';
   const expected = process.env.SCRAPE || process.env.SCRAPE_TOKEN || '';
@@ -179,9 +197,10 @@ export async function GET(request) {
     const cachedItems = [...(cached?.movies || []), ...(cached?.series || [])];
     const cachedIsEmpty = cached && (!cached.count || cachedItems.length === 0);
     const cachedMissingTopReleaseMetadata = cached && cachedItems.some((item) => item.isTopRelease === undefined || item.section === undefined);
+    const cachedMissingTMDBMetadata = cached && matchTMDB && hasTMDBConfig() && cachedItems.some((item) => !item.tmdbId || !item.posterUrl);
     const needsRequestedPage = cached && groupNeedsMore(cached, paging.group, paging.end, maxCacheLimit);
 
-    if (cached && isFresh(cached) && !force && !cachedIsEmpty && !cachedMissingTopReleaseMetadata && !needsRequestedPage) {
+    if (cached && isFresh(cached) && !force && !cachedIsEmpty && !cachedMissingTopReleaseMetadata && !cachedMissingTMDBMetadata && !needsRequestedPage) {
       return NextResponse.json(
         {
           ...paginatePayload(cached, paging, maxCacheLimit),
@@ -196,7 +215,12 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Unauthorized refresh token' }, { status: 401 });
     }
 
-    const payload = await scrapeAndCache({ withPosters, matchTMDB, cacheLimit: requestedCacheLimit });
+    const effectiveMatchTMDB = matchTMDB && hasTMDBConfig();
+    const payload = await scrapeAndCache({
+      withPosters: withPosters || !effectiveMatchTMDB,
+      matchTMDB: effectiveMatchTMDB,
+      cacheLimit: requestedCacheLimit,
+    });
     cached = payload.count > 0 ? await getCachedScrape() : null;
 
     return NextResponse.json(

@@ -91,6 +91,7 @@ export default function LiveTVPage() {
   const [channels, setChannels] = useState([]);
   const [sources, setSources] = useState([]);
   const [active, setActive] = useState(null);
+  const [lastViewed, setLastViewed] = useState(null);
   const [status, setStatus] = useState('loading');
   const [playerStatus, setPlayerStatus] = useState('idle');
   const [playerError, setPlayerError] = useState('');
@@ -116,6 +117,7 @@ export default function LiveTVPage() {
       setChannels(cached.channels || []);
       setSources(cached.sources || []);
       setActive(cached.active || pickInitialChannel(cached.channels || []));
+      setLastViewed(cached.lastViewed || null);
       setStatus(cached.status || 'ready');
       setError(cached.error || '');
       setQuery(cached.query || '');
@@ -151,8 +153,8 @@ export default function LiveTVPage() {
   }, []);
 
   useEffect(() => {
-    writeSessionCache(LIVE_CACHE_KEY, { channels, sources, active, status, error, query, category, sourceFilter, showFavoritesOnly, lastUpdated });
-  }, [channels, sources, active, status, error, query, category, sourceFilter, showFavoritesOnly, lastUpdated]);
+    writeSessionCache(LIVE_CACHE_KEY, { channels, sources, active, lastViewed, status, error, query, category, sourceFilter, showFavoritesOnly, lastUpdated });
+  }, [channels, sources, active, lastViewed, status, error, query, category, sourceFilter, showFavoritesOnly, lastUpdated]);
 
   useEffect(() => {
     const onScroll = () => saveScroll(LIVE_CACHE_KEY);
@@ -379,6 +381,34 @@ export default function LiveTVPage() {
     });
   }, [channels, category, sourceFilter, query, showFavoritesOnly, favoriteSet]);
 
+  const activeFilteredIndex = useMemo(() => {
+    if (!active?.id) return -1;
+    return filteredChannels.findIndex((channel) => channel.id === active.id);
+  }, [filteredChannels, active?.id]);
+
+  function selectChannel(channel, { remember = true } = {}) {
+    if (!channel) return;
+    setActive((current) => {
+      if (remember && current?.id && current.id !== channel.id) setLastViewed(current);
+      return channel;
+    });
+  }
+
+  function navigateChannel(direction) {
+    const list = filteredChannels.length ? filteredChannels : channels;
+    if (!list.length) return;
+    const currentIndex = list.findIndex((channel) => channel.id === active?.id);
+    const baseIndex = currentIndex >= 0 ? currentIndex : direction > 0 ? -1 : 0;
+    const nextIndex = (baseIndex + direction + list.length) % list.length;
+    selectChannel(list[nextIndex]);
+  }
+
+  function returnToLastChannel() {
+    if (!lastViewed?.id) return;
+    const target = channels.find((channel) => channel.id === lastViewed.id) || lastViewed;
+    selectChannel(target);
+  }
+
   function toggleFavorite(channel) {
     const next = favoriteSet.has(channel.id)
       ? favorites.filter((id) => id !== channel.id)
@@ -496,7 +526,37 @@ export default function LiveTVPage() {
               ) : null}
             </div>
 
-            <div className="mt-4 space-y-3">
+            <div className="mt-4 space-y-2 sm:space-y-3">
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => navigateChannel(-1)}
+                  disabled={!filteredChannels.length && !channels.length}
+                  className="rounded-xl border border-white/10 bg-white/[0.04] px-2 py-2.5 text-xs font-black text-white transition hover:border-red-500/50 disabled:opacity-40 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm"
+                  title="Previous channel"
+                >
+                  ‹ Pre
+                </button>
+                <button
+                  type="button"
+                  onClick={returnToLastChannel}
+                  disabled={!lastViewed?.id}
+                  className="rounded-xl border border-orange-400/25 bg-orange-500/10 px-2 py-2.5 text-xs font-black text-orange-100 transition hover:border-orange-300/60 disabled:opacity-40 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm"
+                  title={lastViewed?.name ? `Return to ${lastViewed.name}` : 'Return to last viewed channel'}
+                >
+                  ↩ Return
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigateChannel(1)}
+                  disabled={!filteredChannels.length && !channels.length}
+                  className="rounded-xl border border-white/10 bg-white/[0.04] px-2 py-2.5 text-xs font-black text-white transition hover:border-red-500/50 disabled:opacity-40 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm"
+                  title="Next channel"
+                >
+                  Nxt ›
+                </button>
+              </div>
+              {lastViewed?.name ? <p className="truncate px-1 text-[10px] font-semibold text-zinc-600 sm:text-xs">Last viewed: {lastViewed.name}</p> : null}
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                 <button onClick={enterFullscreen} className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-bold text-white transition hover:border-red-500/50">Fullscreen</button>
                 {active?.url ? <a href={active.url} target="_blank" rel="noreferrer" className="rounded-2xl bg-red-600 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-red-500">Open Directly</a> : null}
@@ -535,7 +595,7 @@ export default function LiveTVPage() {
               <button
                 key={channel.id}
                 type="button"
-                onClick={() => setActive(channel)}
+                onClick={() => selectChannel(channel)}
                 className={`flex w-full items-center gap-3 rounded-2xl border p-2.5 text-left transition sm:rounded-3xl sm:p-3 ${active?.id === channel.id ? 'border-red-500/70 bg-red-600/15' : 'border-white/10 bg-zinc-950/80 hover:border-red-500/40'}`}
               >
                 <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/5 sm:h-14 sm:w-14 sm:rounded-2xl">
