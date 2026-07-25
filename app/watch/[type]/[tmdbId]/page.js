@@ -364,7 +364,6 @@ export default function WatchByTMDBPage() {
                 ) : (
                   <>
                     <option value="auto">Auto Priority (TamilOTT first)</option>
-                    <option value="screenscape">ScreenScape</option>
                     <option value="vidlink">VidLink</option>
                     <option value="vidnest">VidNest</option>
                     <option value="videasy">Videasy</option>
@@ -563,7 +562,7 @@ export default function WatchByTMDBPage() {
             <div>
               <h2 className="text-xl font-bold text-white">Embed Status</h2>
               <p className="mt-1 text-xs text-zinc-500">
-                Choose any source manually. Current modules: TamilOTT JSON, ScreenScape, VidLink, VidNest, Videasy, VidZee, VidRock, VixSrc, 1Embed, and VidSrc mirrors.
+                Choose any source manually. Current modules: TamilOTT JSON, VidLink, VidNest, Videasy, VidZee, VidRock, VixSrc, 1Embed, VidSrc SBS, and VidSrc mirrors.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
