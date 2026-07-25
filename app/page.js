@@ -576,6 +576,12 @@ export default function LandingPage() {
                 >
                   LiVe📺
                 </Link>
+                <Link
+                  href="/stremio"
+                  className="rounded-full border border-fuchsia-500/25 bg-fuchsia-500/10 px-4 py-2 text-sm font-black text-fuchsia-100 transition hover:border-fuchsia-400/70 hover:bg-fuchsia-500/20"
+                >
+                  StReMiO📡
+                </Link>
                 <CleanEmbedButtons />
               </div>
             </div>

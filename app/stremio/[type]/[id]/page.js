@@ -1,0 +1,183 @@
+'use client';
+
+import Link from 'next/link';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useParams } from 'next/navigation';
+
+function isHls(url = '') {
+  return String(url).toLowerCase().includes('.m3u8');
+}
+
+function isDash(url = '') {
+  return String(url).toLowerCase().includes('.mpd');
+}
+
+export default function StremioPlayerPage() {
+  const params = useParams();
+  const type = params?.type === 'series' ? 'series' : 'movie';
+  const id = decodeURIComponent(String(params?.id || ''));
+  const videoRef = useRef(null);
+  const shellRef = useRef(null);
+  const playerRef = useRef(null);
+  const [item, setItem] = useState(null);
+  const [metaStatus, setMetaStatus] = useState('loading');
+  const [streamStatus, setStreamStatus] = useState('idle');
+  const [error, setError] = useState('');
+  const [selectedVideoId, setSelectedVideoId] = useState(id);
+  const [streams, setStreams] = useState([]);
+  const [streamIndex, setStreamIndex] = useState(0);
+
+  const activeStream = streams[streamIndex] || null;
+
+  useEffect(() => {
+    async function loadMeta() {
+      try {
+        setMetaStatus('loading');
+        setError('');
+        const response = await fetch(`/api/stremio/meta?type=${encodeURIComponent(type)}&id=${encodeURIComponent(id)}`, { cache: 'no-store' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data?.error || 'Stremio meta failed');
+        setItem(data.item);
+        if (type === 'series' && data.item?.videos?.length && !String(id).includes(':')) {
+          setSelectedVideoId(data.item.videos[0].id);
+        }
+        setMetaStatus('ready');
+      } catch (err) {
+        setMetaStatus('error');
+        setError(err.message || 'Unable to load Stremio item');
+      }
+    }
+    loadMeta();
+  }, [type, id]);
+
+  useEffect(() => {
+    if (!selectedVideoId) return;
+    async function loadStreams() {
+      try {
+        setStreamStatus('loading');
+        setError('');
+        setStreams([]);
+        setStreamIndex(0);
+        const response = await fetch(`/api/stremio/stream?type=${encodeURIComponent(type)}&id=${encodeURIComponent(selectedVideoId)}`, { cache: 'no-store' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data?.error || 'Stremio stream failed');
+        setStreams(data.streams || []);
+        if (!data.streams?.length) throw new Error(data.blockedCount ? 'Streams were returned but blocked by safety filters / allowed hosts.' : 'No streams found for this title.');
+        setStreamStatus('ready');
+      } catch (err) {
+        setStreamStatus('error');
+        setError(err.message || 'Unable to load Stremio streams');
+      }
+    }
+    loadStreams();
+  }, [type, selectedVideoId]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    const url = activeStream?.url;
+    if (!video || !url) return;
+    let cancelled = false;
+
+    async function destroyPlayer() {
+      if (playerRef.current) {
+        try { await playerRef.current.destroy(); } catch {}
+        playerRef.current = null;
+      }
+    }
+
+    async function load() {
+      try {
+        await destroyPlayer();
+        if (cancelled) return;
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+
+        if (isHls(url) || isDash(url)) {
+          const shakaModule = await import('shaka-player/dist/shaka-player.compiled.js');
+          const shaka = shakaModule.default || window.shaka || shakaModule;
+          shaka.polyfill?.installAll?.();
+          const player = new shaka.Player();
+          playerRef.current = player;
+          await player.attach(video);
+          await player.load(url);
+          if (!cancelled) video.play().catch(() => {});
+        } else {
+          video.src = url;
+          video.load();
+          video.play().catch(() => {});
+        }
+      } catch (err) {
+        if (!cancelled) setError(err.message || 'Playback failed. Try Open Directly or another stream quality.');
+      }
+    }
+
+    load();
+    return () => { cancelled = true; destroyPlayer(); };
+  }, [activeStream?.url]);
+
+  async function fullscreen() {
+    const element = shellRef.current;
+    try {
+      if (element?.requestFullscreen) await element.requestFullscreen();
+      else if (element?.webkitRequestFullscreen) element.webkitRequestFullscreen();
+    } catch {}
+  }
+
+  const selectedEpisode = useMemo(() => {
+    return item?.videos?.find((video) => video.id === selectedVideoId) || null;
+  }, [item, selectedVideoId]);
+
+  return (
+    <main className="min-h-dvh bg-[#050012] text-zinc-100">
+      <header className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/90 px-4 py-3 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+          <Link href="/stremio" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">← Stremio</Link>
+          <p className="text-[10px] font-black uppercase tracking-[0.30em] text-fuchsia-300">Player</p>
+        </div>
+      </header>
+
+      <section className="mx-auto grid max-w-7xl gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[1.45fr_0.75fr] lg:px-8">
+        <div className="space-y-4">
+          <div ref={shellRef} className="classics-player-shell overflow-hidden rounded-3xl border border-white/10 bg-black shadow-2xl shadow-black fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0">
+            <div className="relative aspect-video h-full w-full bg-black fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:aspect-auto">
+              <video ref={videoRef} className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-contain" controls playsInline poster={selectedEpisode?.thumbnail || item?.backdropUrl || item?.posterUrl || undefined} />
+              {streamStatus === 'loading' ? <div className="absolute inset-0 grid place-items-center bg-black/50"><span className="rounded-full bg-black/80 px-5 py-3 text-sm font-bold">Loading Stremio stream...</span></div> : null}
+              {streamStatus === 'error' ? <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-red-500/30 bg-red-950/80 p-3 text-sm text-red-100">{error}</div> : null}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-white/10 bg-zinc-950/80 p-4">
+            <h1 className="text-2xl font-black text-white">{item?.title || 'Stremio'}</h1>
+            {selectedEpisode ? <p className="mt-1 text-sm text-fuchsia-200">S{selectedEpisode.season} E{selectedEpisode.episode} • {selectedEpisode.title}</p> : null}
+            <p className="mt-2 text-sm leading-6 text-zinc-400">{selectedEpisode?.synopsis || item?.synopsis || ''}</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {type === 'series' && item?.videos?.length ? (
+                <select value={selectedVideoId} onChange={(event) => setSelectedVideoId(event.target.value)} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-fuchsia-400 sm:col-span-2 lg:col-span-1">
+                  {item.videos.map((video) => <option key={video.id} value={video.id}>S{video.season} E{video.episode} - {video.title}</option>)}
+                </select>
+              ) : null}
+              <select value={streamIndex} onChange={(event) => setStreamIndex(Number(event.target.value) || 0)} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-fuchsia-400">
+                {streams.map((stream, index) => <option key={`${stream.url}-${index}`} value={index}>{stream.label}</option>)}
+              </select>
+              <button onClick={fullscreen} className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-bold text-white">Fullscreen</button>
+              {activeStream?.url ? <a href={activeStream.url} target="_blank" rel="noreferrer" className="rounded-2xl bg-fuchsia-500 px-4 py-3 text-center text-sm font-bold text-black">Open Directly</a> : null}
+            </div>
+          </div>
+        </div>
+
+        <aside className="rounded-3xl border border-white/10 bg-zinc-950/80 p-4">
+          {item?.posterUrl ? <img src={item.posterUrl} alt="" className="mx-auto max-h-[28rem] rounded-2xl object-cover" /> : null}
+          <div className="mt-4 flex flex-wrap gap-2">
+            {item?.rating ? <span className="rounded-full bg-yellow-500/10 px-3 py-1 text-xs font-bold text-yellow-100">IMDb {item.rating}</span> : null}
+            {(item?.genres || []).map((genre) => <span key={genre} className="rounded-full bg-fuchsia-500/10 px-3 py-1 text-xs font-bold text-fuchsia-100">{genre}</span>)}
+            {streams.length ? <span className="rounded-full bg-green-500/10 px-3 py-1 text-xs font-bold text-green-100">{streams.length} streams</span> : null}
+          </div>
+          {metaStatus === 'loading' ? <p className="mt-4 text-sm text-zinc-500">Loading metadata...</p> : null}
+          {metaStatus === 'error' ? <p className="mt-4 text-sm text-red-300">{error}</p> : null}
+          <p className="mt-5 text-xs leading-5 text-zinc-500">Streams are loaded from your configured authorized Stremio addon. If a MKV does not play in this browser/WebView, use Open Directly or try another quality.</p>
+        </aside>
+      </section>
+    </main>
+  );
+}
