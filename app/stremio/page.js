@@ -3,6 +3,17 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+async function readJsonResponse(response, fallbackMessage = 'Request failed') {
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const text = await response.text().catch(() => '');
+    const isHtml = /^\s*</.test(text) || contentType.includes('text/html');
+    throw new Error(isHtml
+      ? 'Stremio API route returned an HTML page instead of JSON. Deploy the latest Stremio API files and set STREMIO env.'
+      : `${fallbackMessage}: server returned ${contentType || 'non-JSON response'}`);
+  }
+  return response.json();
+}
 function StremioCard({ item }) {
   return (
     <Link
@@ -26,7 +37,7 @@ function StremioCard({ item }) {
   );
 }
 
-function Section({ title, subtitle, items, loading, error, hasMore, onMore }) {
+function Section({ title, subtitle, items, loading, error, hasMore, onMore, compact = false }) {
   return (
     <section className="rounded-[2rem] border border-fuchsia-400/15 bg-white/[0.035] p-4 sm:p-5">
       <div className="mb-4 flex items-end justify-between gap-3">
@@ -37,7 +48,7 @@ function Section({ title, subtitle, items, loading, error, hasMore, onMore }) {
         {hasMore ? <button type="button" onClick={onMore} disabled={loading} className="rounded-full border border-fuchsia-300/30 bg-fuchsia-500/10 px-4 py-2 text-xs font-black text-fuchsia-100 disabled:opacity-60">More</button> : null}
       </div>
       {error ? <div className="mb-4 rounded-2xl border border-red-500/30 bg-red-950/20 p-4 text-sm text-red-200">{error}</div> : null}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+      <div className={compact ? "grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-2 2xl:grid-cols-3" : "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"}>
         {items.map((item) => <StremioCard key={`${item.type}-${item.id}`} item={item} />)}
         {loading ? Array.from({ length: 6 }).map((_, index) => <div key={index} className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 sm:rounded-3xl"><div className="aspect-[2/3] animate-pulse bg-zinc-900" /><div className="space-y-2 p-3"><div className="h-4 animate-pulse rounded bg-zinc-800" /><div className="h-3 w-2/3 animate-pulse rounded bg-zinc-900" /></div></div>) : null}
       </div>
@@ -61,7 +72,7 @@ export default function StremioPage() {
     try {
       setter((value) => ({ ...value, loading: true, error: '' }));
       const response = await fetch(`/api/stremio/catalog?type=${type}&skip=${skip}`, { cache: 'no-store' });
-      const data = await response.json();
+      const data = await readJsonResponse(response, 'Stremio request failed');
       if (!response.ok) throw new Error(data?.error || 'Catalog failed');
       setter((value) => ({
         items: append ? [...value.items, ...(data.items || [])] : (data.items || []),
@@ -81,7 +92,7 @@ export default function StremioPage() {
       try {
         setStatus('loading');
         const response = await fetch('/api/stremio/manifest', { cache: 'no-store' });
-        const data = await response.json();
+        const data = await readJsonResponse(response, 'Stremio request failed');
         if (!response.ok || !data.ok) throw new Error(data?.error || 'Stremio manifest failed');
         setManifest(data.manifest);
         setStatus('ready');
@@ -127,8 +138,10 @@ export default function StremioPage() {
         {status === 'error' ? <div className="rounded-3xl border border-red-500/30 bg-red-950/20 p-5 text-red-200">{error}<p className="mt-2 text-xs text-zinc-500">Set STREMIO to your addon manifest URL.</p></div> : null}
         {status === 'loading' ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-8 text-center text-zinc-400">Loading Stremio addon...</div> : null}
 
-        <Section title="Tamil Movies" subtitle={movies.catalogName || 'Movie catalog'} items={movies.items} loading={movies.loading} error={movies.error} hasMore={movies.hasMore} onMore={() => loadCatalog('movie', true)} />
-        <Section title="Tamil Series" subtitle={series.catalogName || 'Series catalog'} items={series.items} loading={series.loading} error={series.error} hasMore={series.hasMore} onMore={() => loadCatalog('series', true)} />
+        <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
+          <Section title="Tamil Movies" subtitle={movies.catalogName || 'Movie catalog'} items={movies.items} loading={movies.loading} error={movies.error} hasMore={movies.hasMore} onMore={() => loadCatalog('movie', true)} compact />
+          <Section title="Tamil Series" subtitle={series.catalogName || 'Series catalog'} items={series.items} loading={series.loading} error={series.error} hasMore={series.hasMore} onMore={() => loadCatalog('series', true)} compact />
+        </div>
         <div ref={sentinelRef} className="h-12" />
       </section>
     </main>

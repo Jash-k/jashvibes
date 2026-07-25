@@ -4,12 +4,38 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 
+async function readJsonResponse(response, fallbackMessage = 'Request failed') {
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const text = await response.text().catch(() => '');
+    const isHtml = /^\s*</.test(text) || contentType.includes('text/html');
+    throw new Error(isHtml
+      ? 'Stremio API route returned an HTML page instead of JSON. Deploy the latest Stremio API files and set STREMIO env.'
+      : `${fallbackMessage}: server returned ${contentType || 'non-JSON response'}`);
+  }
+  return response.json();
+}
 function isHls(url = '') {
   return String(url).toLowerCase().includes('.m3u8');
 }
 
 function isDash(url = '') {
   return String(url).toLowerCase().includes('.mpd');
+}
+
+function preferredSmoothStreamIndex(streams = []) {
+  if (!streams.length) return 0;
+  const ranked = streams
+    .map((stream, index) => ({ stream, index }))
+    .sort((a, b) => {
+      const aText = `${a.stream.name || ''} ${a.stream.title || ''} ${a.stream.label || ''}`.toLowerCase();
+      const bText = `${b.stream.name || ''} ${b.stream.title || ''} ${b.stream.label || ''}`.toLowerCase();
+      const a480 = /480p|360p/.test(aText) ? 1 : 0;
+      const b480 = /480p|360p/.test(bText) ? 1 : 0;
+      if (a480 !== b480) return b480 - a480;
+      return Number(a.stream.sizeBytes || 0) - Number(b.stream.sizeBytes || 0);
+    });
+  return ranked[0]?.index || 0;
 }
 
 export default function StremioPlayerPage() {
@@ -35,7 +61,7 @@ export default function StremioPlayerPage() {
         setMetaStatus('loading');
         setError('');
         const response = await fetch(`/api/stremio/meta?type=${encodeURIComponent(type)}&id=${encodeURIComponent(id)}`, { cache: 'no-store' });
-        const data = await response.json();
+        const data = await readJsonResponse(response, 'Stremio request failed');
         if (!response.ok) throw new Error(data?.error || 'Stremio meta failed');
         setItem(data.item);
         if (type === 'series' && data.item?.videos?.length && !String(id).includes(':')) {
@@ -59,10 +85,14 @@ export default function StremioPlayerPage() {
         setStreams([]);
         setStreamIndex(0);
         const response = await fetch(`/api/stremio/stream?type=${encodeURIComponent(type)}&id=${encodeURIComponent(selectedVideoId)}`, { cache: 'no-store' });
-        const data = await response.json();
+        const data = await readJsonResponse(response, 'Stremio request failed');
         if (!response.ok) throw new Error(data?.error || 'Stremio stream failed');
-        setStreams(data.streams || []);
-        if (!data.streams?.length) throw new Error(data.blockedCount ? 'Streams were returned but blocked by safety filters / allowed hosts.' : 'No streams found for this title.');
+        const nextStreams = data.streams || [];
+        setStreams(nextStreams);
+        if (!nextStreams.length) throw new Error(data.blockedCount ? 'Streams were returned but blocked by safety filters / allowed hosts.' : 'No streams found for this title.');
+        // Default to the smallest/480p stream for smoother playback on mobile and Render/HF-hosted direct files.
+        // Users can still switch to 720p/1080p from the selector.
+        setStreamIndex(preferredSmoothStreamIndex(nextStreams));
         setStreamStatus('ready');
       } catch (err) {
         setStreamStatus('error');
@@ -141,7 +171,7 @@ export default function StremioPlayerPage() {
         <div className="space-y-4">
           <div ref={shellRef} className="classics-player-shell overflow-hidden rounded-3xl border border-white/10 bg-black shadow-2xl shadow-black fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0">
             <div className="relative aspect-video h-full w-full bg-black fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:aspect-auto">
-              <video ref={videoRef} className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-contain" controls playsInline poster={selectedEpisode?.thumbnail || item?.backdropUrl || item?.posterUrl || undefined} />
+              <video ref={videoRef} className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-contain" controls playsInline preload="metadata" poster={selectedEpisode?.thumbnail || item?.backdropUrl || item?.posterUrl || undefined} />
               {streamStatus === 'loading' ? <div className="absolute inset-0 grid place-items-center bg-black/50"><span className="rounded-full bg-black/80 px-5 py-3 text-sm font-bold">Loading Stremio stream...</span></div> : null}
               {streamStatus === 'error' ? <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-red-500/30 bg-red-950/80 p-3 text-sm text-red-100">{error}</div> : null}
             </div>
@@ -151,6 +181,7 @@ export default function StremioPlayerPage() {
             <h1 className="text-2xl font-black text-white">{item?.title || 'Stremio'}</h1>
             {selectedEpisode ? <p className="mt-1 text-sm text-fuchsia-200">S{selectedEpisode.season} E{selectedEpisode.episode} • {selectedEpisode.title}</p> : null}
             <p className="mt-2 text-sm leading-6 text-zinc-400">{selectedEpisode?.synopsis || item?.synopsis || ''}</p>
+            <p className="mt-2 rounded-2xl border border-fuchsia-300/15 bg-fuchsia-500/10 px-3 py-2 text-xs leading-5 text-fuchsia-100">Smooth mode starts with the smallest/480p stream to reduce buffering. Switch quality manually if your network is fast.</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {type === 'series' && item?.videos?.length ? (
                 <select value={selectedVideoId} onChange={(event) => setSelectedVideoId(event.target.value)} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-fuchsia-400 sm:col-span-2 lg:col-span-1">
