@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 
 const FAVORITES_KEY = 'jash_live_tv_favorites';
-const LIVE_CACHE_KEY = 'jash:live:v1';
+const LIVE_CACHE_KEY = 'jash:live:v2';
 
 function normalize(value = '') {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -366,7 +366,14 @@ export default function LiveTVPage() {
     };
   }, [active]);
 
-  const categories = useMemo(() => unique(channels.map((channel) => channel.category || 'Tamil')), [channels]);
+  const categories = useMemo(() => {
+    const list = unique(channels.map((channel) => channel.category || 'Tamil'));
+    return list.sort((a, b) => {
+      if (a === 'Music') return -1;
+      if (b === 'Music') return 1;
+      return a.localeCompare(b);
+    });
+  }, [channels]);
   const sourceNames = useMemo(() => unique(channels.map((channel) => channel.source)), [channels]);
   const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
 
@@ -577,13 +584,22 @@ export default function LiveTVPage() {
                 {sourceNames.map((item) => <option key={item} value={item}>{item}</option>)}
               </select>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowFavoritesOnly((value) => !value)}
-              className={`mt-2 w-full rounded-2xl border px-4 py-2 text-sm font-black transition ${showFavoritesOnly ? 'border-yellow-400 bg-yellow-400/15 text-yellow-100' : 'border-white/10 bg-white/[0.04] text-zinc-300'}`}
-            >
-              {showFavoritesOnly ? 'Showing Favorites' : 'Show Favorites'}
-            </button>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setCategory((value) => value === 'Music' ? 'all' : 'Music')}
+                className={`rounded-2xl border px-4 py-2 text-sm font-black transition ${category === 'Music' ? 'border-fuchsia-400 bg-fuchsia-500/15 text-fuchsia-100' : 'border-white/10 bg-white/[0.04] text-zinc-300'}`}
+              >
+                ♫ Music
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowFavoritesOnly((value) => !value)}
+                className={`rounded-2xl border px-4 py-2 text-sm font-black transition ${showFavoritesOnly ? 'border-yellow-400 bg-yellow-400/15 text-yellow-100' : 'border-white/10 bg-white/[0.04] text-zinc-300'}`}
+              >
+                {showFavoritesOnly ? 'Favorites' : 'Favorites'}
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2 pr-1 lg:max-h-[70dvh] lg:overflow-y-auto">

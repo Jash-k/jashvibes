@@ -1297,7 +1297,7 @@ export default function MusicPage() {
                       <div className="mb-3 flex items-center justify-between gap-3"><h3 className="text-sm font-black uppercase tracking-[0.22em] text-fuchsia-200">Song CRUD</h3><div className="flex gap-2"><button type="button" onClick={addImportedTrack} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-black text-zinc-200 hover:border-fuchsia-300/40">Add</button><button type="button" onClick={() => setShowSongCrud(false)} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-black text-zinc-400 hover:border-fuchsia-300/40">Minimize</button></div></div>
                       <div className="grid gap-2">
                         {(selectedCollection.tracks || []).map((track, index) => (
-                          <div key={`${trackKey(track)}-manage-top-${index}`} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-2.5">
+                          <div key={`${trackKey(track)}-manage-top-${index}`} className="song-crud-row rounded-2xl border border-white/10 bg-white/[0.035] p-2.5">
                             <button type="button" onClick={() => playTrack(track, selectedCollection.tracks, true)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
                               <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-zinc-900">{track.image ? <img src={track.image} alt="" className="h-full w-full object-cover" /> : null}</div>
                               <div className="min-w-0"><p className="truncate text-sm font-black text-white">{track.title}</p><p className="truncate text-xs text-zinc-500">{track.artists || track.album || 'JioSaavn'}{track.language ? ` • ${track.language}` : ''}</p></div>
@@ -1374,7 +1374,7 @@ export default function MusicPage() {
                     <div className="mb-3 flex items-center justify-between gap-3"><h3 className="text-sm font-black uppercase tracking-[0.22em] text-fuchsia-200">Song CRUD</h3><button type="button" onClick={addImportedTrack} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-black text-zinc-200 hover:border-fuchsia-300/40">Add</button></div>
                     <div className="grid gap-2">
                       {(selectedCollection.tracks || []).map((track, index) => (
-                        <div key={`${trackKey(track)}-manage-${index}`} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-2.5">
+                        <div key={`${trackKey(track)}-manage-${index}`} className="song-crud-row rounded-2xl border border-white/10 bg-white/[0.035] p-2.5">
                           <button type="button" onClick={() => playTrack(track, selectedCollection.tracks, true)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
                             <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-zinc-900">{track.image ? <img src={track.image} alt="" className="h-full w-full object-cover" /> : null}</div>
                             <div className="min-w-0"><p className="truncate text-sm font-black text-white">{track.title}</p><p className="truncate text-xs text-zinc-500">{track.artists || track.album || 'JioSaavn'}{track.language ? ` • ${track.language}` : ''}</p></div>
@@ -1512,38 +1512,46 @@ export default function MusicPage() {
       ) : null}
 
       {showLyrics ? (
-        <div className="lyrics-panel fixed inset-x-3 bottom-28 z-50 max-h-[45dvh] overflow-y-auto rounded-3xl border border-fuchsia-400/20 bg-[#120012]/95 p-4 pr-12 shadow-2xl shadow-fuchsia-950/40 backdrop-blur-xl sm:left-auto sm:right-5 sm:w-[28rem]">
-          <button
-            type="button"
-            onClick={() => setShowLyrics(false)}
-            className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-black/35 text-lg font-black text-zinc-100 shadow-lg shadow-black/20 transition hover:border-fuchsia-300/50 hover:text-white"
-            aria-label="Close lyrics"
-            title="Close lyrics"
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 p-4 pb-28 backdrop-blur-md sm:p-6" onClick={() => setShowLyrics(false)}>
+          <div
+            className="lyrics-panel lyrics-panel-3d relative max-h-[72dvh] w-full max-w-lg overflow-y-auto rounded-[2.25rem] border border-fuchsia-300/25 bg-[radial-gradient(circle_at_20%_0%,rgba(217,70,239,0.30),transparent_30%),linear-gradient(160deg,#1a061b,#050008_58%,#120012)] p-5 pr-12 shadow-2xl shadow-fuchsia-950/60 sm:max-w-xl sm:p-6 sm:pr-14"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Lyrics"
           >
-            ×
-          </button>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-black uppercase tracking-[0.25em] text-fuchsia-200">Lyrics</h3>
-              {lyricsData?.source ? <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-600">{lyricsData.source === 'lrclib' ? 'LRCLIB' : lyricsData.source}</p> : null}
+            <button
+              type="button"
+              onClick={() => setShowLyrics(false)}
+              className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-black/35 text-xl font-black text-zinc-100 shadow-lg shadow-black/20 transition hover:border-fuchsia-300/50 hover:text-white"
+              aria-label="Close lyrics"
+              title="Close lyrics"
+            >
+              ×
+            </button>
+            <div className="mb-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.34em] text-fuchsia-300/80">Now Singing</p>
+              <h3 className="mt-1 line-clamp-2 text-2xl font-black tracking-tight text-white">Lyrics</h3>
+              {playingTrack?.title ? <p className="mt-1 truncate text-sm font-semibold text-zinc-400">{playingTrack.title}</p> : null}
+              {lyricsData?.source ? <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-600">{lyricsData.source === 'lrclib' ? 'LRCLIB' : lyricsData.source}</p> : null}
             </div>
+            {lyricsStatus === 'loading' ? <p className="text-sm leading-7 text-zinc-200">Loading lyrics...</p> : null}
+            {lyricsStatus !== 'loading' && syncedLyricLines.length ? (
+              <div className="space-y-2 py-2">
+                {syncedLyricLines.map((line, index) => (
+                  <p
+                    key={`${line.time}-${index}`}
+                    ref={index === activeLyricLineIndex ? activeLyricRef : null}
+                    className={`rounded-2xl px-3 py-2 text-base leading-7 transition sm:text-lg ${index === activeLyricLineIndex ? 'bg-fuchsia-400/15 text-fuchsia-50 shadow-lg shadow-fuchsia-950/20' : index < activeLyricLineIndex ? 'text-zinc-500' : 'text-zinc-200'}`}
+                  >
+                    {line.text}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+            {lyricsStatus !== 'loading' && !syncedLyricLines.length ? <p className="whitespace-pre-wrap text-base leading-8 text-zinc-200 sm:text-lg">{lyrics || 'Lyrics unavailable for this song.'}</p> : null}
+            {lyricsData?.matched ? <p className="mt-4 border-t border-white/10 pt-3 text-[11px] leading-5 text-zinc-500">Matched: {lyricsData.matched.trackName} • {lyricsData.matched.artistName}</p> : null}
           </div>
-          {lyricsStatus === 'loading' ? <p className="text-sm leading-7 text-zinc-200">Loading lyrics...</p> : null}
-          {lyricsStatus !== 'loading' && syncedLyricLines.length ? (
-            <div className="space-y-2 py-2">
-              {syncedLyricLines.map((line, index) => (
-                <p
-                  key={`${line.time}-${index}`}
-                  ref={index === activeLyricLineIndex ? activeLyricRef : null}
-                  className={`rounded-2xl px-3 py-2 text-sm leading-6 transition ${index === activeLyricLineIndex ? 'bg-fuchsia-400/15 text-fuchsia-50 shadow-lg shadow-fuchsia-950/20' : index < activeLyricLineIndex ? 'text-zinc-500' : 'text-zinc-200'}`}
-                >
-                  {line.text}
-                </p>
-              ))}
-            </div>
-          ) : null}
-          {lyricsStatus !== 'loading' && !syncedLyricLines.length ? <p className="whitespace-pre-wrap text-sm leading-7 text-zinc-200">{lyrics || 'Lyrics unavailable for this song.'}</p> : null}
-          {lyricsData?.matched ? <p className="mt-3 border-t border-white/10 pt-3 text-[11px] leading-5 text-zinc-500">Matched: {lyricsData.matched.trackName} • {lyricsData.matched.artistName}</p> : null}
         </div>
       ) : null}
 

@@ -317,3 +317,47 @@ html.day-mode .lyrics-panel [class*="text-zinc-500"],
 html.day-mode .lyrics-panel [class*="text-zinc-600"] {
   color: #64748b !important;
 }
+
+.song-crud-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.song-crud-row > * {
+  min-width: 0;
+}
+
+.song-crud-row > button:not(:first-child),
+.song-crud-row > span {
+  justify-self: stretch;
+  text-align: center;
+}
+
+@media (min-width: 640px) {
+  .song-crud-row {
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+  }
+
+  .song-crud-row > button:not(:first-child),
+  .song-crud-row > span {
+    justify-self: auto;
+  }
+}
+
+.lyrics-panel-3d {
+  transform: perspective(900px) rotateX(1.2deg) translateZ(0);
+  box-shadow:
+    0 30px 100px rgba(0, 0, 0, 0.65),
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+    0 1px 0 rgba(255, 255, 255, 0.12) inset;
+}
+
+html.day-mode .lyrics-panel-3d {
+  background: radial-gradient(circle at 20% 0%, rgba(217, 70, 239, 0.16), transparent 30%), linear-gradient(160deg, #ffffff, #fff7fd 58%, #fdf2f8) !important;
+  box-shadow:
+    0 30px 90px rgba(134, 25, 143, 0.20),
+    0 0 0 1px rgba(134, 25, 143, 0.10) inset,
+    0 1px 0 rgba(255, 255, 255, 0.9) inset !important;
+}
