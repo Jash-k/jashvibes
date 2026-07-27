@@ -9,7 +9,8 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') === 'series' ? 'series' : 'movie';
     const id = searchParams.get('id') || '';
-    const payload = await getStremioStreams({ type, id });
+    const source = searchParams.get('source') || '';
+    const payload = await getStremioStreams({ type, id, source });
     return NextResponse.json(payload, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     console.error('[api/stremio/stream] Error:', error);

@@ -43,6 +43,7 @@ export default function StremioPlayerPage() {
   const searchParams = useSearchParams();
   const type = params?.type === 'series' ? 'series' : 'movie';
   const id = decodeURIComponent(String(params?.id || ''));
+  const stremioSource = searchParams?.get('source') || '';
   const videoRef = useRef(null);
   const shellRef = useRef(null);
   const playerRef = useRef(null);
@@ -61,7 +62,9 @@ export default function StremioPlayerPage() {
       try {
         setMetaStatus('loading');
         setError('');
-        const response = await fetch(`/api/stremio/meta?type=${encodeURIComponent(type)}&id=${encodeURIComponent(id)}`, { cache: 'no-store' });
+        const metaParams = new URLSearchParams({ type, id });
+        if (stremioSource) metaParams.set('source', stremioSource);
+        const response = await fetch(`/api/stremio/meta?${metaParams.toString()}`, { cache: 'no-store' });
         const data = await readJsonResponse(response, 'Stremio request failed');
         if (!response.ok) throw new Error(data?.error || 'Stremio meta failed');
         setItem(data.item);
@@ -78,7 +81,7 @@ export default function StremioPlayerPage() {
       }
     }
     loadMeta();
-  }, [type, id, searchParams]);
+  }, [type, id, searchParams, stremioSource]);
 
   useEffect(() => {
     if (!selectedVideoId) return;
@@ -88,7 +91,9 @@ export default function StremioPlayerPage() {
         setError('');
         setStreams([]);
         setStreamIndex(0);
-        const response = await fetch(`/api/stremio/stream?type=${encodeURIComponent(type)}&id=${encodeURIComponent(selectedVideoId)}`, { cache: 'no-store' });
+        const streamParams = new URLSearchParams({ type, id: selectedVideoId });
+        if (stremioSource) streamParams.set('source', stremioSource);
+        const response = await fetch(`/api/stremio/stream?${streamParams.toString()}`, { cache: 'no-store' });
         const data = await readJsonResponse(response, 'Stremio request failed');
         if (!response.ok) throw new Error(data?.error || 'Stremio stream failed');
         const nextStreams = data.streams || [];
@@ -104,7 +109,7 @@ export default function StremioPlayerPage() {
       }
     }
     loadStreams();
-  }, [type, selectedVideoId]);
+  }, [type, selectedVideoId, stremioSource]);
 
   useEffect(() => {
     const video = videoRef.current;

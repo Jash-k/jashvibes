@@ -9,7 +9,8 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') === 'series' ? 'series' : 'movie';
     const id = searchParams.get('id') || '';
-    const item = await getStremioMeta({ type, id });
+    const source = searchParams.get('source') || '';
+    const item = await getStremioMeta({ type, id, source });
     return NextResponse.json({ item }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     console.error('[api/stremio/meta] Error:', error);
