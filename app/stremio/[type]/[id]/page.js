@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 
 async function readJsonResponse(response, fallbackMessage = 'Request failed') {
   const contentType = response.headers.get('content-type') || '';
@@ -40,6 +40,7 @@ function preferredSmoothStreamIndex(streams = []) {
 
 export default function StremioPlayerPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const type = params?.type === 'series' ? 'series' : 'movie';
   const id = decodeURIComponent(String(params?.id || ''));
   const videoRef = useRef(null);
@@ -65,7 +66,10 @@ export default function StremioPlayerPage() {
         if (!response.ok) throw new Error(data?.error || 'Stremio meta failed');
         setItem(data.item);
         if (type === 'series' && data.item?.videos?.length && !String(id).includes(':')) {
-          setSelectedVideoId(data.item.videos[0].id);
+          const wantedSeason = Number(searchParams?.get('season') || 1);
+          const wantedEpisode = Number(searchParams?.get('episode') || 1);
+          const wanted = data.item.videos.find((video) => Number(video.season) === wantedSeason && Number(video.episode) === wantedEpisode);
+          setSelectedVideoId(wanted?.id || data.item.videos[0].id);
         }
         setMetaStatus('ready');
       } catch (err) {
@@ -74,7 +78,7 @@ export default function StremioPlayerPage() {
       }
     }
     loadMeta();
-  }, [type, id]);
+  }, [type, id, searchParams]);
 
   useEffect(() => {
     if (!selectedVideoId) return;

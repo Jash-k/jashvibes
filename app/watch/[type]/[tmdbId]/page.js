@@ -160,6 +160,7 @@ export default function WatchByTMDBPage() {
   const [ottStreams, setOttStreams] = useState([]);
   const [selectedOttStreamId, setSelectedOttStreamId] = useState(initialOttStreamId);
   const [resolvedOttStreamId, setResolvedOttStreamId] = useState('');
+  const [stremioCheck, setStremioCheck] = useState({ status: 'idle', available: false, href: '', count: 0, error: '' });
 
   const resolveUrl = useMemo(() => {
     if (!type || !tmdbId) return null;
@@ -191,6 +192,40 @@ export default function WatchByTMDBPage() {
   }, [type, tmdbId, provider, isSeries, season, episode, selectedOttStreamId, isOttTitleOnly, ottTitle, ottYear]);
 
   const shouldShowOttStreamPicker = isOttTitleOnly || provider === 'tamilott' || resolveMode === 'tamilott-json-provider' || ottStreams.length > 0;
+
+  useEffect(() => {
+    if (isOttTitleOnly || !tmdbId || !type) {
+      setStremioCheck({ status: 'idle', available: false, href: '', count: 0, error: '' });
+      return;
+    }
+    const controller = new AbortController();
+    async function checkStremio() {
+      try {
+        setStremioCheck((current) => ({ ...current, status: 'checking', error: '' }));
+        const params = new URLSearchParams({ type, tmdbId: String(tmdbId) });
+        if (isSeries) {
+          params.set('season', String(season || 1));
+          params.set('episode', String(episode || 1));
+        }
+        const response = await fetch(`/api/stremio/check?${params.toString()}`, { signal: controller.signal, cache: 'no-store' });
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) throw new Error('Stremio check returned non-JSON response. Deploy latest API files.');
+        const data = await response.json();
+        setStremioCheck({
+          status: data.available ? 'available' : 'unavailable',
+          available: Boolean(data.available),
+          href: data.href || '',
+          count: data.count || 0,
+          error: data.error || data.reason || '',
+        });
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        setStremioCheck({ status: 'error', available: false, href: '', count: 0, error: err.message || 'Stremio check failed' });
+      }
+    }
+    checkStremio();
+    return () => controller.abort();
+  }, [type, tmdbId, isSeries, season, episode, isOttTitleOnly]);
 
   useEffect(() => {
     if (!(isOttTitleOnly && initialOttStreamId)) {
@@ -526,6 +561,24 @@ export default function WatchByTMDBPage() {
                   Stream
                 </button>
               ) : null}
+              {stremioCheck.available && stremioCheck.href ? (
+                <Link
+                  href={stremioCheck.href}
+                  className="rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/15 px-3 py-2.5 text-center text-xs font-bold text-fuchsia-100 transition hover:border-fuchsia-300 hover:bg-fuchsia-500/25 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
+                  title={`${stremioCheck.count} Stremio stream${stremioCheck.count === 1 ? '' : 's'} available`}
+                >
+                  Stremio📡
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2.5 text-xs font-bold text-zinc-500 opacity-60 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
+                  title={stremioCheck.error || (stremioCheck.status === 'checking' ? 'Checking Stremio streams...' : 'No Stremio streams found')}
+                >
+                  {stremioCheck.status === 'checking' ? 'Stremio…' : 'No Stremio'}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={enterFullscreen}

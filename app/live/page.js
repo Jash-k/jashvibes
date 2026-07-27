@@ -123,7 +123,7 @@ export default function LiveTVPage() {
       setQuery(cached.query || '');
       setCategory(cached.category || 'all');
       setSourceFilter(cached.sourceFilter || 'all');
-      setShowFavoritesOnly(Boolean(cached.showFavoritesOnly));
+      setShowFavoritesOnly(false);
       setLastUpdated(cached.lastUpdated || null);
       restoreScroll(LIVE_CACHE_KEY);
       return;
@@ -369,8 +369,10 @@ export default function LiveTVPage() {
   const categories = useMemo(() => {
     const list = unique(channels.map((channel) => channel.category || 'Tamil'));
     return list.sort((a, b) => {
-      if (a === 'Music') return -1;
-      if (b === 'Music') return 1;
+      const order = { Music: 0, Sports: 1 };
+      const ao = order[a] ?? 99;
+      const bo = order[b] ?? 99;
+      if (ao !== bo) return ao - bo;
       return a.localeCompare(b);
     });
   }, [channels]);
@@ -382,7 +384,6 @@ export default function LiveTVPage() {
     return channels.filter((channel) => {
       if (category !== 'all' && channel.category !== category) return false;
       if (sourceFilter !== 'all' && channel.source !== sourceFilter) return false;
-      if (showFavoritesOnly && !favoriteSet.has(channel.id)) return false;
       if (!q) return true;
       return normalize(`${channel.name} ${channel.category} ${channel.region} ${channel.source}`).includes(q);
     });
@@ -522,15 +523,6 @@ export default function LiveTVPage() {
                   {active ? `${active.category || 'Tamil'} • ${active.source} • ${active.format.toUpperCase()}${active.keyId && active.key ? ' • ClearKey DRM' : ''}` : `Loaded ${channels.length} preferred Tamil channels`}
                 </p>
               </div>
-              {active ? (
-                <button
-                  type="button"
-                  onClick={() => toggleFavorite(active)}
-                  className={`rounded-full border px-4 py-2 text-sm font-black transition ${favoriteSet.has(active.id) ? 'border-yellow-400 bg-yellow-400/15 text-yellow-100' : 'border-white/10 bg-white/[0.04] text-zinc-200 hover:border-yellow-400/50'}`}
-                >
-                  {favoriteSet.has(active.id) ? '★ Favorite' : '☆ Favorite'}
-                </button>
-              ) : null}
             </div>
 
             <div className="mt-4 space-y-2 sm:space-y-3">
@@ -594,10 +586,10 @@ export default function LiveTVPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setShowFavoritesOnly((value) => !value)}
-                className={`rounded-2xl border px-4 py-2 text-sm font-black transition ${showFavoritesOnly ? 'border-yellow-400 bg-yellow-400/15 text-yellow-100' : 'border-white/10 bg-white/[0.04] text-zinc-300'}`}
+                onClick={() => setCategory((value) => value === 'Sports' ? 'all' : 'Sports')}
+                className={`rounded-2xl border px-4 py-2 text-sm font-black transition ${category === 'Sports' ? 'border-green-400 bg-green-500/15 text-green-100' : 'border-white/10 bg-white/[0.04] text-zinc-300'}`}
               >
-                {showFavoritesOnly ? 'Favorites' : 'Favorites'}
+                ⚽ Sports
               </button>
             </div>
           </div>
@@ -623,7 +615,6 @@ export default function LiveTVPage() {
                   <div className="mt-1 flex gap-1">
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${channel.playable ? 'bg-green-500/15 text-green-200' : 'bg-orange-500/15 text-orange-200'}`}>{channel.format.toUpperCase()}</span>
                     {channel.keyId && channel.key ? <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-100">DRM</span> : null}
-                    {favoriteSet.has(channel.id) ? <span className="rounded-full bg-yellow-500/15 px-2 py-0.5 text-[10px] font-bold text-yellow-100">★</span> : null}
                   </div>
                 </div>
               </button>
