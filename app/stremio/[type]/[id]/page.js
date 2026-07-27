@@ -38,6 +38,21 @@ function preferredSmoothStreamIndex(streams = []) {
   return ranked[0]?.index || 0;
 }
 
+function SymbolButton({ children, onClick, disabled = false, title = '' }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={title || String(children)}
+      className="grid h-11 min-w-11 place-items-center rounded-2xl border border-white/10 bg-white/[0.04] px-2 text-xs font-black text-white transition hover:border-fuchsia-300/50 hover:bg-fuchsia-500/10 disabled:cursor-not-allowed disabled:opacity-40 sm:h-12 sm:min-w-12 sm:text-sm"
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function StremioPlayerPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -54,8 +69,44 @@ export default function StremioPlayerPage() {
   const [selectedVideoId, setSelectedVideoId] = useState(id);
   const [streams, setStreams] = useState([]);
   const [streamIndex, setStreamIndex] = useState(0);
+  const [audioTracks, setAudioTracks] = useState([]);
+  const [audioTrackIndex, setAudioTrackIndex] = useState(0);
 
   const activeStream = streams[streamIndex] || null;
+
+  function seekBy(seconds) {
+    const video = videoRef.current;
+    if (!video) return;
+    const max = Number.isFinite(video.duration) ? video.duration : Number.MAX_SAFE_INTEGER;
+    video.currentTime = Math.max(0, Math.min(max, (video.currentTime || 0) + seconds));
+  }
+
+  function refreshAudioTracks() {
+    const tracks = videoRef.current?.audioTracks;
+    if (!tracks?.length) {
+      setAudioTracks([]);
+      setAudioTrackIndex(0);
+      return;
+    }
+    const list = Array.from({ length: tracks.length }, (_, index) => ({
+      index,
+      label: tracks[index].label || tracks[index].language || `A${index + 1}`,
+      language: tracks[index].language || '',
+      enabled: Boolean(tracks[index].enabled),
+    }));
+    const enabledIndex = list.find((item) => item.enabled)?.index ?? 0;
+    setAudioTracks(list);
+    setAudioTrackIndex(enabledIndex);
+  }
+
+  function cycleAudioTrack() {
+    const tracks = videoRef.current?.audioTracks;
+    if (!tracks?.length) return;
+    const next = (audioTrackIndex + 1) % tracks.length;
+    for (let index = 0; index < tracks.length; index += 1) tracks[index].enabled = index === next;
+    setAudioTrackIndex(next);
+    refreshAudioTracks();
+  }
 
   useEffect(() => {
     async function loadMeta() {
@@ -131,6 +182,8 @@ export default function StremioPlayerPage() {
         video.pause();
         video.removeAttribute('src');
         video.load();
+        setAudioTracks([]);
+        setAudioTrackIndex(0);
 
         if (isHls(url) || isDash(url)) {
           const shakaModule = await import('shaka-player/dist/shaka-player.compiled.js');
@@ -140,10 +193,12 @@ export default function StremioPlayerPage() {
           playerRef.current = player;
           await player.attach(video);
           await player.load(url);
-          if (!cancelled) video.play().catch(() => {});
+          if (!cancelled) { refreshAudioTracks(); window.setTimeout(refreshAudioTracks, 900); video.play().catch(() => {}); }
         } else {
           video.src = url;
           video.load();
+          refreshAudioTracks();
+          window.setTimeout(refreshAudioTracks, 900);
           video.play().catch(() => {});
         }
       } catch (err) {
@@ -153,6 +208,18 @@ export default function StremioPlayerPage() {
 
     load();
     return () => { cancelled = true; destroyPlayer(); };
+  }, [activeStream?.url]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const onLoaded = () => refreshAudioTracks();
+    video.addEventListener('loadedmetadata', onLoaded);
+    video.addEventListener('loadeddata', onLoaded);
+    return () => {
+      video.removeEventListener('loadedmetadata', onLoaded);
+      video.removeEventListener('loadeddata', onLoaded);
+    };
   }, [activeStream?.url]);
 
   async function fullscreen() {
@@ -186,22 +253,37 @@ export default function StremioPlayerPage() {
             </div>
           </div>
 
+          <div className="rounded-3xl border border-fuchsia-400/15 bg-zinc-950/85 p-3 shadow-xl shadow-black/25">
+            <div className="grid grid-cols-4 gap-2 sm:flex sm:flex-wrap sm:items-center">
+              <SymbolButton onClick={() => seekBy(-60)} title="Back 1 minute">↶1m</SymbolButton>
+              <SymbolButton onClick={() => seekBy(-30)} title="Back 30 seconds">↶30</SymbolButton>
+              <SymbolButton onClick={() => seekBy(-10)} title="Back 10 seconds">↶10</SymbolButton>
+              <SymbolButton onClick={cycleAudioTrack} disabled={!audioTracks.length} title={audioTracks.length ? `Audio ${audioTracks[audioTrackIndex]?.label || audioTrackIndex + 1}` : 'No alternate audio tracks detected'}>🔊</SymbolButton>
+              <SymbolButton onClick={() => seekBy(10)} title="Forward 10 seconds">10↷</SymbolButton>
+              <SymbolButton onClick={() => seekBy(30)} title="Forward 30 seconds">30↷</SymbolButton>
+              <SymbolButton onClick={() => seekBy(60)} title="Forward 1 minute">1m↷</SymbolButton>
+              <SymbolButton onClick={fullscreen} title="Fullscreen">⛶</SymbolButton>
+              {activeStream?.url ? <a href={activeStream.url} target="_blank" rel="noreferrer" title="Open directly" aria-label="Open directly" className="grid h-11 min-w-11 place-items-center rounded-2xl bg-fuchsia-500 px-2 text-xs font-black text-black transition hover:bg-fuchsia-300 sm:h-12 sm:min-w-12 sm:text-sm">↗</a> : null}
+            </div>
+            {audioTracks.length ? <p className="mt-2 truncate px-1 text-[11px] font-semibold text-zinc-500">🔊 {audioTracks[audioTrackIndex]?.label || `A${audioTrackIndex + 1}`}</p> : null}
+          </div>
+
           <div className="rounded-3xl border border-white/10 bg-zinc-950/80 p-4">
             <h1 className="text-2xl font-black text-white">{item?.title || 'Stremio'}</h1>
             {selectedEpisode ? <p className="mt-1 text-sm text-fuchsia-200">S{selectedEpisode.season} E{selectedEpisode.episode} • {selectedEpisode.title}</p> : null}
             <p className="mt-2 text-sm leading-6 text-zinc-400">{selectedEpisode?.synopsis || item?.synopsis || ''}</p>
             <p className="mt-2 rounded-2xl border border-fuchsia-300/15 bg-fuchsia-500/10 px-3 py-2 text-xs leading-5 text-fuchsia-100">Smooth mode starts with the smallest/480p stream to reduce buffering. Switch quality manually if your network is fast.</p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {type === 'series' && item?.videos?.length ? (
-                <select value={selectedVideoId} onChange={(event) => setSelectedVideoId(event.target.value)} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-fuchsia-400 sm:col-span-2 lg:col-span-1">
-                  {item.videos.map((video) => <option key={video.id} value={video.id}>S{video.season} E{video.episode} - {video.title}</option>)}
+            <div className="mt-4 space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {type === 'series' && item?.videos?.length ? (
+                  <select value={selectedVideoId} onChange={(event) => setSelectedVideoId(event.target.value)} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-fuchsia-400">
+                    {item.videos.map((video) => <option key={video.id} value={video.id}>S{video.season} E{video.episode} - {video.title}</option>)}
+                  </select>
+                ) : null}
+                <select value={streamIndex} onChange={(event) => setStreamIndex(Number(event.target.value) || 0)} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-fuchsia-400">
+                  {streams.map((stream, index) => <option key={`${stream.url}-${index}`} value={index}>{stream.label}</option>)}
                 </select>
-              ) : null}
-              <select value={streamIndex} onChange={(event) => setStreamIndex(Number(event.target.value) || 0)} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-fuchsia-400">
-                {streams.map((stream, index) => <option key={`${stream.url}-${index}`} value={index}>{stream.label}</option>)}
-              </select>
-              <button onClick={fullscreen} className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-bold text-white">Fullscreen</button>
-              {activeStream?.url ? <a href={activeStream.url} target="_blank" rel="noreferrer" className="rounded-2xl bg-fuchsia-500 px-4 py-3 text-center text-sm font-bold text-black">Open Directly</a> : null}
+              </div>
             </div>
           </div>
         </div>
