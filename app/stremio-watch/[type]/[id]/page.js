@@ -58,7 +58,7 @@ export default function StremioPlayerPage() {
   const searchParams = useSearchParams();
   const type = params?.type === 'series' ? 'series' : 'movie';
   const id = decodeURIComponent(String(params?.id || ''));
-  const stremioSource = searchParams?.get('source') || 'watch';
+  const stremioSource = searchParams?.get('source') || 'catalog';
   const videoRef = useRef(null);
   const shellRef = useRef(null);
   const playerRef = useRef(null);
@@ -242,7 +242,7 @@ export default function StremioPlayerPage() {
             <a href="/stremio?home=1" onClick={(event) => { event.preventDefault(); window.location.assign('/stremio?home=1'); }} aria-label="Stremio home" title="Stremio home" className="rounded-full border border-fuchsia-400/20 bg-fuchsia-500/10 px-3 py-2 text-xs font-black text-fuchsia-100 transition hover:border-fuchsia-400/60">📡 Stremio</a>
             <a href="/" onClick={(event) => { event.preventDefault(); window.location.assign('/'); }} aria-label="JaSH ViBeS home" title="JaSH ViBeS home" className="rounded-full border border-white/10 px-3 py-2 text-xs font-black text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">⌂ JaSH</a>
           </div>
-          <p className="text-[10px] font-black uppercase tracking-[0.30em] text-fuchsia-300">Player</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.30em] text-fuchsia-300">{stremioSource === 'watch' ? 'Provider Player' : 'Catalog Player'}</p>
         </div>
       </header>
 
@@ -300,7 +300,7 @@ export default function StremioPlayerPage() {
           </div>
           {metaStatus === 'loading' ? <p className="mt-4 text-sm text-zinc-500">Loading metadata...</p> : null}
           {metaStatus === 'error' ? <p className="mt-4 text-sm text-red-300">{error}</p> : null}
-          <p className="mt-5 text-xs leading-5 text-zinc-500">Streams are loaded from your configured authorized Stremio addon. If a MKV does not play in this browser/WebView, use Open Directly or try another quality.</p>
+          <p className="mt-5 text-xs leading-5 text-zinc-500">Streams are loaded from the {stremioSource === 'watch' ? 'watch/provider' : 'catalog/home'} Stremio addon. If a MKV does not play in this browser/WebView, use Open Directly or try another quality.</p>
         </aside>
       </section>
     </main>

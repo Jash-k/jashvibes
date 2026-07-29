@@ -10,7 +10,7 @@ export default function LegacyStremioWatchRedirect() {
   const type = params?.type || 'movie';
   const id = params?.id || '';
   const query = searchParams?.toString();
-  const target = `/stremio-watch/${encodeURIComponent(type)}/${encodeURIComponent(id)}${query ? `?${query}` : '?source=watch'}`;
+  const target = `/stremio-watch/${encodeURIComponent(type)}/${encodeURIComponent(id)}${query ? `?${query}` : '?source=catalog'}`;
 
   useEffect(() => {
     window.location.replace(target);

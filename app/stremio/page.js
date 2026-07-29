@@ -17,7 +17,7 @@ async function readJsonResponse(response, fallbackMessage = 'Request failed') {
 function StremioCard({ item }) {
   return (
     <Link
-      href={`/stremio-watch/${item.type}/${encodeURIComponent(item.id)}?source=watch`}
+      href={`/stremio-watch/${item.type}/${encodeURIComponent(item.id)}?source=catalog`}
       className="group overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 shadow-xl shadow-black/30 transition hover:-translate-y-1 hover:border-fuchsia-400/50 sm:rounded-3xl"
     >
       <div className="relative aspect-[2/3] bg-zinc-900">
