@@ -239,8 +239,8 @@ export default function StremioPlayerPage() {
       <header className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/90 px-4 py-3 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <a href="/stremio" aria-label="Stremio home" title="Stremio home" className="rounded-full border border-fuchsia-400/20 bg-fuchsia-500/10 px-3 py-2 text-xs font-black text-fuchsia-100 transition hover:border-fuchsia-400/60">📡 Stremio</a>
-            <a href="/" aria-label="JaSH ViBeS home" title="JaSH ViBeS home" className="rounded-full border border-white/10 px-3 py-2 text-xs font-black text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">⌂ JaSH</a>
+            <a href="/stremio?home=1" onClick={(event) => { event.preventDefault(); window.location.assign('/stremio?home=1'); }} aria-label="Stremio home" title="Stremio home" className="rounded-full border border-fuchsia-400/20 bg-fuchsia-500/10 px-3 py-2 text-xs font-black text-fuchsia-100 transition hover:border-fuchsia-400/60">📡 Stremio</a>
+            <a href="/" onClick={(event) => { event.preventDefault(); window.location.assign('/'); }} aria-label="JaSH ViBeS home" title="JaSH ViBeS home" className="rounded-full border border-white/10 px-3 py-2 text-xs font-black text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">⌂ JaSH</a>
           </div>
           <p className="text-[10px] font-black uppercase tracking-[0.30em] text-fuchsia-300">Player</p>
         </div>

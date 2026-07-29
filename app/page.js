@@ -577,7 +577,8 @@ export default function LandingPage() {
                   LiVe📺
                 </Link>
                 <a
-                  href="/stremio"
+                  href="/stremio?home=1"
+                  onClick={(event) => { event.preventDefault(); window.location.assign('/stremio?home=1'); }}
                   className="rounded-full border border-fuchsia-500/25 bg-fuchsia-500/10 px-4 py-2 text-sm font-black text-fuchsia-100 transition hover:border-fuchsia-400/70 hover:bg-fuchsia-500/20"
                 >
                   StReMiO📡
