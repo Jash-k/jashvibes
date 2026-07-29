@@ -538,9 +538,18 @@ export default function LandingPage() {
                   MiX💿
                 </p>
               ) : null}
-              <h1 className="jash-vibes-logo text-4xl tracking-tight min-[380px]:text-5xl sm:text-7xl lg:text-8xl">
-                JaSH ViBeS
-              </h1>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
+                <img
+                  src="/brand/logo.png"
+                  alt="JaSH ViBeS logo"
+                  className="h-24 w-24 rounded-full object-contain drop-shadow-[0_0_28px_rgba(217,70,239,0.45)] sm:h-32 sm:w-32 lg:h-36 lg:w-36"
+                  loading="eager"
+                  decoding="async"
+                />
+                <h1 className="jash-vibes-logo text-4xl tracking-tight min-[380px]:text-5xl sm:text-7xl lg:text-8xl">
+                  JaSH ViBeS
+                </h1>
+              </div>
               <div className="mt-5 flex flex-wrap gap-2">
                 <button
                   type="button"

@@ -361,3 +361,66 @@ html.day-mode .lyrics-panel-3d {
     0 0 0 1px rgba(134, 25, 143, 0.10) inset,
     0 1px 0 rgba(255, 255, 255, 0.9) inset !important;
 }
+
+/* Mini player lyrics: match the mini-player surface, hide scrollbars, keep contrast in day/night. */
+.mini-lyrics-panel {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(217, 70, 239, 0.22), transparent 34%),
+    linear-gradient(160deg, #170018, #050008 58%, #120012) !important;
+  color: #f8fafc !important;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.mini-lyrics-panel::-webkit-scrollbar,
+.lyrics-panel::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.lyrics-panel,
+.mini-lyrics-panel {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.mini-lyrics-panel [class*="text-zinc-200"],
+.mini-lyrics-panel [class*="text-zinc-300"],
+.mini-lyrics-panel [class*="text-zinc-400"] {
+  color: #e5e7eb !important;
+}
+
+.mini-lyrics-panel [class*="text-zinc-500"],
+.mini-lyrics-panel [class*="text-zinc-600"] {
+  color: #a1a1aa !important;
+}
+
+html.day-mode .mini-player-shell {
+  background: radial-gradient(circle at 20% 0%, rgba(217, 70, 239, 0.20), transparent 30%), linear-gradient(160deg, #ffffff, #fff7fd 58%, #fdf2f8) !important;
+  color: #0f172a !important;
+  box-shadow: 0 30px 90px rgba(134, 25, 143, 0.20) !important;
+}
+
+html.day-mode .mini-lyrics-panel {
+  background: radial-gradient(circle at 20% 0%, rgba(217, 70, 239, 0.14), transparent 35%), linear-gradient(160deg, #fff7fd, #ffffff 58%, #fdf2f8) !important;
+  color: #0f172a !important;
+}
+
+html.day-mode .mini-lyrics-panel [class*="text-zinc-200"],
+html.day-mode .mini-lyrics-panel [class*="text-zinc-300"],
+html.day-mode .mini-lyrics-panel [class*="text-zinc-400"] {
+  color: #1e293b !important;
+}
+
+html.day-mode .mini-lyrics-panel [class*="text-zinc-500"],
+html.day-mode .mini-lyrics-panel [class*="text-zinc-600"] {
+  color: #64748b !important;
+}
+
+html.day-mode .mini-lyrics-panel [class*="text-fuchsia-50"],
+html.day-mode .mini-lyrics-panel [class*="text-fuchsia-100"],
+html.day-mode .mini-lyrics-panel [class*="text-fuchsia-200"],
+html.day-mode .mini-lyrics-panel [class*="text-fuchsia-300"] {
+  color: #86198f !important;
+}

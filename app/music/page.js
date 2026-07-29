@@ -1454,7 +1454,7 @@ export default function MusicPage() {
       {showMiniPlayer && playingTrack ? (
         <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/70 p-3 pb-28 backdrop-blur-xl sm:items-center sm:p-5" onClick={closeMiniPlayer}>
           <section
-            className="w-full max-w-sm overflow-hidden rounded-[2.25rem] border border-fuchsia-300/25 bg-[radial-gradient(circle_at_20%_0%,rgba(217,70,239,0.34),transparent_30%),linear-gradient(160deg,#1a061b,#050008_58%,#120012)] p-4 shadow-2xl shadow-fuchsia-950/60 sm:max-w-md sm:p-5"
+            className="mini-player-shell w-full max-w-sm overflow-hidden rounded-[2.25rem] border border-fuchsia-300/25 bg-[radial-gradient(circle_at_20%_0%,rgba(217,70,239,0.34),transparent_30%),linear-gradient(160deg,#1a061b,#050008_58%,#120012)] p-4 shadow-2xl shadow-fuchsia-950/60 sm:max-w-md sm:p-5"
             onClick={(event) => event.stopPropagation()}
             role="dialog"
             aria-modal="true"
@@ -1470,7 +1470,7 @@ export default function MusicPage() {
 
             <div className="relative mx-auto mt-4 aspect-square w-full max-w-[min(74vw,19rem)] overflow-hidden rounded-[2rem] border border-white/10 bg-zinc-950 shadow-2xl shadow-black/50 sm:max-w-[20rem]">
               {showLyrics ? (
-                <div className="lyrics-panel h-full overflow-y-auto bg-[radial-gradient(circle_at_20%_0%,rgba(217,70,239,0.18),transparent_34%),linear-gradient(160deg,#170018,#050008_58%,#120012)] p-4 pr-10 text-left">
+                <div className="mini-lyrics-panel h-full overflow-y-auto p-4 pr-10 text-left">
                   <button type="button" onClick={() => setShowLyrics(false)} className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-black/45 text-lg font-black text-zinc-100" aria-label="Show album art" title="Show album art">×</button>
                   <p className="mb-2 text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-300/80">Lyrics</p>
                   {lyricsStatus === 'loading' ? <p className="text-sm leading-7 text-zinc-200">Loading lyrics...</p> : null}
