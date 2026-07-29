@@ -861,6 +861,11 @@ export default function MusicPage() {
     unlockHoldTimerRef.current = null;
   }
 
+  function closeMiniPlayer() {
+    setShowMiniPlayer(false);
+    setShowLyrics(false);
+  }
+
   function wakeLockStatusText() {
     if (wakeLockStatus === 'active') return 'Screen awake is active';
     if (wakeLockStatus === 'requesting') return 'Requesting screen wake lock...';
@@ -920,8 +925,9 @@ export default function MusicPage() {
   }
 
   async function openLyrics() {
-    setShowLyrics((value) => !value);
     const detail = activeDetail || active;
+    setShowMiniPlayer(true);
+    setShowLyrics(true);
     const loadedFor = lyricsData?.loadedFor;
     const currentKey = trackKey(detail);
     if ((lyrics || lyricsData?.plainLyrics || lyricsData?.syncedLyrics) && loadedFor === currentKey) return;
@@ -953,6 +959,7 @@ export default function MusicPage() {
       setLyricsStatus('error');
     }
   }
+
 
   async function openArtist(artist) {
     const artistId = String(artist?.id || artist?.name || '').trim();
@@ -1445,7 +1452,7 @@ export default function MusicPage() {
       ) : null}
 
       {showMiniPlayer && playingTrack ? (
-        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/70 p-3 pb-28 backdrop-blur-xl sm:items-center sm:p-5" onClick={() => setShowMiniPlayer(false)}>
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/70 p-3 pb-28 backdrop-blur-xl sm:items-center sm:p-5" onClick={closeMiniPlayer}>
           <section
             className="w-full max-w-sm overflow-hidden rounded-[2.25rem] border border-fuchsia-300/25 bg-[radial-gradient(circle_at_20%_0%,rgba(217,70,239,0.34),transparent_30%),linear-gradient(160deg,#1a061b,#050008_58%,#120012)] p-4 shadow-2xl shadow-fuchsia-950/60 sm:max-w-md sm:p-5"
             onClick={(event) => event.stopPropagation()}
@@ -1458,11 +1465,31 @@ export default function MusicPage() {
                 <p className="text-[10px] font-black uppercase tracking-[0.34em] text-fuchsia-300/80">Now Playing</p>
                 <p className="mt-1 text-xs font-semibold text-zinc-500">Tap artist name to open songs/albums</p>
               </div>
-              <button type="button" onClick={() => setShowMiniPlayer(false)} className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/[0.05] text-sm font-black text-zinc-200 transition hover:border-fuchsia-300/50 hover:text-white" aria-label="Close player">×</button>
+              <button type="button" onClick={closeMiniPlayer} className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/[0.05] text-sm font-black text-zinc-200 transition hover:border-fuchsia-300/50 hover:text-white" aria-label="Close player">×</button>
             </div>
 
-            <div className="mx-auto mt-4 aspect-square w-full max-w-[min(74vw,19rem)] overflow-hidden rounded-[2rem] border border-white/10 bg-zinc-950 shadow-2xl shadow-black/50 sm:max-w-[20rem]">
-              {playingImage ? <img src={playingImage} alt="" className="h-full w-full object-cover" /> : <div className="grid h-full w-full place-items-center bg-gradient-to-br from-fuchsia-950 via-black to-zinc-950 text-5xl">♫</div>}
+            <div className="relative mx-auto mt-4 aspect-square w-full max-w-[min(74vw,19rem)] overflow-hidden rounded-[2rem] border border-white/10 bg-zinc-950 shadow-2xl shadow-black/50 sm:max-w-[20rem]">
+              {showLyrics ? (
+                <div className="lyrics-panel h-full overflow-y-auto bg-[radial-gradient(circle_at_20%_0%,rgba(217,70,239,0.18),transparent_34%),linear-gradient(160deg,#170018,#050008_58%,#120012)] p-4 pr-10 text-left">
+                  <button type="button" onClick={() => setShowLyrics(false)} className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-black/45 text-lg font-black text-zinc-100" aria-label="Show album art" title="Show album art">×</button>
+                  <p className="mb-2 text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-300/80">Lyrics</p>
+                  {lyricsStatus === 'loading' ? <p className="text-sm leading-7 text-zinc-200">Loading lyrics...</p> : null}
+                  {lyricsStatus !== 'loading' && syncedLyricLines.length ? (
+                    <div className="space-y-2 pb-4">
+                      {syncedLyricLines.map((line, index) => (
+                        <p
+                          key={`${line.time}-${index}`}
+                          ref={index === activeLyricLineIndex ? activeLyricRef : null}
+                          className={`rounded-2xl px-3 py-2 text-sm leading-6 transition ${index === activeLyricLineIndex ? 'bg-fuchsia-400/15 text-fuchsia-50 shadow-lg shadow-fuchsia-950/20' : index < activeLyricLineIndex ? 'text-zinc-500' : 'text-zinc-200'}`}
+                        >
+                          {line.text}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+                  {lyricsStatus !== 'loading' && !syncedLyricLines.length ? <p className="whitespace-pre-wrap text-sm leading-7 text-zinc-200">{lyrics || 'Lyrics unavailable for this song.'}</p> : null}
+                </div>
+              ) : playingImage ? <img src={playingImage} alt="" className="h-full w-full object-cover" /> : <div className="grid h-full w-full place-items-center bg-gradient-to-br from-fuchsia-950 via-black to-zinc-950 text-5xl">♫</div>}
             </div>
 
             <div className="mt-4 text-center">
@@ -1499,7 +1526,7 @@ export default function MusicPage() {
             </div>
 
             <div className="mt-4 flex items-center justify-center gap-2">
-              <button type="button" onClick={() => { setShowMiniPlayer(false); openLyrics(); }} className="rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-xs font-black text-zinc-200 transition hover:border-fuchsia-300/40 hover:text-white">Lyrics</button>
+              <button type="button" onClick={() => showLyrics ? setShowLyrics(false) : openLyrics()} className={`rounded-full border px-4 py-2 text-xs font-black transition ${showLyrics ? 'border-fuchsia-300 bg-fuchsia-500/20 text-fuchsia-100' : 'border-white/10 bg-white/[0.05] text-zinc-200 hover:border-fuchsia-300/40 hover:text-white'}`}>{showLyrics ? 'Art' : 'Lyrics'}</button>
               <button type="button" onClick={() => setShowSleepMenu((value) => !value)} className="rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-xs font-black text-zinc-200 transition hover:border-fuchsia-300/40 hover:text-white">Sleep</button>
               <button type="button" onClick={toggleListeningMode} className={`rounded-full border px-4 py-2 text-xs font-black transition ${listeningMode ? 'border-fuchsia-300 bg-fuchsia-500/20 text-fuchsia-100' : 'border-white/10 bg-white/[0.05] text-zinc-200 hover:border-fuchsia-300/40 hover:text-white'}`}>🎧</button>
               <button type="button" onClick={() => toggleFavorite(playingTrack)} className={`rounded-full border px-4 py-2 text-xs font-black transition ${favoriteSet.has(trackKey(playingTrack)) ? 'border-yellow-300 bg-yellow-300/15 text-yellow-100' : 'border-white/10 bg-white/[0.05] text-zinc-200 hover:border-yellow-300/40'}`}>{favoriteSet.has(trackKey(playingTrack)) ? '★ Saved' : '☆ Save'}</button>
@@ -1511,7 +1538,7 @@ export default function MusicPage() {
         </div>
       ) : null}
 
-      {showLyrics ? (
+      {false && showLyrics ? (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 p-4 pb-28 backdrop-blur-md sm:p-6" onClick={() => setShowLyrics(false)}>
           <div
             className="lyrics-panel lyrics-panel-3d relative max-h-[72dvh] w-full max-w-lg overflow-y-auto rounded-[2.25rem] border border-fuchsia-300/25 bg-[radial-gradient(circle_at_20%_0%,rgba(217,70,239,0.30),transparent_30%),linear-gradient(160deg,#1a061b,#050008_58%,#120012)] p-5 pr-12 shadow-2xl shadow-fuchsia-950/60 sm:max-w-xl sm:p-6 sm:pr-14"
