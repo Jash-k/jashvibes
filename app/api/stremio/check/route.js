@@ -30,8 +30,8 @@ export async function GET(request) {
     const stremioId = type === 'series' ? `${imdbId}:${season}:${episode}` : imdbId;
     const result = await getStremioStreams({ type, id: stremioId, source: 'watch' });
     const href = type === 'series'
-      ? `/stremio/series/${encodeURIComponent(imdbId)}?season=${season}&episode=${episode}&source=watch`
-      : `/stremio/movie/${encodeURIComponent(imdbId)}?source=watch`;
+      ? `/stremio-watch/series/${encodeURIComponent(imdbId)}?season=${season}&episode=${episode}&source=watch`
+      : `/stremio-watch/movie/${encodeURIComponent(imdbId)}?source=watch`;
 
     return NextResponse.json({
       ok: true,

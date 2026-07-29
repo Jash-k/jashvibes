@@ -1,8 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 async function readJsonResponse(response, fallbackMessage = 'Request failed') {
   const contentType = response.headers.get('content-type') || '';
@@ -15,287 +14,135 @@ async function readJsonResponse(response, fallbackMessage = 'Request failed') {
   }
   return response.json();
 }
-function isHls(url = '') {
-  return String(url).toLowerCase().includes('.m3u8');
-}
-
-function isDash(url = '') {
-  return String(url).toLowerCase().includes('.mpd');
-}
-
-function preferredSmoothStreamIndex(streams = []) {
-  if (!streams.length) return 0;
-  const ranked = streams
-    .map((stream, index) => ({ stream, index }))
-    .sort((a, b) => {
-      const aText = `${a.stream.name || ''} ${a.stream.title || ''} ${a.stream.label || ''}`.toLowerCase();
-      const bText = `${b.stream.name || ''} ${b.stream.title || ''} ${b.stream.label || ''}`.toLowerCase();
-      const a480 = /480p|360p/.test(aText) ? 1 : 0;
-      const b480 = /480p|360p/.test(bText) ? 1 : 0;
-      if (a480 !== b480) return b480 - a480;
-      return Number(a.stream.sizeBytes || 0) - Number(b.stream.sizeBytes || 0);
-    });
-  return ranked[0]?.index || 0;
-}
-
-function SymbolButton({ children, onClick, disabled = false, title = '' }) {
+function StremioCard({ item }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      aria-label={title || String(children)}
-      className="grid h-11 min-w-11 place-items-center rounded-2xl border border-white/10 bg-white/[0.04] px-2 text-xs font-black text-white transition hover:border-fuchsia-300/50 hover:bg-fuchsia-500/10 disabled:cursor-not-allowed disabled:opacity-40 sm:h-12 sm:min-w-12 sm:text-sm"
+    <Link
+      href={`/stremio-watch/${item.type}/${encodeURIComponent(item.id)}?source=watch`}
+      className="group overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 shadow-xl shadow-black/30 transition hover:-translate-y-1 hover:border-fuchsia-400/50 sm:rounded-3xl"
     >
-      {children}
-    </button>
+      <div className="relative aspect-[2/3] bg-zinc-900">
+        {item.posterUrl ? <img src={item.posterUrl} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" /> : <div className="grid h-full place-items-center p-4 text-center text-sm font-black text-zinc-300">{item.title}</div>}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
+        <div className="absolute left-2 top-2 rounded-full bg-fuchsia-500 px-2 py-1 text-[10px] font-black uppercase text-black">{item.type === 'series' ? 'Series' : 'Movie'}</div>
+        {item.releaseInfo ? <div className="absolute right-2 top-2 rounded-full bg-black/75 px-2 py-1 text-[10px] font-black text-white">{item.releaseInfo}</div> : null}
+      </div>
+      <div className="space-y-2 p-3 sm:p-4">
+        <h3 className="line-clamp-2 min-h-9 text-sm font-black leading-5 text-white">{item.title}</h3>
+        <div className="flex flex-wrap gap-1">
+          {item.rating ? <span className="rounded-full border border-yellow-300/25 bg-yellow-300/10 px-2 py-0.5 text-[10px] font-bold text-yellow-100">IMDb {item.rating}</span> : null}
+          {(item.genres || []).slice(0, 2).map((genre) => <span key={genre} className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-bold text-zinc-300">{genre}</span>)}
+        </div>
+      </div>
+    </Link>
   );
 }
 
-export default function StremioPlayerPage() {
-  const params = useParams();
-  const searchParams = useSearchParams();
-  const type = params?.type === 'series' ? 'series' : 'movie';
-  const id = decodeURIComponent(String(params?.id || ''));
-  const stremioSource = searchParams?.get('source') || '';
-  const videoRef = useRef(null);
-  const shellRef = useRef(null);
-  const playerRef = useRef(null);
-  const [item, setItem] = useState(null);
-  const [metaStatus, setMetaStatus] = useState('loading');
-  const [streamStatus, setStreamStatus] = useState('idle');
+function Section({ title, subtitle, items, loading, error, hasMore, onMore, compact = false }) {
+  return (
+    <section className="rounded-[2rem] border border-fuchsia-400/15 bg-white/[0.035] p-4 sm:p-5">
+      <div className="mb-4 flex items-end justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-black text-white sm:text-3xl">{title}</h2>
+          {subtitle ? <p className="mt-1 text-xs font-semibold text-zinc-500">{subtitle}</p> : null}
+        </div>
+        {hasMore ? <button type="button" onClick={onMore} disabled={loading} className="rounded-full border border-fuchsia-300/30 bg-fuchsia-500/10 px-4 py-2 text-xs font-black text-fuchsia-100 disabled:opacity-60">More</button> : null}
+      </div>
+      {error ? <div className="mb-4 rounded-2xl border border-red-500/30 bg-red-950/20 p-4 text-sm text-red-200">{error}</div> : null}
+      <div className={compact ? "grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-2 2xl:grid-cols-3" : "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"}>
+        {items.map((item) => <StremioCard key={`${item.type}-${item.id}`} item={item} />)}
+        {loading ? Array.from({ length: 6 }).map((_, index) => <div key={index} className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 sm:rounded-3xl"><div className="aspect-[2/3] animate-pulse bg-zinc-900" /><div className="space-y-2 p-3"><div className="h-4 animate-pulse rounded bg-zinc-800" /><div className="h-3 w-2/3 animate-pulse rounded bg-zinc-900" /></div></div>) : null}
+      </div>
+      {!loading && !items.length && !error ? <p className="rounded-2xl border border-white/10 bg-black/25 p-5 text-center text-sm text-zinc-400">No Stremio items found.</p> : null}
+    </section>
+  );
+}
+
+export default function StremioPage() {
+  const [manifest, setManifest] = useState(null);
+  const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
-  const [selectedVideoId, setSelectedVideoId] = useState(id);
-  const [streams, setStreams] = useState([]);
-  const [streamIndex, setStreamIndex] = useState(0);
-  const [audioTracks, setAudioTracks] = useState([]);
-  const [audioTrackIndex, setAudioTrackIndex] = useState(0);
+  const [movies, setMovies] = useState({ items: [], skip: 0, hasMore: false, loading: false, error: '' });
+  const [series, setSeries] = useState({ items: [], skip: 0, hasMore: false, loading: false, error: '' });
+  const sentinelRef = useRef(null);
 
-  const activeStream = streams[streamIndex] || null;
-
-  function seekBy(seconds) {
-    const video = videoRef.current;
-    if (!video) return;
-    const max = Number.isFinite(video.duration) ? video.duration : Number.MAX_SAFE_INTEGER;
-    video.currentTime = Math.max(0, Math.min(max, (video.currentTime || 0) + seconds));
-  }
-
-  function refreshAudioTracks() {
-    const tracks = videoRef.current?.audioTracks;
-    if (!tracks?.length) {
-      setAudioTracks([]);
-      setAudioTrackIndex(0);
-      return;
+  const loadCatalog = useCallback(async (type, append = false) => {
+    const setter = type === 'series' ? setSeries : setMovies;
+    const current = type === 'series' ? series : movies;
+    const skip = append ? current.items.length : 0;
+    try {
+      setter((value) => ({ ...value, loading: true, error: '' }));
+      const response = await fetch(`/api/stremio/catalog?source=catalog&type=${type}&skip=${skip}`, { cache: 'no-store' });
+      const data = await readJsonResponse(response, 'Stremio request failed');
+      if (!response.ok) throw new Error(data?.error || 'Catalog failed');
+      setter((value) => ({
+        items: append ? [...value.items, ...(data.items || [])] : (data.items || []),
+        skip: skip + (data.count || 0),
+        hasMore: Boolean(data.hasMore),
+        loading: false,
+        error: '',
+        catalogName: data.catalogName,
+      }));
+    } catch (err) {
+      setter((value) => ({ ...value, loading: false, error: err.message || 'Catalog failed' }));
     }
-    const list = Array.from({ length: tracks.length }, (_, index) => ({
-      index,
-      label: tracks[index].label || tracks[index].language || `A${index + 1}`,
-      language: tracks[index].language || '',
-      enabled: Boolean(tracks[index].enabled),
-    }));
-    const enabledIndex = list.find((item) => item.enabled)?.index ?? 0;
-    setAudioTracks(list);
-    setAudioTrackIndex(enabledIndex);
-  }
-
-  function cycleAudioTrack() {
-    const tracks = videoRef.current?.audioTracks;
-    if (!tracks?.length) return;
-    const next = (audioTrackIndex + 1) % tracks.length;
-    for (let index = 0; index < tracks.length; index += 1) tracks[index].enabled = index === next;
-    setAudioTrackIndex(next);
-    refreshAudioTracks();
-  }
+  }, [movies, series]);
 
   useEffect(() => {
-    async function loadMeta() {
-      try {
-        setMetaStatus('loading');
-        setError('');
-        const metaParams = new URLSearchParams({ type, id });
-        if (stremioSource) metaParams.set('source', stremioSource);
-        const response = await fetch(`/api/stremio/meta?${metaParams.toString()}`, { cache: 'no-store' });
-        const data = await readJsonResponse(response, 'Stremio request failed');
-        if (!response.ok) throw new Error(data?.error || 'Stremio meta failed');
-        setItem(data.item);
-        if (type === 'series' && data.item?.videos?.length && !String(id).includes(':')) {
-          const wantedSeason = Number(searchParams?.get('season') || 1);
-          const wantedEpisode = Number(searchParams?.get('episode') || 1);
-          const wanted = data.item.videos.find((video) => Number(video.season) === wantedSeason && Number(video.episode) === wantedEpisode);
-          setSelectedVideoId(wanted?.id || data.item.videos[0].id);
-        }
-        setMetaStatus('ready');
-      } catch (err) {
-        setMetaStatus('error');
-        setError(err.message || 'Unable to load Stremio item');
-      }
-    }
-    loadMeta();
-  }, [type, id, searchParams, stremioSource]);
-
-  useEffect(() => {
-    if (!selectedVideoId) return;
-    async function loadStreams() {
-      try {
-        setStreamStatus('loading');
-        setError('');
-        setStreams([]);
-        setStreamIndex(0);
-        const streamParams = new URLSearchParams({ type, id: selectedVideoId });
-        if (stremioSource) streamParams.set('source', stremioSource);
-        const response = await fetch(`/api/stremio/stream?${streamParams.toString()}`, { cache: 'no-store' });
-        const data = await readJsonResponse(response, 'Stremio request failed');
-        if (!response.ok) throw new Error(data?.error || 'Stremio stream failed');
-        const nextStreams = data.streams || [];
-        setStreams(nextStreams);
-        if (!nextStreams.length) throw new Error(data.blockedCount ? 'Streams were returned but blocked by safety filters / allowed hosts.' : 'No streams found for this title.');
-        // Default to the smallest/480p stream for smoother playback on mobile and Render/HF-hosted direct files.
-        // Users can still switch to 720p/1080p from the selector.
-        setStreamIndex(preferredSmoothStreamIndex(nextStreams));
-        setStreamStatus('ready');
-      } catch (err) {
-        setStreamStatus('error');
-        setError(err.message || 'Unable to load Stremio streams');
-      }
-    }
-    loadStreams();
-  }, [type, selectedVideoId, stremioSource]);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    const url = activeStream?.url;
-    if (!video || !url) return;
-    let cancelled = false;
-
-    async function destroyPlayer() {
-      if (playerRef.current) {
-        try { await playerRef.current.destroy(); } catch {}
-        playerRef.current = null;
-      }
-    }
-
     async function load() {
       try {
-        await destroyPlayer();
-        if (cancelled) return;
-        video.pause();
-        video.removeAttribute('src');
-        video.load();
-        setAudioTracks([]);
-        setAudioTrackIndex(0);
-
-        if (isHls(url) || isDash(url)) {
-          const shakaModule = await import('shaka-player/dist/shaka-player.compiled.js');
-          const shaka = shakaModule.default || window.shaka || shakaModule;
-          shaka.polyfill?.installAll?.();
-          const player = new shaka.Player();
-          playerRef.current = player;
-          await player.attach(video);
-          await player.load(url);
-          if (!cancelled) { refreshAudioTracks(); window.setTimeout(refreshAudioTracks, 900); video.play().catch(() => {}); }
-        } else {
-          video.src = url;
-          video.load();
-          refreshAudioTracks();
-          window.setTimeout(refreshAudioTracks, 900);
-          video.play().catch(() => {});
-        }
+        setStatus('loading');
+        const response = await fetch('/api/stremio/manifest?source=catalog', { cache: 'no-store' });
+        const data = await readJsonResponse(response, 'Stremio request failed');
+        if (!response.ok || !data.ok) throw new Error(data?.error || 'Stremio manifest failed');
+        setManifest(data.manifest);
+        setStatus('ready');
+        await Promise.all([loadCatalog('movie', false), loadCatalog('series', false)]);
       } catch (err) {
-        if (!cancelled) setError(err.message || 'Playback failed. Try Open Directly or another stream quality.');
+        setError(err.message || 'Stremio is not configured');
+        setStatus('error');
       }
     }
-
     load();
-    return () => { cancelled = true; destroyPlayer(); };
-  }, [activeStream?.url]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const onLoaded = () => refreshAudioTracks();
-    video.addEventListener('loadedmetadata', onLoaded);
-    video.addEventListener('loadeddata', onLoaded);
-    return () => {
-      video.removeEventListener('loadedmetadata', onLoaded);
-      video.removeEventListener('loadeddata', onLoaded);
-    };
-  }, [activeStream?.url]);
-
-  async function fullscreen() {
-    const element = shellRef.current;
-    try {
-      if (element?.requestFullscreen) await element.requestFullscreen();
-      else if (element?.webkitRequestFullscreen) element.webkitRequestFullscreen();
-    } catch {}
-  }
-
-  const selectedEpisode = useMemo(() => {
-    return item?.videos?.find((video) => video.id === selectedVideoId) || null;
-  }, [item, selectedVideoId]);
+    const node = sentinelRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries[0]?.isIntersecting) return;
+      if (movies.hasMore && !movies.loading) loadCatalog('movie', true);
+      if (series.hasMore && !series.loading) loadCatalog('series', true);
+    }, { rootMargin: '900px 0px' });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [movies.hasMore, movies.loading, series.hasMore, series.loading, loadCatalog]);
 
   return (
-    <main className="min-h-dvh bg-[#050012] text-zinc-100">
+    <main className="min-h-dvh overflow-x-hidden bg-[radial-gradient(circle_at_12%_0%,rgba(217,70,239,0.20),transparent_30%),linear-gradient(180deg,#080014,#050505_55%,#090014)] pb-10 text-zinc-100">
       <header className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/90 px-4 py-3 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
-          <Link href="/stremio" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">← Stremio</Link>
-          <p className="text-[10px] font-black uppercase tracking-[0.30em] text-fuchsia-300">Player</p>
+          <Link href="/" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">← Home</Link>
+          <p className="text-[10px] font-black uppercase tracking-[0.30em] text-fuchsia-300">Stremio</p>
         </div>
       </header>
 
-      <section className="mx-auto grid max-w-7xl gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[1.45fr_0.75fr] lg:px-8">
-        <div className="space-y-4">
-          <div ref={shellRef} className="classics-player-shell overflow-hidden rounded-3xl border border-white/10 bg-black shadow-2xl shadow-black fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0">
-            <div className="relative aspect-video h-full w-full bg-black fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:aspect-auto">
-              <video ref={videoRef} className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-contain" controls playsInline preload="metadata" poster={selectedEpisode?.thumbnail || item?.backdropUrl || item?.posterUrl || undefined} />
-              {streamStatus === 'loading' ? <div className="absolute inset-0 grid place-items-center bg-black/50"><span className="rounded-full bg-black/80 px-5 py-3 text-sm font-bold">Loading Stremio stream...</span></div> : null}
-              {streamStatus === 'error' ? <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-red-500/30 bg-red-950/80 p-3 text-sm text-red-100">{error}</div> : null}
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-zinc-950/80 p-4">
-            <h1 className="text-2xl font-black text-white">{item?.title || 'Stremio'}</h1>
-            {selectedEpisode ? <p className="mt-1 text-sm text-fuchsia-200">S{selectedEpisode.season} E{selectedEpisode.episode} • {selectedEpisode.title}</p> : null}
-            <p className="mt-2 text-sm leading-6 text-zinc-400">{selectedEpisode?.synopsis || item?.synopsis || ''}</p>
-            <p className="mt-2 rounded-2xl border border-fuchsia-300/15 bg-fuchsia-500/10 px-3 py-2 text-xs leading-5 text-fuchsia-100">Smooth mode starts with the smallest/480p stream to reduce buffering. Switch quality manually if your network is fast.</p>
-            <div className="mt-4 space-y-3">
-              <div className="grid gap-3 sm:grid-cols-2">
-                {type === 'series' && item?.videos?.length ? (
-                  <select value={selectedVideoId} onChange={(event) => setSelectedVideoId(event.target.value)} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-fuchsia-400">
-                    {item.videos.map((video) => <option key={video.id} value={video.id}>S{video.season} E{video.episode} - {video.title}</option>)}
-                  </select>
-                ) : null}
-                <select value={streamIndex} onChange={(event) => setStreamIndex(Number(event.target.value) || 0)} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-fuchsia-400">
-                  {streams.map((stream, index) => <option key={`${stream.url}-${index}`} value={index}>{stream.label}</option>)}
-                </select>
-              </div>
-              <div className="grid grid-cols-4 gap-2 sm:flex sm:flex-wrap">
-                <SymbolButton onClick={() => seekBy(-60)} title="Back 1 minute">↶1m</SymbolButton>
-                <SymbolButton onClick={() => seekBy(-30)} title="Back 30 seconds">↶30</SymbolButton>
-                <SymbolButton onClick={() => seekBy(-10)} title="Back 10 seconds">↶10</SymbolButton>
-                <SymbolButton onClick={cycleAudioTrack} disabled={!audioTracks.length} title={audioTracks.length ? `Audio ${audioTracks[audioTrackIndex]?.label || audioTrackIndex + 1}` : 'No alternate audio tracks detected'}>🔊</SymbolButton>
-                <SymbolButton onClick={() => seekBy(10)} title="Forward 10 seconds">10↷</SymbolButton>
-                <SymbolButton onClick={() => seekBy(30)} title="Forward 30 seconds">30↷</SymbolButton>
-                <SymbolButton onClick={() => seekBy(60)} title="Forward 1 minute">1m↷</SymbolButton>
-                <SymbolButton onClick={fullscreen} title="Fullscreen">⛶</SymbolButton>
-              </div>
-              {audioTracks.length ? <p className="text-[11px] font-semibold text-zinc-500">🔊 {audioTracks[audioTrackIndex]?.label || `A${audioTrackIndex + 1}`}</p> : null}
-              {activeStream?.url ? <a href={activeStream.url} target="_blank" rel="noreferrer" className="inline-flex rounded-2xl bg-fuchsia-500 px-4 py-3 text-center text-sm font-bold text-black">↗</a> : null}
-            </div>
-          </div>
+      <section className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        <div className="rounded-[2rem] border border-fuchsia-400/20 bg-white/[0.04] p-6 shadow-2xl shadow-fuchsia-950/20 sm:p-8">
+          <p className="text-xs font-black uppercase tracking-[0.35em] text-fuchsia-300/80">Authorized Addon</p>
+          <h1 className="mt-3 text-4xl font-black text-white sm:text-6xl">Stremio</h1>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">Tamil movie and series catalog from your configured Stremio addon. Direct playback is enabled only for HTTPS streams returned by your authorized addon host.</p>
+          {manifest?.name ? <p className="mt-3 text-xs font-bold text-zinc-500">Addon: {manifest.name} • {manifest.version}</p> : null}
         </div>
 
-        <aside className="rounded-3xl border border-white/10 bg-zinc-950/80 p-4">
-          {item?.posterUrl ? <img src={item.posterUrl} alt="" className="mx-auto max-h-[28rem] rounded-2xl object-cover" /> : null}
-          <div className="mt-4 flex flex-wrap gap-2">
-            {item?.rating ? <span className="rounded-full bg-yellow-500/10 px-3 py-1 text-xs font-bold text-yellow-100">IMDb {item.rating}</span> : null}
-            {(item?.genres || []).map((genre) => <span key={genre} className="rounded-full bg-fuchsia-500/10 px-3 py-1 text-xs font-bold text-fuchsia-100">{genre}</span>)}
-            {streams.length ? <span className="rounded-full bg-green-500/10 px-3 py-1 text-xs font-bold text-green-100">{streams.length} streams</span> : null}
-          </div>
-          {metaStatus === 'loading' ? <p className="mt-4 text-sm text-zinc-500">Loading metadata...</p> : null}
-          {metaStatus === 'error' ? <p className="mt-4 text-sm text-red-300">{error}</p> : null}
-          <p className="mt-5 text-xs leading-5 text-zinc-500">Streams are loaded from your configured authorized Stremio addon. If a MKV does not play in this browser/WebView, use Open Directly or try another quality.</p>
-        </aside>
+        {status === 'error' ? <div className="rounded-3xl border border-red-500/30 bg-red-950/20 p-5 text-red-200">{error}<p className="mt-2 text-xs text-zinc-500">Set STREMIO to your addon manifest URL.</p></div> : null}
+        {status === 'loading' ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-8 text-center text-zinc-400">Loading Stremio addon...</div> : null}
+
+        <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
+          <Section title="Tamil Movies" subtitle={movies.catalogName || 'Movie catalog'} items={movies.items} loading={movies.loading} error={movies.error} hasMore={movies.hasMore} onMore={() => loadCatalog('movie', true)} compact />
+          <Section title="Tamil Series" subtitle={series.catalogName || 'Series catalog'} items={series.items} loading={series.loading} error={series.error} hasMore={series.hasMore} onMore={() => loadCatalog('series', true)} compact />
+        </div>
+        <div ref={sentinelRef} className="h-12" />
       </section>
     </main>
   );
