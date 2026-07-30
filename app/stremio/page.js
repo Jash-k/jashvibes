@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-const SELECTED_CATALOGS_KEY = 'jash:stremio:selectedCatalogs:v1';
+const SELECTED_CATALOGS_KEY = 'jash:stremio:selectedCatalogs:v2';
 
 async function readJsonResponse(response, fallbackMessage = 'Request failed') {
   const contentType = response.headers.get('content-type') || '';
@@ -32,6 +32,17 @@ function normalizeCatalog(catalog = {}) {
     type: catalog.type === 'series' ? 'series' : 'movie',
     name: catalog.name || catalog.id || 'Catalog',
     extraSupported: catalog.extraSupported || [],
+  };
+}
+
+function safeCatalogState(value = {}) {
+  return {
+    items: Array.isArray(value.items) ? value.items : [],
+    skip: Number(value.skip || 0),
+    hasMore: Boolean(value.hasMore),
+    loading: Boolean(value.loading),
+    error: value.error || '',
+    catalogName: value.catalogName || '',
   };
 }
 
@@ -83,15 +94,17 @@ export default function StremioPage() {
   const sentinelRef = useRef(null);
 
   const activeCatalog = useMemo(() => selectedCatalogs.find((catalog) => catalogKey(catalog) === activeKey) || selectedCatalogs[0] || null, [selectedCatalogs, activeKey]);
-  const activeState = activeCatalog ? (catalogState[catalogKey(activeCatalog)] || { items: [], skip: 0, hasMore: false, loading: false, error: '' }) : { items: [], skip: 0, hasMore: false, loading: false, error: '' };
+  const activeState = safeCatalogState(activeCatalog ? catalogState[catalogKey(activeCatalog)] : {});
+  const activeItems = activeState.items;
 
   const loadCatalog = useCallback(async (catalog, append = false) => {
     if (!catalog?.id) return;
     const key = catalogKey(catalog);
-    const current = catalogState[key] || { items: [], skip: 0, hasMore: false, loading: false, error: '' };
-    const skip = append ? current.items.length : 0;
+    const current = safeCatalogState(catalogState[key]);
+    const currentItems = current.items;
+    const skip = append ? currentItems.length : 0;
     try {
-      setCatalogState((state) => ({ ...state, [key]: { ...(state[key] || {}), loading: true, error: '' } }));
+      setCatalogState((state) => ({ ...state, [key]: { ...safeCatalogState(state[key]), loading: true, error: '' } }));
       const params = new URLSearchParams({ source: 'catalog', type: catalog.type, catalog: catalog.id, skip: String(skip) });
       const response = await fetch(`/api/stremio/catalog?${params.toString()}`, { cache: 'no-store' });
       const data = await readJsonResponse(response, 'Stremio request failed');
@@ -251,16 +264,16 @@ export default function StremioPage() {
             <div className="mb-4 flex items-end justify-between gap-3">
               <div>
                 <h2 className="text-2xl font-black text-white sm:text-3xl">{catalogLabel(activeCatalog)}</h2>
-                <p className="mt-1 text-xs font-semibold text-zinc-500">{activeState.catalogName || activeCatalog.name} • {activeState.items.length} loaded</p>
+                <p className="mt-1 text-xs font-semibold text-zinc-500">{activeState.catalogName || activeCatalog.name} • {activeItems.length} loaded</p>
               </div>
               {activeState.hasMore ? <button type="button" onClick={() => loadCatalog(activeCatalog, true)} disabled={activeState.loading} className="rounded-full border border-fuchsia-300/30 bg-fuchsia-500/10 px-4 py-2 text-xs font-black text-fuchsia-100 disabled:opacity-60">More</button> : null}
             </div>
             {activeState.error ? <div className="mb-4 rounded-2xl border border-red-500/30 bg-red-950/20 p-4 text-sm text-red-200">{activeState.error}</div> : null}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-              {activeState.items.map((item) => <StremioCard key={`${item.type}-${item.id}`} item={item} />)}
+              {activeItems.map((item) => <StremioCard key={`${item.type}-${item.id}`} item={item} />)}
               {activeState.loading ? Array.from({ length: 6 }).map((_, index) => <div key={index} className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 sm:rounded-3xl"><div className="aspect-[2/3] animate-pulse bg-zinc-900" /><div className="space-y-2 p-3"><div className="h-4 animate-pulse rounded bg-zinc-800" /><div className="h-3 w-2/3 animate-pulse rounded bg-zinc-900" /></div></div>) : null}
             </div>
-            {!activeState.loading && !activeState.items.length && !activeState.error ? <p className="rounded-2xl border border-white/10 bg-black/25 p-5 text-center text-sm text-zinc-400">No items loaded. Click this catalog button again or choose another catalog.</p> : null}
+            {!activeState.loading && !activeItems.length && !activeState.error ? <p className="rounded-2xl border border-white/10 bg-black/25 p-5 text-center text-sm text-zinc-400">No items loaded. Click this catalog button again or choose another catalog.</p> : null}
           </section>
         ) : status === 'ready' ? <div className="rounded-3xl border border-white/10 bg-black/25 p-5 text-center text-sm text-zinc-400">Select catalogs from the dropdown above.</div> : null}
         <div ref={sentinelRef} className="h-12" />
