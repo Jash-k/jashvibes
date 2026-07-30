@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+const SELECTED_CATALOGS_KEY = 'jash:stremio:selectedCatalogs:v1';
 
 async function readJsonResponse(response, fallbackMessage = 'Request failed') {
   const contentType = response.headers.get('content-type') || '';
@@ -14,6 +16,25 @@ async function readJsonResponse(response, fallbackMessage = 'Request failed') {
   }
   return response.json();
 }
+
+function catalogKey(catalog = {}) {
+  return `${catalog.type || 'movie'}:${catalog.id || ''}`;
+}
+
+function catalogLabel(catalog = {}) {
+  const typeLabel = catalog.type === 'series' ? 'Series' : 'Movies';
+  return `${catalog.name || catalog.id || 'Catalog'} ${typeLabel}`;
+}
+
+function normalizeCatalog(catalog = {}) {
+  return {
+    id: catalog.id || '',
+    type: catalog.type === 'series' ? 'series' : 'movie',
+    name: catalog.name || catalog.id || 'Catalog',
+    extraSupported: catalog.extraSupported || [],
+  };
+}
+
 function StremioCard({ item }) {
   return (
     <Link
@@ -37,86 +58,153 @@ function StremioCard({ item }) {
   );
 }
 
-function Section({ title, subtitle, items, loading, error, hasMore, onMore, compact = false }) {
-  return (
-    <section className="rounded-[2rem] border border-fuchsia-400/15 bg-white/[0.035] p-4 sm:p-5">
-      <div className="mb-4 flex items-end justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-black text-white sm:text-3xl">{title}</h2>
-          {subtitle ? <p className="mt-1 text-xs font-semibold text-zinc-500">{subtitle}</p> : null}
-        </div>
-        {hasMore ? <button type="button" onClick={onMore} disabled={loading} className="rounded-full border border-fuchsia-300/30 bg-fuchsia-500/10 px-4 py-2 text-xs font-black text-fuchsia-100 disabled:opacity-60">More</button> : null}
-      </div>
-      {error ? <div className="mb-4 rounded-2xl border border-red-500/30 bg-red-950/20 p-4 text-sm text-red-200">{error}</div> : null}
-      <div className={compact ? "grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-2 2xl:grid-cols-3" : "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"}>
-        {items.map((item) => <StremioCard key={`${item.type}-${item.id}`} item={item} />)}
-        {loading ? Array.from({ length: 6 }).map((_, index) => <div key={index} className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 sm:rounded-3xl"><div className="aspect-[2/3] animate-pulse bg-zinc-900" /><div className="space-y-2 p-3"><div className="h-4 animate-pulse rounded bg-zinc-800" /><div className="h-3 w-2/3 animate-pulse rounded bg-zinc-900" /></div></div>) : null}
-      </div>
-      {!loading && !items.length && !error ? <p className="rounded-2xl border border-white/10 bg-black/25 p-5 text-center text-sm text-zinc-400">No Stremio items found.</p> : null}
-    </section>
-  );
+function getDefaultCatalogs(options = [], tamilCatalogs = {}) {
+  const defaults = [];
+  const movie = options.find((item) => item.type === 'movie' && item.id === tamilCatalogs.movie)
+    || options.find((item) => item.type === 'movie' && String(item.name || '').toLowerCase().includes('tamil'))
+    || options.find((item) => item.type === 'movie');
+  const series = options.find((item) => item.type === 'series' && item.id === tamilCatalogs.series)
+    || options.find((item) => item.type === 'series' && String(item.name || '').toLowerCase().includes('tamil'))
+    || options.find((item) => item.type === 'series');
+  if (movie) defaults.push(movie);
+  if (series && catalogKey(series) !== catalogKey(movie)) defaults.push(series);
+  return defaults;
 }
 
 export default function StremioPage() {
   const [manifest, setManifest] = useState(null);
+  const [catalogOptions, setCatalogOptions] = useState([]);
+  const [selectedCatalogs, setSelectedCatalogs] = useState([]);
+  const [activeKey, setActiveKey] = useState('');
+  const [pickerValue, setPickerValue] = useState('');
+  const [catalogState, setCatalogState] = useState({});
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
-  const [movies, setMovies] = useState({ items: [], skip: 0, hasMore: false, loading: false, error: '' });
-  const [series, setSeries] = useState({ items: [], skip: 0, hasMore: false, loading: false, error: '' });
   const sentinelRef = useRef(null);
 
-  const loadCatalog = useCallback(async (type, append = false) => {
-    const setter = type === 'series' ? setSeries : setMovies;
-    const current = type === 'series' ? series : movies;
+  const activeCatalog = useMemo(() => selectedCatalogs.find((catalog) => catalogKey(catalog) === activeKey) || selectedCatalogs[0] || null, [selectedCatalogs, activeKey]);
+  const activeState = activeCatalog ? (catalogState[catalogKey(activeCatalog)] || { items: [], skip: 0, hasMore: false, loading: false, error: '' }) : { items: [], skip: 0, hasMore: false, loading: false, error: '' };
+
+  const loadCatalog = useCallback(async (catalog, append = false) => {
+    if (!catalog?.id) return;
+    const key = catalogKey(catalog);
+    const current = catalogState[key] || { items: [], skip: 0, hasMore: false, loading: false, error: '' };
     const skip = append ? current.items.length : 0;
     try {
-      setter((value) => ({ ...value, loading: true, error: '' }));
-      const response = await fetch(`/api/stremio/catalog?source=catalog&type=${type}&skip=${skip}`, { cache: 'no-store' });
+      setCatalogState((state) => ({ ...state, [key]: { ...(state[key] || {}), loading: true, error: '' } }));
+      const params = new URLSearchParams({ source: 'catalog', type: catalog.type, catalog: catalog.id, skip: String(skip) });
+      const response = await fetch(`/api/stremio/catalog?${params.toString()}`, { cache: 'no-store' });
       const data = await readJsonResponse(response, 'Stremio request failed');
       if (!response.ok) throw new Error(data?.error || 'Catalog failed');
-      setter((value) => ({
-        items: append ? [...value.items, ...(data.items || [])] : (data.items || []),
-        skip: skip + (data.count || 0),
-        hasMore: Boolean(data.hasMore),
-        loading: false,
-        error: '',
-        catalogName: data.catalogName,
-      }));
+      setCatalogState((state) => {
+        const previous = state[key]?.items || [];
+        const nextItems = append ? [...previous, ...(data.items || [])] : (data.items || []);
+        const seen = new Set();
+        const deduped = nextItems.filter((item) => {
+          const itemKey = `${item.type}:${item.id}`;
+          if (seen.has(itemKey)) return false;
+          seen.add(itemKey);
+          return true;
+        });
+        return {
+          ...state,
+          [key]: {
+            items: deduped,
+            skip: skip + (data.count || 0),
+            hasMore: Boolean(data.hasMore),
+            loading: false,
+            error: '',
+            catalogName: data.catalogName,
+          },
+        };
+      });
     } catch (err) {
-      setter((value) => ({ ...value, loading: false, error: err.message || 'Catalog failed' }));
+      setCatalogState((state) => ({ ...state, [key]: { ...(state[key] || {}), loading: false, error: err.message || 'Catalog failed' } }));
     }
-  }, [movies, series]);
+  }, [catalogState]);
 
   useEffect(() => {
-    async function load() {
+    async function loadManifest() {
       try {
         setStatus('loading');
+        setError('');
         const response = await fetch('/api/stremio/manifest?source=catalog', { cache: 'no-store' });
         const data = await readJsonResponse(response, 'Stremio request failed');
         if (!response.ok || !data.ok) throw new Error(data?.error || 'Stremio manifest failed');
+        const options = (data.manifest?.catalogs || [])
+          .filter((catalog) => catalog.type === 'movie' || catalog.type === 'series')
+          .map(normalizeCatalog)
+          .filter((catalog) => catalog.id);
+        const uniqueOptions = [];
+        const seen = new Set();
+        for (const option of options) {
+          const key = catalogKey(option);
+          if (!seen.has(key)) {
+            seen.add(key);
+            uniqueOptions.push(option);
+          }
+        }
+
+        const savedKeys = JSON.parse(window.localStorage.getItem(SELECTED_CATALOGS_KEY) || '[]');
+        const saved = Array.isArray(savedKeys)
+          ? savedKeys.map((key) => uniqueOptions.find((option) => catalogKey(option) === key)).filter(Boolean)
+          : [];
+        const defaults = saved.length ? saved : getDefaultCatalogs(uniqueOptions, data.tamilCatalogs || {});
+
         setManifest(data.manifest);
+        setCatalogOptions(uniqueOptions);
+        setSelectedCatalogs(defaults);
+        setActiveKey(defaults[0] ? catalogKey(defaults[0]) : '');
+        setPickerValue(uniqueOptions[0] ? catalogKey(uniqueOptions[0]) : '');
         setStatus('ready');
-        await Promise.all([loadCatalog('movie', false), loadCatalog('series', false)]);
       } catch (err) {
         setError(err.message || 'Stremio is not configured');
         setStatus('error');
       }
     }
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadManifest();
   }, []);
 
   useEffect(() => {
+    if (!activeCatalog) return;
+    const state = catalogState[catalogKey(activeCatalog)];
+    if (!state?.items?.length && !state?.loading && !state?.error) loadCatalog(activeCatalog, false);
+  }, [activeCatalog, catalogState, loadCatalog]);
+
+  useEffect(() => {
+    if (!selectedCatalogs.length) return;
+    try { window.localStorage.setItem(SELECTED_CATALOGS_KEY, JSON.stringify(selectedCatalogs.map(catalogKey))); } catch {}
+  }, [selectedCatalogs]);
+
+  useEffect(() => {
     const node = sentinelRef.current;
-    if (!node) return;
+    if (!node || !activeCatalog) return;
     const observer = new IntersectionObserver((entries) => {
       if (!entries[0]?.isIntersecting) return;
-      if (movies.hasMore && !movies.loading) loadCatalog('movie', true);
-      if (series.hasMore && !series.loading) loadCatalog('series', true);
+      const state = catalogState[catalogKey(activeCatalog)] || {};
+      if (state.hasMore && !state.loading) loadCatalog(activeCatalog, true);
     }, { rootMargin: '900px 0px' });
     observer.observe(node);
     return () => observer.disconnect();
-  }, [movies.hasMore, movies.loading, series.hasMore, series.loading, loadCatalog]);
+  }, [activeCatalog, catalogState, loadCatalog]);
+
+  function addSelectedCatalog() {
+    const option = catalogOptions.find((catalog) => catalogKey(catalog) === pickerValue);
+    if (!option) return;
+    setSelectedCatalogs((current) => {
+      if (current.some((catalog) => catalogKey(catalog) === catalogKey(option))) return current;
+      return [...current, option];
+    });
+    setActiveKey(catalogKey(option));
+  }
+
+  function removeSelectedCatalog(key) {
+    setSelectedCatalogs((current) => {
+      const next = current.filter((catalog) => catalogKey(catalog) !== key);
+      if (activeKey === key) setActiveKey(next[0] ? catalogKey(next[0]) : '');
+      return next;
+    });
+  }
 
   return (
     <main className="min-h-dvh overflow-x-hidden bg-[radial-gradient(circle_at_12%_0%,rgba(217,70,239,0.20),transparent_30%),linear-gradient(180deg,#080014,#050505_55%,#090014)] pb-10 text-zinc-100">
@@ -128,20 +216,53 @@ export default function StremioPage() {
       </header>
 
       <section className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-        <div className="rounded-[2rem] border border-fuchsia-400/20 bg-white/[0.04] p-6 shadow-2xl shadow-fuchsia-950/20 sm:p-8">
+        <div className="rounded-[2rem] border border-fuchsia-400/20 bg-white/[0.04] p-5 shadow-2xl shadow-fuchsia-950/20 sm:p-7">
           <p className="text-xs font-black uppercase tracking-[0.35em] text-fuchsia-300/80">Authorized Addon</p>
           <h1 className="mt-3 text-4xl font-black text-white sm:text-6xl">Stremio</h1>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">Tamil movie and series catalog from your configured Stremio addon. Direct playback is enabled only for HTTPS streams returned by your authorized addon host.</p>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">Choose which catalogs from your manifest should appear. Click a catalog button to lazy-load posters for that catalog.</p>
           {manifest?.name ? <p className="mt-3 text-xs font-bold text-zinc-500">Addon: {manifest.name} • {manifest.version}</p> : null}
+
+          <div className="mt-5 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <select value={pickerValue} onChange={(event) => setPickerValue(event.target.value)} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm font-bold text-white outline-none focus:border-fuchsia-300">
+              {catalogOptions.map((catalog) => <option key={catalogKey(catalog)} value={catalogKey(catalog)}>{catalogLabel(catalog)}</option>)}
+            </select>
+            <button type="button" onClick={addSelectedCatalog} className="rounded-2xl border border-fuchsia-300/30 bg-fuchsia-500/10 px-5 py-3 text-sm font-black text-fuchsia-100 hover:border-fuchsia-300/70">Add</button>
+          </div>
+
+          <div className="mt-4 flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {selectedCatalogs.map((catalog) => {
+              const key = catalogKey(catalog);
+              const active = key === activeKey;
+              return (
+                <div key={key} className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 transition ${active ? 'border-fuchsia-300 bg-fuchsia-500/20 text-fuchsia-50' : 'border-white/10 bg-white/[0.04] text-zinc-300'}`}>
+                  <button type="button" onClick={() => setActiveKey(key)} className="px-2 py-1 text-xs font-black">{catalogLabel(catalog)}</button>
+                  <button type="button" onClick={() => removeSelectedCatalog(key)} className="grid h-6 w-6 place-items-center rounded-full text-xs font-black text-zinc-400 hover:bg-black/30 hover:text-white" title="Remove catalog">×</button>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
-        {status === 'error' ? <div className="rounded-3xl border border-red-500/30 bg-red-950/20 p-5 text-red-200">{error}<p className="mt-2 text-xs text-zinc-500">Set STREMIO to your addon manifest URL.</p></div> : null}
+        {status === 'error' ? <div className="rounded-3xl border border-red-500/30 bg-red-950/20 p-5 text-red-200">{error}<p className="mt-2 text-xs text-zinc-500">Set STREMIO/STREMIO_HOME/STREMIO_CATALOG to your addon manifest URL.</p></div> : null}
         {status === 'loading' ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-8 text-center text-zinc-400">Loading Stremio addon...</div> : null}
 
-        <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
-          <Section title="Tamil Movies" subtitle={movies.catalogName || 'Movie catalog'} items={movies.items} loading={movies.loading} error={movies.error} hasMore={movies.hasMore} onMore={() => loadCatalog('movie', true)} compact />
-          <Section title="Tamil Series" subtitle={series.catalogName || 'Series catalog'} items={series.items} loading={series.loading} error={series.error} hasMore={series.hasMore} onMore={() => loadCatalog('series', true)} compact />
-        </div>
+        {activeCatalog ? (
+          <section className="rounded-[2rem] border border-fuchsia-400/15 bg-white/[0.035] p-4 sm:p-5">
+            <div className="mb-4 flex items-end justify-between gap-3">
+              <div>
+                <h2 className="text-2xl font-black text-white sm:text-3xl">{catalogLabel(activeCatalog)}</h2>
+                <p className="mt-1 text-xs font-semibold text-zinc-500">{activeState.catalogName || activeCatalog.name} • {activeState.items.length} loaded</p>
+              </div>
+              {activeState.hasMore ? <button type="button" onClick={() => loadCatalog(activeCatalog, true)} disabled={activeState.loading} className="rounded-full border border-fuchsia-300/30 bg-fuchsia-500/10 px-4 py-2 text-xs font-black text-fuchsia-100 disabled:opacity-60">More</button> : null}
+            </div>
+            {activeState.error ? <div className="mb-4 rounded-2xl border border-red-500/30 bg-red-950/20 p-4 text-sm text-red-200">{activeState.error}</div> : null}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+              {activeState.items.map((item) => <StremioCard key={`${item.type}-${item.id}`} item={item} />)}
+              {activeState.loading ? Array.from({ length: 6 }).map((_, index) => <div key={index} className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 sm:rounded-3xl"><div className="aspect-[2/3] animate-pulse bg-zinc-900" /><div className="space-y-2 p-3"><div className="h-4 animate-pulse rounded bg-zinc-800" /><div className="h-3 w-2/3 animate-pulse rounded bg-zinc-900" /></div></div>) : null}
+            </div>
+            {!activeState.loading && !activeState.items.length && !activeState.error ? <p className="rounded-2xl border border-white/10 bg-black/25 p-5 text-center text-sm text-zinc-400">No items loaded. Click this catalog button again or choose another catalog.</p> : null}
+          </section>
+        ) : status === 'ready' ? <div className="rounded-3xl border border-white/10 bg-black/25 p-5 text-center text-sm text-zinc-400">Select catalogs from the dropdown above.</div> : null}
         <div ref={sentinelRef} className="h-12" />
       </section>
     </main>
