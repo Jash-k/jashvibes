@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 
 const FAVORITES_KEY = 'jash_live_tv_favorites';
-const LIVE_CACHE_KEY = 'jash:live:v8';
+const LIVE_CACHE_KEY = 'jash:live:v9';
 
 function normalize(value = '') {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -78,32 +78,26 @@ function appendCookieToken(uri = '', cookie = '') {
 }
 
 function isJioLike(channel, uri = '') {
-  const text = `${channel?.url || ''} ${channel?.source || ''} ${channel?.sourceId || ''} ${uri}`.toLowerCase();
-  return text.includes('jiotv') || text.includes('jiotvmblive') || text.includes('jiotvpllive') || text.includes('jio-tamil') || text.includes('jio auto');
+  const text = `${channel?.name || ''} ${channel?.url || ''} ${channel?.logo || ''} ${channel?.source || ''} ${channel?.sourceId || ''} ${uri}`.toLowerCase();
+  return text.includes('jio') || text.includes('jiotv') || text.includes('vijay');
 }
 
-function shouldProxyLiveUri(uri = '') {
-  if (!/^https?:\/\//i.test(uri)) return false;
-  try {
-    const parsed = new URL(uri);
-    return parsed.origin !== window.location.origin;
-  } catch {
-    return false;
-  }
+function isPocketChannel(channel) {
+  return channel?.sourceId === 'pocket-tamil' || channel?.source === 'Pocket Tamil';
 }
 
-function buildLiveProxyUrl(uri = '', channel = {}, fallbackReferer = '') {
+function buildPocketProxyUrl(uri = '', channel = {}, fallbackReferer = '') {
   const params = new URLSearchParams({ u: uri });
   if (channel.userAgent) params.set('ua', channel.userAgent);
   if (channel.referer || fallbackReferer) params.set('ref', channel.referer || fallbackReferer);
   if (channel.cookie) params.set('ck', channel.cookie);
-  return `/api/live-proxy?${params.toString()}`;
+  return `/api/live-pocket/proxy?${params.toString()}`;
 }
 
-function restoreOriginalProxyUri(uri = '') {
+function restorePocketProxyUri(uri = '') {
   try {
     const parsed = new URL(uri, window.location.origin);
-    if (parsed.origin === window.location.origin && parsed.pathname === '/api/live-proxy') {
+    if (parsed.origin === window.location.origin && parsed.pathname === '/api/live-pocket/proxy') {
       return parsed.searchParams.get('u') || uri;
     }
   } catch {}
@@ -130,8 +124,7 @@ export default function LiveTVPage() {
   const [sourceFilter, setSourceFilter] = useState('all');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [favorites, setFavorites] = useState([]);
-  const [brokenChannelIds, setBrokenChannelIds] = useState([]);
-  const [proxyChannelIds, setProxyChannelIds] = useState([]);
+  const [pocketProxyIds, setPocketProxyIds] = useState([]);
   const [lastUpdated, setLastUpdated] = useState(null);
 
   useEffect(() => {
@@ -149,18 +142,47 @@ export default function LiveTVPage() {
     try {
       setStatus('loading');
       setError('');
-      const params = new URLSearchParams({ playable: '1' });
-      if (nextSource && nextSource !== 'all') {
-        params.set('source', nextSource);
-      }
-      const response = await fetch(`/api/live-tv?${params.toString()}`, { cache: 'no-store' });
-      const data = await response.json();
-      if (sourceLoadIdRef.current !== loadId) return;
-      if (!response.ok) throw new Error(data?.error || 'Unable to load Live TV');
+      let data;
+      if (nextSource === 'all') {
+        const [regularResult, pocketResult] = await Promise.allSettled([
+          fetch('/api/live-tv?playable=1', { cache: 'no-store' }).then(async (response) => {
+            const json = await response.json();
+            if (!response.ok) throw new Error(json?.error || 'Unable to load Live TV');
+            return json;
+          }),
+          fetch('/api/live-pocket?playable=1', { cache: 'no-store' }).then(async (response) => {
+            const json = await response.json();
+            if (!response.ok) throw new Error(json?.error || 'Unable to load Pocket Live');
+            return json;
+          }),
+        ]);
 
+        const payloads = [regularResult, pocketResult]
+          .filter((result) => result.status === 'fulfilled')
+          .map((result) => result.value);
+        if (!payloads.length) throw new Error(regularResult.reason?.message || pocketResult.reason?.message || 'Unable to load Live TV');
+        data = {
+          updatedAt: new Date().toISOString(),
+          sources: payloads.flatMap((payload) => payload.sources || []),
+          channels: payloads.flatMap((payload) => payload.channels || []),
+          errors: [regularResult, pocketResult]
+            .filter((result) => result.status === 'rejected')
+            .map((result) => result.reason?.message || 'Source failed'),
+        };
+      } else if (nextSource === 'pocket-tamil') {
+        const response = await fetch('/api/live-pocket?playable=1', { cache: 'no-store' });
+        data = await response.json();
+        if (!response.ok) throw new Error(data?.error || 'Unable to load Pocket Live');
+      } else {
+        const params = new URLSearchParams({ playable: '1', source: nextSource });
+        const response = await fetch(`/api/live-tv?${params.toString()}`, { cache: 'no-store' });
+        data = await response.json();
+        if (!response.ok) throw new Error(data?.error || 'Unable to load Live TV');
+      }
+
+      if (sourceLoadIdRef.current !== loadId) return;
       const loadedChannels = (data.channels || []).filter((channel) => channel.playable);
-      setBrokenChannelIds([]);
-      setProxyChannelIds([]);
+      setPocketProxyIds([]);
       setChannels(loadedChannels);
       setSources((current) => {
         const incoming = data.sources || [];
@@ -226,7 +248,8 @@ export default function LiveTVPage() {
     const isCurrentLoad = () => !cancelled && playbackIdRef.current === loadId;
     const video = videoRef.current;
     const container = playerContainerRef.current;
-    const proxyEnabled = /^http:\/\//i.test(active.url || '') || proxyChannelIds.includes(active.id);
+    const pocketChannel = isPocketChannel(active);
+    const pocketProxyEnabled = pocketChannel && (/^http:\/\//i.test(active.url || '') || pocketProxyIds.includes(active.id));
 
     async function destroyPlayerInstances(player, overlay) {
       const targetOverlay = overlay || null;
@@ -356,30 +379,6 @@ export default function LiveTVPage() {
           const jioLike = isJioLike(active, uri);
           const hotstarLike = uri.includes('hotstar.com');
           const fancodeLike = uri.includes('fancode.com') || uri.includes('fblive.fancode.com') || normalize(active.category) === 'fancode' || normalize(active.name).includes('fancode');
-          const fallbackReferer = active.referer ||
-            (jioLike ? 'https://www.jiotv.co/' : '') ||
-            (hotstarLike ? 'https://www.hotstar.com/' : '') ||
-            (fancodeLike ? 'https://www.fancode.com/' : '');
-
-          let nextUri = uri;
-          if (
-            active.cookie &&
-            (jioLike || (hotstarLike && !uri.includes('?'))) &&
-            (requestType === shaka.net.NetworkingEngine.RequestType.MANIFEST || requestType === shaka.net.NetworkingEngine.RequestType.SEGMENT)
-          ) {
-            nextUri = appendCookieToken(uri, active.cookie);
-          }
-
-          if (proxyEnabled && shouldProxyLiveUri(nextUri)) {
-            request.uris[0] = buildLiveProxyUrl(nextUri, active, fallbackReferer);
-            // Browser fetch cannot set User-Agent/Cookie/Referer for real media
-            // hosts. The server proxy injects them, so keep the browser request
-            // to our own API clean.
-            delete request.headers['User-Agent'];
-            delete request.headers.Referer;
-            delete request.headers.Cookie;
-            return;
-          }
 
           if (active.headers && typeof active.headers === 'object') {
             Object.entries(active.headers).forEach(([key, val]) => {
@@ -388,15 +387,40 @@ export default function LiveTVPage() {
             });
           }
 
-          if (fallbackReferer) request.headers.Referer = fallbackReferer;
+          if (active.referer) request.headers.Referer = active.referer;
+          else if (jioLike) request.headers.Referer = 'https://www.jiotv.co/';
+          else if (hotstarLike) request.headers.Referer = 'https://www.hotstar.com/';
+          else if (fancodeLike) request.headers.Referer = 'https://www.fancode.com/';
+
           const userAgent = active.userAgent ||
             (jioLike ? 'plaYtv/7.1.5 (Linux;Android 13) ExoPlayerLib/2.11.6' : '') ||
             (fancodeLike ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' : '');
           if (userAgent) request.headers['User-Agent'] = userAgent;
+
+          let nextUri = uri;
+          if (
+            active.cookie &&
+            (jioLike || (hotstarLike && !uri.includes('?'))) &&
+            (requestType === shaka.net.NetworkingEngine.RequestType.MANIFEST || requestType === shaka.net.NetworkingEngine.RequestType.SEGMENT)
+          ) {
+            nextUri = appendCookieToken(uri, active.cookie);
+            request.uris[0] = nextUri;
+          }
+
+          if (pocketProxyEnabled && /^https?:\/\//i.test(nextUri)) {
+            const fallbackReferer = active.referer ||
+              (jioLike ? 'https://www.jiotv.co/' : '') ||
+              (hotstarLike ? 'https://www.hotstar.com/' : '') ||
+              (fancodeLike ? 'https://www.fancode.com/' : '');
+            request.uris[0] = buildPocketProxyUrl(nextUri, active, fallbackReferer);
+            delete request.headers['User-Agent'];
+            delete request.headers.Referer;
+            delete request.headers.Cookie;
+          }
         });
 
         player.getNetworkingEngine()?.registerResponseFilter((requestType, response) => {
-          if (response?.uri) response.uri = restoreOriginalProxyUri(response.uri);
+          if (pocketProxyEnabled && response?.uri) response.uri = restorePocketProxyUri(response.uri);
         });
 
         player.addEventListener('error', (event) => {
@@ -404,15 +428,14 @@ export default function LiveTVPage() {
           const detail = event.detail;
           console.error('[live-tv] Shaka error:', detail);
           if (loadTimeout) window.clearTimeout(loadTimeout);
-          if (!proxyEnabled && shouldProxyLiveUri(active.url || '')) {
+          if (pocketChannel && !pocketProxyEnabled && /^https?:\/\//i.test(active.url || '')) {
             setPlayerStatus('loading');
-            setPlayerError('Direct playback failed. Retrying with compatibility proxy...');
-            setProxyChannelIds((current) => current.includes(active.id) ? current : [...current, active.id]);
+            setPlayerError('Direct Pocket playback failed. Retrying Pocket route...');
+            setPocketProxyIds((current) => current.includes(active.id) ? current : [...current, active.id]);
             return;
           }
           setPlayerStatus('error');
-          setPlayerError(`Shaka Error ${detail?.code || ''}. Stream failed to load. Hiding this channel and trying the next one.`);
-          markChannelBroken(active.id);
+          setPlayerError(`Shaka Error ${detail?.code || ''}. Stream failed to load. Try another channel or source.`);
         });
 
         player.addEventListener('buffering', (event) => {
@@ -431,15 +454,14 @@ export default function LiveTVPage() {
         if (loadTimeout) window.clearTimeout(loadTimeout);
         if (!isCurrentLoad()) return;
         console.error('[live-tv] Player load failed:', err);
-        if (!proxyEnabled && shouldProxyLiveUri(active.url || '')) {
+        if (pocketChannel && !pocketProxyEnabled && /^https?:\/\//i.test(active.url || '')) {
           setPlayerStatus('loading');
-          setPlayerError('Direct playback failed. Retrying with compatibility proxy...');
-          setProxyChannelIds((current) => current.includes(active.id) ? current : [...current, active.id]);
+          setPlayerError('Direct Pocket playback failed. Retrying Pocket route...');
+          setPocketProxyIds((current) => current.includes(active.id) ? current : [...current, active.id]);
           return;
         }
         setPlayerStatus('error');
-        setPlayerError(err.message || 'Stream failed to load. Hiding this channel and trying the next one.');
-        markChannelBroken(active.id);
+        setPlayerError(err.message || 'Stream failed to load. Try another channel or source.');
       }
     }
 
@@ -450,7 +472,7 @@ export default function LiveTVPage() {
       if (loadTimeout) window.clearTimeout(loadTimeout);
       destroyPlayerInstances(localPlayer, localOverlay);
     };
-  }, [active, proxyChannelIds]);
+  }, [active, pocketProxyIds]);
 
   const categories = useMemo(() => {
     const list = unique(channels.map((channel) => channel.category || 'Tamil'));
@@ -474,19 +496,17 @@ export default function LiveTVPage() {
     return [...map.values()];
   }, [sources, channels]);
   const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
-  const brokenSet = useMemo(() => new Set(brokenChannelIds), [brokenChannelIds]);
 
   const filteredChannels = useMemo(() => {
     const q = normalize(query);
     return channels.filter((channel) => {
-      if (brokenSet.has(channel.id)) return false;
       if (!channel.playable) return false;
       if (category !== 'all' && channel.category !== category) return false;
       if (sourceFilter !== 'all' && channel.sourceId !== sourceFilter && channel.source !== sourceFilter) return false;
       if (!q) return true;
       return normalize(`${channel.name} ${channel.category} ${channel.region} ${channel.source}`).includes(q);
     });
-  }, [channels, category, sourceFilter, query, showFavoritesOnly, favoriteSet, brokenSet]);
+  }, [channels, category, sourceFilter, query, showFavoritesOnly, favoriteSet]);
 
   const activeFilteredIndex = useMemo(() => {
     if (!active?.id) return -1;
@@ -514,19 +534,6 @@ export default function LiveTVPage() {
     if (!lastViewed?.id) return;
     const target = channels.find((channel) => channel.id === lastViewed.id) || lastViewed;
     selectChannel(target);
-  }
-
-  function markChannelBroken(failedId) {
-    if (!failedId) return;
-    setBrokenChannelIds((current) => current.includes(failedId) ? current : [...current, failedId]);
-    setActive((current) => {
-      if (current?.id !== failedId) return current;
-      const blocked = new Set([...brokenChannelIds, failedId]);
-      const currentIndex = channels.findIndex((channel) => channel.id === failedId);
-      const candidates = channels.filter((channel) => channel.playable && !blocked.has(channel.id));
-      if (!candidates.length) return null;
-      return candidates.find((channel) => channels.findIndex((item) => item.id === channel.id) > currentIndex) || candidates[0];
-    });
   }
 
   function toggleFavorite(channel) {
@@ -713,21 +720,12 @@ export default function LiveTVPage() {
                 ⚽ Sports
               </button>
             </div>
-            {brokenChannelIds.length ? (
-              <button
-                type="button"
-                onClick={() => setBrokenChannelIds([])}
-                className="mt-2 w-full rounded-2xl border border-orange-400/30 bg-orange-500/10 px-4 py-2 text-xs font-black text-orange-100 transition hover:border-orange-300/60"
-              >
-                Hidden error channels: {brokenChannelIds.length} • Reset
-              </button>
-            ) : null}
           </div>
 
           <div className="space-y-2 pr-1 lg:max-h-[70dvh] lg:overflow-y-auto">
             {status === 'loading' ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">Loading Tamil channels...</div> : null}
             {status === 'error' ? <div className="rounded-3xl border border-red-500/30 bg-red-950/20 p-6 text-center text-red-200">{error}</div> : null}
-            {status === 'ready' && filteredChannels.length === 0 ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">No working channels found for this filter/source.</div> : null}
+            {status === 'ready' && filteredChannels.length === 0 ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">No channels found for this filter/source.</div> : null}
 
             {filteredChannels.map((channel) => (
               <button
