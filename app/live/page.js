@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 
 const FAVORITES_KEY = 'jash_live_tv_favorites';
-const LIVE_CACHE_KEY = 'jash:live:v6';
+const LIVE_CACHE_KEY = 'jash:live:v7';
 
 function normalize(value = '') {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -526,8 +526,8 @@ export default function LiveTVPage() {
         </div>
       </header>
 
-      <section className="mx-auto grid max-w-7xl gap-3 px-3 py-3 sm:gap-4 sm:px-6 sm:py-5 lg:grid-cols-[1.45fr_0.9fr] lg:px-8">
-        <div className="space-y-3 sm:space-y-4 lg:sticky lg:top-24 lg:self-start">
+      <section className="mx-auto grid max-w-7xl items-start gap-3 px-3 py-3 sm:gap-4 sm:px-6 sm:py-5 lg:grid-cols-[minmax(0,1fr)_minmax(300px,22rem)] xl:grid-cols-[minmax(0,1fr)_minmax(320px,24rem)] lg:px-8">
+        <div className="min-w-0 space-y-3 sm:space-y-4 lg:sticky lg:top-24 lg:self-start">
           <div id="live-player-shell" className="overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black/50 fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0 sm:rounded-3xl">
             <div
               ref={playerContainerRef}
@@ -618,7 +618,7 @@ export default function LiveTVPage() {
           </div>
         </div>
 
-        <aside className="space-y-3">
+        <aside className="min-w-0 space-y-3 lg:w-full">
           <div className="sticky top-[7.7rem] z-30 rounded-2xl border border-white/10 bg-zinc-950/95 p-3 backdrop-blur sm:rounded-3xl sm:p-4 lg:static">
             <div className="grid grid-cols-2 gap-2">
               <select value={category} onChange={(event) => setCategory(event.target.value)} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-red-500">
