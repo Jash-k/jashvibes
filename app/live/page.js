@@ -270,7 +270,6 @@ export default function LiveTVPage() {
             'time_and_duration',
             'spacer',
             'quality',
-            'picture_in_picture',
             'fullscreen',
           ],
           seekBarColors: {
