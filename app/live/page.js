@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 
 const FAVORITES_KEY = 'jash_live_tv_favorites';
-const LIVE_CACHE_KEY = 'jash:live:v4';
+const LIVE_CACHE_KEY = 'jash:live:v5';
 
 function normalize(value = '') {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -102,6 +102,7 @@ export default function LiveTVPage() {
   const [sourceFilter, setSourceFilter] = useState('all');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [favorites, setFavorites] = useState([]);
+  const [brokenChannelIds, setBrokenChannelIds] = useState([]);
   const [lastUpdated, setLastUpdated] = useState(null);
 
   useEffect(() => {
@@ -119,7 +120,7 @@ export default function LiveTVPage() {
     try {
       setStatus('loading');
       setError('');
-      const params = new URLSearchParams({ playable: '1' });
+      const params = new URLSearchParams({ playable: '1', working: '1' });
       if (nextSource && nextSource !== 'all') params.set('source', nextSource);
       const response = await fetch(`/api/live-tv?${params.toString()}`, { cache: 'no-store' });
       const data = await response.json();
@@ -127,6 +128,7 @@ export default function LiveTVPage() {
       if (!response.ok) throw new Error(data?.error || 'Unable to load Live TV');
 
       const loadedChannels = (data.channels || []).filter((channel) => channel.playable);
+      setBrokenChannelIds([]);
       setChannels(loadedChannels);
       setSources((current) => {
         const incoming = data.sources || [];
@@ -347,7 +349,8 @@ export default function LiveTVPage() {
           console.error('[live-tv] Shaka error:', detail);
           if (loadTimeout) window.clearTimeout(loadTimeout);
           setPlayerStatus('error');
-          setPlayerError(`Shaka Error ${detail?.code || ''}. Stream failed to load. Cookie may be expired or CORS may block this channel.`);
+          setPlayerError(`Shaka Error ${detail?.code || ''}. Stream failed to load. Hiding this channel and trying the next one.`);
+          markChannelBroken(active.id);
         });
 
         player.addEventListener('buffering', (event) => {
@@ -367,7 +370,8 @@ export default function LiveTVPage() {
         if (!isCurrentLoad()) return;
         console.error('[live-tv] Player load failed:', err);
         setPlayerStatus('error');
-        setPlayerError(err.message || 'Stream failed to load.');
+        setPlayerError(err.message || 'Stream failed to load. Hiding this channel and trying the next one.');
+        markChannelBroken(active.id);
       }
     }
 
@@ -402,16 +406,19 @@ export default function LiveTVPage() {
     return [...map.values()];
   }, [sources, channels]);
   const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
+  const brokenSet = useMemo(() => new Set(brokenChannelIds), [brokenChannelIds]);
 
   const filteredChannels = useMemo(() => {
     const q = normalize(query);
     return channels.filter((channel) => {
+      if (brokenSet.has(channel.id)) return false;
+      if (!channel.playable) return false;
       if (category !== 'all' && channel.category !== category) return false;
       if (sourceFilter !== 'all' && channel.sourceId !== sourceFilter && channel.source !== sourceFilter) return false;
       if (!q) return true;
       return normalize(`${channel.name} ${channel.category} ${channel.region} ${channel.source}`).includes(q);
     });
-  }, [channels, category, sourceFilter, query, showFavoritesOnly, favoriteSet]);
+  }, [channels, category, sourceFilter, query, showFavoritesOnly, favoriteSet, brokenSet]);
 
   const activeFilteredIndex = useMemo(() => {
     if (!active?.id) return -1;
@@ -439,6 +446,19 @@ export default function LiveTVPage() {
     if (!lastViewed?.id) return;
     const target = channels.find((channel) => channel.id === lastViewed.id) || lastViewed;
     selectChannel(target);
+  }
+
+  function markChannelBroken(failedId) {
+    if (!failedId) return;
+    setBrokenChannelIds((current) => current.includes(failedId) ? current : [...current, failedId]);
+    setActive((current) => {
+      if (current?.id !== failedId) return current;
+      const blocked = new Set([...brokenChannelIds, failedId]);
+      const currentIndex = channels.findIndex((channel) => channel.id === failedId);
+      const candidates = channels.filter((channel) => channel.playable && !blocked.has(channel.id));
+      if (!candidates.length) return null;
+      return candidates.find((channel) => channels.findIndex((item) => item.id === channel.id) > currentIndex) || candidates[0];
+    });
   }
 
   function toggleFavorite(channel) {
@@ -625,12 +645,21 @@ export default function LiveTVPage() {
                 ⚽ Sports
               </button>
             </div>
+            {brokenChannelIds.length ? (
+              <button
+                type="button"
+                onClick={() => setBrokenChannelIds([])}
+                className="mt-2 w-full rounded-2xl border border-orange-400/30 bg-orange-500/10 px-4 py-2 text-xs font-black text-orange-100 transition hover:border-orange-300/60"
+              >
+                Hidden error channels: {brokenChannelIds.length} • Reset
+              </button>
+            ) : null}
           </div>
 
           <div className="space-y-2 pr-1 lg:max-h-[70dvh] lg:overflow-y-auto">
             {status === 'loading' ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">Loading Tamil channels...</div> : null}
             {status === 'error' ? <div className="rounded-3xl border border-red-500/30 bg-red-950/20 p-6 text-center text-red-200">{error}</div> : null}
-            {status === 'ready' && filteredChannels.length === 0 ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">No channels found.</div> : null}
+            {status === 'ready' && filteredChannels.length === 0 ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">No working channels found for this filter/source.</div> : null}
 
             {filteredChannels.map((channel) => (
               <button
