@@ -311,19 +311,28 @@ export default function StremioPlayerPage() {
             <p className="mt-2 rounded-2xl border border-fuchsia-300/15 bg-fuchsia-500/10 px-3 py-2 text-xs leading-5 text-fuchsia-100">Smooth mode starts with the smallest/480p stream to reduce buffering. Switch quality manually if your network is fast.</p>
             <div className="mt-4 space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
-                {type === 'series' && seasons.length ? (
+                {type === 'series' ? (
                   <>
-                    <select value={selectedSeason} onChange={(event) => { const nextSeason = Number(event.target.value) || 1; setSelectedSeason(nextSeason); const firstEpisode = seasons.find((entry) => entry.season === nextSeason)?.videos?.[0]; setSelectedEpisodeNumber(Number(firstEpisode?.episode || 1)); }} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-fuchsia-400">
-                      {seasons.map((entry) => <option key={entry.season} value={entry.season}>Season {entry.season}</option>)}
-                    </select>
-                    <select value={selectedEpisodeNumber} onChange={(event) => setSelectedEpisodeNumber(Number(event.target.value) || 1)} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-fuchsia-400">
-                      {episodesForSeason.map((video) => <option key={video.id} value={video.episode}>E{video.episode} - {video.title}</option>)}
-                    </select>
+                    <label className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
+                      Season
+                      <select value={selectedSeason} onChange={(event) => { const nextSeason = Number(event.target.value) || 1; setSelectedSeason(nextSeason); const firstEpisode = seasons.find((entry) => entry.season === nextSeason)?.videos?.[0]; setSelectedEpisodeNumber(Number(firstEpisode?.episode || 1)); }} disabled={!seasons.length} className="mt-1 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-base font-bold text-white outline-none focus:border-fuchsia-400 disabled:opacity-50">
+                        {(seasons.length ? seasons : [{ season: selectedSeason || 1 }]).map((entry) => <option key={entry.season} value={entry.season}>Season {entry.season}</option>)}
+                      </select>
+                    </label>
+                    <label className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
+                      Episode
+                      <select value={selectedEpisodeNumber} onChange={(event) => setSelectedEpisodeNumber(Number(event.target.value) || 1)} disabled={!episodesForSeason.length} className="mt-1 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-base font-bold text-white outline-none focus:border-fuchsia-400 disabled:opacity-50">
+                        {(episodesForSeason.length ? episodesForSeason : [{ id: `fallback-${selectedEpisodeNumber || 1}`, episode: selectedEpisodeNumber || 1, title: `Episode ${selectedEpisodeNumber || 1}` }]).map((video) => <option key={video.id} value={video.episode}>E{video.episode} - {video.title}</option>)}
+                      </select>
+                    </label>
                   </>
                 ) : null}
-                <select value={streamIndex} onChange={(event) => setStreamIndex(Number(event.target.value) || 0)} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-fuchsia-400">
-                  {streams.map((stream, index) => <option key={`${stream.url}-${index}`} value={index}>{stream.label}</option>)}
-                </select>
+                <label className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
+                  Stream
+                  <select value={streamIndex} onChange={(event) => setStreamIndex(Number(event.target.value) || 0)} className="mt-1 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-base font-bold text-white outline-none focus:border-fuchsia-400">
+                    {streams.map((stream, index) => <option key={`${stream.url}-${index}`} value={index}>{stream.label}</option>)}
+                  </select>
+                </label>
               </div>
             </div>
           </div>
