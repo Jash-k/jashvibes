@@ -66,7 +66,9 @@ export default function StremioPlayerPage() {
   const [metaStatus, setMetaStatus] = useState('loading');
   const [streamStatus, setStreamStatus] = useState('idle');
   const [error, setError] = useState('');
-  const [selectedVideoId, setSelectedVideoId] = useState(id);
+  const idEpisodeMatch = String(id || '').match(/^tt\d+:(\d+):(\d+)$/i);
+  const [selectedSeason, setSelectedSeason] = useState(Number(searchParams?.get('season') || idEpisodeMatch?.[1] || 1));
+  const [selectedEpisodeNumber, setSelectedEpisodeNumber] = useState(Number(searchParams?.get('episode') || idEpisodeMatch?.[2] || 1));
   const [streams, setStreams] = useState([]);
   const [streamIndex, setStreamIndex] = useState(0);
   const [audioTracks, setAudioTracks] = useState([]);
@@ -119,11 +121,12 @@ export default function StremioPlayerPage() {
         const data = await readJsonResponse(response, 'Stremio request failed');
         if (!response.ok) throw new Error(data?.error || 'Stremio meta failed');
         setItem(data.item);
-        if (type === 'series' && data.item?.videos?.length && !String(id).includes(':')) {
-          const wantedSeason = Number(searchParams?.get('season') || 1);
-          const wantedEpisode = Number(searchParams?.get('episode') || 1);
-          const wanted = data.item.videos.find((video) => Number(video.season) === wantedSeason && Number(video.episode) === wantedEpisode);
-          setSelectedVideoId(wanted?.id || data.item.videos[0].id);
+        if (type === 'series' && data.item?.videos?.length) {
+          const wantedSeason = Number(searchParams?.get('season') || idEpisodeMatch?.[1] || 1);
+          const wantedEpisode = Number(searchParams?.get('episode') || idEpisodeMatch?.[2] || 1);
+          const wanted = data.item.videos.find((video) => Number(video.season) === wantedSeason && Number(video.episode) === wantedEpisode) || data.item.videos[0];
+          setSelectedSeason(Number(wanted?.season || wantedSeason || 1));
+          setSelectedEpisodeNumber(Number(wanted?.episode || wantedEpisode || 1));
         }
         setMetaStatus('ready');
       } catch (err) {
@@ -134,22 +137,55 @@ export default function StremioPlayerPage() {
     loadMeta();
   }, [type, id, searchParams, stremioSource]);
 
+  const seasons = useMemo(() => {
+    const map = new Map();
+    for (const video of item?.videos || []) {
+      const seasonNo = Number(video.season || 1);
+      if (!map.has(seasonNo)) map.set(seasonNo, []);
+      map.get(seasonNo).push(video);
+    }
+    return [...map.entries()].map(([season, videos]) => ({
+      season,
+      videos: videos.sort((a, b) => Number(a.episode || 0) - Number(b.episode || 0)),
+    })).sort((a, b) => a.season - b.season);
+  }, [item?.videos]);
+
+  const episodesForSeason = useMemo(() => {
+    return seasons.find((entry) => entry.season === Number(selectedSeason))?.videos || [];
+  }, [seasons, selectedSeason]);
+
+  const currentEpisodeInfo = useMemo(() => {
+    return episodesForSeason.find((video) => Number(video.episode) === Number(selectedEpisodeNumber)) || episodesForSeason[0] || null;
+  }, [episodesForSeason, selectedEpisodeNumber]);
+
+  const streamRequestId = useMemo(() => {
+    if (type !== 'series') return id;
+    if (currentEpisodeInfo?.id) return currentEpisodeInfo.id;
+    const baseId = String(item?.imdbId || id || '').split(':')[0];
+    return baseId ? `${baseId}:${selectedSeason || 1}:${selectedEpisodeNumber || 1}` : '';
+  }, [type, id, item?.imdbId, currentEpisodeInfo?.id, selectedSeason, selectedEpisodeNumber]);
+
   useEffect(() => {
-    if (!selectedVideoId) return;
+    if (!streamRequestId) return;
     async function loadStreams() {
       try {
         setStreamStatus('loading');
         setError('');
         setStreams([]);
         setStreamIndex(0);
-        const streamParams = new URLSearchParams({ type, id: selectedVideoId });
+        const streamParams = new URLSearchParams({
+          type,
+          id: streamRequestId,
+          season: String(selectedSeason || 1),
+          episode: String(selectedEpisodeNumber || 1),
+        });
         if (stremioSource) streamParams.set('source', stremioSource);
         const response = await fetch(`/api/stremio/stream?${streamParams.toString()}`, { cache: 'no-store' });
         const data = await readJsonResponse(response, 'Stremio request failed');
         if (!response.ok) throw new Error(data?.error || 'Stremio stream failed');
         const nextStreams = data.streams || [];
         setStreams(nextStreams);
-        if (!nextStreams.length) throw new Error(data.blockedCount ? 'Streams were returned but blocked by safety filters / allowed hosts.' : 'No streams found for this title.');
+        if (!nextStreams.length) throw new Error(data.blockedCount ? 'Streams were returned but blocked by safety filters / allowed hosts.' : 'No streams found for this season/episode.');
         // Default to the smallest/480p stream for smoother playback on mobile and Render/HF-hosted direct files.
         // Users can still switch to 720p/1080p from the selector.
         setStreamIndex(preferredSmoothStreamIndex(nextStreams));
@@ -160,7 +196,8 @@ export default function StremioPlayerPage() {
       }
     }
     loadStreams();
-  }, [type, selectedVideoId, stremioSource]);
+  }, [type, streamRequestId, selectedSeason, selectedEpisodeNumber, stremioSource]);
+
 
   useEffect(() => {
     const video = videoRef.current;
@@ -230,10 +267,6 @@ export default function StremioPlayerPage() {
     } catch {}
   }
 
-  const selectedEpisode = useMemo(() => {
-    return item?.videos?.find((video) => video.id === selectedVideoId) || null;
-  }, [item, selectedVideoId]);
-
   return (
     <main className="min-h-dvh bg-[#050012] text-zinc-100">
       <header className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/90 px-4 py-3 backdrop-blur-xl">
@@ -250,7 +283,7 @@ export default function StremioPlayerPage() {
         <div className="space-y-4">
           <div ref={shellRef} className="classics-player-shell overflow-hidden rounded-3xl border border-white/10 bg-black shadow-2xl shadow-black fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0">
             <div className="relative aspect-video h-full w-full bg-black fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:aspect-auto">
-              <video ref={videoRef} className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-contain" controls playsInline preload="metadata" poster={selectedEpisode?.thumbnail || item?.backdropUrl || item?.posterUrl || undefined} />
+              <video ref={videoRef} className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-contain" controls playsInline preload="metadata" poster={currentEpisodeInfo?.thumbnail || item?.backdropUrl || item?.posterUrl || undefined} />
               {streamStatus === 'loading' ? <div className="absolute inset-0 grid place-items-center bg-black/50"><span className="rounded-full bg-black/80 px-5 py-3 text-sm font-bold">Loading Stremio stream...</span></div> : null}
               {streamStatus === 'error' ? <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-red-500/30 bg-red-950/80 p-3 text-sm text-red-100">{error}</div> : null}
             </div>
@@ -273,15 +306,20 @@ export default function StremioPlayerPage() {
 
           <div className="rounded-3xl border border-white/10 bg-zinc-950/80 p-4">
             <h1 className="text-2xl font-black text-white">{item?.title || 'Stremio'}</h1>
-            {selectedEpisode ? <p className="mt-1 text-sm text-fuchsia-200">S{selectedEpisode.season} E{selectedEpisode.episode} • {selectedEpisode.title}</p> : null}
-            <p className="mt-2 text-sm leading-6 text-zinc-400">{selectedEpisode?.synopsis || item?.synopsis || ''}</p>
+            {currentEpisodeInfo ? <p className="mt-1 text-sm text-fuchsia-200">S{currentEpisodeInfo.season} E{currentEpisodeInfo.episode} • {currentEpisodeInfo.title}</p> : null}
+            <p className="mt-2 text-sm leading-6 text-zinc-400">{currentEpisodeInfo?.synopsis || item?.synopsis || ''}</p>
             <p className="mt-2 rounded-2xl border border-fuchsia-300/15 bg-fuchsia-500/10 px-3 py-2 text-xs leading-5 text-fuchsia-100">Smooth mode starts with the smallest/480p stream to reduce buffering. Switch quality manually if your network is fast.</p>
             <div className="mt-4 space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
-                {type === 'series' && item?.videos?.length ? (
-                  <select value={selectedVideoId} onChange={(event) => setSelectedVideoId(event.target.value)} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-fuchsia-400">
-                    {item.videos.map((video) => <option key={video.id} value={video.id}>S{video.season} E{video.episode} - {video.title}</option>)}
-                  </select>
+                {type === 'series' && seasons.length ? (
+                  <>
+                    <select value={selectedSeason} onChange={(event) => { const nextSeason = Number(event.target.value) || 1; setSelectedSeason(nextSeason); const firstEpisode = seasons.find((entry) => entry.season === nextSeason)?.videos?.[0]; setSelectedEpisodeNumber(Number(firstEpisode?.episode || 1)); }} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-fuchsia-400">
+                      {seasons.map((entry) => <option key={entry.season} value={entry.season}>Season {entry.season}</option>)}
+                    </select>
+                    <select value={selectedEpisodeNumber} onChange={(event) => setSelectedEpisodeNumber(Number(event.target.value) || 1)} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-fuchsia-400">
+                      {episodesForSeason.map((video) => <option key={video.id} value={video.episode}>E{video.episode} - {video.title}</option>)}
+                    </select>
+                  </>
                 ) : null}
                 <select value={streamIndex} onChange={(event) => setStreamIndex(Number(event.target.value) || 0)} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-fuchsia-400">
                   {streams.map((stream, index) => <option key={`${stream.url}-${index}`} value={index}>{stream.label}</option>)}
