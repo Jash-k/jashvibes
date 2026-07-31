@@ -484,7 +484,7 @@ export default function LiveTVPage() {
                 <video
                   key={active.id}
                   ref={videoRef}
-                  className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-contain"
+                  className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-fill"
                   data-shaka-player
                   playsInline
                   autoPlay
@@ -607,7 +607,7 @@ export default function LiveTVPage() {
                 className={`flex w-full items-center gap-3 rounded-2xl border p-2.5 text-left transition sm:rounded-3xl sm:p-3 ${active?.id === channel.id ? 'border-red-500/70 bg-red-600/15' : 'border-white/10 bg-zinc-950/80 hover:border-red-500/40'}`}
               >
                 <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/5 sm:h-14 sm:w-14 sm:rounded-2xl">
-                  {channel.logo ? <img src={channel.logo} alt="" className="max-h-full max-w-full object-contain" loading="lazy" /> : <span className="text-xs font-black text-zinc-500">TV</span>}
+                  {channel.logo ? <img src={channel.logo} alt="" className="max-h-full max-w-full object-fill" loading="lazy" /> : <span className="text-xs font-black text-zinc-500">TV</span>}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-black text-white">{channel.name}</p>

@@ -277,7 +277,7 @@ export default function ClassicPlayerPage() {
             <div className="space-y-4">
               <div ref={shellRef} className="classics-player-shell overflow-hidden rounded-3xl border border-white/10 bg-black shadow-2xl shadow-black fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0">
                 <div className="relative aspect-video h-full w-full bg-black fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:aspect-auto">
-                  <video ref={videoRef} className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-contain" controls playsInline poster={item.backdropUrl || item.posterUrl || undefined} />
+                  <video ref={videoRef} className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-fill" controls playsInline poster={item.backdropUrl || item.posterUrl || undefined} />
                   {playerStatus === 'loading' ? <div className="absolute inset-0 grid place-items-center bg-black/50"><span className="rounded-full bg-black/80 px-5 py-3 text-sm font-bold">Loading stream...</span></div> : null}
                   {playerStatus === 'error' ? <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-red-500/30 bg-red-950/80 p-3 text-sm text-red-100">{error}</div> : null}
                 </div>
