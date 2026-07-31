@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 
 const FAVORITES_KEY = 'jash_live_tv_favorites';
-const LIVE_CACHE_KEY = 'jash:live:v5';
+const LIVE_CACHE_KEY = 'jash:live:v6';
 
 function normalize(value = '') {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -78,8 +78,8 @@ function appendCookieToken(uri = '', cookie = '') {
 }
 
 function isJioLike(channel, uri = '') {
-  const text = `${channel?.name || ''} ${channel?.url || ''} ${channel?.logo || ''} ${uri}`.toLowerCase();
-  return text.includes('jio') || text.includes('jiotv');
+  const text = `${channel?.url || ''} ${channel?.source || ''} ${channel?.sourceId || ''} ${uri}`.toLowerCase();
+  return text.includes('jiotv') || text.includes('jiotvmblive') || text.includes('jiotvpllive') || text.includes('jio-tamil') || text.includes('jio auto');
 }
 
 export default function LiveTVPage() {
@@ -120,8 +120,11 @@ export default function LiveTVPage() {
     try {
       setStatus('loading');
       setError('');
-      const params = new URLSearchParams({ playable: '1', working: '1' });
-      if (nextSource && nextSource !== 'all') params.set('source', nextSource);
+      const params = new URLSearchParams({ playable: '1' });
+      if (nextSource && nextSource !== 'all') {
+        params.set('source', nextSource);
+        params.set('working', '1');
+      }
       const response = await fetch(`/api/live-tv?${params.toString()}`, { cache: 'no-store' });
       const data = await response.json();
       if (sourceLoadIdRef.current !== loadId) return;
@@ -323,6 +326,13 @@ export default function LiveTVPage() {
           const jioLike = isJioLike(active, uri);
           const hotstarLike = uri.includes('hotstar.com');
           const fancodeLike = uri.includes('fancode.com') || uri.includes('fblive.fancode.com') || normalize(active.category) === 'fancode' || normalize(active.name).includes('fancode');
+
+          if (active.headers && typeof active.headers === 'object') {
+            Object.entries(active.headers).forEach(([key, val]) => {
+              if (!key || val == null || /^cookie$/i.test(key)) return;
+              request.headers[key] = String(val);
+            });
+          }
 
           if (active.referer) request.headers.Referer = active.referer;
           else if (jioLike) request.headers.Referer = 'https://www.jiotv.co/';
