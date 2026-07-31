@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 
 const FAVORITES_KEY = 'jash_live_tv_favorites';
-const LIVE_CACHE_KEY = 'jash:live:v3';
+const LIVE_CACHE_KEY = 'jash:live:v4';
 
 function normalize(value = '') {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -88,6 +88,7 @@ export default function LiveTVPage() {
   const shakaRef = useRef(null);
   const shakaUiRef = useRef(null);
   const playbackIdRef = useRef(0);
+  const sourceLoadIdRef = useRef(0);
   const [channels, setChannels] = useState([]);
   const [sources, setSources] = useState([]);
   const [active, setActive] = useState(null);
@@ -111,6 +112,40 @@ export default function LiveTVPage() {
     }
   }, []);
 
+  async function loadChannelsForSource(nextSource = 'all') {
+    const loadId = sourceLoadIdRef.current + 1;
+    sourceLoadIdRef.current = loadId;
+
+    try {
+      setStatus('loading');
+      setError('');
+      const params = new URLSearchParams({ playable: '1' });
+      if (nextSource && nextSource !== 'all') params.set('source', nextSource);
+      const response = await fetch(`/api/live-tv?${params.toString()}`, { cache: 'no-store' });
+      const data = await response.json();
+      if (sourceLoadIdRef.current !== loadId) return;
+      if (!response.ok) throw new Error(data?.error || 'Unable to load Live TV');
+
+      const loadedChannels = (data.channels || []).filter((channel) => channel.playable);
+      setChannels(loadedChannels);
+      setSources((current) => {
+        const incoming = data.sources || [];
+        if (nextSource === 'all' || !current.length) return incoming;
+        const merged = new Map(current.map((item) => [item.id, item]));
+        incoming.forEach((item) => merged.set(item.id, item));
+        return [...merged.values()];
+      });
+      setLastUpdated(data.updatedAt || null);
+      setActive((current) => loadedChannels.find((channel) => channel.id === current?.id) || pickInitialChannel(loadedChannels));
+      setStatus('ready');
+    } catch (err) {
+      if (sourceLoadIdRef.current !== loadId) return;
+      setChannels([]);
+      setError(err.message || 'Unable to load Live TV');
+      setStatus('error');
+    }
+  }
+
   useEffect(() => {
     const cached = readSessionCache(LIVE_CACHE_KEY);
     if (cached?.channels?.length) {
@@ -129,27 +164,7 @@ export default function LiveTVPage() {
       return;
     }
 
-    async function loadChannels() {
-      try {
-        setStatus('loading');
-        setError('');
-        const response = await fetch('/api/live-tv', { cache: 'no-store' });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data?.error || 'Unable to load Live TV');
-
-        const loadedChannels = data.channels || [];
-        setChannels(loadedChannels);
-        setSources(data.sources || []);
-        setLastUpdated(data.updatedAt || null);
-        setActive(pickInitialChannel(loadedChannels));
-        setStatus('ready');
-      } catch (err) {
-        setError(err.message || 'Unable to load Live TV');
-        setStatus('error');
-      }
-    }
-
-    loadChannels();
+    loadChannelsForSource('all');
   }, []);
 
   useEffect(() => {
@@ -375,14 +390,24 @@ export default function LiveTVPage() {
       return a.localeCompare(b);
     });
   }, [channels]);
-  const sourceNames = useMemo(() => unique(channels.map((channel) => channel.source)), [channels]);
+  const sourceOptions = useMemo(() => {
+    const map = new Map();
+    (sources || []).forEach((item) => {
+      if (item?.id) map.set(item.id, { id: item.id, label: item.label || item.id });
+    });
+    channels.forEach((channel) => {
+      const id = channel.sourceId || channel.source;
+      if (id && !map.has(id)) map.set(id, { id, label: channel.source || id });
+    });
+    return [...map.values()];
+  }, [sources, channels]);
   const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
 
   const filteredChannels = useMemo(() => {
     const q = normalize(query);
     return channels.filter((channel) => {
       if (category !== 'all' && channel.category !== category) return false;
-      if (sourceFilter !== 'all' && channel.source !== sourceFilter) return false;
+      if (sourceFilter !== 'all' && channel.sourceId !== sourceFilter && channel.source !== sourceFilter) return false;
       if (!q) return true;
       return normalize(`${channel.name} ${channel.category} ${channel.region} ${channel.source}`).includes(q);
     });
@@ -570,9 +595,18 @@ export default function LiveTVPage() {
                 <option value="all">All categories</option>
                 {categories.map((item) => <option key={item} value={item}>{item}</option>)}
               </select>
-              <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-red-500">
+              <select
+                value={sourceFilter}
+                onChange={(event) => {
+                  const nextSource = event.target.value;
+                  setSourceFilter(nextSource);
+                  setCategory('all');
+                  loadChannelsForSource(nextSource);
+                }}
+                className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-red-500"
+              >
                 <option value="all">All sources</option>
-                {sourceNames.map((item) => <option key={item} value={item}>{item}</option>)}
+                {sourceOptions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
               </select>
             </div>
             <div className="mt-2 grid grid-cols-2 gap-2">
