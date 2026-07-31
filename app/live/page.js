@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 
 const FAVORITES_KEY = 'jash_live_tv_favorites';
-const LIVE_CACHE_KEY = 'jash:live:v7';
+const LIVE_CACHE_KEY = 'jash:live:v8';
 
 function normalize(value = '') {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -82,6 +82,34 @@ function isJioLike(channel, uri = '') {
   return text.includes('jiotv') || text.includes('jiotvmblive') || text.includes('jiotvpllive') || text.includes('jio-tamil') || text.includes('jio auto');
 }
 
+function shouldProxyLiveUri(uri = '') {
+  if (!/^https?:\/\//i.test(uri)) return false;
+  try {
+    const parsed = new URL(uri);
+    return parsed.origin !== window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+function buildLiveProxyUrl(uri = '', channel = {}, fallbackReferer = '') {
+  const params = new URLSearchParams({ u: uri });
+  if (channel.userAgent) params.set('ua', channel.userAgent);
+  if (channel.referer || fallbackReferer) params.set('ref', channel.referer || fallbackReferer);
+  if (channel.cookie) params.set('ck', channel.cookie);
+  return `/api/live-proxy?${params.toString()}`;
+}
+
+function restoreOriginalProxyUri(uri = '') {
+  try {
+    const parsed = new URL(uri, window.location.origin);
+    if (parsed.origin === window.location.origin && parsed.pathname === '/api/live-proxy') {
+      return parsed.searchParams.get('u') || uri;
+    }
+  } catch {}
+  return uri;
+}
+
 export default function LiveTVPage() {
   const videoRef = useRef(null);
   const playerContainerRef = useRef(null);
@@ -103,6 +131,7 @@ export default function LiveTVPage() {
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [favorites, setFavorites] = useState([]);
   const [brokenChannelIds, setBrokenChannelIds] = useState([]);
+  const [proxyChannelIds, setProxyChannelIds] = useState([]);
   const [lastUpdated, setLastUpdated] = useState(null);
 
   useEffect(() => {
@@ -123,7 +152,6 @@ export default function LiveTVPage() {
       const params = new URLSearchParams({ playable: '1' });
       if (nextSource && nextSource !== 'all') {
         params.set('source', nextSource);
-        params.set('working', '1');
       }
       const response = await fetch(`/api/live-tv?${params.toString()}`, { cache: 'no-store' });
       const data = await response.json();
@@ -132,6 +160,7 @@ export default function LiveTVPage() {
 
       const loadedChannels = (data.channels || []).filter((channel) => channel.playable);
       setBrokenChannelIds([]);
+      setProxyChannelIds([]);
       setChannels(loadedChannels);
       setSources((current) => {
         const incoming = data.sources || [];
@@ -197,6 +226,7 @@ export default function LiveTVPage() {
     const isCurrentLoad = () => !cancelled && playbackIdRef.current === loadId;
     const video = videoRef.current;
     const container = playerContainerRef.current;
+    const proxyEnabled = /^http:\/\//i.test(active.url || '') || proxyChannelIds.includes(active.id);
 
     async function destroyPlayerInstances(player, overlay) {
       const targetOverlay = overlay || null;
@@ -326,6 +356,30 @@ export default function LiveTVPage() {
           const jioLike = isJioLike(active, uri);
           const hotstarLike = uri.includes('hotstar.com');
           const fancodeLike = uri.includes('fancode.com') || uri.includes('fblive.fancode.com') || normalize(active.category) === 'fancode' || normalize(active.name).includes('fancode');
+          const fallbackReferer = active.referer ||
+            (jioLike ? 'https://www.jiotv.co/' : '') ||
+            (hotstarLike ? 'https://www.hotstar.com/' : '') ||
+            (fancodeLike ? 'https://www.fancode.com/' : '');
+
+          let nextUri = uri;
+          if (
+            active.cookie &&
+            (jioLike || (hotstarLike && !uri.includes('?'))) &&
+            (requestType === shaka.net.NetworkingEngine.RequestType.MANIFEST || requestType === shaka.net.NetworkingEngine.RequestType.SEGMENT)
+          ) {
+            nextUri = appendCookieToken(uri, active.cookie);
+          }
+
+          if (proxyEnabled && shouldProxyLiveUri(nextUri)) {
+            request.uris[0] = buildLiveProxyUrl(nextUri, active, fallbackReferer);
+            // Browser fetch cannot set User-Agent/Cookie/Referer for real media
+            // hosts. The server proxy injects them, so keep the browser request
+            // to our own API clean.
+            delete request.headers['User-Agent'];
+            delete request.headers.Referer;
+            delete request.headers.Cookie;
+            return;
+          }
 
           if (active.headers && typeof active.headers === 'object') {
             Object.entries(active.headers).forEach(([key, val]) => {
@@ -334,23 +388,15 @@ export default function LiveTVPage() {
             });
           }
 
-          if (active.referer) request.headers.Referer = active.referer;
-          else if (jioLike) request.headers.Referer = 'https://www.jiotv.co/';
-          else if (hotstarLike) request.headers.Referer = 'https://www.hotstar.com/';
-          else if (fancodeLike) request.headers.Referer = 'https://www.fancode.com/';
-
+          if (fallbackReferer) request.headers.Referer = fallbackReferer;
           const userAgent = active.userAgent ||
             (jioLike ? 'plaYtv/7.1.5 (Linux;Android 13) ExoPlayerLib/2.11.6' : '') ||
             (fancodeLike ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' : '');
           if (userAgent) request.headers['User-Agent'] = userAgent;
+        });
 
-          if (
-            active.cookie &&
-            (jioLike || (hotstarLike && !uri.includes('?'))) &&
-            (requestType === shaka.net.NetworkingEngine.RequestType.MANIFEST || requestType === shaka.net.NetworkingEngine.RequestType.SEGMENT)
-          ) {
-            request.uris[0] = appendCookieToken(uri, active.cookie);
-          }
+        player.getNetworkingEngine()?.registerResponseFilter((requestType, response) => {
+          if (response?.uri) response.uri = restoreOriginalProxyUri(response.uri);
         });
 
         player.addEventListener('error', (event) => {
@@ -358,6 +404,12 @@ export default function LiveTVPage() {
           const detail = event.detail;
           console.error('[live-tv] Shaka error:', detail);
           if (loadTimeout) window.clearTimeout(loadTimeout);
+          if (!proxyEnabled && shouldProxyLiveUri(active.url || '')) {
+            setPlayerStatus('loading');
+            setPlayerError('Direct playback failed. Retrying with compatibility proxy...');
+            setProxyChannelIds((current) => current.includes(active.id) ? current : [...current, active.id]);
+            return;
+          }
           setPlayerStatus('error');
           setPlayerError(`Shaka Error ${detail?.code || ''}. Stream failed to load. Hiding this channel and trying the next one.`);
           markChannelBroken(active.id);
@@ -379,6 +431,12 @@ export default function LiveTVPage() {
         if (loadTimeout) window.clearTimeout(loadTimeout);
         if (!isCurrentLoad()) return;
         console.error('[live-tv] Player load failed:', err);
+        if (!proxyEnabled && shouldProxyLiveUri(active.url || '')) {
+          setPlayerStatus('loading');
+          setPlayerError('Direct playback failed. Retrying with compatibility proxy...');
+          setProxyChannelIds((current) => current.includes(active.id) ? current : [...current, active.id]);
+          return;
+        }
         setPlayerStatus('error');
         setPlayerError(err.message || 'Stream failed to load. Hiding this channel and trying the next one.');
         markChannelBroken(active.id);
@@ -392,7 +450,7 @@ export default function LiveTVPage() {
       if (loadTimeout) window.clearTimeout(loadTimeout);
       destroyPlayerInstances(localPlayer, localOverlay);
     };
-  }, [active]);
+  }, [active, proxyChannelIds]);
 
   const categories = useMemo(() => {
     const list = unique(channels.map((channel) => channel.category || 'Tamil'));
