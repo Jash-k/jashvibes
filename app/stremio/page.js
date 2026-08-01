@@ -27,11 +27,14 @@ function catalogLabel(catalog = {}) {
 }
 
 function normalizeCatalog(catalog = {}) {
+  const extraSupported = Array.isArray(catalog.extraSupported) && catalog.extraSupported.length
+    ? catalog.extraSupported
+    : (catalog.extra || []).map((item) => item?.name).filter(Boolean);
   return {
     id: catalog.id || '',
     type: catalog.type === 'series' ? 'series' : 'movie',
     name: catalog.name || catalog.id || 'Catalog',
-    extraSupported: catalog.extraSupported || [],
+    extraSupported,
   };
 }
 
@@ -88,6 +91,11 @@ export default function StremioPage() {
   const [selectedCatalogs, setSelectedCatalogs] = useState([]);
   const [activeKey, setActiveKey] = useState('');
   const [pickerValue, setPickerValue] = useState('');
+  const [searchDraft, setSearchDraft] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const [languageFilter, setLanguageFilter] = useState('');
+  const [sortFilter, setSortFilter] = useState('Latest Added');
+  const [genreFilter, setGenreFilter] = useState('');
   const [catalogState, setCatalogState] = useState({});
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
@@ -97,8 +105,9 @@ export default function StremioPage() {
   const activeState = safeCatalogState(activeCatalog ? catalogState[catalogKey(activeCatalog)] : {});
   const activeItems = activeState.items;
 
-  const loadCatalog = useCallback(async (catalog, append = false) => {
+  const loadCatalog = useCallback(async (catalog, append = false, filtersOverride = null) => {
     if (!catalog?.id) return;
+    const filters = filtersOverride || { search: appliedSearch, language: languageFilter, sort: sortFilter, genre: genreFilter };
     const key = catalogKey(catalog);
     const current = safeCatalogState(catalogState[key]);
     const currentItems = current.items;
@@ -106,6 +115,10 @@ export default function StremioPage() {
     try {
       setCatalogState((state) => ({ ...state, [key]: { ...safeCatalogState(state[key]), loading: true, error: '' } }));
       const params = new URLSearchParams({ source: 'catalog', type: catalog.type, catalog: catalog.id, skip: String(skip) });
+      if (filters.search) params.set('search', filters.search);
+      if (filters.language) params.set('language', filters.language);
+      if (filters.sort) params.set('sort', filters.sort);
+      if (filters.genre) params.set('genre', filters.genre);
       const response = await fetch(`/api/stremio/catalog?${params.toString()}`, { cache: 'no-store' });
       const data = await readJsonResponse(response, 'Stremio request failed');
       if (!response.ok) throw new Error(data?.error || 'Catalog failed');
@@ -134,7 +147,7 @@ export default function StremioPage() {
     } catch (err) {
       setCatalogState((state) => ({ ...state, [key]: { ...(state[key] || {}), loading: false, error: err.message || 'Catalog failed' } }));
     }
-  }, [catalogState]);
+  }, [catalogState, appliedSearch, languageFilter, sortFilter, genreFilter]);
 
   useEffect(() => {
     async function loadManifest() {
@@ -219,6 +232,23 @@ export default function StremioPage() {
     });
   }
 
+  function applyFilters(event) {
+    event?.preventDefault?.();
+    const nextFilters = { search: searchDraft.trim(), language: languageFilter, sort: sortFilter, genre: genreFilter };
+    setAppliedSearch(nextFilters.search);
+    if (activeCatalog) loadCatalog(activeCatalog, false, nextFilters);
+  }
+
+  function clearFilters() {
+    const nextFilters = { search: '', language: '', sort: 'Latest Added', genre: '' };
+    setSearchDraft('');
+    setAppliedSearch('');
+    setLanguageFilter('');
+    setSortFilter('Latest Added');
+    setGenreFilter('');
+    if (activeCatalog) loadCatalog(activeCatalog, false, nextFilters);
+  }
+
   return (
     <main className="min-h-dvh overflow-x-hidden bg-[radial-gradient(circle_at_12%_0%,rgba(217,70,239,0.20),transparent_30%),linear-gradient(180deg,#080014,#050505_55%,#090014)] pb-10 text-zinc-100">
       <header className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/90 px-4 py-3 backdrop-blur-xl">
@@ -241,6 +271,41 @@ export default function StremioPage() {
             </select>
             <button type="button" onClick={addSelectedCatalog} className="rounded-2xl border border-fuchsia-300/30 bg-fuchsia-500/10 px-5 py-3 text-sm font-black text-fuchsia-100 hover:border-fuchsia-300/70">Add</button>
           </div>
+
+          <form onSubmit={applyFilters} className="mt-4 grid gap-2 rounded-3xl border border-white/10 bg-black/25 p-3 sm:grid-cols-2 lg:grid-cols-5">
+            <label className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500 lg:col-span-2">
+              Search title
+              <input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Movie / series name..." className="mt-1 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm font-bold normal-case tracking-normal text-white outline-none placeholder:text-zinc-600 focus:border-fuchsia-300" />
+            </label>
+            <label className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">
+              Language
+              <select value={languageFilter} onChange={(event) => setLanguageFilter(event.target.value)} className="mt-1 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm font-bold normal-case tracking-normal text-white outline-none focus:border-fuchsia-300">
+                <option value="">All languages</option>
+                {['Tamil', 'Telugu', 'Hindi', 'Malayalam', 'Kannada', 'English', 'Multi'].map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </label>
+            <label className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">
+              Sort / date
+              <select value={sortFilter} onChange={(event) => setSortFilter(event.target.value)} className="mt-1 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm font-bold normal-case tracking-normal text-white outline-none focus:border-fuchsia-300">
+                <option value="Latest Added">Uploaded date</option>
+                <option value="Year: Newest">Release date newest</option>
+                <option value="Year: Oldest">Release date oldest</option>
+                <option value="Highest Rated">IMDb rating</option>
+                <option value="Title: A-Z">Title A-Z</option>
+              </select>
+            </label>
+            <label className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">
+              Genre
+              <select value={genreFilter} onChange={(event) => setGenreFilter(event.target.value)} className="mt-1 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm font-bold normal-case tracking-normal text-white outline-none focus:border-fuchsia-300">
+                <option value="">All genres</option>
+                {['Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Drama', 'Family', 'Fantasy', 'Horror', 'Romance', 'Sci-Fi', 'Sport', 'Thriller'].map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </label>
+            <div className="grid grid-cols-2 gap-2 sm:col-span-2 lg:col-span-5">
+              <button type="submit" className="rounded-2xl bg-fuchsia-500 px-4 py-3 text-sm font-black text-black transition hover:bg-fuchsia-300">Apply filters</button>
+              <button type="button" onClick={clearFilters} className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-black text-zinc-200 transition hover:border-fuchsia-300/50">Clear</button>
+            </div>
+          </form>
 
           <div className="mt-4 flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {selectedCatalogs.map((catalog) => {
