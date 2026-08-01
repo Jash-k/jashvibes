@@ -1239,10 +1239,7 @@ export default function MusicPage() {
       <div className="mx-auto grid w-full min-w-0 max-w-[92rem] lg:grid-cols-[15rem_minmax(0,1fr)]">
         <aside className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/90 px-3 py-3 backdrop-blur-xl lg:fixed lg:bottom-0 lg:left-0 lg:w-60 lg:border-b-0 lg:border-r lg:px-4 lg:py-5">
           <div className="flex items-center justify-between gap-3 lg:block">
-            <div className="flex items-center gap-2 lg:flex-col lg:items-start">
-              <BrandLogo showText className="lg:w-full" />
-              <Link href="/" className="inline-flex rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">← Home</Link>
-            </div>
+            <Link href="/" className="inline-flex rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">← Home</Link>
             <div className="text-right lg:mt-6 lg:text-left">
               <p className="text-[10px] font-black uppercase tracking-[0.32em] text-fuchsia-300/80">ராக வானம்</p>
               <h1 className="hidden text-3xl font-black text-white lg:block">Music</h1>
@@ -1256,10 +1253,11 @@ export default function MusicPage() {
         </aside>
 
         <section className="min-w-0 px-4 py-5 sm:px-6 lg:col-start-2 lg:px-8">
-          <header className="relative overflow-hidden rounded-[2rem] border border-fuchsia-400/20 bg-[radial-gradient(circle_at_15%_18%,rgba(217,70,239,0.34),transparent_30%),radial-gradient(circle_at_85%_15%,rgba(236,72,153,0.20),transparent_28%),linear-gradient(135deg,#160014,#050505_58%,#120012)] p-6 shadow-2xl shadow-fuchsia-950/30 sm:p-9">
-            <p className="text-xs font-black uppercase tracking-[0.35em] text-fuchsia-300/80">Tamil • JioSaavn only</p>
-            <h2 className="mt-4 text-5xl font-black tracking-tight text-fuchsia-100 drop-shadow-[0_0_28px_rgba(217,70,239,0.85)] sm:text-7xl">ராக வானம்</h2>
-            <input value={query} onChange={(event) => { setQuery(event.target.value); setView('search'); }} placeholder="Search songs, albums, artists, playlists..." className="mt-6 w-full max-w-xl rounded-full border border-fuchsia-400/20 bg-black/50 px-5 py-3 text-base font-semibold text-white outline-none placeholder:text-zinc-600 focus:border-fuchsia-300" />
+          <header className="relative overflow-hidden rounded-[2rem] border border-fuchsia-400/20 bg-[radial-gradient(circle_at_15%_18%,rgba(217,70,239,0.34),transparent_30%),radial-gradient(circle_at_85%_15%,rgba(236,72,153,0.20),transparent_28%),linear-gradient(135deg,#160014,#050505_58%,#120012)] p-6 text-center shadow-2xl shadow-fuchsia-950/30 sm:p-9">
+            <BrandLogo className="mx-auto" />
+            <p className="mt-5 text-xs font-black uppercase tracking-[0.35em] text-fuchsia-300/80">Tamil • JioSaavn only</p>
+            <h2 className="mt-3 text-5xl font-black tracking-tight text-fuchsia-100 drop-shadow-[0_0_28px_rgba(217,70,239,0.85)] sm:text-7xl">ராக வானம்</h2>
+            <input value={query} onChange={(event) => { setQuery(event.target.value); setView('search'); }} placeholder="Search songs, albums, artists, playlists..." className="mx-auto mt-6 w-full max-w-xl rounded-full border border-fuchsia-400/20 bg-black/50 px-5 py-3 text-base font-semibold text-white outline-none placeholder:text-zinc-600 focus:border-fuchsia-300" />
           </header>
 
           <div className="mt-8 space-y-9">
@@ -1402,14 +1400,22 @@ export default function MusicPage() {
               </section>
             ) : null}
 
-            {(view === 'home' || view === 'search') && mainSections.map((section) => (
-              <section key={section.id}>
-                <SectionHeader title={section.title} />
-                <HorizontalRow>{(section.items || []).map((track) => <TrackTile key={trackKey(track)} track={track} active={activeKeyValue === trackKey(track)} favorite={favoriteSet.has(trackKey(track))} onPlay={(song) => playTrack(song, section.items, true)} onFavorite={toggleFavorite} />)}</HorizontalRow>
-              </section>
-            ))}
+            {(view === 'home' || view === 'search') && mainSections.map((section) => {
+              const songItems = (section.items || []).filter((item) => item?.type === 'song' || item?.seokey || item?.trackId);
+              return (
+                <section key={section.id}>
+                  <SectionHeader title={section.title} />
+                  <HorizontalRow>
+                    {(section.items || []).map((item) => {
+                      if (item?.type === 'album') return <AlbumTile key={`album-${item.id || item.title}`} album={item} onOpen={openAlbum} />;
+                      if (item?.type === 'playlist') return <PlaylistTile key={`playlist-${item.id || item.title}`} item={item} onOpen={openPlaylist} />;
+                      return <TrackTile key={trackKey(item)} track={item} active={activeKeyValue === trackKey(item)} favorite={favoriteSet.has(trackKey(item))} onPlay={(song) => playTrack(song, songItems.length ? songItems : section.items, true)} onFavorite={toggleFavorite} />;
+                    })}
+                  </HorizontalRow>
+                </section>
+              );
+            })}
 
-            {view === 'home' && home.releases?.tracks?.length ? <section><SectionHeader title="New Tamil Releases" /><HorizontalRow>{home.releases.tracks.map((track) => <TrackTile key={trackKey(track)} track={track} active={activeKeyValue === trackKey(track)} favorite={favoriteSet.has(trackKey(track))} onPlay={(song) => playTrack(song, home.releases.tracks, true)} onFavorite={toggleFavorite} />)}</HorizontalRow></section> : null}
             {(view === 'home' || view === 'artists') && home.artists?.length ? <section><SectionHeader title="Top Tamil Music Directors" /><HorizontalRow>{home.artists.map((artist) => <ArtistTile key={artist.id || artist.name} artist={artist} onOpen={openArtist} />)}</HorizontalRow></section> : null}
             {(view === 'home' || view === 'albums') && home.releases?.albums?.length ? <section><SectionHeader title="Tamil Albums" /><HorizontalRow>{home.releases.albums.map((album) => <AlbumTile key={album.id} album={album} onOpen={openAlbum} />)}</HorizontalRow></section> : null}
             {view === 'home' && home.playlists?.length ? <section><SectionHeader title="Imported Spotify Playlists" /><HorizontalRow>{home.playlists.map((item) => <PlaylistTile key={item.id} item={item} onOpen={openPlaylist} />)}</HorizontalRow></section> : null}

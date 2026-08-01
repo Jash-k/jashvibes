@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import BrandLogo from '@/components/BrandLogo';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 
@@ -38,6 +39,18 @@ function preferredSmoothStreamIndex(streams = []) {
   return ranked[0]?.index || 0;
 }
 
+function scheduleExternalFallback(callback, delay = 1400) {
+  let done = false;
+  const cancel = () => { done = true; window.clearTimeout(timer); };
+  const timer = window.setTimeout(() => {
+    if (!done && document.visibilityState === 'visible') callback();
+  }, delay);
+  window.addEventListener('pagehide', cancel, { once: true });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') cancel();
+  }, { once: true });
+}
+
 function openExternalPlayer(url = '', title = '') {
   if (!url || typeof window === 'undefined') return;
   const ua = navigator.userAgent || '';
@@ -46,20 +59,24 @@ function openExternalPlayer(url = '', title = '') {
   try {
     if (/android/i.test(ua)) {
       const parsed = new URL(url);
+      const scheme = parsed.protocol.replace(':', '');
       const path = `${parsed.host}${parsed.pathname}${parsed.search}${parsed.hash}`;
-      const intent = `intent://${path}#Intent;scheme=${parsed.protocol.replace(':', '')};type=video/*;package=org.videolan.vlc;S.title=${encodedTitle};S.browser_fallback_url=${encodeURIComponent(url)};end`;
-      window.location.href = intent;
+      const genericIntent = `intent://${path}#Intent;scheme=${scheme};type=video/*;S.title=${encodedTitle};S.browser_fallback_url=${encodeURIComponent(url)};end`;
+      const vlcIntent = `intent://${path}#Intent;scheme=${scheme};type=video/*;package=org.videolan.vlc;S.title=${encodedTitle};S.browser_fallback_url=${encodeURIComponent(genericIntent)};end`;
+      scheduleExternalFallback(() => { window.location.href = genericIntent; });
+      window.location.href = vlcIntent;
       return;
     }
 
     if (/iphone|ipad|ipod/i.test(ua)) {
-      const fallback = window.setTimeout(() => window.open(url, '_blank', 'noopener,noreferrer'), 1200);
-      window.addEventListener('pagehide', () => window.clearTimeout(fallback), { once: true });
+      scheduleExternalFallback(() => { window.location.href = url; });
       window.location.href = `vlc-x-callback://x-callback-url/stream?url=${encodeURIComponent(url)}&title=${encodedTitle}`;
       return;
     }
   } catch {}
 
+  // Desktop/default fallback: hand the direct URL to the OS/browser. If the
+  // user has VLC or another player registered for the media type, it can open there.
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
@@ -310,6 +327,10 @@ export default function StremioPlayerPage() {
           <p className="text-[10px] font-black uppercase tracking-[0.30em] text-fuchsia-300">{stremioSource === 'watch' ? 'Provider Player' : 'Catalog Player'}</p>
         </div>
       </header>
+
+      <div className="mx-auto flex max-w-7xl justify-center px-4 pt-5 sm:px-6 sm:pt-7 lg:px-8">
+        <BrandLogo />
+      </div>
 
       <section className="mx-auto grid max-w-7xl gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[1.45fr_0.75fr] lg:px-8">
         <div className="space-y-4">

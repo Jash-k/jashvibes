@@ -1,21 +1,25 @@
 import Link from 'next/link';
 
-export default function BrandLogo({ href = '/', showText = false, className = '' }) {
+export default function BrandLogo({ href = '/', size = 'hero', className = '' }) {
+  const sizes = {
+    hero: 'h-24 w-24 sm:h-32 sm:w-32 lg:h-36 lg:w-36',
+    compact: 'h-16 w-16 sm:h-20 sm:w-20',
+  };
+
   return (
     <Link
       href={href}
-      className={`inline-flex shrink-0 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-2.5 py-2 text-zinc-100 shadow-lg shadow-black/20 backdrop-blur transition hover:border-fuchsia-300/40 hover:bg-white/[0.07] ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center rounded-full outline-none transition hover:scale-[1.02] focus:ring-2 focus:ring-fuchsia-300/50 ${className}`}
       aria-label="JaSH ViBeS home"
       title="JaSH ViBeS"
     >
       <img
         src="/brand/logo.png"
-        alt=""
-        className="h-8 w-8 rounded-xl object-contain drop-shadow-[0_0_12px_rgba(217,70,239,0.35)] sm:h-9 sm:w-9"
+        alt="JaSH ViBeS logo"
+        className={`${sizes[size] || sizes.hero} rounded-full object-contain drop-shadow-[0_0_28px_rgba(217,70,239,0.42)]`}
         loading="eager"
         decoding="async"
       />
-      {showText ? <span className="hidden text-sm font-black tracking-tight text-white sm:inline">JaSH ViBeS</span> : null}
     </Link>
   );
 }
