@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import BrandLogo from '@/components/BrandLogo';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 
@@ -1238,7 +1239,10 @@ export default function MusicPage() {
       <div className="mx-auto grid w-full min-w-0 max-w-[92rem] lg:grid-cols-[15rem_minmax(0,1fr)]">
         <aside className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/90 px-3 py-3 backdrop-blur-xl lg:fixed lg:bottom-0 lg:left-0 lg:w-60 lg:border-b-0 lg:border-r lg:px-4 lg:py-5">
           <div className="flex items-center justify-between gap-3 lg:block">
-            <Link href="/" className="inline-flex rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">← Home</Link>
+            <div className="flex items-center gap-2 lg:flex-col lg:items-start">
+              <BrandLogo showText className="lg:w-full" />
+              <Link href="/" className="inline-flex rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">← Home</Link>
+            </div>
             <div className="text-right lg:mt-6 lg:text-left">
               <p className="text-[10px] font-black uppercase tracking-[0.32em] text-fuchsia-300/80">ராக வானம்</p>
               <h1 className="hidden text-3xl font-black text-white lg:block">Music</h1>

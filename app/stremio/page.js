@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import BrandLogo from '@/components/BrandLogo';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const SELECTED_CATALOGS_KEY = 'jash:stremio:selectedCatalogs:v2';
@@ -253,7 +254,10 @@ export default function StremioPage() {
     <main className="min-h-dvh overflow-x-hidden bg-[radial-gradient(circle_at_12%_0%,rgba(217,70,239,0.20),transparent_30%),linear-gradient(180deg,#080014,#050505_55%,#090014)] pb-10 text-zinc-100">
       <header className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/90 px-4 py-3 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
-          <Link href="/" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">← Home</Link>
+          <div className="flex items-center gap-2">
+            <BrandLogo showText />
+            <Link href="/" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">← Home</Link>
+          </div>
           <p className="text-[10px] font-black uppercase tracking-[0.30em] text-fuchsia-300">Stremio</p>
         </div>
       </header>

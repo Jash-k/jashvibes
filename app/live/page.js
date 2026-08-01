@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import BrandLogo from '@/components/BrandLogo';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 
@@ -577,9 +578,12 @@ export default function LiveTVPage() {
       <header className="sticky top-0 z-50 border-b border-white/10 bg-zinc-950/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-3 py-3 sm:px-6 sm:py-4 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div className="flex items-center justify-between gap-3">
-            <Link href="/" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-red-500 hover:text-white">
-              ← Home
-            </Link>
+            <div className="flex items-center gap-2">
+              <BrandLogo showText />
+              <Link href="/" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-red-500 hover:text-white">
+                ← Home
+              </Link>
+            </div>
             <p className="text-[10px] font-black uppercase tracking-[0.25em] text-red-500 sm:text-xs sm:tracking-[0.3em]">Tamil Live TV</p>
           </div>
           <input

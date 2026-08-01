@@ -38,6 +38,31 @@ function preferredSmoothStreamIndex(streams = []) {
   return ranked[0]?.index || 0;
 }
 
+function openExternalPlayer(url = '', title = '') {
+  if (!url || typeof window === 'undefined') return;
+  const ua = navigator.userAgent || '';
+  const encodedTitle = encodeURIComponent(title || 'JaSH ViBeS');
+
+  try {
+    if (/android/i.test(ua)) {
+      const parsed = new URL(url);
+      const path = `${parsed.host}${parsed.pathname}${parsed.search}${parsed.hash}`;
+      const intent = `intent://${path}#Intent;scheme=${parsed.protocol.replace(':', '')};type=video/*;package=org.videolan.vlc;S.title=${encodedTitle};S.browser_fallback_url=${encodeURIComponent(url)};end`;
+      window.location.href = intent;
+      return;
+    }
+
+    if (/iphone|ipad|ipod/i.test(ua)) {
+      const fallback = window.setTimeout(() => window.open(url, '_blank', 'noopener,noreferrer'), 1200);
+      window.addEventListener('pagehide', () => window.clearTimeout(fallback), { once: true });
+      window.location.href = `vlc-x-callback://x-callback-url/stream?url=${encodeURIComponent(url)}&title=${encodedTitle}`;
+      return;
+    }
+  } catch {}
+
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
 function SymbolButton({ children, onClick, disabled = false, title = '' }) {
   return (
     <button
@@ -73,8 +98,6 @@ export default function StremioPlayerPage() {
   const [streamIndex, setStreamIndex] = useState(0);
   const [audioTracks, setAudioTracks] = useState([]);
   const [audioTrackIndex, setAudioTrackIndex] = useState(0);
-
-  const activeStream = streams[streamIndex] || null;
 
   function seekBy(seconds) {
     const video = videoRef.current;
@@ -199,6 +222,8 @@ export default function StremioPlayerPage() {
   }, [type, streamRequestId, selectedSeason, selectedEpisodeNumber, stremioSource]);
 
 
+  const activeStream = streams[streamIndex] || null;
+
   useEffect(() => {
     const video = videoRef.current;
     const url = activeStream?.url;
@@ -267,6 +292,13 @@ export default function StremioPlayerPage() {
     } catch {}
   }
 
+  function openPlayer() {
+    const title = currentEpisodeInfo
+      ? `${item?.title || 'Stremio'} S${currentEpisodeInfo.season}E${currentEpisodeInfo.episode}`
+      : item?.title || activeStream?.title || 'Stremio';
+    openExternalPlayer(activeStream?.url, title);
+  }
+
   return (
     <main className="min-h-dvh bg-[#050012] text-zinc-100">
       <header className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/90 px-4 py-3 backdrop-blur-xl">
@@ -299,7 +331,7 @@ export default function StremioPlayerPage() {
               <SymbolButton onClick={() => seekBy(30)} title="Forward 30 seconds">30↷</SymbolButton>
               <SymbolButton onClick={() => seekBy(60)} title="Forward 1 minute">1m↷</SymbolButton>
               <SymbolButton onClick={fullscreen} title="Fullscreen">⛶</SymbolButton>
-              {activeStream?.url ? <a href={activeStream.url} target="_blank" rel="noreferrer" title="Open directly" aria-label="Open directly" className="grid h-11 min-w-11 place-items-center rounded-2xl bg-fuchsia-500 px-2 text-xs font-black text-black transition hover:bg-fuchsia-300 sm:h-12 sm:min-w-12 sm:text-sm">↗</a> : null}
+              {activeStream?.url ? <button type="button" onClick={openPlayer} title="Open in VLC / external player" aria-label="Open in external player" className="grid h-11 min-w-[6.5rem] place-items-center rounded-2xl bg-fuchsia-500 px-3 text-xs font-black text-black transition hover:bg-fuchsia-300 sm:h-12 sm:min-w-[7.5rem] sm:text-sm">Open Player</button> : null}
             </div>
             {audioTracks.length ? <p className="mt-2 truncate px-1 text-[11px] font-semibold text-zinc-500">🔊 {audioTracks[audioTrackIndex]?.label || `A${audioTrackIndex + 1}`}</p> : null}
           </div>

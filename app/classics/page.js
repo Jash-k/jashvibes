@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import BrandLogo from '@/components/BrandLogo';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 
@@ -181,7 +182,10 @@ export default function TamilClassicsPage() {
       <header className="sticky top-0 z-50 border-b border-white/10 bg-zinc-950/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div className="flex items-center justify-between gap-3">
-            <Link href="/" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-red-500 hover:text-white">← Home</Link>
+            <div className="flex items-center gap-2">
+              <BrandLogo showText />
+              <Link href="/" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-red-500 hover:text-white">← Home</Link>
+            </div>
             <p className="text-xs font-black uppercase tracking-[0.3em] text-red-500">Tamil Classics</p>
           </div>
           <button onClick={syncNow} disabled={syncStatus === 'syncing'} className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-black text-red-100 transition hover:bg-red-500/20 disabled:opacity-60">
