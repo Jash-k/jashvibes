@@ -586,12 +586,7 @@ export default function LiveTVPage() {
             <BrandLogo />
             <p className="text-[10px] font-black uppercase tracking-[0.26em] text-red-500 sm:text-xs sm:tracking-[0.32em]">Tamil Live TV</p>
           </div>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search Tamil channels..."
-            className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-base font-semibold text-white outline-none placeholder:text-zinc-600 focus:border-red-500 sm:text-sm lg:justify-self-end"
-          />
+          <span className="hidden lg:block" />
         </div>
       </header>
 

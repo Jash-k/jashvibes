@@ -12,7 +12,10 @@ export async function GET(request) {
     const item = await getSongInfo(seokey);
     return NextResponse.json({ item }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
-    console.error('[api/music/song] Error:', error);
-    return NextResponse.json({ error: error.message || 'Music song info failed' }, { status: 500 });
+    const message = error.message || 'Music song info failed';
+    const isClientInputError = /Only JioSaavn|Song id is required|Song not found/i.test(message);
+    if (isClientInputError) console.warn('[api/music/song] Skipped:', message);
+    else console.error('[api/music/song] Error:', error);
+    return NextResponse.json({ error: message }, { status: isClientInputError ? 400 : 500 });
   }
 }
