@@ -27,11 +27,15 @@ export async function GET(request) {
     const imdbId = await getImdbId({ tmdbId, type });
     if (!imdbId) return NextResponse.json({ ok: true, available: false, reason: 'No IMDb id for this TMDB item' }, { headers: { 'Cache-Control': 'no-store' } });
 
-    const stremioId = type === 'series' ? `${imdbId}:${season}:${episode}` : imdbId;
-    const result = await getStremioStreams({ type, id: stremioId, source: 'watch' });
+    // Telegram-Stremio supports tmdb ids directly (`tmdb:123` and
+    // `tmdb:123:1:2`) and some catalogs/providers prefer those over IMDb ids.
+    // Use the TMDB id as the visible watch id; getStremioStreams will try TMDB
+    // first and fall back to IMDb when needed.
+    const stremioId = `tmdb:${tmdbId}`;
+    const result = await getStremioStreams({ type, id: stremioId, source: 'watch', season, episode });
     const href = type === 'series'
-      ? `/stremio-watch/series/${encodeURIComponent(imdbId)}?season=${season}&episode=${episode}&source=watch`
-      : `/stremio-watch/movie/${encodeURIComponent(imdbId)}?source=watch`;
+      ? `/stremio-watch/series/${encodeURIComponent(stremioId)}?season=${season}&episode=${episode}&source=watch`
+      : `/stremio-watch/movie/${encodeURIComponent(stremioId)}?source=watch`;
 
     return NextResponse.json({
       ok: true,

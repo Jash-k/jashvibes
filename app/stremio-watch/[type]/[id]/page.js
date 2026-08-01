@@ -185,7 +185,7 @@ export default function StremioPlayerPage() {
         if (!response.ok) throw new Error(data?.error || 'Stremio stream failed');
         const nextStreams = data.streams || [];
         setStreams(nextStreams);
-        if (!nextStreams.length) throw new Error(data.blockedCount ? 'Streams were returned but blocked by safety filters / allowed hosts.' : 'No streams found for this season/episode.');
+        if (!nextStreams.length) throw new Error(data.blockedCount ? 'Streams were returned but blocked by safety filters / allowed hosts.' : (type === 'series' ? 'No streams found for this season/episode.' : 'No streams found for this movie. Tried the catalog id and IMDb fallback.'));
         // Default to the smallest/480p stream for smoother playback on mobile and Render/HF-hosted direct files.
         // Users can still switch to 720p/1080p from the selector.
         setStreamIndex(preferredSmoothStreamIndex(nextStreams));
