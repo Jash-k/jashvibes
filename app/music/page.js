@@ -1254,9 +1254,13 @@ export default function MusicPage() {
 
         <section className="min-w-0 px-4 py-5 sm:px-6 lg:col-start-2 lg:px-8">
           <header className="relative overflow-hidden rounded-[2rem] border border-fuchsia-400/20 bg-[radial-gradient(circle_at_15%_18%,rgba(217,70,239,0.34),transparent_30%),radial-gradient(circle_at_85%_15%,rgba(236,72,153,0.20),transparent_28%),linear-gradient(135deg,#160014,#050505_58%,#120012)] p-6 text-center shadow-2xl shadow-fuchsia-950/30 sm:p-9">
-            <BrandLogo className="mx-auto" />
-            <p className="mt-5 text-xs font-black uppercase tracking-[0.35em] text-fuchsia-300/80">Tamil • JioSaavn only</p>
-            <h2 className="mt-3 text-5xl font-black tracking-tight text-fuchsia-100 drop-shadow-[0_0_28px_rgba(217,70,239,0.85)] sm:text-7xl">ராக வானம்</h2>
+            <div className="flex items-center justify-center gap-3 sm:gap-5">
+              <BrandLogo />
+              <div className="min-w-0 text-left">
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-fuchsia-300/80 sm:text-xs sm:tracking-[0.35em]">Tamil • JioSaavn only</p>
+                <h2 className="mt-2 text-4xl font-black tracking-tight text-fuchsia-100 drop-shadow-[0_0_28px_rgba(217,70,239,0.85)] min-[380px]:text-5xl sm:text-7xl">ராக வானம்</h2>
+              </div>
+            </div>
             <input value={query} onChange={(event) => { setQuery(event.target.value); setView('search'); }} placeholder="Search songs, albums, artists, playlists..." className="mx-auto mt-6 w-full max-w-xl rounded-full border border-fuchsia-400/20 bg-black/50 px-5 py-3 text-base font-semibold text-white outline-none placeholder:text-zinc-600 focus:border-fuchsia-300" />
           </header>
 

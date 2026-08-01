@@ -318,19 +318,22 @@ export default function StremioPlayerPage() {
 
   return (
     <main className="min-h-dvh bg-[#050012] text-zinc-100">
-      <header className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/90 px-4 py-3 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <a href="/stremio?home=1" onClick={(event) => { event.preventDefault(); window.location.assign('/stremio?home=1'); }} aria-label="Stremio home" title="Stremio home" className="rounded-full border border-fuchsia-400/20 bg-fuchsia-500/10 px-3 py-2 text-xs font-black text-fuchsia-100 transition hover:border-fuchsia-400/60">📡 Stremio</a>
-            <a href="/" onClick={(event) => { event.preventDefault(); window.location.assign('/'); }} aria-label="JaSH ViBeS home" title="JaSH ViBeS home" className="rounded-full border border-white/10 px-3 py-2 text-xs font-black text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">⌂ JaSH</a>
+      <header className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/92 px-4 py-4 backdrop-blur-xl sm:py-5">
+        <div className="mx-auto grid max-w-7xl gap-3 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
+          <div className="flex items-center justify-between gap-2 lg:justify-start">
+            <div className="flex items-center gap-2">
+              <a href="/stremio?home=1" onClick={(event) => { event.preventDefault(); window.location.assign('/stremio?home=1'); }} aria-label="Stremio home" title="Stremio home" className="rounded-full border border-fuchsia-400/20 bg-fuchsia-500/10 px-3 py-2 text-xs font-black text-fuchsia-100 transition hover:border-fuchsia-400/60">📡 Stremio</a>
+              <a href="/" onClick={(event) => { event.preventDefault(); window.location.assign('/'); }} aria-label="JaSH ViBeS home" title="JaSH ViBeS home" className="rounded-full border border-white/10 px-3 py-2 text-xs font-black text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">⌂ JaSH</a>
+            </div>
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-300 lg:hidden">{stremioSource === 'watch' ? 'Provider' : 'Catalog'}</p>
           </div>
-          <p className="text-[10px] font-black uppercase tracking-[0.30em] text-fuchsia-300">{stremioSource === 'watch' ? 'Provider Player' : 'Catalog Player'}</p>
+          <div className="flex items-center justify-center gap-3 text-center sm:gap-4">
+            <BrandLogo />
+            <p className="hidden text-[10px] font-black uppercase tracking-[0.30em] text-fuchsia-300 sm:block">{stremioSource === 'watch' ? 'Provider Player' : 'Catalog Player'}</p>
+          </div>
+          <span className="hidden justify-self-end text-[10px] font-black uppercase tracking-[0.30em] text-fuchsia-300 lg:block">Stremio</span>
         </div>
       </header>
-
-      <div className="mx-auto flex max-w-7xl justify-center px-4 pt-5 sm:px-6 sm:pt-7 lg:px-8">
-        <BrandLogo />
-      </div>
 
       <section className="mx-auto grid max-w-7xl gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[1.45fr_0.75fr] lg:px-8">
         <div className="space-y-4">

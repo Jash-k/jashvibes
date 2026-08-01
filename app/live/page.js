@@ -575,26 +575,26 @@ export default function LiveTVPage() {
 
   return (
     <main className="palette-cybergrape min-h-dvh overflow-x-hidden bg-[#09041a] text-zinc-100">
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-zinc-950/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-3 py-3 sm:px-6 sm:py-4 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-          <div className="flex items-center justify-between gap-3">
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-zinc-950/92 backdrop-blur">
+        <div className="mx-auto grid max-w-7xl gap-3 px-3 py-4 sm:px-6 sm:py-5 lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:px-8">
+          <div className="flex items-center justify-between gap-3 lg:justify-start">
             <Link href="/" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-red-500 hover:text-white">
               ← Home
             </Link>
-            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-red-500 sm:text-xs sm:tracking-[0.3em]">Tamil Live TV</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-red-500 sm:hidden">Tamil Live TV</p>
+          </div>
+          <div className="flex items-center justify-center gap-3 text-center sm:gap-4">
+            <BrandLogo />
+            <p className="hidden text-xs font-black uppercase tracking-[0.32em] text-red-500 sm:block">Tamil Live TV</p>
           </div>
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search Tamil channels..."
-            className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-base font-semibold text-white outline-none placeholder:text-zinc-600 focus:border-red-500 sm:max-w-md sm:text-sm"
+            className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-base font-semibold text-white outline-none placeholder:text-zinc-600 focus:border-red-500 sm:text-sm lg:justify-self-end"
           />
         </div>
       </header>
-
-      <div className="mx-auto flex max-w-7xl justify-center px-3 pt-5 sm:px-6 sm:pt-7 lg:px-8">
-        <BrandLogo />
-      </div>
 
       <section className="mx-auto grid max-w-7xl items-start gap-3 px-3 py-3 sm:gap-4 sm:px-6 sm:py-5 lg:grid-cols-[minmax(0,1fr)_minmax(300px,22rem)] xl:grid-cols-[minmax(0,1fr)_minmax(320px,24rem)] lg:px-8">
         <div className="min-w-0 space-y-3 sm:space-y-4 lg:sticky lg:top-24 lg:self-start">

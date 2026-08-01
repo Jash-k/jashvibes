@@ -252,17 +252,18 @@ export default function StremioPage() {
 
   return (
     <main className="min-h-dvh overflow-x-hidden bg-[radial-gradient(circle_at_12%_0%,rgba(217,70,239,0.20),transparent_30%),linear-gradient(180deg,#080014,#050505_55%,#090014)] pb-10 text-zinc-100">
-      <header className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/90 px-4 py-3 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
-          <Link href="/" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">← Home</Link>
-          <p className="text-[10px] font-black uppercase tracking-[0.30em] text-fuchsia-300">Stremio</p>
+      <header className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/92 px-4 py-4 backdrop-blur-xl sm:py-5">
+        <div className="mx-auto grid max-w-7xl grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <Link href="/" className="justify-self-start rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">← Home</Link>
+          <div className="flex items-center justify-center gap-3 text-center sm:gap-4">
+            <BrandLogo />
+            <p className="hidden text-[10px] font-black uppercase tracking-[0.30em] text-fuchsia-300 sm:block">Stremio</p>
+          </div>
+          <span className="justify-self-end text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-300 sm:hidden">Stremio</span>
         </div>
       </header>
 
       <section className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-        <div className="flex justify-center">
-          <BrandLogo />
-        </div>
         <div className="rounded-[2rem] border border-fuchsia-400/20 bg-white/[0.04] p-5 shadow-2xl shadow-fuchsia-950/20 sm:p-7">
           <p className="text-xs font-black uppercase tracking-[0.35em] text-fuchsia-300/80">Authorized Addon</p>
           <h1 className="mt-3 text-4xl font-black text-white sm:text-6xl">Stremio</h1>
