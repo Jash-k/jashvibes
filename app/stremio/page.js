@@ -255,18 +255,18 @@ export default function StremioPage() {
       <header className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/92 px-4 py-4 backdrop-blur-xl sm:py-5">
         <div className="mx-auto grid max-w-7xl grid-cols-[1fr_auto_1fr] items-center gap-3">
           <Link href="/" className="justify-self-start rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">← Home</Link>
-          <div className="flex items-center justify-center gap-3 text-center sm:gap-4">
+          <div className="flex flex-col items-center justify-center gap-1 text-center">
             <BrandLogo />
-            <p className="hidden text-[10px] font-black uppercase tracking-[0.30em] text-fuchsia-300 sm:block">Stremio</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.26em] text-fuchsia-300 sm:text-xs sm:tracking-[0.32em]">Stremio</p>
           </div>
-          <span className="justify-self-end text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-300 sm:hidden">Stremio</span>
+          <span className="justify-self-end" />
         </div>
       </header>
 
       <section className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
         <div className="rounded-[2rem] border border-fuchsia-400/20 bg-white/[0.04] p-5 shadow-2xl shadow-fuchsia-950/20 sm:p-7">
           <p className="text-xs font-black uppercase tracking-[0.35em] text-fuchsia-300/80">Authorized Addon</p>
-          <h1 className="mt-3 text-4xl font-black text-white sm:text-6xl">Stremio</h1>
+          <h1 className="mt-3 text-3xl font-black text-white sm:text-5xl">Catalogs</h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">Choose which catalogs from your manifest should appear. Click a catalog button to lazy-load posters for that catalog.</p>
           {manifest?.name ? <p className="mt-3 text-xs font-bold text-zinc-500">Addon: {manifest.name} • {manifest.version}</p> : null}
 

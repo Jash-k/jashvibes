@@ -2,758 +2,267 @@
 
 import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 
-const FAVORITES_KEY = 'jash_live_tv_favorites';
-const LIVE_CACHE_KEY = 'jash:live:v9';
+const PAGE_SIZE = 24;
+const CLASSICS_CACHE_KEY = 'jash:classics:v1';
 
-function normalize(value = '') {
-  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-}
-
-function unique(items = []) {
-  return [...new Set(items.filter(Boolean))];
-}
-
-function channelSlug(value = '') {
-  return normalize(value).replace(/\s+/g, '-');
-}
-
-function pickInitialChannel(channels = []) {
-  const playable = channels.filter((channel) => channel.playable);
-  const hash = typeof window !== 'undefined' ? window.location.hash.replace(/^#/, '') : '';
-
-  if (hash) {
-    const byHash = playable.find((channel) => channelSlug(channel.name) === hash || channelSlug(channel.id) === hash);
-    if (byHash) return byHash;
-  }
-
+function Card({ item }) {
   return (
-    playable.find((channel) => normalize(channel.name) === 'star vijay hd') ||
-    playable.find((channel) => normalize(channel.name).includes('star vijay')) ||
-    playable.find((channel) => normalize(channel.name).includes('vijay tv')) ||
-    playable.find((channel) => normalize(channel.name).includes('vijay')) ||
-    playable[0] ||
-    channels[0] ||
-    null
+    <Link
+      href={`/classics/${item.id}`}
+      className="group overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-lg shadow-black/30 transition hover:-translate-y-1 hover:border-red-500/60 sm:rounded-3xl"
+    >
+      <div className="relative aspect-[2/3] bg-zinc-900">
+        {item.posterUrl ? (
+          <img src={item.posterUrl} alt="" className="h-full w-full object-cover transition group-hover:scale-105" loading="lazy" />
+        ) : (
+          <div className="flex h-full items-center justify-center p-4 text-center text-sm font-black text-zinc-300">{item.title}</div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
+        <div className="absolute left-2 top-2 rounded-full bg-red-600 px-2 py-1 text-[10px] font-black text-white">
+          {item.rating ? item.rating.toFixed(1) : 'NR'}
+        </div>
+        {item.year ? (
+          <div className="absolute right-2 top-2 rounded-full bg-black/75 px-2 py-1 text-[10px] font-bold text-zinc-100">
+            {item.year}
+          </div>
+        ) : null}
+      </div>
+      <div className="space-y-2 p-3 sm:p-4">
+        <h3 className="line-clamp-2 min-h-9 text-[13px] font-black leading-4 text-white sm:text-sm sm:leading-5">{item.title}</h3>
+        <div className="flex flex-wrap gap-1">
+          {(item.sources || []).slice(0, 2).map((source) => (
+            <span key={source} className="rounded-full border border-red-500/25 bg-red-500/10 px-2 py-0.5 text-[10px] font-bold text-red-100">{source}</span>
+          ))}
+          <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-bold text-zinc-300">{item.streamsCount} streams</span>
+        </div>
+      </div>
+    </Link>
   );
 }
 
-function cleanHex(value = '') {
-  return String(value || '').trim().replace(/[^0-9a-fA-F]/g, '').toLowerCase();
+function SkeletonGrid() {
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-6">
+      {Array.from({ length: 12 }).map((_, index) => (
+        <div key={index} className="rounded-2xl border border-white/10 bg-zinc-950 sm:rounded-3xl">
+          <div className="aspect-[2/3] animate-pulse bg-zinc-900" />
+          <div className="space-y-2 p-3">
+            <div className="h-4 animate-pulse rounded bg-zinc-800" />
+            <div className="h-3 w-2/3 animate-pulse rounded bg-zinc-900" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
-function buildClearKeys(channel) {
-  const license = String(channel?.licenseKey || '').trim();
-  if (license && license.includes(':')) {
-    const [keyId, key] = license.split(':');
-    const kid = cleanHex(keyId);
-    const clearKey = cleanHex(key);
-    if (kid && clearKey) return { [kid]: clearKey };
-  }
-
-  const kid = cleanHex(channel?.keyId || '');
-  const clearKey = cleanHex(channel?.key || '');
-  if (kid && clearKey && kid !== 'null' && clearKey !== 'null') return { [kid]: clearKey };
-  return {};
-}
-
-function appendCookieToken(uri = '', cookie = '') {
-  const token = String(cookie || '').trim();
-  if (!token) return uri;
-
-  const cookieName = token.includes('__hdnea__') ? '__hdnea__' : token.includes('hdnea') ? 'hdnea' : '';
-  if (!cookieName) return uri;
-
-  const tokenValue = token.includes('=') ? token.slice(token.indexOf('=') + 1) : token;
-  if (!tokenValue) return uri;
-
-  // Stream4Liv appends the Akamai token raw, not URL-encoded. Encoding the
-  // slash in acl=/* can make Jio respond with BAD_HTTP_STATUS / Shaka 1001.
-  if (uri.includes(`${cookieName}=`)) {
-    return uri.replace(new RegExp(`(${cookieName}=)[^&"'\\s;]+`), `$1${tokenValue}`);
-  }
-
-  return `${uri}${uri.includes('?') ? '&' : '?'}${cookieName}=${tokenValue}`;
-}
-
-function isJioLike(channel, uri = '') {
-  const text = `${channel?.name || ''} ${channel?.url || ''} ${channel?.logo || ''} ${channel?.source || ''} ${channel?.sourceId || ''} ${uri}`.toLowerCase();
-  return text.includes('jio') || text.includes('jiotv') || text.includes('vijay');
-}
-
-function isPocketChannel(channel) {
-  return channel?.sourceId === 'pocket-tamil' || channel?.source === 'Pocket Tamil';
-}
-
-function buildPocketProxyUrl(uri = '', channel = {}, fallbackReferer = '') {
-  const params = new URLSearchParams({ u: uri });
-  if (channel.userAgent) params.set('ua', channel.userAgent);
-  if (channel.referer || fallbackReferer) params.set('ref', channel.referer || fallbackReferer);
-  if (channel.cookie) params.set('ck', channel.cookie);
-  return `/api/live-pocket/proxy?${params.toString()}`;
-}
-
-function restorePocketProxyUri(uri = '') {
-  try {
-    const parsed = new URL(uri, window.location.origin);
-    if (parsed.origin === window.location.origin && parsed.pathname === '/api/live-pocket/proxy') {
-      return parsed.searchParams.get('u') || uri;
-    }
-  } catch {}
-  return uri;
-}
-
-export default function LiveTVPage() {
-  const videoRef = useRef(null);
-  const playerContainerRef = useRef(null);
-  const shakaRef = useRef(null);
-  const shakaUiRef = useRef(null);
-  const playbackIdRef = useRef(0);
-  const sourceLoadIdRef = useRef(0);
-  const [channels, setChannels] = useState([]);
-  const [sources, setSources] = useState([]);
-  const [active, setActive] = useState(null);
-  const [lastViewed, setLastViewed] = useState(null);
+export default function TamilClassicsPage() {
+  const [items, setItems] = useState([]);
   const [status, setStatus] = useState('loading');
-  const [playerStatus, setPlayerStatus] = useState('idle');
-  const [playerError, setPlayerError] = useState('');
   const [error, setError] = useState('');
-  const [query, setQuery] = useState('');
-  const [category, setCategory] = useState('all');
-  const [sourceFilter, setSourceFilter] = useState('all');
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-  const [favorites, setFavorites] = useState([]);
-  const [pocketProxyIds, setPocketProxyIds] = useState([]);
-  const [lastUpdated, setLastUpdated] = useState(null);
+  const [syncStatus, setSyncStatus] = useState('idle');
+  const [syncSummary, setSyncSummary] = useState(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [facets, setFacets] = useState({ sources: [], genres: [], minYear: null, maxYear: null });
+  const [filters, setFilters] = useState({ q: '', sort: 'rating.desc', source: 'Aha', genre: 'all', minRating: '', yearFrom: '', yearTo: '' });
+  const sentinelRef = useRef(null);
+  const autoSyncStartedRef = useRef(false);
 
-  useEffect(() => {
+  const buildQuery = useCallback((pageNumber) => {
+    const params = new URLSearchParams({ page: String(pageNumber), limit: String(PAGE_SIZE), sort: filters.sort });
+    if (filters.q.trim()) params.set('q', filters.q.trim());
+    if (filters.source !== 'all') params.set('source', filters.source);
+    if (filters.genre !== 'all') params.set('genre', filters.genre);
+    if (filters.minRating) params.set('minRating', filters.minRating);
+    if (filters.yearFrom) params.set('yearFrom', filters.yearFrom);
+    if (filters.yearTo) params.set('yearTo', filters.yearTo);
+    return params.toString();
+  }, [filters]);
+
+  const loadPage = useCallback(async (pageNumber = 1, append = false) => {
     try {
-      setFavorites(JSON.parse(window.localStorage.getItem(FAVORITES_KEY) || '[]'));
-    } catch {
-      setFavorites([]);
-    }
-  }, []);
-
-  async function loadChannelsForSource(nextSource = 'all') {
-    const loadId = sourceLoadIdRef.current + 1;
-    sourceLoadIdRef.current = loadId;
-
-    try {
-      setStatus('loading');
+      setStatus(append ? 'ready' : 'loading');
       setError('');
-      let data;
-      if (nextSource === 'all') {
-        const [regularResult, pocketResult] = await Promise.allSettled([
-          fetch('/api/live-tv?playable=1', { cache: 'no-store' }).then(async (response) => {
-            const json = await response.json();
-            if (!response.ok) throw new Error(json?.error || 'Unable to load Live TV');
-            return json;
-          }),
-          fetch('/api/live-pocket?playable=1', { cache: 'no-store' }).then(async (response) => {
-            const json = await response.json();
-            if (!response.ok) throw new Error(json?.error || 'Unable to load Pocket Live');
-            return json;
-          }),
-        ]);
+      const response = await fetch(`/api/vod?${buildQuery(pageNumber)}`, { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Unable to load Tamil Classics');
 
-        const payloads = [regularResult, pocketResult]
-          .filter((result) => result.status === 'fulfilled')
-          .map((result) => result.value);
-        if (!payloads.length) throw new Error(regularResult.reason?.message || pocketResult.reason?.message || 'Unable to load Live TV');
-        data = {
-          updatedAt: new Date().toISOString(),
-          sources: payloads.flatMap((payload) => payload.sources || []),
-          channels: payloads.flatMap((payload) => payload.channels || []),
-          errors: [regularResult, pocketResult]
-            .filter((result) => result.status === 'rejected')
-            .map((result) => result.reason?.message || 'Source failed'),
-        };
-      } else if (nextSource === 'pocket-tamil') {
-        const response = await fetch('/api/live-pocket?playable=1', { cache: 'no-store' });
-        data = await response.json();
-        if (!response.ok) throw new Error(data?.error || 'Unable to load Pocket Live');
-      } else {
-        const params = new URLSearchParams({ playable: '1', source: nextSource });
-        const response = await fetch(`/api/live-tv?${params.toString()}`, { cache: 'no-store' });
-        data = await response.json();
-        if (!response.ok) throw new Error(data?.error || 'Unable to load Live TV');
+      if (data.needsSync && !autoSyncStartedRef.current) {
+        autoSyncStartedRef.current = true;
+        setStatus('sync-needed');
+        return;
       }
 
-      if (sourceLoadIdRef.current !== loadId) return;
-      const loadedChannels = (data.channels || []).filter((channel) => channel.playable);
-      setPocketProxyIds([]);
-      setChannels(loadedChannels);
-      setSources((current) => {
-        const incoming = data.sources || [];
-        if (nextSource === 'all' || !current.length) return incoming;
-        const merged = new Map(current.map((item) => [item.id, item]));
-        incoming.forEach((item) => merged.set(item.id, item));
-        return [...merged.values()];
-      });
-      setLastUpdated(data.updatedAt || null);
-      setActive((current) => loadedChannels.find((channel) => channel.id === current?.id) || pickInitialChannel(loadedChannels));
+      setItems((current) => append ? [...current, ...(data.items || [])] : (data.items || []));
+      setPage(data.page || pageNumber);
+      setHasMore(Boolean(data.hasMore));
+      setTotal(data.total || 0);
+      setFacets(data.facets || { sources: [], genres: [] });
       setStatus('ready');
     } catch (err) {
-      if (sourceLoadIdRef.current !== loadId) return;
-      setChannels([]);
-      setError(err.message || 'Unable to load Live TV');
+      setError(err.message || 'Unable to load Tamil Classics');
       setStatus('error');
     }
-  }
+  }, [buildQuery]);
+
+  const syncNow = useCallback(async () => {
+    try {
+      setSyncStatus('syncing');
+      setError('');
+      const response = await fetch('/api/vod/sync', { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data?.error || 'Sync failed');
+      setSyncSummary(data);
+      setSyncStatus('done');
+      await loadPage(1, false);
+    } catch (err) {
+      setSyncStatus('error');
+      setError(err.message || 'Sync failed');
+    }
+  }, [loadPage]);
 
   useEffect(() => {
-    const cached = readSessionCache(LIVE_CACHE_KEY);
-    if (cached?.channels?.length) {
-      setChannels(cached.channels || []);
-      setSources(cached.sources || []);
-      setActive(cached.active || pickInitialChannel(cached.channels || []));
-      setLastViewed(cached.lastViewed || null);
+    const cached = readSessionCache(CLASSICS_CACHE_KEY);
+    if (cached?.items?.length) {
+      setItems(cached.items || []);
       setStatus(cached.status || 'ready');
       setError(cached.error || '');
-      setQuery(cached.query || '');
-      setCategory(cached.category || 'all');
-      setSourceFilter(cached.sourceFilter || 'all');
-      setShowFavoritesOnly(false);
-      setLastUpdated(cached.lastUpdated || null);
-      restoreScroll(LIVE_CACHE_KEY);
+      setSyncStatus(cached.syncStatus || 'idle');
+      setSyncSummary(cached.syncSummary || null);
+      setPage(cached.page || 1);
+      setHasMore(Boolean(cached.hasMore));
+      setTotal(cached.total || 0);
+      setFacets(cached.facets || { sources: [], genres: [], minYear: null, maxYear: null });
+      setFilters(cached.filters || { q: '', sort: 'rating.desc', source: 'Aha', genre: 'all', minRating: '', yearFrom: '', yearTo: '' });
+      restoreScroll(CLASSICS_CACHE_KEY);
       return;
     }
-
-    loadChannelsForSource('all');
-  }, []);
-
-  useEffect(() => {
-    writeSessionCache(LIVE_CACHE_KEY, { channels, sources, active, lastViewed, status, error, query, category, sourceFilter, showFavoritesOnly, lastUpdated });
-  }, [channels, sources, active, lastViewed, status, error, query, category, sourceFilter, showFavoritesOnly, lastUpdated]);
+    loadPage(1, false);
+  }, [loadPage]);
 
   useEffect(() => {
-    const onScroll = () => saveScroll(LIVE_CACHE_KEY);
+    writeSessionCache(CLASSICS_CACHE_KEY, { items, status, error, syncStatus, syncSummary, page, hasMore, total, facets, filters });
+  }, [items, status, error, syncStatus, syncSummary, page, hasMore, total, facets, filters]);
+
+  useEffect(() => {
+    const onScroll = () => saveScroll(CLASSICS_CACHE_KEY);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => {
-      saveScroll(LIVE_CACHE_KEY);
+      saveScroll(CLASSICS_CACHE_KEY);
       window.removeEventListener('scroll', onScroll);
     };
   }, []);
 
   useEffect(() => {
-    if (!active || !videoRef.current || !playerContainerRef.current) return;
+    if (status === 'sync-needed' && syncStatus === 'idle') syncNow();
+  }, [status, syncStatus, syncNow]);
 
-    let cancelled = false;
-    let loadTimeout = null;
-    let localPlayer = null;
-    let localOverlay = null;
-    const loadId = playbackIdRef.current + 1;
-    playbackIdRef.current = loadId;
-    const isCurrentLoad = () => !cancelled && playbackIdRef.current === loadId;
-    const video = videoRef.current;
-    const container = playerContainerRef.current;
-    const pocketChannel = isPocketChannel(active);
-    const pocketProxyEnabled = pocketChannel && (/^http:\/\//i.test(active.url || '') || pocketProxyIds.includes(active.id));
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || status !== 'ready' || !hasMore) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) loadPage(page + 1, true);
+    }, { rootMargin: '700px 0px' });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [status, hasMore, page, loadPage]);
 
-    async function destroyPlayerInstances(player, overlay) {
-      const targetOverlay = overlay || null;
-      const targetPlayer = player || null;
-
-      if (targetOverlay) {
-        try {
-          await targetOverlay.destroy();
-        } catch {}
-        if (shakaUiRef.current === targetOverlay) shakaUiRef.current = null;
-      }
-
-      if (targetPlayer) {
-        try {
-          await targetPlayer.destroy();
-        } catch {}
-        if (shakaRef.current === targetPlayer) shakaRef.current = null;
-      }
-    }
-
-    async function destroyCurrentPlayer() {
-      // Capture the current instances before awaiting. This prevents the cleanup
-      // from a previous channel switch from accidentally destroying the next
-      // channel's newly-created player, which caused every alternate switch to
-      // freeze/play.
-      const overlay = shakaUiRef.current;
-      const player = shakaRef.current;
-      await destroyPlayerInstances(player, overlay);
-    }
-
-    async function loadChannel() {
-      setPlayerStatus('loading');
-      setPlayerError('');
-      loadTimeout = window.setTimeout(() => {
-        if (!isCurrentLoad()) return;
-        setPlayerStatus('error');
-        setPlayerError('Channel switch timed out. Try the channel again or choose another source.');
-        destroyPlayerInstances(localPlayer, localOverlay);
-      }, 25000);
-
-      await destroyCurrentPlayer();
-      if (!isCurrentLoad()) return;
-
-      video.pause();
-      video.controls = false;
-      video.removeAttribute('src');
-      video.load();
-
-      if (!active.playable) {
-        if (loadTimeout) window.clearTimeout(loadTimeout);
-        setPlayerStatus('unsupported');
-        setPlayerError('This channel format is not marked playable.');
-        return;
-      }
-
-      try {
-        const [shakaModule, muxModule] = await Promise.all([
-          import('shaka-player/dist/shaka-player.ui.js'),
-          import('mux.js'),
-        ]);
-        if (!isCurrentLoad()) return;
-
-        const shaka = shakaModule.default || window.shaka || shakaModule;
-        const muxjs = muxModule.default || muxModule;
-        window.muxjs = muxjs;
-
-        shaka.polyfill?.installAll?.();
-        if (!shaka.Player?.isBrowserSupported?.()) {
-          if (loadTimeout) window.clearTimeout(loadTimeout);
-          setPlayerStatus('unsupported');
-          setPlayerError('This browser does not support Shaka playback.');
-          return;
-        }
-
-        const player = new shaka.Player();
-        localPlayer = player;
-        shakaRef.current = player;
-        await player.attach(video);
-        if (!isCurrentLoad()) {
-          await destroyPlayerInstances(player, null);
-          return;
-        }
-
-        const overlay = new shaka.ui.Overlay(player, container, video);
-        localOverlay = overlay;
-        shakaUiRef.current = overlay;
-        overlay.configure({
-          controlPanelElements: [
-            'play_pause',
-            'volume',
-            'time_and_duration',
-            'spacer',
-            'quality',
-            'fullscreen',
-          ],
-          seekBarColors: {
-            base: 'rgba(255,255,255,0.3)',
-            buffered: 'rgba(255,255,255,0.6)',
-            played: '#ff2222',
-          },
-          volumeBarColors: {
-            base: 'rgba(255,255,255,0.3)',
-            level: '#ff2222',
-          },
-        });
-
-        const clearKeys = buildClearKeys(active);
-        player.configure({
-          drm: Object.keys(clearKeys).length ? { clearKeys } : {},
-          manifest: { defaultPresentationDelay: 5 },
-          streaming: {
-            safeSeekOffset: 5,
-            bufferingGoal: 10,
-            rebufferingGoal: 2,
-            lowLatencyMode: true,
-          },
-          abr: {
-            enabled: true,
-            defaultBandwidthEstimate: 1_000_000,
-            restrictToElementSize: false,
-            switchInterval: 1,
-          },
-        });
-
-        player.getNetworkingEngine()?.registerRequestFilter((requestType, request) => {
-          const uri = request.uris?.[0] || '';
-          const jioLike = isJioLike(active, uri);
-          const hotstarLike = uri.includes('hotstar.com');
-          const fancodeLike = uri.includes('fancode.com') || uri.includes('fblive.fancode.com') || normalize(active.category) === 'fancode' || normalize(active.name).includes('fancode');
-
-          if (active.headers && typeof active.headers === 'object') {
-            Object.entries(active.headers).forEach(([key, val]) => {
-              if (!key || val == null || /^cookie$/i.test(key)) return;
-              request.headers[key] = String(val);
-            });
-          }
-
-          if (active.referer) request.headers.Referer = active.referer;
-          else if (jioLike) request.headers.Referer = 'https://www.jiotv.co/';
-          else if (hotstarLike) request.headers.Referer = 'https://www.hotstar.com/';
-          else if (fancodeLike) request.headers.Referer = 'https://www.fancode.com/';
-
-          const userAgent = active.userAgent ||
-            (jioLike ? 'plaYtv/7.1.5 (Linux;Android 13) ExoPlayerLib/2.11.6' : '') ||
-            (fancodeLike ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' : '');
-          if (userAgent) request.headers['User-Agent'] = userAgent;
-
-          let nextUri = uri;
-          if (
-            active.cookie &&
-            (jioLike || (hotstarLike && !uri.includes('?'))) &&
-            (requestType === shaka.net.NetworkingEngine.RequestType.MANIFEST || requestType === shaka.net.NetworkingEngine.RequestType.SEGMENT)
-          ) {
-            nextUri = appendCookieToken(uri, active.cookie);
-            request.uris[0] = nextUri;
-          }
-
-          if (pocketProxyEnabled && /^https?:\/\//i.test(nextUri)) {
-            const fallbackReferer = active.referer ||
-              (jioLike ? 'https://www.jiotv.co/' : '') ||
-              (hotstarLike ? 'https://www.hotstar.com/' : '') ||
-              (fancodeLike ? 'https://www.fancode.com/' : '');
-            request.uris[0] = buildPocketProxyUrl(nextUri, active, fallbackReferer);
-            delete request.headers['User-Agent'];
-            delete request.headers.Referer;
-            delete request.headers.Cookie;
-          }
-        });
-
-        player.getNetworkingEngine()?.registerResponseFilter((requestType, response) => {
-          if (pocketProxyEnabled && response?.uri) response.uri = restorePocketProxyUri(response.uri);
-        });
-
-        player.addEventListener('error', (event) => {
-          if (!isCurrentLoad()) return;
-          const detail = event.detail;
-          console.error('[live-tv] Shaka error:', detail);
-          if (loadTimeout) window.clearTimeout(loadTimeout);
-          if (pocketChannel && !pocketProxyEnabled && /^https?:\/\//i.test(active.url || '')) {
-            setPlayerStatus('loading');
-            setPlayerError('Direct Pocket playback failed. Retrying Pocket route...');
-            setPocketProxyIds((current) => current.includes(active.id) ? current : [...current, active.id]);
-            return;
-          }
-          setPlayerStatus('error');
-          setPlayerError(`Shaka Error ${detail?.code || ''}. Stream failed to load. Try another channel or source.`);
-        });
-
-        player.addEventListener('buffering', (event) => {
-          if (isCurrentLoad()) setPlayerStatus(event.buffering ? 'loading' : 'ready');
-        });
-
-        setPlayerStatus('loading');
-        const mimeType = active.format === 'hls' ? 'application/x-mpegurl' : undefined;
-        await player.load(active.url, undefined, mimeType);
-        if (!isCurrentLoad()) return;
-
-        if (loadTimeout) window.clearTimeout(loadTimeout);
-        setPlayerStatus('ready');
-        video.play().catch(() => {});
-      } catch (err) {
-        if (loadTimeout) window.clearTimeout(loadTimeout);
-        if (!isCurrentLoad()) return;
-        console.error('[live-tv] Player load failed:', err);
-        if (pocketChannel && !pocketProxyEnabled && /^https?:\/\//i.test(active.url || '')) {
-          setPlayerStatus('loading');
-          setPlayerError('Direct Pocket playback failed. Retrying Pocket route...');
-          setPocketProxyIds((current) => current.includes(active.id) ? current : [...current, active.id]);
-          return;
-        }
-        setPlayerStatus('error');
-        setPlayerError(err.message || 'Stream failed to load. Try another channel or source.');
-      }
-    }
-
-    loadChannel();
-
-    return () => {
-      cancelled = true;
-      if (loadTimeout) window.clearTimeout(loadTimeout);
-      destroyPlayerInstances(localPlayer, localOverlay);
-    };
-  }, [active, pocketProxyIds]);
-
-  const categories = useMemo(() => {
-    const list = unique(channels.map((channel) => channel.category || 'Tamil'));
-    return list.sort((a, b) => {
-      const order = { Music: 0, Sports: 1 };
-      const ao = order[a] ?? 99;
-      const bo = order[b] ?? 99;
-      if (ao !== bo) return ao - bo;
-      return a.localeCompare(b);
-    });
-  }, [channels]);
-  const sourceOptions = useMemo(() => {
-    const map = new Map();
-    (sources || []).forEach((item) => {
-      if (item?.id) map.set(item.id, { id: item.id, label: item.label || item.id });
-    });
-    channels.forEach((channel) => {
-      const id = channel.sourceId || channel.source;
-      if (id && !map.has(id)) map.set(id, { id, label: channel.source || id });
-    });
-    return [...map.values()];
-  }, [sources, channels]);
-  const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
-
-  const filteredChannels = useMemo(() => {
-    const q = normalize(query);
-    return channels.filter((channel) => {
-      if (!channel.playable) return false;
-      if (category !== 'all' && channel.category !== category) return false;
-      if (sourceFilter !== 'all' && channel.sourceId !== sourceFilter && channel.source !== sourceFilter) return false;
-      if (!q) return true;
-      return normalize(`${channel.name} ${channel.category} ${channel.region} ${channel.source}`).includes(q);
-    });
-  }, [channels, category, sourceFilter, query, showFavoritesOnly, favoriteSet]);
-
-  const activeFilteredIndex = useMemo(() => {
-    if (!active?.id) return -1;
-    return filteredChannels.findIndex((channel) => channel.id === active.id);
-  }, [filteredChannels, active?.id]);
-
-  function selectChannel(channel, { remember = true } = {}) {
-    if (!channel) return;
-    setActive((current) => {
-      if (remember && current?.id && current.id !== channel.id) setLastViewed(current);
-      return channel;
-    });
-  }
-
-  function navigateChannel(direction) {
-    const list = filteredChannels.length ? filteredChannels : channels;
-    if (!list.length) return;
-    const currentIndex = list.findIndex((channel) => channel.id === active?.id);
-    const baseIndex = currentIndex >= 0 ? currentIndex : direction > 0 ? -1 : 0;
-    const nextIndex = (baseIndex + direction + list.length) % list.length;
-    selectChannel(list[nextIndex]);
-  }
-
-  function returnToLastChannel() {
-    if (!lastViewed?.id) return;
-    const target = channels.find((channel) => channel.id === lastViewed.id) || lastViewed;
-    selectChannel(target);
-  }
-
-  function toggleFavorite(channel) {
-    const next = favoriteSet.has(channel.id)
-      ? favorites.filter((id) => id !== channel.id)
-      : [...favorites, channel.id];
-    setFavorites(next);
-    window.localStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
-  }
-
-  async function enterFullscreen() {
-    const shell = document.getElementById('live-player-shell');
-    if (!shell) return;
-    try {
-      if (shell.requestFullscreen) await shell.requestFullscreen();
-      else if (shell.webkitRequestFullscreen) shell.webkitRequestFullscreen();
-    } catch {}
-  }
-
-  async function pictureInPicture() {
-    const video = videoRef.current;
-    if (!video || !document.pictureInPictureEnabled) return;
-    try {
-      if (document.pictureInPictureElement) await document.exitPictureInPicture();
-      else await video.requestPictureInPicture();
-    } catch {}
-  }
-
-  async function copyUrl() {
-    if (!active?.url) return;
-    try {
-      await navigator.clipboard.writeText(active.url);
-      alert('Channel URL copied');
-    } catch {
-      alert(active.url);
-    }
+  function updateFilter(key, value) {
+    setFilters((current) => ({ ...current, [key]: value }));
+    setPage(1);
   }
 
   return (
-    <main className="palette-cybergrape min-h-dvh overflow-x-hidden bg-[#09041a] text-zinc-100">
+    <main className="palette-nordic min-h-dvh bg-[#06110d] text-zinc-100">
       <header className="sticky top-0 z-50 border-b border-white/10 bg-zinc-950/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-3 py-3 sm:px-6 sm:py-4 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div className="flex items-center justify-between gap-3">
-            <Link href="/" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-red-500 hover:text-white">
-              ← Home
-            </Link>
-            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-red-500 sm:text-xs sm:tracking-[0.3em]">Tamil Live TV</p>
+            <Link href="/" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-red-500 hover:text-white">← Home</Link>
           </div>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search Tamil channels..."
-            className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-base font-semibold text-white outline-none placeholder:text-zinc-600 focus:border-red-500 sm:max-w-md sm:text-sm"
-          />
+          <button onClick={syncNow} disabled={syncStatus === 'syncing'} className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-black text-red-100 transition hover:bg-red-500/20 disabled:opacity-60">
+            {syncStatus === 'syncing' ? 'Syncing...' : 'Sync / Refresh'}
+          </button>
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-7xl justify-center px-3 pt-5 sm:px-6 sm:pt-7 lg:px-8">
+      <div className="mx-auto flex max-w-7xl flex-col items-center justify-center gap-1 px-4 pt-6 text-center sm:px-6 sm:pt-8 lg:px-8">
         <BrandLogo />
+        <p className="text-[10px] font-black uppercase tracking-[0.26em] text-red-500 sm:text-xs sm:tracking-[0.32em]">Tamil Classics</p>
       </div>
 
-      <section className="mx-auto grid max-w-7xl items-start gap-3 px-3 py-3 sm:gap-4 sm:px-6 sm:py-5 lg:grid-cols-[minmax(0,1fr)_minmax(300px,22rem)] xl:grid-cols-[minmax(0,1fr)_minmax(320px,24rem)] lg:px-8">
-        <div className="min-w-0 space-y-3 sm:space-y-4 lg:sticky lg:top-24 lg:self-start">
-          <div id="live-player-shell" className="overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black/50 fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0 sm:rounded-3xl">
-            <div
-              ref={playerContainerRef}
-              className="relative aspect-video h-full w-full bg-black fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:aspect-auto"
-              data-shaka-player-container
-            >
-              {active?.playable ? (
-                <video
-                  key={active.id}
-                  ref={videoRef}
-                  className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-fill"
-                  data-shaka-player
-                  playsInline
-                  autoPlay
-                  muted={false}
-                  poster={active.logo || undefined}
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center p-8 text-center">
-                  <div>
-                    <p className="text-xl font-black text-white">{active ? 'Channel unavailable' : 'Choose a channel'}</p>
-                    <p className="mt-2 text-sm leading-6 text-zinc-400">
-                      {active ? (playerError || 'This channel could not be loaded by Shaka Player. Try Open Directly or another source.') : 'Tamil preferred channels will appear on the right.'}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {playerStatus === 'loading' ? (
-                <div className="absolute inset-0 grid place-items-center bg-black/45">
-                  <div className="rounded-full border border-white/10 bg-black/80 px-5 py-3 text-sm font-bold text-zinc-200">Loading channel...</div>
-                </div>
+      <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mb-6 rounded-3xl border border-white/10 bg-zinc-950/80 p-4 shadow-2xl shadow-black/20">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h1 className="text-3xl font-black text-white sm:text-5xl">Classics Catalog</h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+                ErosNow + Aha playlists combined, matched with TMDB, stored in MongoDB, and sorted by TMDB rating high to low.
+              </p>
+              {syncSummary ? (
+                <p className="mt-2 text-xs text-green-300">
+                  Synced {syncSummary.stored} titles • matched {syncSummary.matched} • unmatched {syncSummary.unmatched}
+                </p>
               ) : null}
-              {playerStatus === 'error' ? (
-                <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-red-500/30 bg-red-950/80 p-3 text-sm leading-6 text-red-100 backdrop-blur">
-                  {playerError || 'Playback failed. Try another source or Open Directly.'}
-                </div>
-              ) : null}
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-bold text-zinc-300">
+              {items.length} / {total} loaded
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-zinc-950/80 p-3 sm:rounded-3xl sm:p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <h1 className="truncate text-xl font-black text-white sm:text-2xl">{active?.name || 'Tamil Live TV'}</h1>
-                <p className="mt-1 text-xs text-zinc-500 sm:text-sm">
-                  {active ? `${active.category || 'Tamil'} • ${active.source} • ${active.format.toUpperCase()}${active.keyId && active.key ? ' • ClearKey DRM' : ''}` : `Loaded ${channels.length} preferred Tamil channels`}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-2 sm:space-y-3">
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => navigateChannel(-1)}
-                  disabled={!filteredChannels.length && !channels.length}
-                  className="rounded-xl border border-white/10 bg-white/[0.04] px-2 py-2.5 text-xs font-black text-white transition hover:border-red-500/50 disabled:opacity-40 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm"
-                  title="Previous channel"
-                >
-                  ‹ Pre
-                </button>
-                <button
-                  type="button"
-                  onClick={returnToLastChannel}
-                  disabled={!lastViewed?.id}
-                  className="rounded-xl border border-orange-400/25 bg-orange-500/10 px-2 py-2.5 text-xs font-black text-orange-100 transition hover:border-orange-300/60 disabled:opacity-40 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm"
-                  title={lastViewed?.name ? `Return to ${lastViewed.name}` : 'Return to last viewed channel'}
-                >
-                  ↩ Return
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigateChannel(1)}
-                  disabled={!filteredChannels.length && !channels.length}
-                  className="rounded-xl border border-white/10 bg-white/[0.04] px-2 py-2.5 text-xs font-black text-white transition hover:border-red-500/50 disabled:opacity-40 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm"
-                  title="Next channel"
-                >
-                  Nxt ›
-                </button>
-              </div>
-              {lastViewed?.name ? <p className="truncate px-1 text-[10px] font-semibold text-zinc-600 sm:text-xs">Last viewed: {lastViewed.name}</p> : null}
-              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-                <button onClick={enterFullscreen} className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-bold text-white transition hover:border-red-500/50">Fullscreen</button>
-                {active?.url ? <a href={active.url} target="_blank" rel="noreferrer" className="rounded-2xl bg-red-600 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-red-500">Open Directly</a> : null}
-              </div>
-            </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+            <input value={filters.q} onChange={(e) => updateFilter('q', e.target.value)} placeholder="Search classics..." className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none focus:border-red-500 lg:col-span-2" />
+            <select value={filters.sort} onChange={(e) => updateFilter('sort', e.target.value)} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-red-500">
+              <option value="rating.desc">Rating high → low</option>
+              <option value="rating.asc">Rating low → high</option>
+              <option value="year.desc">Year newest</option>
+              <option value="year.asc">Year oldest</option>
+              <option value="title.asc">Title A-Z</option>
+              <option value="synced.desc">Recently synced</option>
+            </select>
+            <select value={filters.source} onChange={(e) => updateFilter('source', e.target.value)} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-red-500">
+              <option value="all">All sources</option>
+              {!facets.sources?.includes('Aha') ? <option value="Aha">Aha</option> : null}
+              {(facets.sources || []).map((source) => <option key={source} value={source}>{source}</option>)}
+            </select>
+            <input value={filters.yearFrom} onChange={(e) => updateFilter('yearFrom', e.target.value)} placeholder="Year from" inputMode="numeric" className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-red-500" />
+            <input value={filters.minRating} onChange={(e) => updateFilter('minRating', e.target.value)} placeholder="Min rating" inputMode="decimal" className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-red-500" />
           </div>
         </div>
 
-        <aside className="min-w-0 space-y-3 lg:w-full">
-          <div className="sticky top-[7.7rem] z-30 rounded-2xl border border-white/10 bg-zinc-950/95 p-3 backdrop-blur sm:rounded-3xl sm:p-4 lg:static">
-            <div className="grid grid-cols-2 gap-2">
-              <select value={category} onChange={(event) => setCategory(event.target.value)} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-red-500">
-                <option value="all">All categories</option>
-                {categories.map((item) => <option key={item} value={item}>{item}</option>)}
-              </select>
-              <select
-                value={sourceFilter}
-                onChange={(event) => {
-                  const nextSource = event.target.value;
-                  setSourceFilter(nextSource);
-                  setCategory('all');
-                  loadChannelsForSource(nextSource);
-                }}
-                className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-red-500"
-              >
-                <option value="all">All sources</option>
-                {sourceOptions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-              </select>
+        {status === 'loading' || status === 'sync-needed' || syncStatus === 'syncing' ? (
+          <div className="space-y-6">
+            <div className="rounded-3xl border border-yellow-500/20 bg-yellow-500/10 p-5 text-sm leading-6 text-yellow-100">
+              {syncStatus === 'syncing' ? 'First sync running. This can take time because titles are being matched with TMDB and saved to MongoDB.' : 'Loading Tamil Classics...'}
             </div>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setCategory((value) => value === 'Music' ? 'all' : 'Music')}
-                className={`rounded-2xl border px-4 py-2 text-sm font-black transition ${category === 'Music' ? 'border-fuchsia-400 bg-fuchsia-500/15 text-fuchsia-100' : 'border-white/10 bg-white/[0.04] text-zinc-300'}`}
-              >
-                ♫ Music
-              </button>
-              <button
-                type="button"
-                onClick={() => setCategory((value) => value === 'Sports' ? 'all' : 'Sports')}
-                className={`rounded-2xl border px-4 py-2 text-sm font-black transition ${category === 'Sports' ? 'border-green-400 bg-green-500/15 text-green-100' : 'border-white/10 bg-white/[0.04] text-zinc-300'}`}
-              >
-                ⚽ Sports
-              </button>
+            <SkeletonGrid />
+          </div>
+        ) : null}
+
+        {status === 'error' || syncStatus === 'error' ? (
+          <div className="rounded-3xl border border-red-500/30 bg-red-950/20 p-6 text-red-200">{error}</div>
+        ) : null}
+
+        {status === 'ready' ? (
+          <>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-6">
+              {items.map((item) => <Card key={item.id} item={item} />)}
             </div>
-          </div>
-
-          <div className="space-y-2 pr-1 lg:max-h-[70dvh] lg:overflow-y-auto">
-            {status === 'loading' ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">Loading Tamil channels...</div> : null}
-            {status === 'error' ? <div className="rounded-3xl border border-red-500/30 bg-red-950/20 p-6 text-center text-red-200">{error}</div> : null}
-            {status === 'ready' && filteredChannels.length === 0 ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">No channels found for this filter/source.</div> : null}
-
-            {filteredChannels.map((channel) => (
-              <button
-                key={channel.id}
-                type="button"
-                onClick={() => selectChannel(channel)}
-                className={`flex w-full items-center gap-3 rounded-2xl border p-2.5 text-left transition sm:rounded-3xl sm:p-3 ${active?.id === channel.id ? 'border-red-500/70 bg-red-600/15' : 'border-white/10 bg-zinc-950/80 hover:border-red-500/40'}`}
-              >
-                <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/5 sm:h-14 sm:w-14 sm:rounded-2xl">
-                  {channel.logo ? <img src={channel.logo} alt="" className="max-h-full max-w-full object-fill" loading="lazy" /> : <span className="text-xs font-black text-zinc-500">TV</span>}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-black text-white">{channel.name}</p>
-                  <p className="mt-1 truncate text-xs text-zinc-500">{channel.category} • {channel.source}</p>
-                  <div className="mt-1 flex gap-1">
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${channel.playable ? 'bg-green-500/15 text-green-200' : 'bg-orange-500/15 text-orange-200'}`}>{channel.format.toUpperCase()}</span>
-                    {channel.keyId && channel.key ? <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-100">DRM</span> : null}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </aside>
+            <div ref={sentinelRef} className="mt-10 flex min-h-24 items-center justify-center">
+              {hasMore ? (
+                <button onClick={() => loadPage(page + 1, true)} className="rounded-full border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-bold text-white transition hover:border-red-500">
+                  Load more classics
+                </button>
+              ) : (
+                <p className="text-sm text-zinc-500">No more classics.</p>
+              )}
+            </div>
+          </>
+        ) : null}
       </section>
     </main>
   );

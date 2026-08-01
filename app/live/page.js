@@ -577,15 +577,14 @@ export default function LiveTVPage() {
     <main className="palette-cybergrape min-h-dvh overflow-x-hidden bg-[#09041a] text-zinc-100">
       <header className="sticky top-0 z-50 border-b border-white/10 bg-zinc-950/92 backdrop-blur">
         <div className="mx-auto grid max-w-7xl gap-3 px-3 py-4 sm:px-6 sm:py-5 lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:px-8">
-          <div className="flex items-center justify-between gap-3 lg:justify-start">
+          <div className="flex items-center justify-start gap-3">
             <Link href="/" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-red-500 hover:text-white">
               ← Home
             </Link>
-            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-red-500 sm:hidden">Tamil Live TV</p>
           </div>
-          <div className="flex items-center justify-center gap-3 text-center sm:gap-4">
+          <div className="flex flex-col items-center justify-center gap-1 text-center">
             <BrandLogo />
-            <p className="hidden text-xs font-black uppercase tracking-[0.32em] text-red-500 sm:block">Tamil Live TV</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.26em] text-red-500 sm:text-xs sm:tracking-[0.32em]">Tamil Live TV</p>
           </div>
           <input
             value={query}

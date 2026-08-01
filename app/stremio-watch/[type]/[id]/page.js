@@ -327,9 +327,9 @@ export default function StremioPlayerPage() {
             </div>
             <p className="text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-300 lg:hidden">{stremioSource === 'watch' ? 'Provider' : 'Catalog'}</p>
           </div>
-          <div className="flex items-center justify-center gap-3 text-center sm:gap-4">
+          <div className="flex flex-col items-center justify-center gap-1 text-center">
             <BrandLogo />
-            <p className="hidden text-[10px] font-black uppercase tracking-[0.30em] text-fuchsia-300 sm:block">{stremioSource === 'watch' ? 'Provider Player' : 'Catalog Player'}</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.26em] text-fuchsia-300 sm:text-xs sm:tracking-[0.32em]">{stremioSource === 'watch' ? 'Provider Player' : 'Catalog Player'}</p>
           </div>
           <span className="hidden justify-self-end text-[10px] font-black uppercase tracking-[0.30em] text-fuchsia-300 lg:block">Stremio</span>
         </div>
