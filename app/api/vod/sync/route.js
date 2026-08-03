@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
-import VodItem from '@/models/VodItem';
+import VodItem, { ensureVodTextIndexSafe } from '@/models/VodItem';
 import {
   fetchVodEntriesFromSources,
   matchMovieToTMDB,
@@ -52,6 +52,7 @@ async function syncVod() {
   let stored = 0;
 
   await dbConnect();
+  await ensureVodTextIndexSafe();
 
   await runLimitedConcurrency(workItems, Number(process.env.VOD_CONCURRENCY || 3), async (item) => {
     let tmdb = null;
@@ -103,8 +104,9 @@ async function syncVod() {
     stored += 1;
   });
 
+  const ok = stored > 0;
   return {
-    ok: true,
+    ok,
     syncBatch,
     sourceCount: sources.length,
     sources: sources.map((source) => ({ label: source.label })),
@@ -115,6 +117,9 @@ async function syncVod() {
     matched,
     unmatched,
     errors,
+    message: ok
+      ? `Synced ${stored} classics.`
+      : 'No classics were synced. Your VOD source URLs returned no playable M3U entries. Re-upload/update VOD, VOD_EROS, or VOD_AHA env URLs.',
   };
 }
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
-import VodItem from '@/models/VodItem';
+import VodItem, { ensureVodTextIndexSafe } from '@/models/VodItem';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -62,6 +62,7 @@ export async function GET(request) {
     const sort = searchParams.get('sort') || 'rating.desc';
 
     await dbConnect();
+    await ensureVodTextIndexSafe();
     const totalDbCount = await VodItem.countDocuments({});
 
     if (totalDbCount === 0) {
