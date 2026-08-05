@@ -194,7 +194,7 @@ export default function WatchByTMDBPage() {
   const shouldShowOttStreamPicker = isOttTitleOnly || provider === 'tamilott' || resolveMode === 'tamilott-json-provider' || ottStreams.length > 0;
 
   useEffect(() => {
-    if (isOttTitleOnly || !tmdbId || !type) {
+    if (!type || (!tmdbId && !ottTitle)) {
       setStremioCheck({ status: 'idle', available: false, href: '', count: 0, error: '' });
       return;
     }
@@ -202,7 +202,13 @@ export default function WatchByTMDBPage() {
     async function checkStremio() {
       try {
         setStremioCheck((current) => ({ ...current, status: 'checking', error: '' }));
-        const params = new URLSearchParams({ type, tmdbId: String(tmdbId) });
+        const params = new URLSearchParams({ type, source: 'watch' });
+        if (isOttTitleOnly) {
+          params.set('title', ottTitle);
+          if (ottYear) params.set('year', ottYear);
+        } else {
+          params.set('tmdbId', String(tmdbId));
+        }
         if (isSeries) {
           params.set('season', String(season || 1));
           params.set('episode', String(episode || 1));
@@ -225,7 +231,7 @@ export default function WatchByTMDBPage() {
     }
     checkStremio();
     return () => controller.abort();
-  }, [type, tmdbId, isSeries, season, episode, isOttTitleOnly]);
+  }, [type, tmdbId, ottTitle, ottYear, isSeries, season, episode, isOttTitleOnly]);
 
   useEffect(() => {
     if (!(isOttTitleOnly && initialOttStreamId)) {
@@ -540,6 +546,24 @@ export default function WatchByTMDBPage() {
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:flex sm:flex-wrap sm:gap-3">
+          {stremioCheck.available && stremioCheck.href ? (
+            <Link
+              href={stremioCheck.href}
+              className="rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/15 px-3 py-2.5 text-center text-xs font-bold text-fuchsia-100 transition hover:border-fuchsia-300 hover:bg-fuchsia-500/25 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
+              title={`${stremioCheck.count} Stremio stream${stremioCheck.count === 1 ? '' : 's'} available`}
+            >
+              Stremio📡
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled
+              className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2.5 text-xs font-bold text-zinc-500 opacity-60 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
+              title={stremioCheck.error || (stremioCheck.status === 'checking' ? 'Checking Stremio streams...' : 'No Stremio streams found')}
+            >
+              {stremioCheck.status === 'checking' ? 'Stremio…' : 'No Stremio'}
+            </button>
+          )}
           {streamUrl ? (
             <>
               {!isOttTitleOnly ? (
@@ -561,24 +585,6 @@ export default function WatchByTMDBPage() {
                   Stream
                 </button>
               ) : null}
-              {stremioCheck.available && stremioCheck.href ? (
-                <Link
-                  href={stremioCheck.href}
-                  className="rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/15 px-3 py-2.5 text-center text-xs font-bold text-fuchsia-100 transition hover:border-fuchsia-300 hover:bg-fuchsia-500/25 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
-                  title={`${stremioCheck.count} Stremio stream${stremioCheck.count === 1 ? '' : 's'} available`}
-                >
-                  Stremio📡
-                </Link>
-              ) : (
-                <button
-                  type="button"
-                  disabled
-                  className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2.5 text-xs font-bold text-zinc-500 opacity-60 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
-                  title={stremioCheck.error || (stremioCheck.status === 'checking' ? 'Checking Stremio streams...' : 'No Stremio streams found')}
-                >
-                  {stremioCheck.status === 'checking' ? 'Stremio…' : 'No Stremio'}
-                </button>
-              )}
               <button
                 type="button"
                 onClick={enterFullscreen}

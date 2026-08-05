@@ -249,7 +249,7 @@ function MediaCard({ item }) {
         </div>
 
         <p className={`pt-1 text-[11px] font-semibold ${hasTMDB || item.isOttCatalog ? 'text-green-300' : 'text-orange-300'}`}>
-          {item.isOttCatalog ? 'TamilOTT stream' : hasTMDB ? 'Ready to play' : 'TamilOTT only'}
+          {item.isOttCatalog ? 'TamilOTT stream' : hasTMDB ? 'Ready to play' : 'OTT + Stremio search'}
         </p>
       </div>
     </Wrapper>
