@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 
 const PAGE_SIZE = 15;
-const HOME_CACHE_KEY = 'jash:home:v2';
+const HOME_CACHE_KEY = 'jash:home:v3';
 
 function formatDateTime(value) {
   if (!value) return 'Not updated yet';

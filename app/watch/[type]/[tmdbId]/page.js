@@ -279,11 +279,50 @@ export default function WatchByTMDBPage() {
     return seriesMeta?.seasons?.find((item) => item.seasonNumber === season) || null;
   }, [seriesMeta, season]);
 
+  const tamilOttSeriesSeasons = useMemo(() => {
+    const map = new Map();
+    for (const stream of ottStreams || []) {
+      const seasonNumber = Number(stream.season || 0);
+      const episodeNumber = Number(stream.episode || 0);
+      if (!seasonNumber || !episodeNumber) continue;
+      if (!map.has(seasonNumber)) map.set(seasonNumber, new Map());
+      const episodeMap = map.get(seasonNumber);
+      if (!episodeMap.has(episodeNumber)) {
+        episodeMap.set(episodeNumber, {
+          episodeNumber,
+          name: stream.title || stream.streamTitle || `Episode ${episodeNumber}`,
+          streamId: stream.id,
+        });
+      }
+    }
+    return [...map.entries()].map(([seasonNumber, episodeMap]) => ({
+      seasonNumber,
+      name: `Season ${seasonNumber}`,
+      episodes: [...episodeMap.values()].sort((a, b) => a.episodeNumber - b.episodeNumber),
+    })).sort((a, b) => a.seasonNumber - b.seasonNumber);
+  }, [ottStreams]);
+
+  const seasonOptions = useMemo(() => {
+    if (isSeries && tamilOttSeriesSeasons.length && shouldShowOttStreamPicker) return tamilOttSeriesSeasons;
+    return seriesMeta?.seasons?.length ? seriesMeta.seasons : [{ seasonNumber: season, name: `Season ${season}` }];
+  }, [isSeries, tamilOttSeriesSeasons, shouldShowOttStreamPicker, seriesMeta, season]);
+
+  const episodeOptions = useMemo(() => {
+    const tamilOttSeason = isSeries && tamilOttSeriesSeasons.length && shouldShowOttStreamPicker
+      ? tamilOttSeriesSeasons.find((item) => item.seasonNumber === season)
+      : null;
+    if (tamilOttSeason?.episodes?.length) return tamilOttSeason.episodes;
+    return selectedSeasonMeta?.episodes?.length ? selectedSeasonMeta.episodes : [{ episodeNumber: episode, name: `Episode ${episode}` }];
+  }, [isSeries, tamilOttSeriesSeasons, shouldShowOttStreamPicker, season, selectedSeasonMeta, episode]);
+
   useEffect(() => {
-    if (!selectedSeasonMeta?.episodes?.length) return;
-    const hasEpisode = selectedSeasonMeta.episodes.some((item) => item.episodeNumber === episode);
-    if (!hasEpisode) setEpisode(selectedSeasonMeta.episodes[0].episodeNumber || 1);
-  }, [selectedSeasonMeta, episode]);
+    if (!episodeOptions?.length) return;
+    const hasEpisode = episodeOptions.some((item) => item.episodeNumber === episode);
+    if (!hasEpisode) {
+      setSelectedOttStreamId('');
+      setEpisode(episodeOptions[0].episodeNumber || 1);
+    }
+  }, [episodeOptions, episode]);
 
   useEffect(() => {
     if (!resolveUrl) return;
@@ -317,6 +356,10 @@ export default function WatchByTMDBPage() {
         setResolveMode(data.mode || '');
         setOttStreams(data.availableStreams || []);
         setResolvedOttStreamId(data.selectedStreamId || '');
+        if (isSeries && !selectedOttStreamId && data.match?.season && data.match?.episode && (data.match.season !== season || data.match.episode !== episode)) {
+          setSeason(Number(data.match.season) || 1);
+          setEpisode(Number(data.match.episode) || 1);
+        }
 
         if (!response.ok) throw new Error(data?.error || 'Unable to build embed URL');
         if (!data.streamUrl) throw new Error('No stream URL returned');
@@ -429,12 +472,13 @@ export default function WatchByTMDBPage() {
                     onChange={(event) => {
                       const nextSeason = Number(event.target.value) || 1;
                       setSeason(nextSeason);
-                      const nextSeasonMeta = seriesMeta?.seasons?.find((item) => item.seasonNumber === nextSeason);
+                      setSelectedOttStreamId('');
+                      const nextSeasonMeta = seasonOptions.find((item) => item.seasonNumber === nextSeason);
                       setEpisode(nextSeasonMeta?.episodes?.[0]?.episodeNumber || 1);
                     }}
                     className="mt-1 w-full rounded-xl border border-white/10 bg-black px-3 py-2 text-white outline-none focus:border-red-500"
                   >
-                    {(seriesMeta?.seasons?.length ? seriesMeta.seasons : [{ seasonNumber: season, name: `Season ${season}` }]).map((item) => (
+                    {seasonOptions.map((item) => (
                       <option key={item.seasonNumber} value={item.seasonNumber}>
                         {item.name || `Season ${item.seasonNumber}`}
                       </option>
@@ -446,10 +490,10 @@ export default function WatchByTMDBPage() {
                   Episode
                   <select
                     value={episode}
-                    onChange={(event) => setEpisode(Number(event.target.value) || 1)}
+                    onChange={(event) => { setSelectedOttStreamId(''); setEpisode(Number(event.target.value) || 1); }}
                     className="mt-1 w-full rounded-xl border border-white/10 bg-black px-3 py-2 text-white outline-none focus:border-red-500"
                   >
-                    {((selectedSeasonMeta?.episodes?.length ? selectedSeasonMeta.episodes : [{ episodeNumber: episode, name: `Episode ${episode}` }])).map((item) => (
+                    {episodeOptions.map((item) => (
                       <option key={item.episodeNumber} value={item.episodeNumber}>
                         E{item.episodeNumber} {item.name ? `- ${item.name}` : ''}
                       </option>
