@@ -295,6 +295,7 @@ export default function LandingPage() {
   const [updatedAt, setUpdatedAt] = useState(null);
   const [scrapeStatus, setScrapeStatus] = useState('loading');
   const [scrapeError, setScrapeError] = useState('');
+  const [syncStatus, setSyncStatus] = useState('idle');
   const [paging, setPaging] = useState({
     movies: { page: 1, hasMore: false, loading: false, total: 0 },
     series: { page: 1, hasMore: false, loading: false, total: 0 },
@@ -429,6 +430,43 @@ export default function LandingPage() {
     }
   }, [paging, scrapeStatus]);
 
+  const syncLatestReleases = useCallback(async () => {
+    if (syncStatus === 'syncing') return;
+    try {
+      setCatalogMode('tamilmv');
+      setSyncStatus('syncing');
+      setScrapeError('');
+      const response = await fetch(`/api/tamilmv?sync=1&manual=1&page=1&limit=${PAGE_SIZE}`, { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Sync failed');
+      setMovies(data.movies || []);
+      setSeries(data.series || []);
+      setUpdatedAt(data.updatedAt || data.refreshedAt || null);
+      setPaging({
+        movies: {
+          page: data.pagination?.movies?.page || 1,
+          hasMore: Boolean(data.pagination?.movies?.hasMore),
+          loading: false,
+          total: data.pagination?.movies?.total || data.movies?.length || 0,
+        },
+        series: {
+          page: data.pagination?.series?.page || 1,
+          hasMore: Boolean(data.pagination?.series?.hasMore),
+          loading: false,
+          total: data.pagination?.series?.total || data.series?.length || 0,
+        },
+      });
+      setScrapeStatus('ready');
+      setSyncStatus('ready');
+      window.setTimeout(() => setSyncStatus('idle'), 1600);
+    } catch (error) {
+      setScrapeError(error.message || 'Sync failed');
+      setScrapeStatus('error');
+      setSyncStatus('error');
+      window.setTimeout(() => setSyncStatus('idle'), 2200);
+    }
+  }, [syncStatus]);
+
   const loadOttCatalog = useCallback(async ({ source = ottSource, page = 1, append = false } = {}) => {
     if (append) {
       if (ottPaging.loading || !ottPaging.hasMore) return;
@@ -485,8 +523,6 @@ export default function LandingPage() {
 
   const activeItems = activeTab === 'movies' ? movies : series;
   const activePaging = paging[activeTab];
-  const totalShown = movies.length + series.length;
-
   const showOtt = catalogMode === 'ott';
   const currentItems = showOtt ? ottItems : activeItems;
   const currentPaging = showOtt ? ottPaging : activePaging;
@@ -531,6 +567,14 @@ export default function LandingPage() {
                   className={`rounded-full border px-4 py-2 text-sm font-black transition ${showOtt ? 'border-red-500 bg-red-600 text-white' : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-red-500/40'}`}
                 >
                   MiX💿
+                </button>
+                <button
+                  type="button"
+                  onClick={syncLatestReleases}
+                  disabled={syncStatus === 'syncing'}
+                  className="rounded-full border border-yellow-400/25 bg-yellow-400/10 px-3 py-2 text-xs font-black text-yellow-100 transition hover:border-yellow-300 hover:bg-yellow-400/20 disabled:cursor-wait disabled:opacity-60"
+                >
+                  {syncStatus === 'syncing' ? 'Syncing…' : syncStatus === 'ready' ? 'Synced' : 'Sync'}
                 </button>
                 <Link
                   href="/music"

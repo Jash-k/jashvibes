@@ -204,9 +204,6 @@ export default function SportsPage() {
   const [active, setActive] = useState(BASE_CHANNELS[0]);
   const [switching, setSwitching] = useState(false);
   const [matches, setMatches] = useState([]);
-  const [bcciHighlights, setBcciHighlights] = useState([]);
-  const [iccHighlights, setIccHighlights] = useState([]);
-  const [iplMatches, setIplMatches] = useState([]);
   const [feedError, setFeedError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const playerRef = useRef(null);
@@ -227,7 +224,11 @@ export default function SportsPage() {
           const stream = bestFancodeVariant(m.auto_streams?.[0]?.auto || '') || m.STREAMING_CDN?.Primary_Playback_URL || '';
           return channelCardBase({ id: `fc-${m.match_id}`, name: m.title || 'FanCode', sub: 'FanCode', group: 'FanCode', color: '#ec1c24', logo: m.image_cdn?.LOGO || '/fancode.svg', url: stream ? playerUrlFromHls(stream, m.title || 'FanCode') : FANCODE_PERMANENT_URL, desc: m.tournament || 'Live FanCode event' });
         });
-        if (!cancelled && live.length) { setChannels([...live, ...BASE_CHANNELS]); setActive((current) => live.some((item) => item.id === current?.id) ? current : live[0]); }
+        if (!cancelled) {
+          const nextChannels = live.length ? [...live, ...BASE_CHANNELS] : BASE_CHANNELS;
+          setChannels(nextChannels);
+          setActive((current) => nextChannels.some((item) => item.id === current?.id) ? current : nextChannels[0]);
+        }
       } catch {}
     }
     loadFanCode();
@@ -239,29 +240,25 @@ export default function SportsPage() {
     setRefreshing(true);
     setFeedError('');
     try {
-      const [bcciLive, bcciUpcoming, bcciRecent, wt20, ipl, bcciVids, iccVids] = await Promise.all([
-        fetch('/api/bcci/live', { cache: 'no-store' }).then((r) => r.json()),
-        fetch('/api/bcci/upcoming', { cache: 'no-store' }).then((r) => r.json()),
-        fetch('/api/bcci/recent', { cache: 'no-store' }).then((r) => r.json()),
-        fetch('/api/wt20/schedule?series_ids=12672&game_count=8', { cache: 'no-store' }).then((r) => r.json()),
-        fetch('/api/ipl/2026/all-matches', { cache: 'no-store' }).then((r) => r.json()),
-        fetch('/api/bcci/highlights?page=1', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ videos: [] })),
-        fetch('/api/icc/highlights?offset=0&limit=8', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ videos: [] })),
+      const [bcciLive, wt20, ipl] = await Promise.all([
+        fetch('/api/bcci/live', { cache: 'no-store' }).then((r) => r.json()).catch((error) => ({ liveMatches: [], unavailable: true, error: error.message })),
+        fetch('/api/wt20/schedule?series_ids=12672&game_count=8', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ data: { matches: [] } })),
+        fetch('/api/ipl/2026/all-matches', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ matches: [] })),
       ]);
 
-      const bcci = [
-        ...pickArray(bcciLive, ['liveMatches']).filter(isSeniorMenBcci).map((row) => normalizeBcciMatch(row, 'live')),
-        ...pickArray(bcciUpcoming, ['upcomingMatches']).filter(isSeniorMenBcci).map((row) => normalizeBcciMatch(row, 'upcoming')),
-        ...pickArray(bcciRecent, ['recentMatches']).filter(isSeniorMenBcci).map((row) => normalizeBcciMatch(row, 'recent')),
-      ];
-      const wt20Matches = pickArray(wt20?.data || wt20, ['matches']).map(normalizeWt20Match);
-      const iplRows = pickArray(ipl, ['matches', 'Matchsummary', 'MatchSummary']).map(normalizeIplMatch).filter((m) => m.id);
-      setMatches([...bcci, ...wt20Matches]);
-      setIplMatches(iplRows);
-      setBcciHighlights(pickArray(bcciVids, ['videos', 'items']).slice(0, 10));
-      setIccHighlights(pickArray(iccVids, ['videos', 'items']).slice(0, 10));
-      const unavailable = [bcciLive, bcciUpcoming, bcciRecent].find((p) => p?.upstreamUnavailable || p?.unavailable);
-      if (unavailable) setFeedError(unavailable.error || `Some BCCI score feeds are unavailable right now. IPL/ICC and video sections still load independently.`);
+      const bcci = pickArray(bcciLive, ['liveMatches'])
+        .filter(isSeniorMenBcci)
+        .map((row) => normalizeBcciMatch(row, 'live'))
+        .filter((match) => match.status === 'live');
+      const wt20Matches = pickArray(wt20?.data || wt20, ['matches'])
+        .map(normalizeWt20Match)
+        .filter((match) => match.status === 'live');
+      const iplRows = pickArray(ipl, ['matches', 'Matchsummary', 'MatchSummary'])
+        .map(normalizeIplMatch)
+        .filter((match) => match.id && match.status === 'live');
+
+      setMatches([...bcci, ...wt20Matches, ...iplRows]);
+      if (bcciLive?.upstreamUnavailable || bcciLive?.unavailable) setFeedError(bcciLive.error || 'BCCI live feed is unavailable right now.');
     } catch (err) {
       setFeedError(err.message || 'Sports feeds unavailable');
     } finally {
@@ -275,10 +272,7 @@ export default function SportsPage() {
     return () => window.clearInterval(timer);
   }, [loadSports]);
 
-  const liveMatches = useMemo(() => [...matches, ...iplMatches].filter((m) => m.status === 'live'), [matches, iplMatches]);
-  const upcomingMatches = useMemo(() => matches.filter((m) => m.status === 'upcoming').slice(0, 8), [matches]);
-  const completedMatches = useMemo(() => matches.filter((m) => m.status === 'completed').slice(0, 8), [matches]);
-  const liveNow = liveMatches.length ? liveMatches : [...completedMatches, ...upcomingMatches].slice(0, 8);
+  const liveMatches = useMemo(() => matches.filter((m) => m.status === 'live'), [matches]);
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#070709] text-white">
@@ -293,9 +287,8 @@ export default function SportsPage() {
 
       <section className="relative z-10 mx-auto max-w-6xl space-y-8 px-4 py-5 pb-24">
         <div>
-          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-600">BCCI · IPL · ICC · FanCode · Willow</p>
-          <h1 className="text-3xl font-black uppercase italic leading-none tracking-tighter sm:text-5xl">Sports <span className="text-amber-400">Command Center</span></h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-500">Scorecards and video channels are independent: scorecards can work while video is unavailable, and channels can play while a score API is down.</p>
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-600">FanCode · Willow</p>
+          <h1 className="text-3xl font-black uppercase italic leading-none tracking-tighter sm:text-5xl">Live <span className="text-amber-400">Sports</span></h1>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1.35fr_0.9fr]">
@@ -304,27 +297,10 @@ export default function SportsPage() {
             {active ? <StreamPlayer channel={active} switching={switching} playerRef={playerRef} /> : null}
           </div>
           <aside className="rounded-3xl border border-white/10 bg-white/[0.025] p-4">
-            <div className="mb-4 flex items-center justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[0.25em] text-gray-500">Live Now Strip</p><h2 className="text-xl font-black text-white">Scorecards</h2></div><span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-1 text-[8px] font-black uppercase text-amber-400">60s</span></div>
             {feedError ? <p className="mb-3 rounded-2xl border border-yellow-400/20 bg-yellow-500/10 p-3 text-[10px] leading-5 text-yellow-100">{feedError}</p> : null}
-            <div className="space-y-2">{liveNow.map((match, index) => <MatchCard key={`${match.provider}-${match.id}-${index}`} match={match} compact />)}{!liveNow.length ? <div className="rounded-2xl border border-white/10 bg-black/25 p-5 text-center text-xs text-gray-500">No public match cards available right now.</div> : null}</div>
+            <div className="space-y-2">{liveMatches.map((match, index) => <MatchCard key={`${match.provider}-${match.id}-${index}`} match={match} />)}{!liveMatches.length ? <div className="rounded-2xl border border-white/10 bg-black/25 p-5 text-center text-xs text-gray-500">No live match right now.</div> : null}</div>
           </aside>
         </div>
-
-        <Section title="BCCI / ICC Match Cards" kicker="Live · Upcoming · Completed">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{matches.slice(0, 12).map((match, index) => <MatchCard key={`${match.provider}-${match.id}-${index}`} match={match} />)}{!matches.length ? <div className="col-span-full rounded-2xl border border-white/10 bg-white/[0.025] p-6 text-center text-sm text-zinc-500">BCCI may be returning 503 right now. ICC/BCCI highlights can still work independently.</div> : null}</div>
-        </Section>
-
-        <Section title="IPL Match Centers" kicker="IPL 2026 completed/live fixtures">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{iplMatches.slice(0, 12).map((match, index) => <MatchCard key={`ipl-${match.id}-${index}`} match={match} compact />)}{!iplMatches.length ? <div className="col-span-full rounded-2xl border border-white/10 bg-white/[0.025] p-6 text-center text-sm text-zinc-500">IPL backend returned no 2026 fixtures right now. The IPL Match Center route and APIs are wired.</div> : null}</div>
-        </Section>
-
-        <Section title="ICC Highlights" kicker="ICC video feed + entitlement player">
-          <div className="flex gap-3 overflow-x-auto pb-2">{iccHighlights.map((video, index) => <HighlightCard key={video.uuid || video.id || index} video={video} source="icc" />)}{!iccHighlights.length ? <EmptyHighlights /> : null}</div>
-        </Section>
-
-        <Section title="BCCI Highlights" kicker="BCCI global highlight row">
-          <div className="flex gap-3 overflow-x-auto pb-2">{bcciHighlights.map((video, index) => <HighlightCard key={video.id || index} video={video} source="bcci" />)}{!bcciHighlights.length ? <EmptyHighlights /> : null}</div>
-        </Section>
       </section>
     </main>
   );

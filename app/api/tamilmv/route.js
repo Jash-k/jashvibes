@@ -6,7 +6,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const COLLECTION_NAME = 'tamilmv_scrapes';
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+const SYNC_INTERVAL_MS = Number(process.env.TAMILMV_SYNC_INTERVAL_MS || SIX_HOURS_MS);
+let backgroundSyncPromise = null;
 const DEFAULT_PAGE_LIMIT = 15;
 // Keep the first request light. Lazy loading expands the cache page-by-page up
 // to this maximum instead of forcing a large scrape before anything appears.
@@ -94,9 +96,14 @@ async function saveScrape(payload) {
   );
 }
 
-function isFresh(doc) {
-  if (!doc?.refreshedAt) return false;
-  return Date.now() - new Date(doc.refreshedAt).getTime() < ONE_DAY_MS;
+function cacheAgeMs(doc) {
+  if (!doc?.refreshedAt) return Infinity;
+  const time = new Date(doc.refreshedAt).getTime();
+  return Number.isFinite(time) ? Date.now() - time : Infinity;
+}
+
+function isSyncDue(doc) {
+  return cacheAgeMs(doc) >= SYNC_INTERVAL_MS;
 }
 
 function getRequestPaging(searchParams) {
@@ -183,43 +190,95 @@ async function scrapeAndCache({ withPosters, matchTMDB, cacheLimit }) {
   return cachePayload;
 }
 
+function startBackgroundSync({ withPosters, matchTMDB, cacheLimit, reason = 'scheduled' }) {
+  if (backgroundSyncPromise) return backgroundSyncPromise;
+  backgroundSyncPromise = scrapeAndCache({ withPosters, matchTMDB, cacheLimit })
+    .then((payload) => {
+      console.log(`[api/tamilmv] Background sync complete (${reason}): ${payload.count || 0} items`);
+      return payload;
+    })
+    .catch((error) => {
+      console.error(`[api/tamilmv] Background sync failed (${reason}):`, error);
+      return null;
+    })
+    .finally(() => {
+      backgroundSyncPromise = null;
+    });
+  return backgroundSyncPromise;
+}
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const paging = getRequestPaging(searchParams);
-  const force = searchParams.get('force') === '1' || searchParams.get('refresh') === '1';
+  const force = searchParams.get('force') === '1' || searchParams.get('refresh') === '1' || searchParams.get('sync') === '1';
+  const manual = searchParams.get('manual') === '1' || searchParams.get('sync') === '1';
   const withPosters = searchParams.get('posters') === '1';
   const matchTMDB = searchParams.get('tmdb') !== '0';
   const maxCacheLimit = getMaxCacheLimit();
-  const requestedCacheLimit = Math.min(maxCacheLimit, Math.max(DEFAULT_PAGE_LIMIT, paging.end));
+  const effectiveMatchTMDB = matchTMDB && hasTMDBConfig();
 
   try {
     let cached = await getCachedScrape();
     const cachedItems = [...(cached?.movies || []), ...(cached?.series || [])];
     const cachedIsEmpty = cached && (!cached.count || cachedItems.length === 0);
     const cachedMissingTopReleaseMetadata = cached && cachedItems.some((item) => item.isTopRelease === undefined || item.section === undefined);
-    const cachedMissingTMDBMetadata = cached && matchTMDB && hasTMDBConfig() && cachedItems.some((item) => !item.tmdbId || !item.posterUrl);
+    const cachedMissingTMDBMetadata = cached && effectiveMatchTMDB && cachedItems.some((item) => !item.tmdbId || !item.posterUrl);
     const needsRequestedPage = cached && groupNeedsMore(cached, paging.group, paging.end, maxCacheLimit);
 
-    if (cached && isFresh(cached) && !force && !cachedIsEmpty && !cachedMissingTopReleaseMetadata && !cachedMissingTMDBMetadata && !needsRequestedPage) {
+    // Normal homepage reads must be fast: return the latest DB cache immediately.
+    // A six-hour refresh runs through the cron route or a non-blocking background
+    // sync. The Sync button uses refresh/sync to explicitly wait for a fresh scrape.
+    if (!force) {
+      if (cached && !cachedIsEmpty) {
+        const syncDue = isSyncDue(cached) || cachedMissingTopReleaseMetadata || cachedMissingTMDBMetadata || needsRequestedPage;
+        if (syncDue) {
+          startBackgroundSync({
+            withPosters: withPosters || !effectiveMatchTMDB,
+            matchTMDB: effectiveMatchTMDB,
+            cacheLimit: maxCacheLimit,
+            reason: 'six-hour-cache-refresh',
+          });
+        }
+        return NextResponse.json(
+          {
+            ...paginatePayload(cached, paging, maxCacheLimit),
+            cached: true,
+            from: 'mongodb-cache',
+            syncDue,
+            syncing: Boolean(backgroundSyncPromise),
+            cacheAgeMs: cacheAgeMs(cached),
+            syncIntervalMs: SYNC_INTERVAL_MS,
+          },
+          { headers: { 'Cache-Control': 'no-store, max-age=0' } },
+        );
+      }
+
+      startBackgroundSync({
+        withPosters: withPosters || !effectiveMatchTMDB,
+        matchTMDB: effectiveMatchTMDB,
+        cacheLimit: maxCacheLimit,
+        reason: 'empty-cache-warmup',
+      });
+
       return NextResponse.json(
-        {
-          ...paginatePayload(cached, paging, maxCacheLimit),
-          cached: true,
-          from: 'mongodb-cache',
-        },
-        { headers: { 'Cache-Control': 'no-store, max-age=0' } }
+        emptyPayload({
+          cached: false,
+          from: 'empty-cache',
+          syncing: true,
+          message: 'Latest Releases cache is warming. Use Sync if you want to wait for a fresh scrape now.',
+        }),
+        { headers: { 'Cache-Control': 'no-store, max-age=0' } },
       );
     }
 
-    if (force && !isAuthorized(request)) {
+    if (!manual && !isAuthorized(request)) {
       return NextResponse.json({ error: 'Unauthorized refresh token' }, { status: 401 });
     }
 
-    const effectiveMatchTMDB = matchTMDB && hasTMDBConfig();
     const payload = await scrapeAndCache({
       withPosters: withPosters || !effectiveMatchTMDB,
       matchTMDB: effectiveMatchTMDB,
-      cacheLimit: requestedCacheLimit,
+      cacheLimit: maxCacheLimit,
     });
     cached = payload.count > 0 ? await getCachedScrape() : null;
 
@@ -227,9 +286,10 @@ export async function GET(request) {
       {
         ...paginatePayload(cached || payload, paging, maxCacheLimit),
         cached: false,
-        from: 'live-scrape',
+        from: manual ? 'manual-sync' : 'live-scrape',
+        synced: true,
       },
-      { headers: { 'Cache-Control': 'no-store, max-age=0' } }
+      { headers: { 'Cache-Control': 'no-store, max-age=0' } },
     );
   } catch (error) {
     console.error('[api/tamilmv] Error:', error);
@@ -244,14 +304,14 @@ export async function GET(request) {
             from: 'stale-mongodb-cache',
             warning: error.message || 'Live scrape failed; showing cached data.',
           },
-          { headers: { 'Cache-Control': 'no-store, max-age=0' } }
+          { headers: { 'Cache-Control': 'no-store, max-age=0' } },
         );
       }
     } catch {}
 
     return NextResponse.json(
       emptyPayload({ error: error.message || 'TamilMV scrape failed' }),
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -21,6 +21,13 @@ function isDash(url = '') {
   return String(url).toLowerCase().includes('.mpd');
 }
 
+function compactQualityLabel(stream = {}, index = 0) {
+  const text = `${stream.label || ''} ${stream.title || ''} ${stream.name || ''} ${stream.size || ''}`;
+  const resolution = text.match(/\b(2160p|1440p|1080p|720p|576p|540p|480p|360p|240p|4k)\b/i)?.[1]?.replace(/^4k$/i, '4K') || '';
+  const size = String(stream.size || text.match(/([\d.]+)\s*(TB|GB|MB|KB)\b/i)?.[0] || '').replace(/\s+/g, '').toUpperCase();
+  return [resolution, size].filter(Boolean).join(' ') || `Stream ${index + 1}`;
+}
+
 function preferredSmoothStreamIndex(streams = []) {
   if (!streams.length) return 0;
   const ranked = streams
@@ -196,6 +203,10 @@ export default function StremioPlayerPage() {
 
 
   const activeStream = streams[streamIndex] || null;
+  const streamQualityOptions = useMemo(() => streams.map((stream, index) => ({
+    label: compactQualityLabel(stream, index),
+    value: index,
+  })), [streams]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -290,6 +301,9 @@ export default function StremioPlayerPage() {
                   src={activeStream.url}
                   title={activePlayerTitle}
                   poster={currentEpisodeInfo?.thumbnail || item?.backdropUrl || item?.posterUrl || ''}
+                  qualityOptions={streamQualityOptions}
+                  qualityIndex={streamIndex}
+                  onQualityChange={(index) => setStreamIndex(index)}
                   inline
                   onBackClick={() => window.history.back()}
                   onError={(message) => setError(message || 'Stremio playback failed. Try another stream quality.')}
@@ -339,12 +353,7 @@ export default function StremioPlayerPage() {
                     </label>
                   </>
                 ) : null}
-                <label className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
-                  Stream
-                  <select value={streamIndex} onChange={(event) => setStreamIndex(Number(event.target.value) || 0)} className="mt-1 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-base font-bold text-white outline-none focus:border-fuchsia-400">
-                    {streams.map((stream, index) => <option key={`${stream.url}-${index}`} value={index}>{stream.label}</option>)}
-                  </select>
-                </label>
+
               </div>
             </div>
           </div>

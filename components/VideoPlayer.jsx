@@ -83,6 +83,9 @@ export default function VideoPlayer({
   inline = true,
   startTime = 0,
   preferredAudioLang = '',
+  qualityOptions = [],
+  qualityIndex = 0,
+  onQualityChange,
   onBackClick,
   onProgress,
   onError,
@@ -122,6 +125,19 @@ export default function VideoPlayer({
     if (!duration) return 0;
     return Math.max(0, Math.min(100, (currentTime / duration) * 100));
   }, [currentTime, duration]);
+
+  const externalQualityOptions = useMemo(() => {
+    return (qualityOptions || [])
+      .map((option, index) => ({
+        index,
+        label: String(option?.label || option?.title || `Stream ${index + 1}`).trim(),
+        value: option?.value ?? index,
+      }))
+      .filter((option) => option.label);
+  }, [qualityOptions]);
+  const selectedExternalQuality = externalQualityOptions[qualityIndex]?.label || '';
+  const hlsQualityLabel = currentLevel >= 0 && levels[currentLevel]?.height ? `${levels[currentLevel].height}p` : 'Quality';
+  const qualityButtonLabel = selectedExternalQuality || hlsQualityLabel;
 
   const reportError = useCallback((message, extra = {}) => {
     setLocalError(message || 'Video playback failed.');
@@ -465,6 +481,17 @@ export default function VideoPlayer({
     setSettingsPanel(null);
   };
 
+  const changeExternalQuality = (index) => {
+    if (index === qualityIndex) {
+      setSettingsPanel(null);
+      return;
+    }
+    setIsBuffering(true);
+    setLocalError('');
+    onQualityChange?.(index, externalQualityOptions[index]);
+    setSettingsPanel(null);
+  };
+
   const changeAudio = (index) => {
     if (hlsRef.current) hlsRef.current.audioTrack = index;
     setCurrentAudioTrackId(index);
@@ -592,7 +619,13 @@ export default function VideoPlayer({
             </div>
             <div className="max-h-72 overflow-y-auto py-1">
               {settingsPanel === 'quality' ? (
-                levels.length ? (
+                externalQualityOptions.length ? (
+                  externalQualityOptions.map((option, index) => (
+                    <button key={`${option.label}-${index}`} type="button" onClick={() => changeExternalQuality(index)} className={`${panelButton} ${qualityIndex === index ? 'bg-blue-500/15 text-blue-300' : 'text-zinc-100'}`}>
+                      <span>{option.label}</span><span>{qualityIndex === index ? '✓' : ''}</span>
+                    </button>
+                  ))
+                ) : levels.length ? (
                   <>
                     <button type="button" onClick={() => changeLevel(-1)} className={`${panelButton} ${currentLevel === -1 ? 'bg-blue-500/15 text-blue-300' : 'text-zinc-100'}`}>
                       <span>Auto</span><span>{currentLevel === -1 ? '✓' : ''}</span>
@@ -603,7 +636,7 @@ export default function VideoPlayer({
                       </button>
                     ))}
                   </>
-                ) : <p className="px-4 py-4 text-sm text-zinc-500">Quality menu is available for HLS streams only.</p>
+                ) : <p className="px-4 py-4 text-sm text-zinc-500">No quality options found.</p>
               ) : null}
 
               {settingsPanel === 'audio' ? (
@@ -688,7 +721,7 @@ export default function VideoPlayer({
             <button type="button" onClick={() => setSettingsPanel('speed')} className={controlsButton}>{playbackRate === 1 ? '1x' : `${playbackRate}x`}</button>
             <button type="button" onClick={() => setSettingsPanel('subtitles')} className={`${controlsButton} ${currentSubtitleId !== -1 ? 'text-blue-200' : ''}`}>CC</button>
             <button type="button" onClick={() => setSettingsPanel('audio')} className={controlsButton}>Audio</button>
-            <button type="button" onClick={() => setSettingsPanel('quality')} className={`${controlsButton} hidden sm:inline-flex`}>Quality</button>
+            <button type="button" onClick={() => setSettingsPanel('quality')} className={`${controlsButton} max-w-[7rem] truncate sm:max-w-[9rem]`}>{qualityButtonLabel}</button>
             <button type="button" onClick={toggleFullscreen} className={controlsButton}>⛶</button>
           </div>
         </div>
