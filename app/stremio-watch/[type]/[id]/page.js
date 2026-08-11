@@ -17,10 +17,6 @@ async function readJsonResponse(response, fallbackMessage = 'Request failed') {
   }
   return response.json();
 }
-function isHls(url = '') {
-  return String(url).toLowerCase().includes('.m3u8');
-}
-
 function isDash(url = '') {
   return String(url).toLowerCase().includes('.mpd');
 }
@@ -38,47 +34,6 @@ function preferredSmoothStreamIndex(streams = []) {
       return Number(a.stream.sizeBytes || 0) - Number(b.stream.sizeBytes || 0);
     });
   return ranked[0]?.index || 0;
-}
-
-function scheduleExternalFallback(callback, delay = 1400) {
-  let done = false;
-  const cancel = () => { done = true; window.clearTimeout(timer); };
-  const timer = window.setTimeout(() => {
-    if (!done && document.visibilityState === 'visible') callback();
-  }, delay);
-  window.addEventListener('pagehide', cancel, { once: true });
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') cancel();
-  }, { once: true });
-}
-
-function openExternalPlayer(url = '', title = '') {
-  if (!url || typeof window === 'undefined') return;
-  const ua = navigator.userAgent || '';
-  const encodedTitle = encodeURIComponent(title || 'JaSH ViBeS');
-
-  try {
-    if (/android/i.test(ua)) {
-      const parsed = new URL(url);
-      const scheme = parsed.protocol.replace(':', '');
-      const path = `${parsed.host}${parsed.pathname}${parsed.search}${parsed.hash}`;
-      const genericIntent = `intent://${path}#Intent;scheme=${scheme};type=video/*;S.title=${encodedTitle};S.browser_fallback_url=${encodeURIComponent(url)};end`;
-      const vlcIntent = `intent://${path}#Intent;scheme=${scheme};type=video/*;package=org.videolan.vlc;S.title=${encodedTitle};S.browser_fallback_url=${encodeURIComponent(genericIntent)};end`;
-      scheduleExternalFallback(() => { window.location.href = genericIntent; });
-      window.location.href = vlcIntent;
-      return;
-    }
-
-    if (/iphone|ipad|ipod/i.test(ua)) {
-      scheduleExternalFallback(() => { window.location.href = url; });
-      window.location.href = `vlc-x-callback://x-callback-url/stream?url=${encodeURIComponent(url)}&title=${encodedTitle}`;
-      return;
-    }
-  } catch {}
-
-  // Desktop/default fallback: hand the direct URL to the OS/browser. If the
-  // user has VLC or another player registered for the media type, it can open there.
-  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 function SymbolButton({ children, onClick, disabled = false, title = '' }) {
@@ -282,7 +237,7 @@ export default function StremioPlayerPage() {
         await player.load(url);
         if (!cancelled) { refreshAudioTracks(); window.setTimeout(refreshAudioTracks, 900); video.play().catch(() => {}); }
       } catch (err) {
-        if (!cancelled) setError(err.message || 'DASH playback failed. Try Open Directly or another stream quality.');
+        if (!cancelled) setError(err.message || 'DASH playback failed. Try another stream quality.');
       }
     }
 
@@ -302,22 +257,10 @@ export default function StremioPlayerPage() {
     };
   }, [activeStream?.url]);
 
-  async function fullscreen() {
-    const element = shellRef.current;
-    try {
-      if (element?.requestFullscreen) await element.requestFullscreen();
-      else if (element?.webkitRequestFullscreen) element.webkitRequestFullscreen();
-    } catch {}
-  }
-
   const activePlayerTitle = currentEpisodeInfo
     ? `${item?.title || 'Stremio'} S${currentEpisodeInfo.season}E${currentEpisodeInfo.episode}`
     : item?.title || activeStream?.title || 'Stremio';
   const directStremioActive = Boolean(activeStream?.url && !isDash(activeStream.url));
-
-  function openPlayer() {
-    openExternalPlayer(activeStream?.url, activePlayerTitle);
-  }
 
   return (
     <main className="min-h-dvh bg-[#050012] text-zinc-100">
@@ -359,34 +302,25 @@ export default function StremioPlayerPage() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-fuchsia-400/15 bg-zinc-950/85 p-3 shadow-xl shadow-black/25">
-            <div className="grid grid-cols-4 gap-2 sm:flex sm:flex-wrap sm:items-center">
-              {directStremioActive ? (
-                <span className="col-span-4 rounded-2xl border border-fuchsia-400/15 bg-fuchsia-500/10 px-3 py-3 text-[11px] font-bold text-fuchsia-100 sm:col-span-1">
-                  Custom player active: use on-video seek, audio, subtitle and quality controls.
-                </span>
-              ) : (
-                <>
-                  <SymbolButton onClick={() => seekBy(-60)} title="Back 1 minute">↶1m</SymbolButton>
-                  <SymbolButton onClick={() => seekBy(-30)} title="Back 30 seconds">↶30</SymbolButton>
-                  <SymbolButton onClick={() => seekBy(-10)} title="Back 10 seconds">↶10</SymbolButton>
-                  <SymbolButton onClick={cycleAudioTrack} disabled={!audioTracks.length} title={audioTracks.length ? `Audio ${audioTracks[audioTrackIndex]?.label || audioTrackIndex + 1}` : 'No alternate audio tracks detected'}>🔊</SymbolButton>
-                  <SymbolButton onClick={() => seekBy(10)} title="Forward 10 seconds">10↷</SymbolButton>
-                  <SymbolButton onClick={() => seekBy(30)} title="Forward 30 seconds">30↷</SymbolButton>
-                  <SymbolButton onClick={() => seekBy(60)} title="Forward 1 minute">1m↷</SymbolButton>
-                </>
-              )}
-              <SymbolButton onClick={fullscreen} title="Fullscreen">⛶</SymbolButton>
-              {activeStream?.url ? <button type="button" onClick={openPlayer} title="Open in VLC / external player" aria-label="Open in external player" className="grid h-11 min-w-[6.5rem] place-items-center rounded-2xl bg-fuchsia-500 px-3 text-xs font-black text-black transition hover:bg-fuchsia-300 sm:h-12 sm:min-w-[7.5rem] sm:text-sm">Open Player</button> : null}
+          {!directStremioActive ? (
+            <div className="rounded-3xl border border-fuchsia-400/15 bg-zinc-950/85 p-3 shadow-xl shadow-black/25">
+              <div className="grid grid-cols-4 gap-2 sm:flex sm:flex-wrap sm:items-center">
+                <SymbolButton onClick={() => seekBy(-60)} title="Back 1 minute">↶1m</SymbolButton>
+                <SymbolButton onClick={() => seekBy(-30)} title="Back 30 seconds">↶30</SymbolButton>
+                <SymbolButton onClick={() => seekBy(-10)} title="Back 10 seconds">↶10</SymbolButton>
+                <SymbolButton onClick={cycleAudioTrack} disabled={!audioTracks.length} title={audioTracks.length ? `Audio ${audioTracks[audioTrackIndex]?.label || audioTrackIndex + 1}` : 'No alternate audio tracks detected'}>🔊</SymbolButton>
+                <SymbolButton onClick={() => seekBy(10)} title="Forward 10 seconds">10↷</SymbolButton>
+                <SymbolButton onClick={() => seekBy(30)} title="Forward 30 seconds">30↷</SymbolButton>
+                <SymbolButton onClick={() => seekBy(60)} title="Forward 1 minute">1m↷</SymbolButton>
+              </div>
+              {audioTracks.length ? <p className="mt-2 truncate px-1 text-[11px] font-semibold text-zinc-500">🔊 {audioTracks[audioTrackIndex]?.label || `A${audioTrackIndex + 1}`}</p> : null}
             </div>
-            {audioTracks.length ? <p className="mt-2 truncate px-1 text-[11px] font-semibold text-zinc-500">🔊 {audioTracks[audioTrackIndex]?.label || `A${audioTrackIndex + 1}`}</p> : null}
-          </div>
+          ) : null}
 
           <div className="rounded-3xl border border-white/10 bg-zinc-950/80 p-4">
             <h1 className="text-2xl font-black text-white">{item?.title || 'Stremio'}</h1>
             {currentEpisodeInfo ? <p className="mt-1 text-sm text-fuchsia-200">S{currentEpisodeInfo.season} E{currentEpisodeInfo.episode} • {currentEpisodeInfo.title}</p> : null}
             <p className="mt-2 text-sm leading-6 text-zinc-400">{currentEpisodeInfo?.synopsis || item?.synopsis || ''}</p>
-            <p className="mt-2 rounded-2xl border border-fuchsia-300/15 bg-fuchsia-500/10 px-3 py-2 text-xs leading-5 text-fuchsia-100">Smooth mode starts with the smallest/480p stream to reduce buffering. Switch quality manually if your network is fast.</p>
             <div className="mt-4 space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
                 {type === 'series' ? (
@@ -425,7 +359,7 @@ export default function StremioPlayerPage() {
           </div>
           {metaStatus === 'loading' ? <p className="mt-4 text-sm text-zinc-500">Loading metadata...</p> : null}
           {metaStatus === 'error' ? <p className="mt-4 text-sm text-red-300">{error}</p> : null}
-          <p className="mt-5 text-xs leading-5 text-zinc-500">Streams are loaded from the {stremioSource === 'watch' ? 'watch/provider' : 'catalog/home'} Stremio addon. If a MKV does not play in this browser/WebView, use Open Directly or try another quality.</p>
+
         </aside>
       </section>
     </main>

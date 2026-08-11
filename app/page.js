@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 
 const PAGE_SIZE = 15;
-const HOME_CACHE_KEY = 'jash:home:v4';
+const HOME_CACHE_KEY = 'jash:home:v5';
 
 function formatDateTime(value) {
   if (!value) return 'Not updated yet';
@@ -14,20 +14,6 @@ function formatDateTime(value) {
   } catch {
     return 'Not updated yet';
   }
-}
-
-function MetaPill({ children, tone = 'zinc' }) {
-  const tones = {
-    red: 'border-red-500/30 bg-red-500/10 text-red-200',
-    green: 'border-green-500/30 bg-green-500/10 text-green-200',
-    zinc: 'border-white/10 bg-white/[0.04] text-zinc-300',
-  };
-
-  return (
-    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold sm:px-3 sm:py-1 sm:text-xs ${tones[tone] || tones.zinc}`}>
-      {children}
-    </span>
-  );
 }
 
 function SearchBox() {
@@ -226,31 +212,12 @@ function MediaCard({ item }) {
             {item.type === 'series' ? 'Series' : 'Movie'}
           </span>
         </div>
-        {(item.releaseDate || item.year) ? (
-          <div className="absolute right-2 top-2 sm:right-3 sm:top-3">
-            <span className="rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-black text-white shadow-lg shadow-red-950/40 sm:px-2.5 sm:py-1 sm:text-[10px]">
-              {item.year || String(item.releaseDate).slice(0, 4)}
-            </span>
-          </div>
-        ) : null}
       </div>
 
-      <div className="space-y-2 p-3 sm:p-4">
+      <div className="p-3 sm:p-4">
         <h3 className="line-clamp-2 min-h-9 text-[13px] font-black leading-4 text-white sm:min-h-10 sm:text-sm sm:leading-5">
           {item.title}
         </h3>
-
-        <div className="flex flex-wrap gap-1 sm:gap-1.5">
-          {item.isTopRelease ? <MetaPill tone="green">Top this week</MetaPill> : null}
-          {item.isOttCatalog ? <MetaPill tone="green">OTT LIFO</MetaPill> : null}
-          {item.category ? <MetaPill tone="red">{item.category}</MetaPill> : null}
-          {item.season ? <MetaPill>Season {item.season}</MetaPill> : null}
-          {item.episode ? <MetaPill>Episode {item.episode}</MetaPill> : null}
-        </div>
-
-        <p className={`pt-1 text-[11px] font-semibold ${hasTMDB || item.isOttCatalog ? 'text-green-300' : 'text-orange-300'}`}>
-          {item.isOttCatalog ? 'TamilOTT stream' : hasTMDB ? 'Ready to play' : 'OTT + Stremio search'}
-        </p>
       </div>
     </Wrapper>
   );
@@ -601,20 +568,6 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-3 gap-2 sm:mt-8 sm:gap-3">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 backdrop-blur sm:rounded-3xl sm:p-5">
-              <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-zinc-500 sm:text-xs sm:tracking-[0.25em]">{showOtt ? 'OTT source' : 'Movies shown'}</p>
-              <p className="mt-1 truncate text-2xl font-black text-white sm:mt-2 sm:text-3xl">{showOtt ? (ottSource === 'dubbed' ? 'Dubbed' : 'Movies') : movies.length}</p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 backdrop-blur sm:rounded-3xl sm:p-5">
-              <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-zinc-500 sm:text-xs sm:tracking-[0.25em]">{showOtt ? 'OTT shown' : 'Series shown'}</p>
-              <p className="mt-1 text-2xl font-black text-white sm:mt-2 sm:text-3xl">{showOtt ? ottItems.length : series.length}</p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 backdrop-blur sm:rounded-3xl sm:p-5">
-              <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-zinc-500 sm:text-xs sm:tracking-[0.25em]">{showOtt ? 'OTT total' : 'Total shown'}</p>
-              <p className="mt-1 text-2xl font-black text-white sm:mt-2 sm:text-3xl">{showOtt ? ottPaging.total : totalShown}</p>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -622,21 +575,21 @@ export default function LandingPage() {
         <div className="mb-6 rounded-2xl border border-white/10 bg-zinc-950/70 p-4 shadow-2xl shadow-black/20 sm:mb-8 sm:rounded-3xl sm:p-5">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h2 className="text-2xl font-black text-white">{showOtt ? 'TamilOTT Catalog' : '1TamilMV Scraped Catalogue'}</h2>
+              <h2 className="text-2xl font-black text-white">{showOtt ? 'MiX Catalog' : 'Latest Releases'}</h2>
               <p className="mt-2 text-sm leading-6 text-zinc-400">
                 {showOtt
-                  ? `Showing ${ottSource === 'dubbed' ? 'tamil_dubbed.json' : 'tamil_movies.json'} in LIFO order. Last loaded: ${formatDateTime(ottUpdatedAt)}.`
-                  : `Movies and series only. Top Releases This Week appear first. Last update: ${formatDateTime(updatedAt)}.`}
+                  ? `Tamil movies and dubbed titles. Last loaded: ${formatDateTime(ottUpdatedAt)}.`
+                  : `Fresh movies and series. Last update: ${formatDateTime(updatedAt)}.`}
               </p>
             </div>
 
             {showOtt ? (
               <div className="sticky top-16 z-30 -mx-1 grid grid-cols-2 gap-2 rounded-3xl border border-white/10 bg-[#050505]/90 p-1.5 backdrop-blur sm:static sm:mx-0 sm:min-w-96 sm:gap-3 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
                 <TabButton active={ottSource === 'movies'} count={ottSource === 'movies' ? ottItems.length : 0} onClick={() => setOttSource('movies')}>
-                  Movies JSON
+                  Movies
                 </TabButton>
                 <TabButton active={ottSource === 'dubbed'} count={ottSource === 'dubbed' ? ottItems.length : 0} onClick={() => setOttSource('dubbed')}>
-                  Dubbed JSON
+                  Dubbed
                 </TabButton>
               </div>
             ) : (
@@ -668,10 +621,10 @@ export default function LandingPage() {
             <div className="mb-4 flex items-end justify-between gap-3 sm:mb-5 sm:gap-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.22em] text-red-500 sm:text-xs sm:tracking-[0.28em]">
-                  {showOtt ? (ottSource === 'dubbed' ? 'OTT Dubbed JSON' : 'OTT Movies JSON') : activeTab === 'movies' ? 'Scraped Movies' : 'Scraped Series'}
+                  {showOtt ? (ottSource === 'dubbed' ? 'Dubbed' : 'Movies') : activeTab === 'movies' ? 'Movies' : 'Series'}
                 </p>
                 <h2 className="mt-1 text-2xl font-black text-white sm:mt-2 sm:text-3xl">
-                  {showOtt ? 'OTT Catalog' : activeTab === 'movies' ? 'Movies' : 'Series'}
+                  {showOtt ? 'MiX' : activeTab === 'movies' ? 'Movies' : 'Series'}
                 </h2>
               </div>
               <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs font-bold text-zinc-400 sm:px-3 sm:text-sm">

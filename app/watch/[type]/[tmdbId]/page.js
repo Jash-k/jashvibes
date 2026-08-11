@@ -195,7 +195,6 @@ export default function WatchByTMDBPage() {
   const streamChoices = useMemo(() => [...new Set([streamUrl, ...(streamFallbacks || [])].filter(Boolean))], [streamUrl, streamFallbacks]);
   const currentStreamUrl = streamChoices[streamChoiceIndex] || streamUrl;
   const activePlayerUrl = playerMode === 'trailer' ? trailerUrl : currentStreamUrl;
-  const activeProvider = playerMode === 'trailer' ? 'trailer' : (isOttTitleOnly ? 'tamilott' : provider);
   const [error, setError] = useState('');
   const [attempts, setAttempts] = useState([]);
   const [savedToMongoDB, setSavedToMongoDB] = useState(false);
@@ -205,6 +204,7 @@ export default function WatchByTMDBPage() {
   const [selectedOttStreamId, setSelectedOttStreamId] = useState(initialOttStreamId);
   const [resolvedOttStreamId, setResolvedOttStreamId] = useState('');
   const [stremioCheck, setStremioCheck] = useState({ status: 'idle', available: false, href: '', count: 0, error: '' });
+  const activeProvider = playerMode === 'trailer' ? 'trailer' : (resolvedProviderId || (isOttTitleOnly ? 'tamilott' : provider));
 
   const resolveUrl = useMemo(() => {
     if (!type || !tmdbId) return null;
@@ -497,19 +497,6 @@ export default function WatchByTMDBPage() {
     }
   };
 
-  const enterFullscreen = async () => {
-    const element = playerShellRef.current;
-    if (!element) return;
-
-    try {
-      if (element.requestFullscreen) await element.requestFullscreen();
-      else if (element.webkitRequestFullscreen) element.webkitRequestFullscreen();
-      else if (element.msRequestFullscreen) element.msRequestFullscreen();
-    } catch (error) {
-      console.warn('Fullscreen request failed:', error);
-    }
-  };
-
   const directStreamActive = playerMode === 'stream' && isDirectPlayerType(streamType, activePlayerUrl);
 
   return (
@@ -622,9 +609,7 @@ export default function WatchByTMDBPage() {
                     </option>
                   ))}
                 </select>
-                <span className="mt-1 block text-[10px] text-zinc-500">
-                  For series, changing the Season/Episode dropdown above auto-selects that episode. Use this list for manual episode/quality selection.
-                </span>
+
               </label>
             ) : null}
           </div>
@@ -684,7 +669,7 @@ export default function WatchByTMDBPage() {
                 src={activePlayerUrl}
                 className="h-full w-full border-0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
-                sandbox={popupBlocker ? 'allow-scripts allow-same-origin allow-forms allow-presentation' : undefined}
+                sandbox={popupBlocker && activeProvider !== 'tamilott' && !/onestream|tamilott|stream\/page/i.test(activePlayerUrl) ? 'allow-scripts allow-same-origin allow-forms allow-presentation' : undefined}
                 allowFullScreen
                 referrerPolicy="origin-when-cross-origin"
               />
@@ -732,35 +717,8 @@ export default function WatchByTMDBPage() {
                   Stream
                 </button>
               ) : null}
-              <button
-                type="button"
-                onClick={enterFullscreen}
-                className="rounded-xl border border-white/10 bg-white/10 px-3 py-2.5 text-xs font-bold text-white transition hover:border-red-500 hover:bg-red-500/10 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
-              >
-                Fullscreen
-              </button>
-              {playerMode === 'stream' && streamChoices.length > 1 ? (
-                <button
-                  type="button"
-                  onClick={() => setStreamChoiceIndex((index) => (index + 1) % streamChoices.length)}
-                  className="rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2.5 text-xs font-bold text-orange-100 transition hover:border-orange-400 hover:bg-orange-500/20 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
-                >
-                  Mirror {streamChoiceIndex + 1}/{streamChoices.length}
-                </button>
-              ) : null}
-              <a
-                href={activePlayerUrl || streamUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-xl bg-red-600 px-3 py-2.5 text-center text-xs font-bold text-white transition hover:bg-red-500 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
-              >
-                Open Direct
-              </a>
             </>
           ) : null}
-          <p className="col-span-2 flex items-center text-center text-[11px] leading-5 text-zinc-500 sm:text-left sm:text-xs">
-            Popup blocker uses iframe sandboxing to stop popups/top-navigation ads. If a source says “disable sandbox” or will not start, turn off Block Popups or use Open Source Directly.
-          </p>
         </div>
 
       </section>
