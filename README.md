@@ -104,7 +104,7 @@ That is enough for:
 Optional only if you need them:
 
 ```env
-PROVIDERS=tamilott,screenscape,vidlink,vidnest,videasy,vidzee,vidrock,vixsrc,oneembed,vidsrcsbs,vidsrc
+PROVIDERS=tamilott,vidlink,vidnest,videasy,vidzee,vidrock,vixsrc,oneembed,vidsrcsbs,vidsrc
 TAMILMV=https://www.1tamilmv.report/
 TAMILMV_CACHE_LIMIT=90
 OTT=https://tamilott.vercel.app/tamil_movies.json,https://tamilott.vercel.app/tamil_dubbed.json
@@ -113,7 +113,7 @@ OTT=https://tamilott.vercel.app/tamil_movies.json,https://tamilott.vercel.app/ta
 EMBED=https://piratexplay.cc/language/tamil/
 ELABEL=PirateXPlay Tamil
 # or multiple:
-EMBEDS=PirateXPlay Tamil|https://piratexplay.cc/language/tamil/,Example|https://example.com
+EMBEDS=PirateXPlay Tamil|https://piratexplay.cc/language/tamil/
 ```
 
 `OTT` is for TamilOTT playback matching and accepts one URL or multiple comma-separated URLs. It expects items with `stream_title`, `stream_url`, and optional `omdb.Title`, `omdb.Year`, `omdb.Type`, `omdb.Poster`. If unset, the built-in TamilOTT JSON defaults are used; set `OTT=off` to disable playback matching.

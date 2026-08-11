@@ -4,6 +4,18 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 
+function isHlsUrl(url = '') {
+  return String(url || '').toLowerCase().includes('.m3u8') || String(url || '').toLowerCase().includes('m3u8');
+}
+
+function isDashUrl(url = '') {
+  return String(url || '').toLowerCase().includes('.mpd');
+}
+
+function isDirectPlayerType(type = '', url = '') {
+  return ['hls', 'dash', 'video'].includes(String(type || '').toLowerCase()) || isHlsUrl(url) || isDashUrl(url) || /\.(mp4|webm|mkv)(\?|#|$)/i.test(String(url || ''));
+}
+
 function shouldUseObjectPlayer(provider, streamUrl) {
   // VidSrc works best as a normal unsandboxed iframe with autoplay/fullscreen
   // permissions. Keep <object> only for providers that complain about iframe
@@ -125,6 +137,8 @@ export default function WatchByTMDBPage() {
   const tmdbId = params?.tmdbId;
   const isSeries = type === 'series' || type === 'tv';
   const playerShellRef = useRef(null);
+  const directVideoRef = useRef(null);
+  const directPlayerRef = useRef(null);
 
   const initialSeason = Math.max(1, Number(searchParams?.get('season') || searchParams?.get('s') || 1));
   const initialEpisode = Math.max(1, Number(searchParams?.get('episode') || searchParams?.get('e') || 1));
@@ -381,6 +395,55 @@ export default function WatchByTMDBPage() {
     return () => controller.abort();
   }, [resolveUrl]);
 
+  useEffect(() => {
+    const video = directVideoRef.current;
+    if (!video || status !== 'ready' || playerMode !== 'stream' || !activePlayerUrl || !isDirectPlayerType(streamType, activePlayerUrl)) return;
+    let cancelled = false;
+
+    async function destroyDirectPlayer() {
+      if (directPlayerRef.current) {
+        try { await directPlayerRef.current.destroy(); } catch {}
+        directPlayerRef.current = null;
+      }
+    }
+
+    async function loadDirect() {
+      try {
+        await destroyDirectPlayer();
+        if (cancelled) return;
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+
+        if (isHlsUrl(activePlayerUrl) || isDashUrl(activePlayerUrl)) {
+          const shakaModule = await import('shaka-player/dist/shaka-player.compiled.js');
+          const shaka = shakaModule.default || window.shaka || shakaModule;
+          shaka.polyfill?.installAll?.();
+          const player = new shaka.Player();
+          directPlayerRef.current = player;
+          await player.attach(video);
+          player.configure({
+            streaming: { bufferingGoal: 20, rebufferingGoal: 2 },
+            abr: { enabled: true, defaultBandwidthEstimate: 1_500_000 },
+          });
+          await player.load(activePlayerUrl, undefined, isHlsUrl(activePlayerUrl) ? 'application/x-mpegurl' : undefined);
+        } else {
+          video.src = activePlayerUrl;
+          video.load();
+        }
+        if (!cancelled) video.play().catch(() => {});
+      } catch (error) {
+        if (!cancelled) {
+          setError(error.message || 'Direct player failed. Try another source.');
+          setStatus('error');
+        }
+      }
+    }
+
+    loadDirect();
+    return () => { cancelled = true; destroyDirectPlayer(); };
+  }, [status, playerMode, activePlayerUrl, streamType]);
+
   const playTrailer = async () => {
     if (!tmdbId || !type) return;
 
@@ -447,7 +510,9 @@ export default function WatchByTMDBPage() {
                   <option value="tamilott">TamilOTT JSON only</option>
                 ) : (
                   <>
-                    <option value="auto">Auto Priority (TamilOTT first)</option>
+                    <option value="auto">Auto Priority (TamilOTT → AnchorHD → Omega)</option>
+                    <option value="anchorhd">1AnchorHD</option>
+                    <option value="omega">Omega</option>
                     <option value="vidlink">VidLink</option>
                     <option value="vidnest">VidNest</option>
                     <option value="videasy">Videasy</option>
@@ -561,7 +626,17 @@ export default function WatchByTMDBPage() {
               </div>
             ) : null}
 
-            {status === 'ready' && activePlayerUrl && !popupBlocker && shouldUseObjectPlayer(activeProvider, activePlayerUrl) ? (
+            {status === 'ready' && activePlayerUrl && playerMode === 'stream' && isDirectPlayerType(streamType, activePlayerUrl) ? (
+              <video
+                ref={directVideoRef}
+                className="h-full w-full bg-black object-fill"
+                controls
+                playsInline
+                autoPlay
+              />
+            ) : null}
+
+            {status === 'ready' && activePlayerUrl && !isDirectPlayerType(streamType, activePlayerUrl) && !popupBlocker && shouldUseObjectPlayer(activeProvider, activePlayerUrl) ? (
               <object
                 title={playerMode === 'trailer' ? trailerTitle || 'Trailer player' : 'Embed player'}
                 data={activePlayerUrl}
@@ -574,7 +649,7 @@ export default function WatchByTMDBPage() {
               </object>
             ) : null}
 
-            {status === 'ready' && activePlayerUrl && (popupBlocker || !shouldUseObjectPlayer(activeProvider, activePlayerUrl)) ? (
+            {status === 'ready' && activePlayerUrl && !isDirectPlayerType(streamType, activePlayerUrl) && (popupBlocker || !shouldUseObjectPlayer(activeProvider, activePlayerUrl)) ? (
               <iframe
                 key={`${popupBlocker ? 'blocked' : 'open'}-${activePlayerUrl}`}
                 title={playerMode === 'trailer' ? trailerTitle || 'Trailer player' : 'Embed player'}

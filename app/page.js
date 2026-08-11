@@ -574,10 +574,10 @@ export default function LandingPage() {
                   ♫
                 </Link>
                 <Link
-                  href="/classics"
-                  className="rounded-full border border-yellow-500/25 bg-yellow-500/10 px-4 py-2 text-sm font-black text-yellow-100 transition hover:border-yellow-400/70 hover:bg-yellow-500/20"
+                  href="/sports"
+                  className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-sm font-black text-emerald-100 transition hover:border-emerald-400/70 hover:bg-emerald-500/20"
                 >
-                  CLaSSics📼
+                  SPoRTS🏏
                 </Link>
                 <Link
                   href="/live"

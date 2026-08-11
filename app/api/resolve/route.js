@@ -9,6 +9,7 @@ import {
   createTamilOttAttempt,
   resolveTamilOttProvider,
 } from '@/lib/providers/tamilOttProvider';
+import { createAnchorHdAttempt, resolveAnchorHdProvider } from '@/lib/providers/anchorHdProvider';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -185,6 +186,7 @@ export async function GET(request) {
           season,
           episode,
           streamId: ottStreamId,
+          quick: requestedProvider === 'auto',
         });
         selected = tamilOttResult;
         sourcesToSave = hasValidTmdbId ? [tamilOttResult, ...resolved.providers] : [tamilOttResult];
@@ -241,12 +243,36 @@ export async function GET(request) {
       ];
     }
 
+    if (hasValidTmdbId && (requestedProvider === 'anchorhd' || (requestedProvider === 'auto' && selected?.id !== 'tamilott'))) {
+      try {
+        const anchorResult = await resolveAnchorHdProvider({ tmdbId, type, season, episode });
+        selected = anchorResult;
+        sourcesToSave = [anchorResult, ...(sourcesToSave || [])];
+        attempts = [
+          createAnchorHdAttempt(anchorResult, 'available', `AnchorHD signed HLS ready: ${anchorResult.path}`),
+          ...attempts.map((attempt) => attempt.providerId === 'anchorhd' ? { ...attempt, status: 'available' } : attempt),
+        ];
+      } catch (error) {
+        const failedAttempt = createAnchorHdAttempt(null, 'failed', `${error.message || 'AnchorHD source unavailable'}${requestedProvider === 'auto' ? ' Auto Priority is falling back to the next provider.' : ''}`);
+        attempts = [failedAttempt, ...attempts];
+        if (requestedProvider === 'anchorhd') {
+          return NextResponse.json(
+            { error: error.message || 'AnchorHD source unavailable', attempts, mode: 'anchorhd-provider' },
+            { status: 404 },
+          );
+        }
+      }
+    }
+
     if (!selected?.streamUrl) {
       return NextResponse.json({ error: 'No stream URL returned by selected provider', attempts }, { status: 404 });
     }
 
-    let saveResult = { saved: false };
-    if (hasValidTmdbId) {
+    let saveResult = { saved: false, skipped: true };
+    // Saving generated embed source metadata is optional. On small/free hosts this
+    // MongoDB round-trip can make the watch page feel slow, so keep provider
+    // resolution fast by default. Set RESOLVE_SAVE=1 if you want the old behavior.
+    if (hasValidTmdbId && process.env.RESOLVE_SAVE === '1') {
       await dbConnect();
       saveResult = await saveEmbedSources({
         tmdbId,
@@ -271,7 +297,7 @@ export async function GET(request) {
         savedToMongoDB: saveResult.saved,
         savedSources: saveResult.sources || [],
         titleOnly: isTamilOttTitleOnly,
-        mode: selected.id === 'tamilott' ? 'tamilott-json-provider' : 'local-embed-provider-module',
+        mode: selected.id === 'tamilott' ? 'tamilott-json-provider' : selected.id === 'anchorhd' ? 'anchorhd-signed-hls' : 'local-embed-provider-module',
       },
       {
         headers: {
