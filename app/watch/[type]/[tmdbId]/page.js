@@ -745,37 +745,6 @@ export default function WatchByTMDBPage() {
           </p>
         </div>
 
-        <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-zinc-400 sm:mt-6 sm:p-5">
-          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-bold text-white">Embed Status</h2>
-              <p className="mt-1 text-xs text-zinc-500">
-                Choose any source manually. Current modules: TamilOTT JSON, VidLink, VidNest, Videasy, VidZee, VidRock, VixSrc, 1Embed, VidSrc SBS, and VidSrc mirrors.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-zinc-400">
-                {isOttTitleOnly ? `TamilOTT title: ${ottTitle || 'Unknown'}` : `TMDB ID: ${tmdbId}`} • {isSeries ? `TV S${season} E${episode}` : 'Movie'} • {playerMode === 'trailer' ? 'Trailer' : (isOttTitleOnly ? 'tamilott' : provider)}
-              </span>
-              {resolveMode ? (
-                <span className="rounded-full border border-blue-500/30 bg-blue-950/20 px-3 py-1 text-xs text-blue-300">
-                  {resolveMode}
-                </span>
-              ) : null}
-              {savedToMongoDB ? (
-                <span className="rounded-full border border-green-500/30 bg-green-950/20 px-3 py-1 text-xs text-green-300">
-                  Saved in MongoDB
-                </span>
-              ) : null}
-            </div>
-          </div>
-
-          <SourceStatusGrid
-            attempts={attempts}
-            selectedProvider={isOttTitleOnly ? 'tamilott' : provider}
-            onSelectProvider={(providerId) => setProvider(providerId)}
-          />
-        </div>
       </section>
     </main>
   );
