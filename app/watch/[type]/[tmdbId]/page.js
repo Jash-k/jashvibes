@@ -1,8 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import VideoPlayer from '@/components/VideoPlayer';
 import { useParams, useSearchParams } from 'next/navigation';
 
 function isHlsUrl(url = '') {
@@ -25,10 +24,7 @@ function formatDirectPlaybackError(error, resolvedProviderId = '') {
 
   if (code === 1001 || /1001|BAD_HTTP_STATUS|HTTP\s+(4\d\d|5\d\d)/i.test(message)) {
     const statusText = (message.match(/HTTP\s+(4\d\d|5\d\d)/i) || dataText.match(/\b(4\d\d|5\d\d)\b/))?.[1];
-    const providerHint = resolvedProviderId === 'anchorhd'
-      ? ' 1AnchorHD signed a URL, but the HLS manifest or segment was rejected by the stream worker. Use Omega, or add this JaSH ViBeS domain to the 1AnchorHD worker allowed origins.'
-      : '';
-    return `${message || `Direct HLS server returned a bad HTTP status${statusText ? ` (${statusText})` : ''}.`}${providerHint}`;
+    return message || `Direct HLS server returned a bad HTTP status${statusText ? ` (${statusText})` : ''}.`;
   }
 
   return message || 'Direct player failed. Try another source.';
@@ -87,8 +83,7 @@ function getStatusStyle(status) {
 }
 
 const WATCH_SERVER_OPTIONS = [
-  { id: 'auto', name: 'Auto', label: 'TamilOTT → AnchorHD → Omega' },
-  { id: 'anchorhd', name: '1AnchorHD', label: 'Signed HLS' },
+  { id: 'auto', name: 'Auto', label: 'TamilOTT → Omega' },
   { id: 'omega', name: 'Omega', label: 'Direct embed' },
   { id: 'tamilott', name: 'TamilOTT', label: 'JSON stream' },
   { id: 'vidlink', name: 'VidLink', label: 'TMDB embed' },
@@ -171,6 +166,8 @@ export default function WatchByTMDBPage() {
   const tmdbId = params?.tmdbId;
   const isSeries = type === 'series' || type === 'tv';
   const playerShellRef = useRef(null);
+  const directVideoRef = useRef(null);
+  const directPlayerRef = useRef(null);
 
   const initialSeason = Math.max(1, Number(searchParams?.get('season') || searchParams?.get('s') || 1));
   const initialEpisode = Math.max(1, Number(searchParams?.get('episode') || searchParams?.get('e') || 1));
@@ -430,17 +427,54 @@ export default function WatchByTMDBPage() {
     return () => controller.abort();
   }, [resolveUrl]);
 
-  const handleDirectPlayerError = useCallback((playbackError) => {
-    const message = formatDirectPlaybackError(playbackError, resolvedProviderId);
-    if (provider === 'auto' && resolvedProviderId === 'anchorhd') {
-      setError('');
-      setStatus('loading');
-      setProvider('omega');
-      return;
+  useEffect(() => {
+    const video = directVideoRef.current;
+    if (!video || status !== 'ready' || playerMode !== 'stream' || !activePlayerUrl || !isDirectPlayerType(streamType, activePlayerUrl)) return;
+    let cancelled = false;
+
+    async function destroyDirectPlayer() {
+      if (directPlayerRef.current) {
+        try { await directPlayerRef.current.destroy(); } catch {}
+        directPlayerRef.current = null;
+      }
     }
-    setError(message);
-    setStatus('error');
-  }, [provider, resolvedProviderId]);
+
+    async function loadDirect() {
+      try {
+        await destroyDirectPlayer();
+        if (cancelled) return;
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+
+        if (isHlsUrl(activePlayerUrl) || isDashUrl(activePlayerUrl)) {
+          const shakaModule = await import('shaka-player/dist/shaka-player.compiled.js');
+          const shaka = shakaModule.default || window.shaka || shakaModule;
+          shaka.polyfill?.installAll?.();
+          const player = new shaka.Player();
+          directPlayerRef.current = player;
+          await player.attach(video);
+          player.configure({
+            streaming: { bufferingGoal: 20, rebufferingGoal: 2 },
+            abr: { enabled: true, defaultBandwidthEstimate: 1_500_000 },
+          });
+          await player.load(activePlayerUrl, undefined, isHlsUrl(activePlayerUrl) ? 'application/x-mpegurl' : undefined);
+        } else {
+          video.src = activePlayerUrl;
+          video.load();
+        }
+        if (!cancelled) video.play().catch(() => {});
+      } catch (playbackError) {
+        if (!cancelled) {
+          setError(formatDirectPlaybackError(playbackError, resolvedProviderId));
+          setStatus('error');
+        }
+      }
+    }
+
+    loadDirect();
+    return () => { cancelled = true; destroyDirectPlayer(); };
+  }, [status, playerMode, activePlayerUrl, streamType, resolvedProviderId]);
 
   const playTrailer = async () => {
     if (!tmdbId || !type) return;
@@ -621,12 +655,12 @@ export default function WatchByTMDBPage() {
             ) : null}
 
             {status === 'ready' && activePlayerUrl && directStreamActive ? (
-              <VideoPlayer
-                src={activePlayerUrl}
-                title={ottTitle || trailerTitle || 'JaSH ViBeS'}
-                inline
-                onBackClick={() => window.history.back()}
-                onError={handleDirectPlayerError}
+              <video
+                ref={directVideoRef}
+                className="h-full w-full bg-black object-fill"
+                controls
+                playsInline
+                autoPlay
               />
             ) : null}
 

@@ -10,7 +10,6 @@ import {
   createTamilOttAttempt,
   resolveTamilOttProvider,
 } from '@/lib/providers/tamilOttProvider';
-import { createAnchorHdAttempt, resolveAnchorHdProvider } from '@/lib/providers/anchorHdProvider';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -159,7 +158,6 @@ export async function GET(request) {
     const title = String(searchParams.get('title') || '').trim();
     const year = String(searchParams.get('year') || '').trim();
     const isTamilOttTitleOnly = !hasValidTmdbId && requestedProvider === 'tamilott' && title;
-    const requestOrigin = request.headers.get('origin') || new URL(request.url).origin;
 
     if (!hasValidTmdbId && !isTamilOttTitleOnly) {
       return NextResponse.json(
@@ -268,27 +266,6 @@ export async function GET(request) {
       ];
     }
 
-    if (hasValidTmdbId && (requestedProvider === 'anchorhd' || (requestedProvider === 'auto' && selected?.id !== 'tamilott'))) {
-      try {
-        const anchorResult = await resolveAnchorHdProvider({ tmdbId, type, season, episode, requestOrigin });
-        selected = anchorResult;
-        sourcesToSave = [anchorResult, ...(sourcesToSave || [])];
-        attempts = [
-          createAnchorHdAttempt(anchorResult, 'available', `AnchorHD signed HLS ready: ${anchorResult.path}`),
-          ...attempts.map((attempt) => attempt.providerId === 'anchorhd' ? { ...attempt, status: 'available' } : attempt),
-        ];
-      } catch (error) {
-        const failedAttempt = createAnchorHdAttempt(null, 'failed', `${error.message || 'AnchorHD source unavailable'}${requestedProvider === 'auto' ? ' Auto Priority is falling back to the next provider.' : ''}`);
-        attempts = [failedAttempt, ...attempts];
-        if (requestedProvider === 'anchorhd') {
-          return NextResponse.json(
-            { error: error.message || 'AnchorHD source unavailable', attempts, mode: 'anchorhd-provider' },
-            { status: 404 },
-          );
-        }
-      }
-    }
-
     if (!selected?.streamUrl) {
       return NextResponse.json({ error: 'No stream URL returned by selected provider', attempts }, { status: 404 });
     }
@@ -322,7 +299,7 @@ export async function GET(request) {
         savedToMongoDB: saveResult.saved,
         savedSources: saveResult.sources || [],
         titleOnly: isTamilOttTitleOnly,
-        mode: selected.id === 'tamilott' ? 'tamilott-json-provider' : selected.id === 'anchorhd' ? 'anchorhd-signed-hls' : 'local-embed-provider-module',
+        mode: selected.id === 'tamilott' ? 'tamilott-json-provider' : 'local-embed-provider-module',
       },
       {
         headers: {

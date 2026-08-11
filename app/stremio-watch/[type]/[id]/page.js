@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
+import VideoPlayer from '@/components/VideoPlayer';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 
@@ -244,7 +245,6 @@ export default function StremioPlayerPage() {
   useEffect(() => {
     const video = videoRef.current;
     const url = activeStream?.url;
-    if (!video || !url) return;
     let cancelled = false;
 
     async function destroyPlayer() {
@@ -254,7 +254,16 @@ export default function StremioPlayerPage() {
       }
     }
 
-    async function load() {
+    if (!url || !isDash(url)) {
+      destroyPlayer();
+      setAudioTracks([]);
+      setAudioTrackIndex(0);
+      return () => { cancelled = true; };
+    }
+
+    if (!video) return;
+
+    async function loadDash() {
       try {
         await destroyPlayer();
         if (cancelled) return;
@@ -264,28 +273,20 @@ export default function StremioPlayerPage() {
         setAudioTracks([]);
         setAudioTrackIndex(0);
 
-        if (isHls(url) || isDash(url)) {
-          const shakaModule = await import('shaka-player/dist/shaka-player.compiled.js');
-          const shaka = shakaModule.default || window.shaka || shakaModule;
-          shaka.polyfill?.installAll?.();
-          const player = new shaka.Player();
-          playerRef.current = player;
-          await player.attach(video);
-          await player.load(url);
-          if (!cancelled) { refreshAudioTracks(); window.setTimeout(refreshAudioTracks, 900); video.play().catch(() => {}); }
-        } else {
-          video.src = url;
-          video.load();
-          refreshAudioTracks();
-          window.setTimeout(refreshAudioTracks, 900);
-          video.play().catch(() => {});
-        }
+        const shakaModule = await import('shaka-player/dist/shaka-player.compiled.js');
+        const shaka = shakaModule.default || window.shaka || shakaModule;
+        shaka.polyfill?.installAll?.();
+        const player = new shaka.Player();
+        playerRef.current = player;
+        await player.attach(video);
+        await player.load(url);
+        if (!cancelled) { refreshAudioTracks(); window.setTimeout(refreshAudioTracks, 900); video.play().catch(() => {}); }
       } catch (err) {
-        if (!cancelled) setError(err.message || 'Playback failed. Try Open Directly or another stream quality.');
+        if (!cancelled) setError(err.message || 'DASH playback failed. Try Open Directly or another stream quality.');
       }
     }
 
-    load();
+    loadDash();
     return () => { cancelled = true; destroyPlayer(); };
   }, [activeStream?.url]);
 
@@ -309,11 +310,13 @@ export default function StremioPlayerPage() {
     } catch {}
   }
 
+  const activePlayerTitle = currentEpisodeInfo
+    ? `${item?.title || 'Stremio'} S${currentEpisodeInfo.season}E${currentEpisodeInfo.episode}`
+    : item?.title || activeStream?.title || 'Stremio';
+  const directStremioActive = Boolean(activeStream?.url && !isDash(activeStream.url));
+
   function openPlayer() {
-    const title = currentEpisodeInfo
-      ? `${item?.title || 'Stremio'} S${currentEpisodeInfo.season}E${currentEpisodeInfo.episode}`
-      : item?.title || activeStream?.title || 'Stremio';
-    openExternalPlayer(activeStream?.url, title);
+    openExternalPlayer(activeStream?.url, activePlayerTitle);
   }
 
   return (
@@ -339,7 +342,18 @@ export default function StremioPlayerPage() {
         <div className="space-y-4">
           <div ref={shellRef} className="classics-player-shell overflow-hidden rounded-3xl border border-white/10 bg-black shadow-2xl shadow-black fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0">
             <div className="relative aspect-video h-full w-full bg-black fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:aspect-auto">
-              <video ref={videoRef} className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-fill" controls playsInline preload="metadata" poster={currentEpisodeInfo?.thumbnail || item?.backdropUrl || item?.posterUrl || undefined} />
+              {directStremioActive ? (
+                <VideoPlayer
+                  src={activeStream.url}
+                  title={activePlayerTitle}
+                  poster={currentEpisodeInfo?.thumbnail || item?.backdropUrl || item?.posterUrl || ''}
+                  inline
+                  onBackClick={() => window.history.back()}
+                  onError={(message) => setError(message || 'Stremio playback failed. Try another stream quality.')}
+                />
+              ) : (
+                <video ref={videoRef} className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-fill" controls playsInline preload="metadata" poster={currentEpisodeInfo?.thumbnail || item?.backdropUrl || item?.posterUrl || undefined} />
+              )}
               {streamStatus === 'loading' ? <div className="absolute inset-0 grid place-items-center bg-black/50"><span className="rounded-full bg-black/80 px-5 py-3 text-sm font-bold">Loading Stremio stream...</span></div> : null}
               {streamStatus === 'error' ? <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-red-500/30 bg-red-950/80 p-3 text-sm text-red-100">{error}</div> : null}
             </div>
@@ -347,13 +361,21 @@ export default function StremioPlayerPage() {
 
           <div className="rounded-3xl border border-fuchsia-400/15 bg-zinc-950/85 p-3 shadow-xl shadow-black/25">
             <div className="grid grid-cols-4 gap-2 sm:flex sm:flex-wrap sm:items-center">
-              <SymbolButton onClick={() => seekBy(-60)} title="Back 1 minute">↶1m</SymbolButton>
-              <SymbolButton onClick={() => seekBy(-30)} title="Back 30 seconds">↶30</SymbolButton>
-              <SymbolButton onClick={() => seekBy(-10)} title="Back 10 seconds">↶10</SymbolButton>
-              <SymbolButton onClick={cycleAudioTrack} disabled={!audioTracks.length} title={audioTracks.length ? `Audio ${audioTracks[audioTrackIndex]?.label || audioTrackIndex + 1}` : 'No alternate audio tracks detected'}>🔊</SymbolButton>
-              <SymbolButton onClick={() => seekBy(10)} title="Forward 10 seconds">10↷</SymbolButton>
-              <SymbolButton onClick={() => seekBy(30)} title="Forward 30 seconds">30↷</SymbolButton>
-              <SymbolButton onClick={() => seekBy(60)} title="Forward 1 minute">1m↷</SymbolButton>
+              {directStremioActive ? (
+                <span className="col-span-4 rounded-2xl border border-fuchsia-400/15 bg-fuchsia-500/10 px-3 py-3 text-[11px] font-bold text-fuchsia-100 sm:col-span-1">
+                  Custom player active: use on-video seek, audio, subtitle and quality controls.
+                </span>
+              ) : (
+                <>
+                  <SymbolButton onClick={() => seekBy(-60)} title="Back 1 minute">↶1m</SymbolButton>
+                  <SymbolButton onClick={() => seekBy(-30)} title="Back 30 seconds">↶30</SymbolButton>
+                  <SymbolButton onClick={() => seekBy(-10)} title="Back 10 seconds">↶10</SymbolButton>
+                  <SymbolButton onClick={cycleAudioTrack} disabled={!audioTracks.length} title={audioTracks.length ? `Audio ${audioTracks[audioTrackIndex]?.label || audioTrackIndex + 1}` : 'No alternate audio tracks detected'}>🔊</SymbolButton>
+                  <SymbolButton onClick={() => seekBy(10)} title="Forward 10 seconds">10↷</SymbolButton>
+                  <SymbolButton onClick={() => seekBy(30)} title="Forward 30 seconds">30↷</SymbolButton>
+                  <SymbolButton onClick={() => seekBy(60)} title="Forward 1 minute">1m↷</SymbolButton>
+                </>
+              )}
               <SymbolButton onClick={fullscreen} title="Fullscreen">⛶</SymbolButton>
               {activeStream?.url ? <button type="button" onClick={openPlayer} title="Open in VLC / external player" aria-label="Open in external player" className="grid h-11 min-w-[6.5rem] place-items-center rounded-2xl bg-fuchsia-500 px-3 text-xs font-black text-black transition hover:bg-fuchsia-300 sm:h-12 sm:min-w-[7.5rem] sm:text-sm">Open Player</button> : null}
             </div>
