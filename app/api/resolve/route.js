@@ -159,6 +159,7 @@ export async function GET(request) {
     const title = String(searchParams.get('title') || '').trim();
     const year = String(searchParams.get('year') || '').trim();
     const isTamilOttTitleOnly = !hasValidTmdbId && requestedProvider === 'tamilott' && title;
+    const requestOrigin = request.headers.get('origin') || new URL(request.url).origin;
 
     if (!hasValidTmdbId && !isTamilOttTitleOnly) {
       return NextResponse.json(
@@ -269,7 +270,7 @@ export async function GET(request) {
 
     if (hasValidTmdbId && (requestedProvider === 'anchorhd' || (requestedProvider === 'auto' && selected?.id !== 'tamilott'))) {
       try {
-        const anchorResult = await resolveAnchorHdProvider({ tmdbId, type, season, episode });
+        const anchorResult = await resolveAnchorHdProvider({ tmdbId, type, season, episode, requestOrigin });
         selected = anchorResult;
         sourcesToSave = [anchorResult, ...(sourcesToSave || [])];
         attempts = [

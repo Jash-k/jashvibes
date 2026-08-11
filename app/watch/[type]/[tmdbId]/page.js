@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import VideoPlayer from '@/components/VideoPlayer';
 import { useParams, useSearchParams } from 'next/navigation';
 
 function isHlsUrl(url = '') {
@@ -14,6 +15,23 @@ function isDashUrl(url = '') {
 
 function isDirectPlayerType(type = '', url = '') {
   return ['hls', 'dash', 'video'].includes(String(type || '').toLowerCase()) || isHlsUrl(url) || isDashUrl(url) || /\.(mp4|webm|mkv)(\?|#|$)/i.test(String(url || ''));
+}
+
+function formatDirectPlaybackError(error, resolvedProviderId = '') {
+  const message = typeof error === 'string' ? error : (error?.message || '');
+  const code = typeof error === 'object' ? error?.code : undefined;
+  const data = Array.isArray(error?.data) ? error.data : [];
+  const dataText = data.filter((item) => typeof item === 'string' || typeof item === 'number').join(' • ');
+
+  if (code === 1001 || /1001|BAD_HTTP_STATUS|HTTP\s+(4\d\d|5\d\d)/i.test(message)) {
+    const statusText = (message.match(/HTTP\s+(4\d\d|5\d\d)/i) || dataText.match(/\b(4\d\d|5\d\d)\b/))?.[1];
+    const providerHint = resolvedProviderId === 'anchorhd'
+      ? ' 1AnchorHD signed a URL, but the HLS manifest or segment was rejected by the stream worker. Use Omega, or add this JaSH ViBeS domain to the 1AnchorHD worker allowed origins.'
+      : '';
+    return `${message || `Direct HLS server returned a bad HTTP status${statusText ? ` (${statusText})` : ''}.`}${providerHint}`;
+  }
+
+  return message || 'Direct player failed. Try another source.';
 }
 
 function shouldUseObjectPlayer(provider, streamUrl) {
@@ -153,8 +171,6 @@ export default function WatchByTMDBPage() {
   const tmdbId = params?.tmdbId;
   const isSeries = type === 'series' || type === 'tv';
   const playerShellRef = useRef(null);
-  const directVideoRef = useRef(null);
-  const directPlayerRef = useRef(null);
 
   const initialSeason = Math.max(1, Number(searchParams?.get('season') || searchParams?.get('s') || 1));
   const initialEpisode = Math.max(1, Number(searchParams?.get('episode') || searchParams?.get('e') || 1));
@@ -187,6 +203,7 @@ export default function WatchByTMDBPage() {
   const [attempts, setAttempts] = useState([]);
   const [savedToMongoDB, setSavedToMongoDB] = useState(false);
   const [resolveMode, setResolveMode] = useState('');
+  const [resolvedProviderId, setResolvedProviderId] = useState('');
   const [ottStreams, setOttStreams] = useState([]);
   const [selectedOttStreamId, setSelectedOttStreamId] = useState(initialOttStreamId);
   const [resolvedOttStreamId, setResolvedOttStreamId] = useState('');
@@ -366,6 +383,7 @@ export default function WatchByTMDBPage() {
         setAttempts([]);
         setSavedToMongoDB(false);
         setResolveMode('');
+        setResolvedProviderId('');
         setOttStreams([]);
         setResolvedOttStreamId('');
         setStreamUrl('');
@@ -384,6 +402,7 @@ export default function WatchByTMDBPage() {
         setAttempts(data.attempts || []);
         setSavedToMongoDB(Boolean(data.savedToMongoDB));
         setResolveMode(data.mode || '');
+        setResolvedProviderId(data.providerId || '');
         setOttStreams(data.availableStreams || []);
         setResolvedOttStreamId(data.selectedStreamId || '');
         if (isSeries && !selectedOttStreamId && data.match?.season && data.match?.episode && (data.match.season !== season || data.match.episode !== episode)) {
@@ -411,54 +430,17 @@ export default function WatchByTMDBPage() {
     return () => controller.abort();
   }, [resolveUrl]);
 
-  useEffect(() => {
-    const video = directVideoRef.current;
-    if (!video || status !== 'ready' || playerMode !== 'stream' || !activePlayerUrl || !isDirectPlayerType(streamType, activePlayerUrl)) return;
-    let cancelled = false;
-
-    async function destroyDirectPlayer() {
-      if (directPlayerRef.current) {
-        try { await directPlayerRef.current.destroy(); } catch {}
-        directPlayerRef.current = null;
-      }
+  const handleDirectPlayerError = useCallback((playbackError) => {
+    const message = formatDirectPlaybackError(playbackError, resolvedProviderId);
+    if (provider === 'auto' && resolvedProviderId === 'anchorhd') {
+      setError('');
+      setStatus('loading');
+      setProvider('omega');
+      return;
     }
-
-    async function loadDirect() {
-      try {
-        await destroyDirectPlayer();
-        if (cancelled) return;
-        video.pause();
-        video.removeAttribute('src');
-        video.load();
-
-        if (isHlsUrl(activePlayerUrl) || isDashUrl(activePlayerUrl)) {
-          const shakaModule = await import('shaka-player/dist/shaka-player.compiled.js');
-          const shaka = shakaModule.default || window.shaka || shakaModule;
-          shaka.polyfill?.installAll?.();
-          const player = new shaka.Player();
-          directPlayerRef.current = player;
-          await player.attach(video);
-          player.configure({
-            streaming: { bufferingGoal: 20, rebufferingGoal: 2 },
-            abr: { enabled: true, defaultBandwidthEstimate: 1_500_000 },
-          });
-          await player.load(activePlayerUrl, undefined, isHlsUrl(activePlayerUrl) ? 'application/x-mpegurl' : undefined);
-        } else {
-          video.src = activePlayerUrl;
-          video.load();
-        }
-        if (!cancelled) video.play().catch(() => {});
-      } catch (error) {
-        if (!cancelled) {
-          setError(error.message || 'Direct player failed. Try another source.');
-          setStatus('error');
-        }
-      }
-    }
-
-    loadDirect();
-    return () => { cancelled = true; destroyDirectPlayer(); };
-  }, [status, playerMode, activePlayerUrl, streamType]);
+    setError(message);
+    setStatus('error');
+  }, [provider, resolvedProviderId]);
 
   const playTrailer = async () => {
     if (!tmdbId || !type) return;
@@ -493,6 +475,8 @@ export default function WatchByTMDBPage() {
       console.warn('Fullscreen request failed:', error);
     }
   };
+
+  const directStreamActive = playerMode === 'stream' && isDirectPlayerType(streamType, activePlayerUrl);
 
   return (
     <main className="min-h-dvh overflow-x-hidden bg-black text-zinc-100">
@@ -636,17 +620,17 @@ export default function WatchByTMDBPage() {
               </div>
             ) : null}
 
-            {status === 'ready' && activePlayerUrl && playerMode === 'stream' && isDirectPlayerType(streamType, activePlayerUrl) ? (
-              <video
-                ref={directVideoRef}
-                className="h-full w-full bg-black object-fill"
-                controls
-                playsInline
-                autoPlay
+            {status === 'ready' && activePlayerUrl && directStreamActive ? (
+              <VideoPlayer
+                src={activePlayerUrl}
+                title={ottTitle || trailerTitle || 'JaSH ViBeS'}
+                inline
+                onBackClick={() => window.history.back()}
+                onError={handleDirectPlayerError}
               />
             ) : null}
 
-            {status === 'ready' && activePlayerUrl && !isDirectPlayerType(streamType, activePlayerUrl) && !popupBlocker && shouldUseObjectPlayer(activeProvider, activePlayerUrl) ? (
+            {status === 'ready' && activePlayerUrl && !directStreamActive && !popupBlocker && shouldUseObjectPlayer(activeProvider, activePlayerUrl) ? (
               <object
                 title={playerMode === 'trailer' ? trailerTitle || 'Trailer player' : 'Embed player'}
                 data={activePlayerUrl}
@@ -659,7 +643,7 @@ export default function WatchByTMDBPage() {
               </object>
             ) : null}
 
-            {status === 'ready' && activePlayerUrl && !isDirectPlayerType(streamType, activePlayerUrl) && (popupBlocker || !shouldUseObjectPlayer(activeProvider, activePlayerUrl)) ? (
+            {status === 'ready' && activePlayerUrl && !directStreamActive && (popupBlocker || !shouldUseObjectPlayer(activeProvider, activePlayerUrl)) ? (
               <iframe
                 key={`${popupBlocker ? 'blocked' : 'open'}-${activePlayerUrl}`}
                 title={playerMode === 'trailer' ? trailerTitle || 'Trailer player' : 'Embed player'}
