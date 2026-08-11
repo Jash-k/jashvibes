@@ -67,10 +67,10 @@ export default function SportsPage() {
     async function loadChannels() {
       try {
         setChannelStatus('loading');
-        const response = await fetch('/api/live-tv?playable=1', { cache: 'no-store' });
+        const response = await fetch('/api/sports/channels', { cache: 'no-store' });
         const data = await response.json();
-        if (!response.ok) throw new Error(data?.error || 'Unable to load sports channels');
-        const sports = (data.channels || []).filter(isSportsChannel);
+        if (!response.ok || data.ok === false) throw new Error(data?.error || 'Unable to load sports channels');
+        const sports = data.channels || [];
         if (!cancelled) {
           setChannels(sports);
           setActive(sports[0] || null);

@@ -68,6 +68,22 @@ function getStatusStyle(status) {
   }
 }
 
+const WATCH_SERVER_OPTIONS = [
+  { id: 'auto', name: 'Auto', label: 'TamilOTT → AnchorHD → Omega' },
+  { id: 'anchorhd', name: '1AnchorHD', label: 'Signed HLS' },
+  { id: 'omega', name: 'Omega', label: 'Direct embed' },
+  { id: 'tamilott', name: 'TamilOTT', label: 'JSON stream' },
+  { id: 'vidlink', name: 'VidLink', label: 'TMDB embed' },
+  { id: 'vidnest', name: 'VidNest', label: 'TMDB embed' },
+  { id: 'videasy', name: 'Videasy', label: 'Simple embed' },
+  { id: 'vidzee', name: 'VidZee', label: 'Backup' },
+  { id: 'vidrock', name: 'VidRock', label: 'Backup' },
+  { id: 'vixsrc', name: 'VixSrc', label: 'API embed' },
+  { id: 'oneembed', name: '1Embed', label: 'Global CDN' },
+  { id: 'vidsrcsbs', name: 'VidSrc SBS', label: 'Mirror' },
+  { id: 'vidsrc', name: 'VidSrc', label: 'Mirrors' },
+];
+
 function SourceStatusGrid({ attempts, onSelectProvider, selectedProvider }) {
   if (!attempts?.length) {
     return (
@@ -498,36 +514,30 @@ export default function WatchByTMDBPage() {
       <section className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
         <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3 sm:mb-5 sm:p-4">
           <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
-            <label className="col-span-2 text-sm text-zinc-400 sm:col-span-1">
-              Source
-              <select
-                value={isOttTitleOnly ? 'tamilott' : provider}
-                onChange={(event) => setProvider(event.target.value)}
-                disabled={isOttTitleOnly}
-                className="mt-1 w-full rounded-xl border border-white/10 bg-black px-3 py-2 text-white outline-none focus:border-red-500 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {isOttTitleOnly ? (
-                  <option value="tamilott">TamilOTT JSON only</option>
-                ) : (
-                  <>
-                    <option value="auto">Auto Priority (TamilOTT → AnchorHD → Omega)</option>
-                    <option value="anchorhd">1AnchorHD</option>
-                    <option value="omega">Omega</option>
-                    <option value="vidlink">VidLink</option>
-                    <option value="vidnest">VidNest</option>
-                    <option value="videasy">Videasy</option>
-                    <option value="vidzee">VidZee</option>
-                    <option value="vidrock">VidRock</option>
-                    <option value="vixsrc">VixSrc</option>
-                    <option value="oneembed">1Embed</option>
-                    <option value="vidsrcsbs">VidSrc SBS</option>
-                    <option value="vidsrc">VidSrc Mirrors</option>
-                    <option value="tamilott">TamilOTT JSON</option>
-                  </>
-                )}
-              </select>
-              {isOttTitleOnly ? <span className="mt-1 block text-[10px] text-orange-300">Opened from an unmatched TamilMV card. Playback is locked to TamilOTT title search.</span> : null}
-            </label>
+            <div className="col-span-2 rounded-2xl border border-white/10 bg-black/40 p-3 sm:col-span-4">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-zinc-500">Servers</p>
+                {isOttTitleOnly ? <span className="text-[10px] font-bold text-orange-300">TamilOTT title-search mode</span> : null}
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                {(isOttTitleOnly ? WATCH_SERVER_OPTIONS.filter((item) => item.id === 'tamilott') : WATCH_SERVER_OPTIONS).map((server) => {
+                  const active = (isOttTitleOnly ? 'tamilott' : provider) === server.id;
+                  return (
+                    <button
+                      key={server.id}
+                      type="button"
+                      onClick={() => !isOttTitleOnly && setProvider(server.id)}
+                      disabled={isOttTitleOnly && server.id !== 'tamilott'}
+                      className={`min-h-[4.1rem] rounded-2xl border p-3 text-left transition active:scale-[0.98] ${active ? 'border-blue-400/60 bg-blue-500/15 shadow-lg shadow-blue-950/20' : 'border-white/10 bg-white/[0.035] hover:border-blue-300/35 hover:bg-blue-500/10'} disabled:opacity-70`}
+                    >
+                      <span className={`block text-xs font-black uppercase tracking-[0.12em] ${active ? 'text-blue-100' : 'text-white'}`}>{server.name}</span>
+                      <span className="mt-1 block truncate text-[10px] font-semibold text-zinc-500">{server.label}</span>
+                      {active ? <span className="mt-2 block h-1 w-8 rounded-full bg-blue-400" /> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             {isSeries ? (
               <>
                 <label className="text-sm text-zinc-400">

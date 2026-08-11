@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import Media from '@/models/Media';
+import { fetchTMDB } from '@/lib/tmdb';
 import {
   buildStoredSource,
   resolveEmbedProvider,
@@ -20,6 +21,27 @@ function normalizeType(type) {
 
 function uniqueList(items) {
   return [...new Set((items || []).filter(Boolean))];
+}
+
+async function getImdbIdForProvider({ tmdbId, type }) {
+  if (!tmdbId) return '';
+  const mediaType = normalizeType(type) === 'series' ? 'tv' : 'movie';
+  try {
+    const external = await fetchTMDB(`/${mediaType}/${tmdbId}/external_ids`);
+    if (external?.imdb_id) return external.imdb_id;
+  } catch {}
+
+  try {
+    const base = String(process.env.MOVIES1_BACKEND || process.env.ANCHORHD_BACKEND || 'https://movies1-backend.onrender.com').replace(/\/+$/, '');
+    const url = new URL('/api/tmdb-details', base);
+    url.searchParams.set('tmdbId', String(tmdbId));
+    url.searchParams.set('contentType', mediaType === 'tv' ? 'tv' : 'movie');
+    const response = await fetch(url, { cache: 'no-store', headers: { Accept: 'application/json' } });
+    const data = await response.json().catch(() => ({}));
+    return data?.data?.imdb_id || '';
+  } catch {
+    return '';
+  }
 }
 
 async function checkEmbedUrl(url) {
@@ -151,8 +173,10 @@ export async function GET(request) {
     let sourcesToSave = [];
 
     if (hasValidTmdbId) {
+      const imdbId = await getImdbIdForProvider({ tmdbId, type });
       resolved = resolveEmbedProvider({
         tmdbId,
+        imdbId,
         type,
         season,
         episode,
