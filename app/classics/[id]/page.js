@@ -235,7 +235,8 @@ export default function ClassicPlayerPage() {
     const element = shellRef.current;
     if (!element) return;
     try {
-      if (element.requestFullscreen) await element.requestFullscreen();
+      if (window.jashRequestFullscreen) await window.jashRequestFullscreen(element);
+      else if (element.requestFullscreen) await element.requestFullscreen();
       else if (element.webkitRequestFullscreen) element.webkitRequestFullscreen();
     } catch {}
   }

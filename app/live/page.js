@@ -549,7 +549,8 @@ export default function LiveTVPage() {
     const shell = document.getElementById('live-player-shell');
     if (!shell) return;
     try {
-      if (shell.requestFullscreen) await shell.requestFullscreen();
+      if (window.jashRequestFullscreen) await window.jashRequestFullscreen(shell);
+      else if (shell.requestFullscreen) await shell.requestFullscreen();
       else if (shell.webkitRequestFullscreen) shell.webkitRequestFullscreen();
     } catch {}
   }

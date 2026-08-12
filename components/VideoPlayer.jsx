@@ -470,8 +470,16 @@ export default function VideoPlayer({
     const element = containerRef.current;
     if (!element) return;
     try {
-      if (!document.fullscreenElement) await element.requestFullscreen();
-      else await document.exitFullscreen();
+      if (!document.fullscreenElement) {
+        if (window.jashRequestFullscreen) await window.jashRequestFullscreen(element);
+        else {
+          await element.requestFullscreen?.();
+          await window.jashLockLandscape?.();
+        }
+      } else {
+        await document.exitFullscreen();
+        try { screen?.orientation?.unlock?.(); } catch {}
+      }
     } catch {}
   }, []);
 
@@ -612,19 +620,21 @@ export default function VideoPlayer({
       {settingsPanel ? (
         <>
           <button type="button" aria-label="Close settings" className="absolute inset-0 z-[55] cursor-default" onClick={() => setSettingsPanel(null)} />
-          <div className="absolute bottom-24 right-3 z-[60] w-64 max-w-[92vw] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/95 shadow-2xl backdrop-blur sm:right-6">
+          <div className="absolute inset-x-2 bottom-20 z-[60] max-h-[74dvh] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/95 shadow-2xl backdrop-blur sm:inset-x-auto sm:right-6 sm:w-80 sm:max-w-[80vw]">
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
               <p className="text-sm font-black capitalize">{settingsPanel}</p>
               <button type="button" onClick={() => setSettingsPanel(null)} className="text-zinc-400 hover:text-white">✕</button>
             </div>
-            <div className="max-h-72 overflow-y-auto py-1">
+            <div className="max-h-[calc(74dvh-3.25rem)] overflow-y-auto py-1 overscroll-contain">
               {settingsPanel === 'quality' ? (
                 externalQualityOptions.length ? (
-                  externalQualityOptions.map((option, index) => (
-                    <button key={`${option.label}-${index}`} type="button" onClick={() => changeExternalQuality(index)} className={`${panelButton} ${qualityIndex === index ? 'bg-blue-500/15 text-blue-300' : 'text-zinc-100'}`}>
-                      <span>{option.label}</span><span>{qualityIndex === index ? '✓' : ''}</span>
-                    </button>
-                  ))
+                  <div className="grid grid-cols-2 gap-2 p-2 sm:grid-cols-1">
+                    {externalQualityOptions.map((option, index) => (
+                      <button key={`${option.label}-${index}`} type="button" onClick={() => changeExternalQuality(index)} className={`flex items-center justify-between rounded-xl border px-3 py-3 text-left text-xs font-black transition sm:text-sm ${qualityIndex === index ? 'border-blue-400/50 bg-blue-500/20 text-blue-100' : 'border-white/10 bg-white/[0.04] text-zinc-100 hover:bg-white/10'}`}>
+                        <span className="truncate">{option.label}</span><span className="ml-2 shrink-0">{qualityIndex === index ? '✓' : ''}</span>
+                      </button>
+                    ))}
+                  </div>
                 ) : levels.length ? (
                   <>
                     <button type="button" onClick={() => changeLevel(-1)} className={`${panelButton} ${currentLevel === -1 ? 'bg-blue-500/15 text-blue-300' : 'text-zinc-100'}`}>

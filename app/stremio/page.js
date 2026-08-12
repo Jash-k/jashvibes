@@ -54,22 +54,50 @@ function StremioCard({ item }) {
   return (
     <Link
       href={`/stremio-watch/${item.type}/${encodeURIComponent(item.id)}?source=catalog`}
-      className="group overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 shadow-xl shadow-black/30 transition hover:-translate-y-1 hover:border-fuchsia-400/50 sm:rounded-3xl"
+      className="group w-36 shrink-0 snap-start overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 shadow-xl shadow-black/30 transition hover:-translate-y-1 hover:border-fuchsia-400/50 sm:w-44 sm:rounded-3xl lg:w-48"
     >
       <div className="relative aspect-[2/3] bg-zinc-900">
         {item.posterUrl ? <img src={item.posterUrl} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" /> : <div className="grid h-full place-items-center p-4 text-center text-sm font-black text-zinc-300">{item.title}</div>}
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
-        <div className="absolute left-2 top-2 rounded-full bg-fuchsia-500 px-2 py-1 text-[10px] font-black uppercase text-black">{item.type === 'series' ? 'Series' : 'Movie'}</div>
-        {item.releaseInfo ? <div className="absolute right-2 top-2 rounded-full bg-black/75 px-2 py-1 text-[10px] font-black text-white">{item.releaseInfo}</div> : null}
+        <div className="absolute left-2 top-2 rounded-full bg-fuchsia-500 px-2 py-1 text-[9px] font-black uppercase text-black">{item.type === 'series' ? 'Series' : 'Movie'}</div>
+        {item.releaseInfo ? <div className="absolute right-2 top-2 rounded-full bg-black/75 px-2 py-1 text-[9px] font-black text-white">{item.releaseInfo}</div> : null}
       </div>
-      <div className="space-y-2 p-3 sm:p-4">
-        <h3 className="line-clamp-2 min-h-9 text-sm font-black leading-5 text-white">{item.title}</h3>
-        <div className="flex flex-wrap gap-1">
-          {item.rating ? <span className="rounded-full border border-yellow-300/25 bg-yellow-300/10 px-2 py-0.5 text-[10px] font-bold text-yellow-100">IMDb {item.rating}</span> : null}
-          {(item.genres || []).slice(0, 2).map((genre) => <span key={genre} className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-bold text-zinc-300">{genre}</span>)}
-        </div>
+      <div className="space-y-1.5 p-2.5 sm:p-3">
+        <h3 className="line-clamp-2 min-h-9 text-xs font-black leading-4 text-white sm:text-sm sm:leading-5">{item.title}</h3>
+        <p className="truncate text-[10px] font-semibold text-zinc-500">{item.rating ? `IMDb ${item.rating}` : (item.genres || [])[0] || item.type}</p>
       </div>
     </Link>
+  );
+}
+
+function HorizontalCatalogRow({ catalog, state, onMore }) {
+  const rowRef = useRef(null);
+  const scroll = (direction) => {
+    const node = rowRef.current;
+    if (!node) return;
+    node.scrollBy({ left: direction * Math.max(260, node.clientWidth * 0.86), behavior: 'smooth' });
+  };
+
+  return (
+    <section className="min-w-0 overflow-hidden rounded-[2rem] border border-fuchsia-400/15 bg-white/[0.035] p-3 sm:p-5">
+      <div className="mb-3 flex items-end justify-between gap-3 px-1">
+        <div className="min-w-0">
+          <h2 className="truncate text-xl font-black text-white sm:text-3xl">{catalogLabel(catalog)}</h2>
+          <p className="mt-1 text-xs font-semibold text-zinc-500">{state.catalogName || catalog.name} • {state.items.length} loaded</p>
+        </div>
+        {state.hasMore ? <button type="button" onClick={onMore} disabled={state.loading} className="shrink-0 rounded-full border border-fuchsia-300/30 bg-fuchsia-500/10 px-4 py-2 text-xs font-black text-fuchsia-100 disabled:opacity-60">More</button> : null}
+      </div>
+      {state.error ? <div className="mb-3 rounded-2xl border border-red-500/30 bg-red-950/20 p-3 text-sm text-red-200">{state.error}</div> : null}
+      <div className="relative min-w-0 max-w-full overflow-hidden">
+        <button type="button" onClick={() => scroll(-1)} className="absolute left-1 top-1/2 z-20 hidden h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-fuchsia-300/35 bg-black/85 text-2xl font-black text-fuchsia-100 shadow-xl backdrop-blur transition hover:bg-fuchsia-300 hover:text-black sm:grid" aria-label="Scroll left">‹</button>
+        <div ref={rowRef} className="flex min-w-0 snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain scroll-smooth pb-2 touch-pan-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:px-11">
+          {state.items.map((item) => <StremioCard key={`${item.type}-${item.id}`} item={item} />)}
+          {state.loading ? Array.from({ length: 6 }).map((_, index) => <div key={index} className="w-36 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 sm:w-44 sm:rounded-3xl lg:w-48"><div className="aspect-[2/3] animate-pulse bg-zinc-900" /><div className="space-y-2 p-3"><div className="h-4 animate-pulse rounded bg-zinc-800" /><div className="h-3 w-2/3 animate-pulse rounded bg-zinc-900" /></div></div>) : null}
+        </div>
+        <button type="button" onClick={() => scroll(1)} className="absolute right-1 top-1/2 z-20 hidden h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-fuchsia-300/35 bg-black/85 text-2xl font-black text-fuchsia-100 shadow-xl backdrop-blur transition hover:bg-fuchsia-300 hover:text-black sm:grid" aria-label="Scroll right">›</button>
+      </div>
+      {!state.loading && !state.items.length && !state.error ? <p className="rounded-2xl border border-white/10 bg-black/25 p-5 text-center text-sm text-zinc-400">No items loaded in this catalog.</p> : null}
+    </section>
   );
 }
 
@@ -100,11 +128,8 @@ export default function StremioPage() {
   const [catalogState, setCatalogState] = useState({});
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
-  const sentinelRef = useRef(null);
 
   const activeCatalog = useMemo(() => selectedCatalogs.find((catalog) => catalogKey(catalog) === activeKey) || selectedCatalogs[0] || null, [selectedCatalogs, activeKey]);
-  const activeState = safeCatalogState(activeCatalog ? catalogState[catalogKey(activeCatalog)] : {});
-  const activeItems = activeState.items;
 
   const loadCatalog = useCallback(async (catalog, append = false, filtersOverride = null) => {
     if (!catalog?.id) return;
@@ -193,27 +218,17 @@ export default function StremioPage() {
   }, []);
 
   useEffect(() => {
-    if (!activeCatalog) return;
-    const state = catalogState[catalogKey(activeCatalog)];
-    if (!state?.items?.length && !state?.loading && !state?.error) loadCatalog(activeCatalog, false);
-  }, [activeCatalog, catalogState, loadCatalog]);
+    if (!selectedCatalogs.length) return;
+    for (const catalog of selectedCatalogs) {
+      const state = safeCatalogState(catalogState[catalogKey(catalog)]);
+      if (!state.items.length && !state.loading && !state.error) loadCatalog(catalog, false);
+    }
+  }, [selectedCatalogs, catalogState, loadCatalog]);
 
   useEffect(() => {
     if (!selectedCatalogs.length) return;
     try { window.localStorage.setItem(SELECTED_CATALOGS_KEY, JSON.stringify(selectedCatalogs.map(catalogKey))); } catch {}
   }, [selectedCatalogs]);
-
-  useEffect(() => {
-    const node = sentinelRef.current;
-    if (!node || !activeCatalog) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (!entries[0]?.isIntersecting) return;
-      const state = catalogState[catalogKey(activeCatalog)] || {};
-      if (state.hasMore && !state.loading) loadCatalog(activeCatalog, true);
-    }, { rootMargin: '900px 0px' });
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [activeCatalog, catalogState, loadCatalog]);
 
   function addSelectedCatalog() {
     const option = catalogOptions.find((catalog) => catalogKey(catalog) === pickerValue);
@@ -237,7 +252,7 @@ export default function StremioPage() {
     event?.preventDefault?.();
     const nextFilters = { search: searchDraft.trim(), language: languageFilter, sort: sortFilter, genre: genreFilter };
     setAppliedSearch(nextFilters.search);
-    if (activeCatalog) loadCatalog(activeCatalog, false, nextFilters);
+    selectedCatalogs.forEach((catalog) => loadCatalog(catalog, false, nextFilters));
   }
 
   function clearFilters() {
@@ -247,7 +262,7 @@ export default function StremioPage() {
     setLanguageFilter('');
     setSortFilter('Latest Added');
     setGenreFilter('');
-    if (activeCatalog) loadCatalog(activeCatalog, false, nextFilters);
+    selectedCatalogs.forEach((catalog) => loadCatalog(catalog, false, nextFilters));
   }
 
   return (
@@ -329,24 +344,22 @@ export default function StremioPage() {
         {status === 'error' ? <div className="rounded-3xl border border-red-500/30 bg-red-950/20 p-5 text-red-200">{error}<p className="mt-2 text-xs text-zinc-500">Set STREMIO/STREMIO_HOME/STREMIO_CATALOG to your addon manifest URL.</p></div> : null}
         {status === 'loading' ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-8 text-center text-zinc-400">Loading Stremio addon...</div> : null}
 
-        {activeCatalog ? (
-          <section className="rounded-[2rem] border border-fuchsia-400/15 bg-white/[0.035] p-4 sm:p-5">
-            <div className="mb-4 flex items-end justify-between gap-3">
-              <div>
-                <h2 className="text-2xl font-black text-white sm:text-3xl">{catalogLabel(activeCatalog)}</h2>
-                <p className="mt-1 text-xs font-semibold text-zinc-500">{activeState.catalogName || activeCatalog.name} • {activeItems.length} loaded</p>
-              </div>
-              {activeState.hasMore ? <button type="button" onClick={() => loadCatalog(activeCatalog, true)} disabled={activeState.loading} className="rounded-full border border-fuchsia-300/30 bg-fuchsia-500/10 px-4 py-2 text-xs font-black text-fuchsia-100 disabled:opacity-60">More</button> : null}
-            </div>
-            {activeState.error ? <div className="mb-4 rounded-2xl border border-red-500/30 bg-red-950/20 p-4 text-sm text-red-200">{activeState.error}</div> : null}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-              {activeItems.map((item) => <StremioCard key={`${item.type}-${item.id}`} item={item} />)}
-              {activeState.loading ? Array.from({ length: 6 }).map((_, index) => <div key={index} className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 sm:rounded-3xl"><div className="aspect-[2/3] animate-pulse bg-zinc-900" /><div className="space-y-2 p-3"><div className="h-4 animate-pulse rounded bg-zinc-800" /><div className="h-3 w-2/3 animate-pulse rounded bg-zinc-900" /></div></div>) : null}
-            </div>
-            {!activeState.loading && !activeItems.length && !activeState.error ? <p className="rounded-2xl border border-white/10 bg-black/25 p-5 text-center text-sm text-zinc-400">No items loaded. Click this catalog button again or choose another catalog.</p> : null}
-          </section>
+        {selectedCatalogs.length ? (
+          <div className="space-y-5">
+            {selectedCatalogs.map((catalog) => {
+              const key = catalogKey(catalog);
+              const state = safeCatalogState(catalogState[key]);
+              return (
+                <HorizontalCatalogRow
+                  key={key}
+                  catalog={catalog}
+                  state={state}
+                  onMore={() => loadCatalog(catalog, true)}
+                />
+              );
+            })}
+          </div>
         ) : status === 'ready' ? <div className="rounded-3xl border border-white/10 bg-black/25 p-5 text-center text-sm text-zinc-400">Select catalogs from the dropdown above.</div> : null}
-        <div ref={sentinelRef} className="h-12" />
       </section>
     </main>
   );

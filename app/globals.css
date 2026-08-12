@@ -474,3 +474,31 @@ video:-webkit-full-screen {
   max-height: 100dvh !important;
   object-fit: fill !important;
 }
+
+/* Mobile fullscreen: when the player fullscreen icon is tapped, request landscape.
+   If browser orientation-lock is blocked, this CSS fallback rotates the fullscreen
+   player surface so it behaves like landscape even when system auto-rotate is off. */
+.jash-landscape-fullscreen:fullscreen,
+.jash-landscape-fullscreen:-webkit-full-screen {
+  background: #000 !important;
+}
+
+@media (max-width: 900px) and (orientation: portrait) {
+  .jash-landscape-fullscreen:fullscreen,
+  .jash-landscape-fullscreen:-webkit-full-screen {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    width: 100dvh !important;
+    height: 100dvw !important;
+    max-width: 100dvh !important;
+    max-height: 100dvw !important;
+    transform: translate(-50%, -50%) rotate(90deg) !important;
+    transform-origin: center center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    overflow: hidden !important;
+  }
+}

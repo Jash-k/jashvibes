@@ -158,7 +158,7 @@ function StreamPlayer({ channel, switching, playerRef }) {
     <div ref={playerRef} className="relative overflow-hidden rounded-3xl border bg-black shadow-2xl" style={{ borderColor: channel.border, boxShadow: `0 0 60px ${channel.glow}` }}>
       <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: channel.border, background: `linear-gradient(90deg,${channel.bg},transparent)` }}>
         <div className="flex min-w-0 items-center gap-2"><PulsingDot color={channel.color} />{channel.logo ? <img src={channel.logo} alt="" className="h-4 w-auto object-contain" /> : null}<span className="truncate text-xs font-black uppercase tracking-widest" style={{ color: channel.color }}>{channel.name}</span></div>
-        <button type="button" onClick={() => playerRef.current?.requestFullscreen?.()} className="rounded-lg border border-white/10 px-3 py-1.5 text-[10px] font-black text-zinc-300">⛶</button>
+        <button type="button" onClick={() => playerRef.current && (window.jashRequestFullscreen ? window.jashRequestFullscreen(playerRef.current) : playerRef.current.requestFullscreen?.())} className="rounded-lg border border-white/10 px-3 py-1.5 text-[10px] font-black text-zinc-300">⛶</button>
       </div>
       <div className="relative aspect-video w-full bg-black">{switching ? <div className="absolute inset-0 z-20 grid place-items-center bg-black/90 text-xs font-black uppercase tracking-widest" style={{ color: channel.color }}>Switching…</div> : null}<iframe key={channel.id + channel.url} src={channel.url} className="h-full w-full border-0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen scrolling="no" /></div>
     </div>

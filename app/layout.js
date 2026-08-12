@@ -2,6 +2,7 @@ import './globals.css';
 import 'shaka-player/dist/controls.css';
 import AuthGate from '@/components/AuthGate';
 import PWARegister from '@/components/PWARegister';
+import FullscreenOrientationLock from '@/components/FullscreenOrientationLock';
 
 export const metadata = {
   title: 'JaSH ViBeS',
@@ -63,6 +64,7 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <PWARegister />
+        <FullscreenOrientationLock />
         <AuthGate>{children}</AuthGate>
       </body>
     </html>
