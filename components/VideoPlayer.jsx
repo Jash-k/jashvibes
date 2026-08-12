@@ -533,7 +533,7 @@ export default function VideoPlayer({
     event.target.value = '';
   };
 
-  const controlsButton = 'rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm font-bold text-white transition hover:bg-white/20 active:scale-95';
+  const controlsButton = 'rounded-xl border border-white/10 bg-white/10 px-2 py-1.5 text-[11px] font-bold text-white transition hover:bg-white/20 active:scale-95 sm:px-3 sm:py-2 sm:text-sm';
   const panelButton = 'flex w-full items-center justify-between px-4 py-2.5 text-left text-sm font-semibold transition hover:bg-white/10';
 
   return (
@@ -679,7 +679,7 @@ export default function VideoPlayer({
         </>
       ) : null}
 
-      <div className={`absolute inset-x-0 bottom-0 z-50 bg-gradient-to-t from-black via-black/85 to-transparent p-3 transition duration-300 sm:p-5 ${showControls ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>
+      <div className={`absolute inset-x-0 bottom-0 z-50 bg-gradient-to-t from-black via-black/85 to-transparent p-2 transition duration-300 sm:p-5 ${showControls ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>
         <div className="mb-2 flex justify-between px-1 text-[11px] font-bold text-white/70">
           <span>{formatTime(currentTime)}</span>
           <span>{formatTime(duration)}</span>
@@ -698,10 +698,10 @@ export default function VideoPlayer({
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-3">
             <button type="button" onClick={() => seekBy(-10)} className={`${controlsButton} hidden sm:inline-flex`}>↺10</button>
-            <button type="button" onClick={togglePlay} className="rounded-full bg-white px-4 py-2 text-lg font-black text-black transition hover:scale-105 active:scale-95">
+            <button type="button" onClick={togglePlay} className="rounded-full bg-white px-3 py-1.5 text-base font-black text-black transition hover:scale-105 active:scale-95 sm:px-4 sm:py-2 sm:text-lg">
               {isPlaying ? '❚❚' : '▶'}
             </button>
             <button type="button" onClick={() => seekBy(10)} className={`${controlsButton} hidden sm:inline-flex`}>10↻</button>
@@ -717,11 +717,11 @@ export default function VideoPlayer({
             />
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex max-w-full items-center gap-1 overflow-x-auto sm:gap-2">
             <button type="button" onClick={() => setSettingsPanel('speed')} className={controlsButton}>{playbackRate === 1 ? '1x' : `${playbackRate}x`}</button>
             <button type="button" onClick={() => setSettingsPanel('subtitles')} className={`${controlsButton} ${currentSubtitleId !== -1 ? 'text-blue-200' : ''}`}>CC</button>
             <button type="button" onClick={() => setSettingsPanel('audio')} className={controlsButton}>Audio</button>
-            <button type="button" onClick={() => setSettingsPanel('quality')} className={`${controlsButton} max-w-[7rem] truncate sm:max-w-[9rem]`}>{qualityButtonLabel}</button>
+            <button type="button" onClick={() => setSettingsPanel('quality')} className={`${controlsButton} max-w-[6rem] truncate sm:max-w-[9rem]`}>{qualityButtonLabel}</button>
             <button type="button" onClick={toggleFullscreen} className={controlsButton}>⛶</button>
           </div>
         </div>

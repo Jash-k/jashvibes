@@ -2,8 +2,8 @@ import Link from 'next/link';
 
 export default function BrandLogo({ href = '/', size = 'hero', className = '' }) {
   const sizes = {
-    hero: 'h-[5.25rem] w-[5.25rem] sm:h-[7.25rem] sm:w-[7.25rem] lg:h-[7.25rem] lg:w-[7.25rem]',
-    compact: 'h-14 w-14 sm:h-16 sm:w-16 lg:h-20 lg:w-20',
+    hero: 'h-12 w-12 sm:h-[7.25rem] sm:w-[7.25rem] lg:h-[7.25rem] lg:w-[7.25rem]',
+    compact: 'h-10 w-10 sm:h-16 sm:w-16 lg:h-20 lg:w-20',
   };
 
   return (

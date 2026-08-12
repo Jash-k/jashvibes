@@ -275,26 +275,26 @@ export default function StremioPlayerPage() {
 
   return (
     <main className="min-h-dvh bg-[#050012] text-zinc-100">
-      <header className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/92 px-4 py-4 backdrop-blur-xl sm:py-5">
+      <header className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/92 px-3 py-2 backdrop-blur-xl sm:px-4 sm:py-5">
         <div className="mx-auto grid max-w-7xl gap-3 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
           <div className="flex items-center justify-between gap-2 lg:justify-start">
             <div className="flex items-center gap-2">
-              <a href="/stremio?home=1" onClick={(event) => { event.preventDefault(); window.location.assign('/stremio?home=1'); }} aria-label="Stremio home" title="Stremio home" className="rounded-full border border-fuchsia-400/20 bg-fuchsia-500/10 px-3 py-2 text-xs font-black text-fuchsia-100 transition hover:border-fuchsia-400/60">📡 Stremio</a>
-              <a href="/" onClick={(event) => { event.preventDefault(); window.location.assign('/'); }} aria-label="JaSH ViBeS home" title="JaSH ViBeS home" className="rounded-full border border-white/10 px-3 py-2 text-xs font-black text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">⌂ JaSH</a>
+              <a href="/stremio?home=1" onClick={(event) => { event.preventDefault(); window.location.assign('/stremio?home=1'); }} aria-label="Stremio home" title="Stremio home" className="rounded-full border border-fuchsia-400/20 bg-fuchsia-500/10 px-2 py-1.5 text-[10px] font-black text-fuchsia-100 transition hover:border-fuchsia-400/60 sm:px-3 sm:py-2 sm:text-xs">📡 Stremio</a>
+              <a href="/" onClick={(event) => { event.preventDefault(); window.location.assign('/'); }} aria-label="JaSH ViBeS home" title="JaSH ViBeS home" className="rounded-full border border-white/10 px-2 py-1.5 text-[10px] font-black text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white sm:px-3 sm:py-2 sm:text-xs">⌂ JaSH</a>
             </div>
             <p className="text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-300 lg:hidden">{stremioSource === 'watch' ? 'Provider' : 'Catalog'}</p>
           </div>
           <div className="flex flex-col items-center justify-center gap-1 text-center">
             <BrandLogo />
-            <p className="text-[10px] font-black uppercase tracking-[0.26em] text-fuchsia-300 sm:text-xs sm:tracking-[0.32em]">{stremioSource === 'watch' ? 'Provider Player' : 'Catalog Player'}</p>
+            <p className="text-[9px] font-black uppercase tracking-[0.20em] text-fuchsia-300 sm:text-xs sm:tracking-[0.32em]">{stremioSource === 'watch' ? 'Provider Player' : 'Catalog Player'}</p>
           </div>
           <span className="hidden justify-self-end text-[10px] font-black uppercase tracking-[0.30em] text-fuchsia-300 lg:block">Stremio</span>
         </div>
       </header>
 
-      <section className="mx-auto grid max-w-7xl gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[1.45fr_0.75fr] lg:px-8">
-        <div className="space-y-4">
-          <div ref={shellRef} className="classics-player-shell overflow-hidden rounded-3xl border border-white/10 bg-black shadow-2xl shadow-black fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0">
+      <section className="mx-auto grid max-w-7xl gap-3 px-2 py-3 sm:gap-5 sm:px-6 sm:py-5 lg:grid-cols-[1.45fr_0.75fr] lg:px-8">
+        <div className="space-y-3 sm:space-y-4">
+          <div ref={shellRef} className="classics-player-shell overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0 sm:rounded-3xl">
             <div className="relative aspect-video h-full w-full bg-black fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:aspect-auto">
               {directStremioActive ? (
                 <VideoPlayer
@@ -331,7 +331,7 @@ export default function StremioPlayerPage() {
             </div>
           ) : null}
 
-          <div className="rounded-3xl border border-white/10 bg-zinc-950/80 p-4">
+          <div className="rounded-2xl border border-white/10 bg-zinc-950/80 p-3 sm:rounded-3xl sm:p-4">
             <h1 className="text-2xl font-black text-white">{item?.title || 'Stremio'}</h1>
             {currentEpisodeInfo ? <p className="mt-1 text-sm text-fuchsia-200">S{currentEpisodeInfo.season} E{currentEpisodeInfo.episode} • {currentEpisodeInfo.title}</p> : null}
             <p className="mt-2 text-sm leading-6 text-zinc-400">{currentEpisodeInfo?.synopsis || item?.synopsis || ''}</p>

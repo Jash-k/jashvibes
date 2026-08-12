@@ -568,14 +568,6 @@ export default function LandingPage() {
                 >
                   MiX💿
                 </button>
-                <button
-                  type="button"
-                  onClick={syncLatestReleases}
-                  disabled={syncStatus === 'syncing'}
-                  className="rounded-full border border-yellow-400/25 bg-yellow-400/10 px-3 py-2 text-xs font-black text-yellow-100 transition hover:border-yellow-300 hover:bg-yellow-400/20 disabled:cursor-wait disabled:opacity-60"
-                >
-                  {syncStatus === 'syncing' ? 'Syncing…' : syncStatus === 'ready' ? 'Synced' : 'Sync'}
-                </button>
                 <Link
                   href="/music"
                   aria-label="Music"
@@ -619,7 +611,19 @@ export default function LandingPage() {
         <div className="mb-6 rounded-2xl border border-white/10 bg-zinc-950/70 p-4 shadow-2xl shadow-black/20 sm:mb-8 sm:rounded-3xl sm:p-5">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h2 className="text-2xl font-black text-white">{showOtt ? 'MiX Catalog' : 'Latest Releases'}</h2>
+              <div className="flex flex-wrap items-center gap-3">
+                <h2 className="text-2xl font-black text-white">{showOtt ? 'MiX Catalog' : 'Latest Releases'}</h2>
+                {!showOtt ? (
+                  <button
+                    type="button"
+                    onClick={syncLatestReleases}
+                    disabled={syncStatus === 'syncing'}
+                    className="rounded-full border border-yellow-400/25 bg-yellow-400/10 px-3 py-1.5 text-xs font-black text-yellow-100 transition hover:border-yellow-300 hover:bg-yellow-400/20 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {syncStatus === 'syncing' ? 'Syncing…' : syncStatus === 'ready' ? 'Synced' : 'Sync'}
+                  </button>
+                ) : null}
+              </div>
               <p className="mt-2 text-sm leading-6 text-zinc-400">
                 {showOtt
                   ? `Tamil movies and dubbed titles. Last loaded: ${formatDateTime(ottUpdatedAt)}.`

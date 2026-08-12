@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 
 const STORAGE_KEY = 'jash_theatre_access_token';
 
@@ -53,6 +54,8 @@ async function fetchJsonWithRetry(url, options = {}, retries = 2) {
 
 function DayNightToggle() {
   const [mode, setMode] = useState('day');
+  const pathname = usePathname();
+  const compactMobile = pathname !== '/';
 
   useEffect(() => {
     const saved = window.localStorage.getItem('jash_theme_mode') || 'day';
@@ -71,7 +74,7 @@ function DayNightToggle() {
     <button
       type="button"
       onClick={toggleMode}
-      className="fixed right-4 top-[calc(0.75rem+env(safe-area-inset-top))] z-[80] rounded-full border border-white/10 bg-black/70 px-3 py-2 text-xs font-black text-zinc-200 shadow-xl shadow-black/30 backdrop-blur transition hover:border-yellow-400/50 day-night-toggle"
+      className={`fixed z-[80] rounded-full border border-white/10 bg-black/70 font-black text-zinc-200 shadow-xl shadow-black/30 backdrop-blur transition hover:border-yellow-400/50 day-night-toggle ${compactMobile ? 'right-2 top-[calc(0.45rem+env(safe-area-inset-top))] px-2 py-1 text-[10px] sm:right-4 sm:top-[calc(0.75rem+env(safe-area-inset-top))] sm:px-3 sm:py-2 sm:text-xs' : 'right-4 top-[calc(0.75rem+env(safe-area-inset-top))] px-3 py-2 text-xs'}`}
       title="Switch day/night mode"
     >
       {mode === 'day' ? '☀ Day' : '☾ Night'}
