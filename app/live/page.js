@@ -11,6 +11,16 @@ import {
   getChannelCatalogIds,
   sortChannelsForCatalog,
 } from '@/lib/liveCatalogs';
+import {
+  JIO_COOKIE_OVERRIDE_KEY,
+  appendJioCookieToUrl,
+  buildJioProxyUrl,
+  getJioCookieExpiry,
+  isJioChannel,
+  isJioCookieValid,
+  normalizeJioCookie,
+  restoreJioProxyUrl,
+} from '@/lib/jioPlayback';
 
 const FAVORITES_KEY = 'jash_live_tv_favorites';
 const LIVE_CACHE_KEY = 'jash:live:v10-manual-catalogs';
@@ -62,28 +72,47 @@ function buildClearKeys(channel) {
   return {};
 }
 
-function appendCookieToken(uri = '', cookie = '') {
-  const token = String(cookie || '').trim();
-  if (!token) return uri;
-
-  const cookieName = token.includes('__hdnea__') ? '__hdnea__' : token.includes('hdnea') ? 'hdnea' : '';
-  if (!cookieName) return uri;
-
-  const tokenValue = token.includes('=') ? token.slice(token.indexOf('=') + 1) : token;
-  if (!tokenValue) return uri;
-
-  // Stream4Liv appends the Akamai token raw, not URL-encoded. Encoding the
-  // slash in acl=/* can make Jio respond with BAD_HTTP_STATUS / Shaka 1001.
-  if (uri.includes(`${cookieName}=`)) {
-    return uri.replace(new RegExp(`(${cookieName}=)[^&"'\\s;]+`), `$1${tokenValue}`);
+function getLocalJioCookie() {
+  if (typeof window === 'undefined') return '';
+  try {
+    const cookie = normalizeJioCookie(window.localStorage.getItem(JIO_COOKIE_OVERRIDE_KEY) || '');
+    return isJioCookieValid(cookie) ? cookie : '';
+  } catch {
+    return '';
   }
-
-  return `${uri}${uri.includes('?') ? '&' : '?'}${cookieName}=${tokenValue}`;
 }
 
-function isJioLike(channel, uri = '') {
-  const text = `${channel?.name || ''} ${channel?.url || ''} ${channel?.logo || ''} ${channel?.source || ''} ${channel?.sourceId || ''} ${uri}`.toLowerCase();
-  return text.includes('jio') || text.includes('jiotv') || text.includes('vijay');
+async function resolveJioAccess(channel = {}, { force = false } = {}) {
+  const fallbackUrl = String(channel.url || '');
+  const localCookie = getLocalJioCookie();
+  if (localCookie) return { cookie: localCookie, playbackUrl: fallbackUrl, scoped: false };
+
+  const channelCookie = normalizeJioCookie(channel.cookie || '');
+  const channelCookieIsScoped = channelCookie.includes('/bpk-tv/') || (channelCookie.includes('acl=') && !channelCookie.includes('acl=/*'));
+  if (!force && channelCookieIsScoped && isJioCookieValid(channelCookie)) {
+    return { cookie: channelCookie, playbackUrl: fallbackUrl, scoped: true };
+  }
+
+  try {
+    const params = new URLSearchParams();
+    if (force) params.set('force', '1');
+    if (channel.tvgId) params.set('channelId', channel.tvgId);
+    if (channel.name) params.set('name', channel.name);
+    if (fallbackUrl) params.set('channelUrl', fallbackUrl);
+    const response = await fetch(`/api/live-jio?${params.toString()}`, { cache: 'no-store' });
+    const data = await response.json().catch(() => ({}));
+    const cookie = normalizeJioCookie(data.cookie || '');
+    const playbackUrl = String(data.playbackUrl || fallbackUrl);
+    if (response.ok && isJioCookieValid(cookie) && isJioChannel({ url: playbackUrl })) {
+      return { cookie, playbackUrl, scoped: Boolean(data.scoped) };
+    }
+  } catch {}
+
+  return {
+    cookie: isJioCookieValid(channelCookie) ? channelCookie : '',
+    playbackUrl: fallbackUrl,
+    scoped: channelCookieIsScoped,
+  };
 }
 
 function isPocketChannel(channel) {
@@ -217,6 +246,7 @@ export default function LiveTVPage() {
     const container = playerContainerRef.current;
     const pocketChannel = isPocketChannel(active);
     const pocketProxyEnabled = pocketChannel && (/^http:\/\//i.test(active.url || '') || pocketProxyIds.includes(active.id));
+    const activeUsesJio = isJioChannel(active);
 
     async function destroyPlayerInstances(player, overlay) {
       const targetOverlay = overlay || null;
@@ -255,7 +285,7 @@ export default function LiveTVPage() {
         setPlayerStatus('error');
         setPlayerError('Channel switch timed out. Try the channel again or choose another source.');
         destroyPlayerInstances(localPlayer, localOverlay);
-      }, 25000);
+      }, activeUsesJio ? 40000 : 25000);
 
       await destroyCurrentPlayer();
       if (!isCurrentLoad()) return;
@@ -323,6 +353,16 @@ export default function LiveTVPage() {
           },
         });
 
+        let jioAccess = activeUsesJio
+          ? await resolveJioAccess(active)
+          : { cookie: '', playbackUrl: active.url, scoped: false };
+        let jioCookie = jioAccess.cookie;
+        let jioPlaybackUrl = jioAccess.playbackUrl || active.url;
+        let jioProxyEnabled = false;
+        if (activeUsesJio && !jioCookie) {
+          throw new Error('No valid Jio token is available. Add a fresh __hdnea__ token in Live Service → Tools.');
+        }
+
         const clearKeys = buildClearKeys(active);
         player.configure({
           drm: Object.keys(clearKeys).length ? { clearKeys } : {},
@@ -343,40 +383,42 @@ export default function LiveTVPage() {
 
         player.getNetworkingEngine()?.registerRequestFilter((requestType, request) => {
           const uri = request.uris?.[0] || '';
-          const jioLike = isJioLike(active, uri);
-          const hotstarLike = uri.includes('hotstar.com');
-          const fancodeLike = uri.includes('fancode.com') || uri.includes('fblive.fancode.com') || normalize(active.category) === 'fancode' || normalize(active.name).includes('fancode');
+          const originalUri = restoreJioProxyUrl(uri, window.location.origin);
+          const jioLike = isJioChannel(active, originalUri);
+          const hotstarLike = originalUri.includes('hotstar.com');
+          const fancodeLike = originalUri.includes('fancode.com') || originalUri.includes('fblive.fancode.com') || normalize(active.category) === 'fancode' || normalize(active.name).includes('fancode');
 
           if (active.headers && typeof active.headers === 'object') {
             Object.entries(active.headers).forEach(([key, val]) => {
               if (!key || val == null || /^cookie$/i.test(key)) return;
+              // Browsers cannot set these forbidden headers. The Jio proxy sets
+              // them server-side during fallback instead.
+              if (jioLike && /^(?:user-agent|referer|referrer)$/i.test(key)) return;
               request.headers[key] = String(val);
             });
           }
 
-          if (active.referer) request.headers.Referer = active.referer;
-          else if (jioLike) request.headers.Referer = 'https://www.jiotv.co/';
-          else if (hotstarLike) request.headers.Referer = 'https://www.hotstar.com/';
-          else if (fancodeLike) request.headers.Referer = 'https://www.fancode.com/';
+          if (!jioLike) {
+            if (active.referer) request.headers.Referer = active.referer;
+            else if (hotstarLike) request.headers.Referer = 'https://www.hotstar.com/';
+            else if (fancodeLike) request.headers.Referer = 'https://www.fancode.com/';
 
-          const userAgent = active.userAgent ||
-            (jioLike ? 'plaYtv/7.1.5 (Linux;Android 13) ExoPlayerLib/2.11.6' : '') ||
-            (fancodeLike ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' : '');
-          if (userAgent) request.headers['User-Agent'] = userAgent;
+            const userAgent = active.userAgent ||
+              (fancodeLike ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' : '');
+            if (userAgent) request.headers['User-Agent'] = userAgent;
+          }
 
-          let nextUri = uri;
-          if (
-            active.cookie &&
-            (jioLike || (hotstarLike && !uri.includes('?'))) &&
-            (requestType === shaka.net.NetworkingEngine.RequestType.MANIFEST || requestType === shaka.net.NetworkingEngine.RequestType.SEGMENT)
-          ) {
-            nextUri = appendCookieToken(uri, active.cookie);
-            request.uris[0] = nextUri;
+          let nextUri = originalUri;
+          if (jioLike && jioCookie &&
+            (requestType === shaka.net.NetworkingEngine.RequestType.MANIFEST || requestType === shaka.net.NetworkingEngine.RequestType.SEGMENT)) {
+            // This is Stream4Liv's core technique: append the current Akamai
+            // token to the MPD and every segment request without URL-encoding acl=/*.
+            nextUri = appendJioCookieToUrl(originalUri, jioCookie);
+            request.uris[0] = jioProxyEnabled ? buildJioProxyUrl(nextUri, jioCookie) : nextUri;
           }
 
           if (pocketProxyEnabled && /^https?:\/\//i.test(nextUri)) {
             const fallbackReferer = active.referer ||
-              (jioLike ? 'https://www.jiotv.co/' : '') ||
               (hotstarLike ? 'https://www.hotstar.com/' : '') ||
               (fancodeLike ? 'https://www.fancode.com/' : '');
             request.uris[0] = buildPocketProxyUrl(nextUri, active, fallbackReferer);
@@ -387,6 +429,7 @@ export default function LiveTVPage() {
         });
 
         player.getNetworkingEngine()?.registerResponseFilter((requestType, response) => {
+          if (jioProxyEnabled && response?.uri) response.uri = restoreJioProxyUrl(response.uri, window.location.origin);
           if (pocketProxyEnabled && response?.uri) response.uri = restorePocketProxyUri(response.uri);
         });
 
@@ -394,6 +437,11 @@ export default function LiveTVPage() {
           if (!isCurrentLoad()) return;
           const detail = event.detail;
           console.error('[live-tv] Shaka error:', detail);
+          if (activeUsesJio && !jioProxyEnabled) {
+            setPlayerStatus('loading');
+            setPlayerError(`Direct Jio request failed (${detail?.code || 'network'}). Refreshing token and trying the secure Jio route…`);
+            return;
+          }
           if (loadTimeout) window.clearTimeout(loadTimeout);
           if (pocketChannel && !pocketProxyEnabled && /^https?:\/\//i.test(active.url || '')) {
             setPlayerStatus('loading');
@@ -411,16 +459,37 @@ export default function LiveTVPage() {
 
         setPlayerStatus('loading');
         const mimeType = active.format === 'hls' ? 'application/x-mpegurl' : undefined;
-        await player.load(active.url, undefined, mimeType);
+        const directUrl = activeUsesJio ? appendJioCookieToUrl(jioPlaybackUrl, jioCookie) : active.url;
+        try {
+          await player.load(directUrl, undefined, mimeType);
+        } catch (directError) {
+          if (!activeUsesJio || !isCurrentLoad()) throw directError;
+          setPlayerStatus('loading');
+          setPlayerError('Direct Jio playback failed. Refreshing the token and trying the secure server route…');
+          jioAccess = await resolveJioAccess(active, { force: true });
+          jioCookie = jioAccess.cookie;
+          jioPlaybackUrl = jioAccess.playbackUrl || active.url;
+          if (!jioCookie) throw new Error('Jio token refresh failed. Paste a current __hdnea__ token in Live Service → Tools.');
+          jioProxyEnabled = true;
+          await player.unload().catch(() => {});
+          const proxiedUrl = buildJioProxyUrl(appendJioCookieToUrl(jioPlaybackUrl, jioCookie), jioCookie);
+          await player.load(proxiedUrl, undefined, mimeType);
+        }
         if (!isCurrentLoad()) return;
 
         if (loadTimeout) window.clearTimeout(loadTimeout);
+        setPlayerError('');
         setPlayerStatus('ready');
         video.play().catch(() => {});
       } catch (err) {
         if (loadTimeout) window.clearTimeout(loadTimeout);
         if (!isCurrentLoad()) return;
         console.error('[live-tv] Player load failed:', err);
+        if (activeUsesJio) {
+          setPlayerStatus('error');
+          setPlayerError(`Jio playback failed${err?.code ? ` (Shaka ${err.code})` : ''}. The token may be expired or Jio may be blocking this network. Refresh the token in Live Service → Tools.`);
+          return;
+        }
         if (pocketChannel && !pocketProxyEnabled && /^https?:\/\//i.test(active.url || '')) {
           setPlayerStatus('loading');
           setPlayerError('Direct Pocket playback failed. Retrying Pocket route...');
@@ -757,7 +826,7 @@ function ServicePreviewPlayer({ channel }) {
         setStatus('error');
         setError('Preview timed out. Try channel in main panel or another source.');
         destroy();
-      }, 18000);
+      }, isJioChannel(channel) ? 40000 : 18000);
 
       try {
         video.pause();
@@ -780,6 +849,15 @@ function ServicePreviewPlayer({ channel }) {
           await player.attach(video);
           if (cancelled || loadSeqRef.current !== seq) return;
 
+          const jioPlayback = isJioChannel(channel);
+          let jioAccess = jioPlayback
+            ? await resolveJioAccess(channel)
+            : { cookie: '', playbackUrl: channel.url, scoped: false };
+          let jioCookie = jioAccess.cookie;
+          let jioPlaybackUrl = jioAccess.playbackUrl || channel.url;
+          let jioProxyEnabled = false;
+          if (jioPlayback && !jioCookie) throw new Error('No valid Jio token is available. Add one in Tools.');
+
           const clearKeys = buildClearKeys(channel);
           player.configure({
             drm: Object.keys(clearKeys).length ? { clearKeys } : {},
@@ -789,36 +867,37 @@ function ServicePreviewPlayer({ channel }) {
 
           player.getNetworkingEngine()?.registerRequestFilter((requestType, request) => {
             const uri = request.uris?.[0] || '';
-            const jioLike = isJioLike(channel, uri);
-            const hotstarLike = uri.includes('hotstar.com');
-            const fancodeLike = uri.includes('fancode.com') || uri.includes('fblive.fancode.com') || normalize(channel.category) === 'fancode' || normalize(channel.name).includes('fancode');
+            const originalUri = restoreJioProxyUrl(uri, window.location.origin);
+            const jioLike = isJioChannel(channel, originalUri);
+            const hotstarLike = originalUri.includes('hotstar.com');
+            const fancodeLike = originalUri.includes('fancode.com') || originalUri.includes('fblive.fancode.com') || normalize(channel.category) === 'fancode' || normalize(channel.name).includes('fancode');
 
             if (channel.headers && typeof channel.headers === 'object') {
               Object.entries(channel.headers).forEach(([key, val]) => {
                 if (!key || val == null || /^cookie$/i.test(key)) return;
+                if (jioLike && /^(?:user-agent|referer|referrer)$/i.test(key)) return;
                 request.headers[key] = String(val);
               });
             }
 
-            if (channel.referer) request.headers.Referer = channel.referer;
-            else if (jioLike) request.headers.Referer = 'https://www.jiotv.co/';
-            else if (hotstarLike) request.headers.Referer = 'https://www.hotstar.com/';
-            else if (fancodeLike) request.headers.Referer = 'https://www.fancode.com/';
+            if (!jioLike) {
+              if (channel.referer) request.headers.Referer = channel.referer;
+              else if (hotstarLike) request.headers.Referer = 'https://www.hotstar.com/';
+              else if (fancodeLike) request.headers.Referer = 'https://www.fancode.com/';
+              const userAgent = channel.userAgent ||
+                (fancodeLike ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36' : '');
+              if (userAgent) request.headers['User-Agent'] = userAgent;
+            }
 
-            const userAgent = channel.userAgent ||
-              (jioLike ? 'plaYtv/7.1.5 (Linux;Android 13) ExoPlayerLib/2.11.6' : '') ||
-              (fancodeLike ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36' : '');
-            if (userAgent) request.headers['User-Agent'] = userAgent;
-
-            let nextUri = uri;
-            if (channel.cookie && (jioLike || (hotstarLike && !uri.includes('?'))) &&
+            let nextUri = originalUri;
+            if (jioLike && jioCookie &&
               (requestType === shaka.net.NetworkingEngine.RequestType.MANIFEST || requestType === shaka.net.NetworkingEngine.RequestType.SEGMENT)) {
-              nextUri = appendCookieToken(uri, channel.cookie);
-              request.uris[0] = nextUri;
+              nextUri = appendJioCookieToUrl(originalUri, jioCookie);
+              request.uris[0] = jioProxyEnabled ? buildJioProxyUrl(nextUri, jioCookie) : nextUri;
             }
 
             if (isPocketChannel(channel) && /^https?:\/\//i.test(nextUri)) {
-              const fallbackReferer = channel.referer || (jioLike ? 'https://www.jiotv.co/' : '') || (hotstarLike ? 'https://www.hotstar.com/' : '') || (fancodeLike ? 'https://www.fancode.com/' : '');
+              const fallbackReferer = channel.referer || (hotstarLike ? 'https://www.hotstar.com/' : '') || (fancodeLike ? 'https://www.fancode.com/' : '');
               request.uris[0] = buildPocketProxyUrl(nextUri, channel, fallbackReferer);
               delete request.headers['User-Agent'];
               delete request.headers.Referer;
@@ -827,17 +906,36 @@ function ServicePreviewPlayer({ channel }) {
           });
 
           player.getNetworkingEngine()?.registerResponseFilter((requestType, response) => {
+            if (jioProxyEnabled && response?.uri) response.uri = restoreJioProxyUrl(response.uri, window.location.origin);
             if (isPocketChannel(channel) && response?.uri) response.uri = restorePocketProxyUri(response.uri);
           });
 
           player.addEventListener('error', (event) => {
             if (cancelled || loadSeqRef.current !== seq) return;
             const detail = event.detail;
+            if (jioPlayback && !jioProxyEnabled) {
+              setStatus('loading');
+              setError('Refreshing Jio token and trying the secure route…');
+              return;
+            }
             setStatus('error');
             setError(`Preview error ${detail?.code || ''}`);
           });
 
-          await player.load(channel.url, undefined, channel.format === 'hls' ? 'application/x-mpegurl' : undefined);
+          const mimeType = channel.format === 'hls' ? 'application/x-mpegurl' : undefined;
+          const directUrl = jioPlayback ? appendJioCookieToUrl(jioPlaybackUrl, jioCookie) : channel.url;
+          try {
+            await player.load(directUrl, undefined, mimeType);
+          } catch (directError) {
+            if (!jioPlayback || cancelled || loadSeqRef.current !== seq) throw directError;
+            jioAccess = await resolveJioAccess(channel, { force: true });
+            jioCookie = jioAccess.cookie;
+            jioPlaybackUrl = jioAccess.playbackUrl || channel.url;
+            if (!jioCookie) throw new Error('Jio token refresh failed. Add a fresh token in Tools.');
+            jioProxyEnabled = true;
+            await player.unload().catch(() => {});
+            await player.load(buildJioProxyUrl(appendJioCookieToUrl(jioPlaybackUrl, jioCookie), jioCookie), undefined, mimeType);
+          }
         } else {
           video.src = channel.url;
           video.load();
@@ -845,6 +943,7 @@ function ServicePreviewPlayer({ channel }) {
 
         if (cancelled || loadSeqRef.current !== seq) return;
         if (timeout) window.clearTimeout(timeout);
+        setError('');
         setStatus('ready');
         video.play().catch(() => {});
       } catch (err) {
@@ -904,10 +1003,22 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
   const [previewChannel, setPreviewChannel] = useState(null);
   const [sourceForm, setSourceForm] = useState({ label: '', url: '', type: 'm3u', priority: 50 });
   const [importText, setImportText] = useState('');
+  const [jioCookieText, setJioCookieText] = useState('');
+  const [jioTokenStatus, setJioTokenStatus] = useState('');
 
   useEffect(() => {
     if (!open) return;
     try { setToken(window.sessionStorage.getItem(SERVICE_TOKEN_KEY) || ''); } catch {}
+    try {
+      const savedCookie = normalizeJioCookie(window.localStorage.getItem(JIO_COOKIE_OVERRIDE_KEY) || '');
+      setJioCookieText(savedCookie);
+      const expiresAt = getJioCookieExpiry(savedCookie);
+      setJioTokenStatus(savedCookie
+        ? isJioCookieValid(savedCookie)
+          ? `Browser override active${expiresAt ? ` until ${new Date(expiresAt).toLocaleString()}` : ''}.`
+          : 'Saved browser override is expired.'
+        : 'Automatic public token mode is active.');
+    } catch {}
   }, [open]);
 
   const api = async (path, options = {}) => {
@@ -1186,6 +1297,39 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
     setTab('duplicates');
   }
 
+  function saveJioCookieOverride() {
+    const cookie = normalizeJioCookie(jioCookieText);
+    if (!cookie || !isJioCookieValid(cookie)) {
+      setJioTokenStatus('Invalid or expired token. Paste the complete __hdnea__=st=…~exp=…~acl=…~hmac=… value.');
+      return;
+    }
+    window.localStorage.setItem(JIO_COOKIE_OVERRIDE_KEY, cookie);
+    setJioCookieText(cookie);
+    const expiresAt = getJioCookieExpiry(cookie);
+    setJioTokenStatus(`Browser override saved${expiresAt ? `; valid until ${new Date(expiresAt).toLocaleString()}` : ''}.`);
+    setMessage('Jio browser token saved. Close the service panel or reselect the channel to retry playback.');
+  }
+
+  function clearJioCookieOverride() {
+    window.localStorage.removeItem(JIO_COOKIE_OVERRIDE_KEY);
+    setJioCookieText('');
+    setJioTokenStatus('Browser override cleared. Automatic public token mode is active.');
+    setMessage('Jio override cleared.');
+  }
+
+  async function checkAutomaticJioToken() {
+    try {
+      setJioTokenStatus('Refreshing automatic Jio token…');
+      const response = await fetch('/api/live-jio?force=1', { cache: 'no-store' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.available) throw new Error(data.error || 'No token available');
+      const expiresAt = Number(data.expiresAtMs || 0);
+      setJioTokenStatus(`Automatic token available${expiresAt ? ` until ${new Date(expiresAt).toLocaleString()}` : ''}.`);
+    } catch (err) {
+      setJioTokenStatus(`Automatic token check failed: ${err.message || 'unknown error'}`);
+    }
+  }
+
   async function exportBackup() {
     const data = await api('/api/live-service/export');
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -1356,6 +1500,15 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
               </div> : null}
 
               {tab === 'tools' ? <div className="space-y-4">
+                <div className="rounded-3xl border border-yellow-300/20 bg-yellow-500/[0.07] p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div><p className="text-sm font-black text-yellow-100">Jio playback token</p><p className="mt-1 max-w-2xl text-xs leading-5 text-zinc-400">Playback automatically refreshes the public Stream4Liv-compatible token. If that feed is down, paste a current <code>__hdnea__</code> token here. The override stays only in this browser.</p></div>
+                    <button type="button" onClick={checkAutomaticJioToken} className="rounded-full border border-yellow-300/30 px-3 py-1.5 text-xs font-black text-yellow-100">Check automatic token</button>
+                  </div>
+                  <textarea value={jioCookieText} onChange={(event) => setJioCookieText(event.target.value)} placeholder="__hdnea__=st=…~exp=…~acl=/*~hmac=…" className="mt-3 h-24 w-full rounded-2xl border border-white/10 bg-black p-3 font-mono text-xs text-white outline-none focus:border-yellow-400" />
+                  <div className="mt-2 flex flex-wrap items-center gap-2"><button type="button" onClick={saveJioCookieOverride} className="rounded-full bg-yellow-400 px-4 py-2 text-xs font-black text-black">Save Jio override</button><button type="button" onClick={clearJioCookieOverride} className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-zinc-300">Use automatic token</button></div>
+                  {jioTokenStatus ? <p className="mt-3 rounded-xl bg-black/25 p-2 text-xs text-zinc-300">{jioTokenStatus}</p> : null}
+                </div>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"><button onClick={() => purge('unused')} className="rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white">Purge unused</button><button onClick={() => purge('broken')} className="rounded-2xl border border-red-400/30 px-4 py-3 text-sm font-black text-red-200">Purge broken</button><button onClick={checkBroken} className="rounded-2xl border border-green-400/30 px-4 py-3 text-sm font-black text-green-200">Check broken</button><button onClick={loadDuplicates} className="rounded-2xl border border-yellow-400/30 px-4 py-3 text-sm font-black text-yellow-100">Find duplicates</button><button onClick={addProfile} className="rounded-2xl border border-purple-400/30 px-4 py-3 text-sm font-black text-purple-100">Add profile</button><button onClick={exportBackup} className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-black">Export backup</button></div>
                 <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="Paste exported JSON backup here" className="h-36 w-full rounded-2xl border border-white/10 bg-black p-3 text-xs text-white" />
                 <button onClick={importBackup} className="rounded-2xl bg-purple-500 px-4 py-3 text-sm font-black text-black">Import backup</button>

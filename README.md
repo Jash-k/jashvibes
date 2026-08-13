@@ -1459,3 +1459,22 @@ Only manually mapped channels that are selected, visible, playable, and compatib
 Before the first catalog mapping exists, `/api/live-tv` may return the Jio Tamil source as an initial bootstrap fallback. Once any catalog mapping exists, raw Jio or other source catalogs are never merged into the main feed. If catalog storage is unavailable, the endpoint fails closed rather than assuming the service is unconfigured.
 
 Live Service export format version 2 includes catalog memberships and each membership's position. Import restores and normalizes these values. Cleanup and source deletion preserve mapped channels unless the administrator explicitly deletes/unmaps them.
+
+### Jio playback
+
+Jio DASH playback follows the Stream4Liv-style flow without depending on Stream4Liv's deployment:
+
+1. The server retrieves and validates a current `__hdnea__` token, rejecting expired values.
+2. Mapped Jio channels are hydrated with the current token whenever `/api/live-tv` is loaded, so a token saved during an earlier source sync is not reused indefinitely.
+3. Star Sports channels use Stream4Liv-style channel-specific scoped URLs/tokens when the companion feed provides them.
+4. Before playback, the browser refreshes the token from `/api/live-jio`.
+5. Shaka receives the channel's ClearKey pair and appends the unencoded Akamai token to the MPD and every segment request.
+6. Direct playback is tried first so the request uses the viewer's network/region. If it fails, Shaka retries through the restricted `/api/live-jio` server route, which supplies Jio-compatible headers and accepts only approved Jio CDN hosts.
+
+Open **Live Service → Tools → Jio playback token** to inspect the automatic token or save a browser-only override. You can also configure a server fallback in deployment secrets:
+
+```env
+JIO_LIVE_COOKIE=__hdnea__=st=...~exp=...~acl=/*~hmac=...
+```
+
+Tokens expire regularly. Do not hard-code one in source control. Jio may enforce account, entitlement, geographic, or network restrictions; the application reports those failures but does not bypass access controls.

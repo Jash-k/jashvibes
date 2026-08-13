@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getLiveTVChannels } from '@/lib/liveTv';
+import { getFreshJioCookie, getLiveTVChannels, injectJioCookie } from '@/lib/liveTv';
 import { getLiveCatalogState } from '@/lib/liveService';
+import { isJioChannel } from '@/lib/jioPlayback';
 import { buildCatalogSummary, LIVE_CATALOGS } from '@/lib/liveCatalogs';
 import LiveSource from '@/models/LiveSource';
 
@@ -54,9 +55,14 @@ export async function GET(request) {
         // only source for the main panel—even if the active profile currently
         // has zero visible channels. Raw source channels must never leak back in.
         if (state.configured) {
+          let hydratedChannels = state.channels;
+          if (hydratedChannels.some((channel) => isJioChannel(channel))) {
+            const jioCookie = await getFreshJioCookie();
+            hydratedChannels = injectJioCookie(hydratedChannels, jioCookie);
+          }
           const channels = playableOnly
-            ? state.channels.filter((channel) => channel.playable)
-            : state.channels;
+            ? hydratedChannels.filter((channel) => channel.playable)
+            : hydratedChannels;
           return NextResponse.json({
             updatedAt: new Date().toISOString(),
             source: 'manual-catalogs',
