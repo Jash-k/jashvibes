@@ -1,11 +1,41 @@
 import { NextResponse } from 'next/server';
 import { getLiveTVChannels } from '@/lib/liveTv';
-import { getSelectedLiveChannels } from '@/lib/liveService';
+import { getLiveCatalogState } from '@/lib/liveService';
+import { buildCatalogSummary, LIVE_CATALOGS } from '@/lib/liveCatalogs';
 import LiveSource from '@/models/LiveSource';
-import LiveChannel from '@/models/LiveChannel';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+function sourceList(sources = []) {
+  return sources.map((item) => ({
+    id: item.sourceId || item.id,
+    label: item.label,
+    url: item.url,
+    type: item.type,
+    priority: item.priority ?? 99,
+  }));
+}
+
+function decorateInitialJioFallback(payload = {}) {
+  const channels = (payload.channels || []).map((channel, index) => ({
+    ...channel,
+    catalogs: [{ catalogId: 'main', position: (index + 1) * 100 }],
+    catalogIds: ['main'],
+    mapped: false,
+    initialFallback: true,
+  }));
+  return {
+    ...payload,
+    source: 'jio-initial-fallback',
+    channels,
+    count: channels.length,
+    catalogs: buildCatalogSummary(channels),
+    catalogConfigured: false,
+    initialFallback: true,
+    fromDb: false,
+  };
+}
 
 export async function GET(request) {
   try {
@@ -14,47 +44,65 @@ export async function GET(request) {
     const playableOnly = ['1', 'true', 'yes'].includes(String(searchParams.get('playable') || '').toLowerCase());
     const workingOnly = ['1', 'true', 'yes'].includes(String(searchParams.get('working') || searchParams.get('ok') || '').toLowerCase());
     const profileId = searchParams.get('profile') || 'default';
+
     if (source === 'all' && !workingOnly) {
       try {
-        const selectedChannels = await getSelectedLiveChannels({ profileId });
+        const state = await getLiveCatalogState({ profileId, playableOnly });
         const sources = await LiveSource.find({}).sort({ priority: 1 }).lean().catch(() => []);
-        if (selectedChannels.length) {
+
+        // Once any manual catalog mapping exists, the database catalog is the
+        // only source for the main panel—even if the active profile currently
+        // has zero visible channels. Raw source channels must never leak back in.
+        if (state.configured) {
+          const channels = playableOnly
+            ? state.channels.filter((channel) => channel.playable)
+            : state.channels;
           return NextResponse.json({
             updatedAt: new Date().toISOString(),
-            source: 'db-selected',
+            source: 'manual-catalogs',
             profile: profileId,
-            count: selectedChannels.length,
-            channels: playableOnly ? selectedChannels.filter((channel) => channel.playable) : selectedChannels,
-            sources: sources.map((item) => ({ id: item.sourceId, label: item.label, url: item.url, type: item.type })),
-            fromDb: true,
-          }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
-        }
-        const dbChannelCount = await LiveChannel.countDocuments({ hidden: { $ne: true } }).catch(() => 0);
-        if (dbChannelCount > 0) {
-          return NextResponse.json({
-            updatedAt: new Date().toISOString(),
-            source: 'db-selected-empty',
-            profile: profileId,
-            count: 0,
-            channels: [],
-            sources: sources.map((item) => ({ id: item.sourceId, label: item.label, url: item.url, type: item.type })),
+            count: channels.length,
+            configuredCount: state.configuredCount,
+            channels,
+            catalogs: buildCatalogSummary(channels),
+            sources: sourceList(sources),
+            catalogConfigured: true,
+            initialFallback: false,
             fromDb: true,
           }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
         }
       } catch (dbError) {
-        console.warn('[api/live-tv] DB selected fallback:', dbError.message);
+        // Never guess that the service is unconfigured when storage is unavailable:
+        // doing so could leak the raw Jio list after an administrator has mapped it.
+        console.error('[api/live-tv] Manual catalog lookup failed:', dbError.message);
+        return NextResponse.json({
+          error: 'Live TV catalog storage is temporarily unavailable',
+          channels: [],
+          count: 0,
+          catalogs: LIVE_CATALOGS,
+          catalogConfigured: null,
+          initialFallback: false,
+        }, { status: 503, headers: { 'Cache-Control': 'no-store, max-age=0' } });
       }
+
+      // First-use bootstrap only: load Jio so the TV page remains useful before
+      // the administrator has synced and manually mapped the first channel.
+      const fallback = await getLiveTVChannels({ source: 'jio-tamil', playableOnly, workingOnly: false });
+      return NextResponse.json(decorateInitialJioFallback(fallback), {
+        headers: { 'Cache-Control': 'no-store, max-age=0' },
+      });
     }
 
+    // Explicit source reads remain available for diagnostics/legacy clients,
+    // but the main TV page never uses them after manual catalogs are configured.
     const payload = await getLiveTVChannels({ source, playableOnly, workingOnly });
-
-    return NextResponse.json(payload, {
+    return NextResponse.json({ ...payload, catalogs: LIVE_CATALOGS, catalogConfigured: false }, {
       headers: { 'Cache-Control': 'no-store, max-age=0' },
     });
   } catch (error) {
     console.error('[api/live-tv] Error:', error);
     return NextResponse.json(
-      { error: error.message || 'Unable to load Live TV channels', channels: [], count: 0 },
+      { error: error.message || 'Unable to load Live TV channels', channels: [], count: 0, catalogs: LIVE_CATALOGS },
       { status: 500 },
     );
   }

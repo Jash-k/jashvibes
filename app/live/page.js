@@ -4,16 +4,19 @@ import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
+import {
+  LIVE_CATALOGS,
+  catalogLabel,
+  getCatalogPosition,
+  getChannelCatalogIds,
+  sortChannelsForCatalog,
+} from '@/lib/liveCatalogs';
 
 const FAVORITES_KEY = 'jash_live_tv_favorites';
-const LIVE_CACHE_KEY = 'jash:live:v9';
+const LIVE_CACHE_KEY = 'jash:live:v10-manual-catalogs';
 
 function normalize(value = '') {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-}
-
-function unique(items = []) {
-  return [...new Set(items.filter(Boolean))];
 }
 
 function channelSlug(value = '') {
@@ -113,7 +116,6 @@ export default function LiveTVPage() {
   const playbackIdRef = useRef(0);
   const sourceLoadIdRef = useRef(0);
   const [channels, setChannels] = useState([]);
-  const [sources, setSources] = useState([]);
   const [active, setActive] = useState(null);
   const [lastViewed, setLastViewed] = useState(null);
   const [status, setStatus] = useState('loading');
@@ -122,7 +124,6 @@ export default function LiveTVPage() {
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
-  const [sourceFilter, setSourceFilter] = useState('all');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [favorites, setFavorites] = useState([]);
   const [pocketProxyIds, setPocketProxyIds] = useState([]);
@@ -137,63 +138,24 @@ export default function LiveTVPage() {
     }
   }, []);
 
-  async function loadChannelsForSource(nextSource = 'all') {
+  async function loadChannelsForSource() {
     const loadId = sourceLoadIdRef.current + 1;
     sourceLoadIdRef.current = loadId;
 
     try {
       setStatus('loading');
       setError('');
-      let data;
-      if (nextSource === 'all') {
-        const regularPayload = await fetch('/api/live-tv?playable=1', { cache: 'no-store' }).then(async (response) => {
-          const json = await response.json();
-          if (!response.ok) throw new Error(json?.error || 'Unable to load Live TV');
-          return json;
-        });
-
-        // When the service DB has selected channels, /api/live-tv returns exactly
-        // the main panel list. Do not merge Pocket/default fallback channels here,
-        // otherwise unselected items appear in the main panel.
-        if (regularPayload.fromDb) {
-          data = regularPayload;
-        } else {
-          const pocketResult = await fetch('/api/live-pocket?playable=1', { cache: 'no-store' })
-            .then(async (response) => {
-              const json = await response.json();
-              if (!response.ok) throw new Error(json?.error || 'Unable to load Pocket Live');
-              return json;
-            })
-            .catch((error) => ({ channels: [], sources: [], errors: [error.message || 'Pocket Live failed'] }));
-          data = {
-            updatedAt: new Date().toISOString(),
-            sources: [...(regularPayload.sources || []), ...(pocketResult.sources || [])],
-            channels: [...(regularPayload.channels || []), ...(pocketResult.channels || [])],
-            errors: [...(regularPayload.errors || []), ...(pocketResult.errors || [])],
-          };
-        }
-      } else if (nextSource === 'pocket-tamil') {
-        const response = await fetch('/api/live-pocket?playable=1', { cache: 'no-store' });
-        data = await response.json();
-        if (!response.ok) throw new Error(data?.error || 'Unable to load Pocket Live');
-      } else {
-        const params = new URLSearchParams({ playable: '1', source: nextSource });
-        const response = await fetch(`/api/live-tv?${params.toString()}`, { cache: 'no-store' });
-        data = await response.json();
-        if (!response.ok) throw new Error(data?.error || 'Unable to load Live TV');
-      }
-
+      const response = await fetch('/api/live-tv?playable=1', { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Unable to load Live TV');
       if (sourceLoadIdRef.current !== loadId) return;
+
+      // The API returns either the small manually mapped catalog or, only before
+      // the first mapping exists, the Jio bootstrap fallback. Never merge raw
+      // Pocket/default source catalogs into this main list.
       const loadedChannels = (data.channels || []).filter((channel) => channel.playable);
       setPocketProxyIds([]);
       setChannels(loadedChannels);
-      setSources((current) => {
-        const incoming = data.sources || [];
-        if (nextSource === 'all' || !current.length) return incoming;
-        const merged = new Map(current.map((item) => [item.id, item]));
-        incoming.forEach((item) => merged.set(item.id, item));
-        return [...merged.values()];
-      });
       setLastUpdated(data.updatedAt || null);
       setActive((current) => loadedChannels.find((channel) => channel.id === current?.id) || pickInitialChannel(loadedChannels));
       setStatus('ready');
@@ -209,29 +171,28 @@ export default function LiveTVPage() {
     const cached = readSessionCache(LIVE_CACHE_KEY);
     if (cached?.channels?.length) {
       setChannels(cached.channels || []);
-      setSources(cached.sources || []);
       setActive(cached.active || pickInitialChannel(cached.channels || []));
       setLastViewed(cached.lastViewed || null);
       setStatus(cached.status || 'ready');
       setError(cached.error || '');
       setQuery(cached.query || '');
-      setCategory(cached.category || 'all');
-      setSourceFilter(cached.sourceFilter || 'all');
+      const cachedCatalog = String(cached.category || 'all').toLowerCase();
+      setCategory(cachedCatalog === 'all' || LIVE_CATALOGS.some((item) => item.id === cachedCatalog) ? cachedCatalog : 'all');
       setShowFavoritesOnly(false);
       setLastUpdated(cached.lastUpdated || null);
       restoreScroll(LIVE_CACHE_KEY);
       // Always revalidate from DB/service after painting cache. This prevents
       // old fallback or unselected channels from staying in the main panel.
-      loadChannelsForSource('all');
+      loadChannelsForSource();
       return;
     }
 
-    loadChannelsForSource('all');
+    loadChannelsForSource();
   }, []);
 
   useEffect(() => {
-    writeSessionCache(LIVE_CACHE_KEY, { channels, sources, active, lastViewed, status, error, query, category, sourceFilter, showFavoritesOnly, lastUpdated });
-  }, [channels, sources, active, lastViewed, status, error, query, category, sourceFilter, showFavoritesOnly, lastUpdated]);
+    writeSessionCache(LIVE_CACHE_KEY, { channels, active, lastViewed, status, error, query, category, showFavoritesOnly, lastUpdated });
+  }, [channels, active, lastViewed, status, error, query, category, showFavoritesOnly, lastUpdated]);
 
   useEffect(() => {
     const onScroll = () => saveScroll(LIVE_CACHE_KEY);
@@ -480,39 +441,23 @@ export default function LiveTVPage() {
     };
   }, [active, pocketProxyIds]);
 
-  const categories = useMemo(() => {
-    const list = unique(channels.map((channel) => channel.category || 'Tamil'));
-    return list.sort((a, b) => {
-      const order = { Music: 0, Sports: 1 };
-      const ao = order[a] ?? 99;
-      const bo = order[b] ?? 99;
-      if (ao !== bo) return ao - bo;
-      return a.localeCompare(b);
-    });
-  }, [channels]);
-  const sourceOptions = useMemo(() => {
-    const map = new Map();
-    (sources || []).forEach((item) => {
-      if (item?.id) map.set(item.id, { id: item.id, label: item.label || item.id });
-    });
-    channels.forEach((channel) => {
-      const id = channel.sourceId || channel.source;
-      if (id && !map.has(id)) map.set(id, { id, label: channel.source || id });
-    });
-    return [...map.values()];
-  }, [sources, channels]);
+  const catalogOptions = useMemo(() => LIVE_CATALOGS.map((catalog) => ({
+    ...catalog,
+    count: channels.filter((channel) => getChannelCatalogIds(channel).includes(catalog.id)).length,
+  })), [channels]);
   const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
 
   const filteredChannels = useMemo(() => {
     const q = normalize(query);
-    return channels.filter((channel) => {
+    const filtered = channels.filter((channel) => {
       if (!channel.playable) return false;
-      if (category !== 'all' && channel.category !== category) return false;
-      if (sourceFilter !== 'all' && channel.sourceId !== sourceFilter && channel.source !== sourceFilter) return false;
+      if (category !== 'all' && !getChannelCatalogIds(channel).includes(category)) return false;
+      if (showFavoritesOnly && !favoriteSet.has(channel.id)) return false;
       if (!q) return true;
-      return normalize(`${channel.name} ${channel.category} ${channel.region} ${channel.source}`).includes(q);
+      return normalize(`${channel.name} ${channel.category} ${channel.region} ${channel.source} ${getChannelCatalogIds(channel).join(' ')}`).includes(q);
     });
-  }, [channels, category, sourceFilter, query, showFavoritesOnly, favoriteSet]);
+    return sortChannelsForCatalog(filtered, category);
+  }, [channels, category, query, showFavoritesOnly, favoriteSet]);
 
   const activeFilteredIndex = useMemo(() => {
     if (!active?.id) return -1;
@@ -651,7 +596,7 @@ export default function LiveTVPage() {
               <div className="min-w-0">
                 <h1 className="truncate text-xl font-black text-white sm:text-2xl">{active?.name || 'Tamil Live TV'}</h1>
                 <p className="mt-1 text-xs text-zinc-500 sm:text-sm">
-                  {active ? `${active.category || 'Tamil'} • ${active.source} • ${active.format.toUpperCase()}${active.keyId && active.key ? ' • ClearKey DRM' : ''}` : `Loaded ${channels.length} preferred Tamil channels`}
+                  {active ? `${getChannelCatalogIds(active).map(catalogLabel).join(' + ') || 'Initial Jio'} • ${active.source} • ${active.format.toUpperCase()}${active.keyId && active.key ? ' • ClearKey DRM' : ''}` : `Loaded ${channels.length} manually mapped channels`}
                 </p>
               </div>
             </div>
@@ -697,39 +642,43 @@ export default function LiveTVPage() {
 
         <aside className="min-w-0 space-y-3 lg:w-full">
           <div className="sticky top-[7.7rem] z-30 rounded-2xl border border-white/10 bg-zinc-950/95 p-3 backdrop-blur sm:rounded-3xl sm:p-4 lg:static">
-            <div className="grid grid-cols-2 gap-2">
-              <select value={category} onChange={(event) => setCategory(event.target.value)} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-red-500">
-                <option value="all">All categories</option>
-                {categories.map((item) => <option key={item} value={item}>{item}</option>)}
-              </select>
-              <select
-                value={sourceFilter}
-                onChange={(event) => {
-                  const nextSource = event.target.value;
-                  setSourceFilter(nextSource);
-                  setCategory('all');
-                  loadChannelsForSource(nextSource);
-                }}
-                className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-red-500"
-              >
-                <option value="all">All sources</option>
-                {sourceOptions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-              </select>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-200">My catalogs</p>
+              <span className="rounded-full bg-white/[0.06] px-2 py-1 text-[10px] font-bold text-zinc-400">{filteredChannels.length}</span>
             </div>
-            <div className="mt-2 grid grid-cols-2 gap-2">
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2">
               <button
                 type="button"
-                onClick={() => setCategory((value) => value === 'Music' ? 'all' : 'Music')}
-                className={`rounded-2xl border px-4 py-2 text-sm font-black transition ${category === 'Music' ? 'border-fuchsia-400 bg-fuchsia-500/15 text-fuchsia-100' : 'border-white/10 bg-white/[0.04] text-zinc-300'}`}
+                onClick={() => setCategory('all')}
+                className={`rounded-xl border px-2 py-2 text-xs font-black transition ${category === 'all' ? 'border-purple-400 bg-purple-500/20 text-purple-100' : 'border-white/10 bg-white/[0.04] text-zinc-300'}`}
               >
-                ♫ Music
+                All · {channels.length}
               </button>
+              {catalogOptions.map((catalog) => (
+                <button
+                  key={catalog.id}
+                  type="button"
+                  onClick={() => setCategory(catalog.id)}
+                  className={`rounded-xl border px-2 py-2 text-xs font-black transition ${category === catalog.id ? 'border-purple-400 bg-purple-500/20 text-purple-100' : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-purple-400/40'}`}
+                >
+                  {catalog.icon} {catalog.name} · {catalog.count}
+                </button>
+              ))}
+            </div>
+            <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search mapped channels"
+                className="min-w-0 rounded-xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-purple-400"
+              />
               <button
                 type="button"
-                onClick={() => setCategory((value) => value === 'Sports' ? 'all' : 'Sports')}
-                className={`rounded-2xl border px-4 py-2 text-sm font-black transition ${category === 'Sports' ? 'border-green-400 bg-green-500/15 text-green-100' : 'border-white/10 bg-white/[0.04] text-zinc-300'}`}
+                onClick={() => setShowFavoritesOnly((value) => !value)}
+                className={`rounded-xl border px-3 py-2 text-sm ${showFavoritesOnly ? 'border-yellow-400 bg-yellow-500/15 text-yellow-100' : 'border-white/10 text-zinc-400'}`}
+                title="Favorites only"
               >
-                ⚽ Sports
+                ★
               </button>
             </div>
           </div>
@@ -737,7 +686,7 @@ export default function LiveTVPage() {
           <div className="space-y-2 pr-1 lg:max-h-[70dvh] lg:overflow-y-auto">
             {status === 'loading' ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">Loading Tamil channels...</div> : null}
             {status === 'error' ? <div className="rounded-3xl border border-red-500/30 bg-red-950/20 p-6 text-center text-red-200">{error}</div> : null}
-            {status === 'ready' && filteredChannels.length === 0 ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">No channels found for this filter/source.</div> : null}
+            {status === 'ready' && filteredChannels.length === 0 ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">No manually mapped channels in this catalog.</div> : null}
 
             {filteredChannels.map((channel) => (
               <button
@@ -751,7 +700,7 @@ export default function LiveTVPage() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-black text-white">{channel.name}</p>
-                  <p className="mt-1 truncate text-xs text-zinc-500">{channel.category} • {channel.source}</p>
+                  <p className="mt-1 truncate text-xs text-zinc-500">{getChannelCatalogIds(channel).map(catalogLabel).join(' + ') || 'Initial Jio'} • {channel.source}</p>
                   <div className="mt-1 flex gap-1">
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${channel.playable ? 'bg-green-500/15 text-green-200' : 'bg-orange-500/15 text-orange-200'}`}>{channel.format.toUpperCase()}</span>
                     {channel.keyId && channel.key ? <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-100">DRM</span> : null}
@@ -764,7 +713,7 @@ export default function LiveTVPage() {
       </section>
       <LiveServicePanel
         open={serviceOpen}
-        onClose={() => setServiceOpen(false)}
+        onClose={() => { setServiceOpen(false); loadChannelsForSource(); }}
         onPreview={(channel) => selectChannel(channel)}
         onMainRefresh={() => loadChannelsForSource('all')}
       />
@@ -945,6 +894,10 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
   const [sourceFilter, setSourceFilter] = useState('');
   const [channelQuery, setChannelQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [mappingFilter, setMappingFilter] = useState('all');
+  const [channelsLoaded, setChannelsLoaded] = useState(false);
+  const [channelStats, setChannelStats] = useState({ total: 0, mapped: 0, unmapped: 0 });
+  const [orderCatalog, setOrderCatalog] = useState('main');
   const [activeProfile, setActiveProfile] = useState('default');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -1005,22 +958,54 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
     setProfiles(data.profiles || []);
   }
 
-  async function loadChannels({ selected = false } = {}) {
+  async function loadChannels({ mapped = false, sourceId = sourceFilter } = {}) {
     if (!token) return;
-    const params = new URLSearchParams({ limit: selected ? '500' : '800', hidden: '0' });
-    if (selected) params.set('selected', '1');
-    if (selected) params.set('profile', activeProfile);
-    if (!selected && sourceFilter) params.set('sourceId', sourceFilter);
-    if (!selected && channelQuery.trim()) params.set('q', channelQuery.trim());
-    if (!selected && categoryFilter) params.set('category', categoryFilter);
+    const params = new URLSearchParams({ limit: mapped ? '1000' : '5000' });
+    if (mapped) {
+      params.set('mapped', '1');
+      params.set('profile', activeProfile);
+    } else {
+      if (!sourceId) {
+        setChannels([]);
+        setCategories([]);
+        setChannelsLoaded(false);
+        setChannelStats({ total: 0, mapped: 0, unmapped: 0 });
+        return;
+      }
+      params.set('sourceId', sourceId);
+    }
+
     const data = await api(`/api/live-service/channels?${params.toString()}`);
-    if (selected) setSelectedChannels(data.channels || []);
-    else {
+    if (mapped) {
+      setSelectedChannels(data.channels || []);
+    } else {
       setChannels(data.channels || []);
       setCategories(data.categories || []);
+      setChannelsLoaded(true);
+      setChannelStats({
+        total: data.sourceTotal || data.total || 0,
+        mapped: data.mappedTotal || 0,
+        unmapped: data.unmappedTotal || 0,
+      });
     }
   }
 
+  async function loadSourceChannels() {
+    if (!sourceFilter) {
+      setMessage('Choose one source, then click Load source channels.');
+      return;
+    }
+    setLoading(true);
+    setMessage('');
+    try {
+      await loadChannels({ sourceId: sourceFilter });
+      setMessage('Source channels loaded. Map only the channels you want to publish.');
+    } catch (err) {
+      setMessage(err.message || 'Unable to load source channels');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function loadMainPanelPreview() {
     if (!token) return;
@@ -1035,7 +1020,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
     setLoading(true);
     setMessage('');
     try {
-      await Promise.all([loadSources(), loadProfiles(), loadChannels(), loadChannels({ selected: true }), loadMainPanelPreview()]);
+      await Promise.all([loadSources(), loadProfiles(), loadChannels({ mapped: true }), loadMainPanelPreview()]);
     } catch (err) {
       setMessage(err.message || 'Load failed');
     } finally {
@@ -1044,19 +1029,26 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
   }
 
   useEffect(() => { if (open && token) refreshAll(); }, [open, token]);
-  useEffect(() => { if (open && token) loadChannels(); }, [sourceFilter, categoryFilter]);
   useEffect(() => {
-    if (!open || !token) return;
-    const timer = window.setTimeout(() => loadChannels(), 260);
-    return () => window.clearTimeout(timer);
-  }, [channelQuery]);
-  useEffect(() => { if (open && token) { loadChannels({ selected: true }); loadMainPanelPreview(); } }, [activeProfile]);
+    // Selecting a source must not automatically load its full catalog. The
+    // explicit Load button keeps service-panel startup and source switching fast.
+    setChannels([]);
+    setCategories([]);
+    setChannelsLoaded(false);
+    setChannelStats({ total: 0, mapped: 0, unmapped: 0 });
+    setCategoryFilter('');
+    setChannelQuery('');
+    setMappingFilter('all');
+  }, [sourceFilter]);
+  useEffect(() => { if (open && token) { loadChannels({ mapped: true }); loadMainPanelPreview(); } }, [activeProfile]);
 
   async function syncSource(sourceId = '') {
     setLoading(true);
     try {
-      const data = await api('/api/live-service/sync', { method: 'POST', body: JSON.stringify({ sourceId, includeAll: true, autoSelectPopular: true }) });
-      setMessage(`Synced ${data.results?.length || 0} source(s).`);
+      const data = await api('/api/live-service/sync', { method: 'POST', body: JSON.stringify({ sourceId, includeAll: true }) });
+      setMessage(`Synced ${data.results?.length || 0} source(s). New channels remain unmapped until you publish them manually.`);
+      setChannelsLoaded(false);
+      setChannels([]);
       await refreshAll();
       onMainRefresh?.();
     } catch (err) { setMessage(err.message || 'Sync failed'); } finally { setLoading(false); }
@@ -1085,14 +1077,85 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
   }
 
   async function channelAction(channel, action, patch = {}) {
-    await api('/api/live-service/channels', { method: 'PATCH', body: JSON.stringify({ channelId: channel.channelId || channel.id, action, ...patch }) });
-    await Promise.all([loadChannels(), loadChannels({ selected: true }), loadMainPanelPreview(), loadSources()]);
-    onMainRefresh?.();
+    try {
+      const wasMapped = Boolean(channel.mapped || getChannelCatalogIds(channel).length);
+      const data = await api('/api/live-service/channels', {
+        method: 'PATCH',
+        body: JSON.stringify({ channelId: channel.channelId || channel.id, action, ...patch }),
+      });
+      const updates = data.channels || [];
+      if (!updates.length) return;
+      const requestedId = channel.channelId || channel.id;
+      const updated = updates.find((item) => (item.channelId || item.id) === requestedId) || updates[0];
+      const isMapped = Boolean(updated.mapped || getChannelCatalogIds(updated).length);
+      const updateMap = new Map(updates.map((item) => [item.channelId || item.id, item]));
+      const replace = (items) => items.map((item) => updateMap.get(item.channelId || item.id) || item);
+      const profileCompatible = (item) => (item.profiles || ['default']).includes(activeProfile);
+
+      setChannels((items) => replace(items));
+      setSelectedChannels((items) => {
+        let next = replace(items);
+        for (const item of updates) {
+          const id = item.channelId || item.id;
+          next = next.filter((current) => (current.channelId || current.id) !== id);
+          if ((item.mapped || getChannelCatalogIds(item).length) && profileCompatible(item)) next.push(item);
+        }
+        return next;
+      });
+      setMainPanelChannels((items) => {
+        let next = replace(items);
+        for (const item of updates) {
+          const id = item.channelId || item.id;
+          next = next.filter((current) => (current.channelId || current.id) !== id);
+          if ((item.mapped || getChannelCatalogIds(item).length) && item.selected && !item.hidden && item.playable && profileCompatible(item)) next.push(item);
+        }
+        return next;
+      });
+      if (channelsLoaded && wasMapped !== isMapped) {
+        setChannelStats((current) => ({
+          ...current,
+          mapped: Math.max(0, current.mapped + (isMapped ? 1 : -1)),
+          unmapped: Math.max(0, current.unmapped + (isMapped ? -1 : 1)),
+        }));
+      }
+      setMessage(action === 'swapCatalogPosition'
+        ? `${catalogLabel(patch.catalogId)} order updated.`
+        : isMapped
+          ? `${updated.name} mapped to ${getChannelCatalogIds(updated).map(catalogLabel).join(' + ')}.`
+          : `${updated.name} is unmapped and removed from the main panel.`);
+      loadSources().catch(() => {});
+    } catch (err) {
+      setMessage(err.message || 'Channel update failed');
+    }
+  }
+
+  async function toggleCatalog(channel, catalogId) {
+    await channelAction(channel, 'toggleCatalog', { catalogId });
+  }
+
+  async function setCatalogPosition(channel, catalogId) {
+    const current = getCatalogPosition(channel, catalogId);
+    const raw = window.prompt(`Position in ${catalogLabel(catalogId)}`, current < 999999 ? String(current) : '100');
+    if (raw == null) return;
+    const position = Number(raw);
+    if (!Number.isFinite(position) || position < 0) {
+      setMessage('Position must be a number greater than or equal to zero.');
+      return;
+    }
+    await channelAction(channel, 'catalogPosition', { catalogId, position });
   }
 
   async function reorder(channel, direction) {
-    const next = Math.max(0, Number(channel.order || 9999) + direction);
-    await channelAction(channel, '', { order: next, selected: true });
+    const index = orderedCatalogChannels.findIndex((item) => (item.channelId || item.id) === (channel.channelId || channel.id));
+    if (index < 0) return;
+    const nextIndex = index + (direction < 0 ? -1 : 1);
+    const adjacent = orderedCatalogChannels[nextIndex];
+    if (!adjacent) return;
+    await channelAction(channel, 'swapCatalogPosition', {
+      catalogId: orderCatalog,
+      otherChannelId: adjacent.channelId || adjacent.id,
+      direction: direction < 0 ? -1 : 1,
+    });
   }
 
   async function purge(mode = 'unused') {
@@ -1152,7 +1215,6 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
     await loadProfiles();
   }
 
-  const mainPanelCategories = useMemo(() => unique(mainPanelChannels.map((channel) => channel.category || 'Tamil')).sort(), [mainPanelChannels]);
   const mainPanelSources = useMemo(() => {
     const map = new Map();
     sources.forEach((source) => map.set(source.sourceId || source.id, { id: source.sourceId || source.id, label: source.label }));
@@ -1164,14 +1226,32 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
   }, [sources, mainPanelChannels]);
   const mainPanelFiltered = useMemo(() => {
     const q = normalize(mainPanelQuery);
-    return mainPanelChannels.filter((channel) => {
+    const filtered = mainPanelChannels.filter((channel) => {
       if (!channel.playable) return false;
-      if (mainPanelCategory !== 'all' && channel.category !== mainPanelCategory) return false;
+      if (mainPanelCategory !== 'all' && !getChannelCatalogIds(channel).includes(mainPanelCategory)) return false;
       if (mainPanelSource !== 'all' && channel.sourceId !== mainPanelSource && channel.source !== mainPanelSource) return false;
       if (!q) return true;
-      return normalize(`${channel.name} ${channel.category} ${channel.region} ${channel.source}`).includes(q);
+      return normalize(`${channel.name} ${channel.category} ${channel.region} ${channel.source} ${getChannelCatalogIds(channel).join(' ')}`).includes(q);
     });
+    return sortChannelsForCatalog(filtered, mainPanelCategory);
   }, [mainPanelChannels, mainPanelQuery, mainPanelCategory, mainPanelSource]);
+  const channelRowsFiltered = useMemo(() => {
+    const q = normalize(channelQuery);
+    return channels.filter((channel) => {
+      const mapped = Boolean(channel.mapped || getChannelCatalogIds(channel).length);
+      if (mappingFilter === 'mapped' && !mapped) return false;
+      if (mappingFilter === 'unmapped' && mapped) return false;
+      if (categoryFilter && channel.category !== categoryFilter) return false;
+      if (!q) return true;
+      return normalize(`${channel.name} ${channel.category} ${channel.source}`).includes(q);
+    });
+  }, [channels, channelQuery, categoryFilter, mappingFilter]);
+  const orderedCatalogChannels = useMemo(() => {
+    return sortChannelsForCatalog(
+      selectedChannels.filter((channel) => getChannelCatalogIds(channel).includes(orderCatalog)),
+      orderCatalog,
+    );
+  }, [selectedChannels, orderCatalog]);
 
   if (!open) return null;
 
@@ -1179,7 +1259,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
     <div className="fixed inset-0 z-[120] bg-black/75 p-2 backdrop-blur-xl sm:p-4">
       <section className="mx-auto flex h-full max-w-7xl flex-col overflow-hidden rounded-[1.6rem] border border-purple-300/20 bg-[#080411] text-white shadow-2xl sm:rounded-[2rem]">
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
-          <div><h2 className="text-lg font-black sm:text-2xl">Live TV Service Panel</h2><p className="text-[11px] text-zinc-500">Sources • channels • profiles • cleanup</p></div>
+          <div><h2 className="text-lg font-black sm:text-2xl">Live TV Service Panel</h2><p className="text-[11px] text-zinc-500">Manual catalogs • source-on-demand loading • per-catalog order</p></div>
           <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/5 text-xl">×</button>
         </div>
 
@@ -1194,10 +1274,17 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
           <div className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-[16rem_minmax(0,1fr)_22rem]">
             <aside className="min-h-0 overflow-y-auto rounded-3xl border border-white/10 bg-black/25 p-3">
               <div className="grid gap-2">
-                {['sources', 'channels', 'main', 'selected', 'tools', 'duplicates'].map((id) => <button key={id} onClick={() => setTab(id)} className={`rounded-2xl px-4 py-3 text-left text-sm font-black capitalize ${tab === id ? 'bg-purple-500 text-black' : 'bg-white/[0.04] text-zinc-300'}`}>{id}</button>)}
+                {[
+                  ['sources', 'Sources'],
+                  ['channels', 'Manual mapping'],
+                  ['main', 'Main preview'],
+                  ['selected', 'Catalog order'],
+                  ['tools', 'Tools'],
+                  ['duplicates', 'Duplicates'],
+                ].map(([id, label]) => <button key={id} onClick={() => setTab(id)} className={`rounded-2xl px-4 py-3 text-left text-sm font-black ${tab === id ? 'bg-purple-500 text-black' : 'bg-white/[0.04] text-zinc-300'}`}>{label}</button>)}
               </div>
               <div className="mt-4 space-y-2">
-                <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white"><option value="">All sources</option>{sources.map((s) => <option key={s.sourceId || s.id} value={s.sourceId || s.id}>{s.label}</option>)}</select>
+                <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white"><option value="">Choose source…</option>{sources.map((s) => <option key={s.sourceId || s.id} value={s.sourceId || s.id}>{s.label}</option>)}</select>
                 <select value={activeProfile} onChange={(e) => setActiveProfile(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white">{(profiles.length ? profiles : [{ profileId: 'default', name: 'Main' }]).map((p) => <option key={p.profileId} value={p.profileId}>{p.name}</option>)}</select>
                 <button onClick={refreshAll} disabled={loading} className="w-full rounded-2xl border border-white/10 px-3 py-2 text-xs font-black text-zinc-200">{loading ? 'Working…' : 'Refresh'}</button>
                 {message ? <p className="rounded-2xl bg-white/[0.04] p-3 text-xs leading-5 text-zinc-300">{message}</p> : null}
@@ -1207,7 +1294,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
             <main className="min-h-0 overflow-y-auto rounded-3xl border border-white/10 bg-black/20 p-3">
               {tab === 'sources' ? <div className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-3xl border border-white/10 bg-white/[0.03] p-3">
-                  <div><p className="text-sm font-black text-white">Sources</p><p className="text-xs text-zinc-500">Sync Jio first, then other sources. Channel counts update after sync.</p></div>
+                  <div><p className="text-sm font-black text-white">Sources</p><p className="text-xs text-zinc-500">Sync stores channels as unmapped. Nothing is published until you map it manually.</p></div>
                   <button onClick={() => syncSource('')} disabled={loading} className="rounded-full bg-green-500 px-4 py-2 text-xs font-black text-black disabled:opacity-60">Sync all enabled</button>
                 </div>
                 <form onSubmit={saveSource} className="grid gap-2 rounded-3xl border border-white/10 bg-white/[0.03] p-3 sm:grid-cols-2">
@@ -1217,32 +1304,55 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
                   <button className="rounded-2xl bg-purple-500 px-3 py-2 text-sm font-black text-black">Add / Save Source</button>
                 </form>
                 {sources.map((source) => <div key={source.sourceId || source.id} className="rounded-3xl border border-white/10 bg-white/[0.03] p-3">
-                  <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-black">{source.label}</p><p className="break-all text-xs text-zinc-500">{source.url}</p><p className="mt-1 text-xs text-zinc-500">{source.channelCount || 0} channels • {source.selectedCount || 0} selected • priority {source.priority}</p>{source.lastError ? <p className="mt-2 rounded-xl border border-red-400/25 bg-red-500/10 p-2 text-xs text-red-200">{source.lastError}</p> : null}</div><span className="rounded-full bg-white/[0.06] px-2 py-1 text-[10px] font-bold uppercase">{source.type}</span></div>
+                  <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-black">{source.label}</p><p className="break-all text-xs text-zinc-500">{source.url}</p><p className="mt-1 text-xs text-zinc-500">{source.channelCount || 0} channels • {source.mappedCount ?? source.selectedCount ?? 0} mapped • priority {source.priority}</p>{source.lastError ? <p className="mt-2 rounded-xl border border-red-400/25 bg-red-500/10 p-2 text-xs text-red-200">{source.lastError}</p> : null}</div><span className="rounded-full bg-white/[0.06] px-2 py-1 text-[10px] font-bold uppercase">{source.type}</span></div>
                   <div className="mt-3 flex flex-wrap gap-2"><button onClick={() => syncSource(source.sourceId || source.id)} className="rounded-full bg-green-500 px-3 py-1.5 text-xs font-black text-black">Sync</button><button onClick={() => patchSource(source, { enabled: !source.enabled })} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-black">{source.enabled ? 'Disable' : 'Enable'}</button><button onClick={() => patchSource(source, { autoPurge: !source.autoPurge })} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-black">Auto purge {source.autoPurge ? 'On' : 'Off'}</button><button onClick={() => deleteSource(source, false)} className="rounded-full border border-red-400/30 px-3 py-1.5 text-xs font-black text-red-200">Delete</button></div>
                 </div>)}
               </div> : null}
 
               {tab === 'channels' ? <div className="space-y-3">
-                <div className="grid gap-2 sm:grid-cols-3"><input value={channelQuery} onChange={(e) => setChannelQuery(e.target.value)} placeholder="Search all channels" className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white" /><select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white"><option value="">All categories</option>{categories.map((c) => <option key={c} value={c}>{c}</option>)}</select><button onClick={() => loadChannels()} className="rounded-2xl border border-white/10 px-3 py-2 text-sm font-black">Apply</button></div>
-                {channels.map((channel) => <ChannelManagerRow key={channel.channelId} channel={channel} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} />)}
+                <div className="rounded-3xl border border-cyan-300/20 bg-cyan-500/10 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-black text-white">Manual catalog mapping</p>
+                      <p className="text-xs leading-5 text-zinc-400">Choose one source on the left. Its full catalog loads only when you press Load. Click one or more catalog chips to publish a channel.</p>
+                    </div>
+                    <button onClick={loadSourceChannels} disabled={loading || !sourceFilter} className="rounded-full bg-cyan-400 px-4 py-2 text-xs font-black text-black disabled:cursor-not-allowed disabled:opacity-40">Load source channels</button>
+                  </div>
+                  {channelsLoaded ? <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-xl bg-black/25 p-2"><b className="block text-white">{channelStats.total}</b>All</div><div className="rounded-xl bg-green-500/10 p-2 text-green-200"><b className="block">{channelStats.mapped}</b>Mapped</div><div className="rounded-xl bg-zinc-500/10 p-2 text-zinc-300"><b className="block">{channelStats.unmapped}</b>Unmapped</div></div> : null}
+                </div>
+                {channelsLoaded ? <>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <input value={channelQuery} onChange={(e) => setChannelQuery(e.target.value)} placeholder="Search loaded source" className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white" />
+                    <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white"><option value="">All source categories</option>{categories.map((c) => <option key={c} value={c}>{c}</option>)}</select>
+                    <select value={mappingFilter} onChange={(e) => setMappingFilter(e.target.value)} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white"><option value="all">Mapped + unmapped</option><option value="mapped">Mapped only</option><option value="unmapped">Unmapped only</option></select>
+                  </div>
+                  <p className="text-xs text-zinc-500">Showing {channelRowsFiltered.length} loaded channel(s).</p>
+                  {channelRowsFiltered.map((channel) => <ChannelManagerRow key={channel.channelId} channel={channel} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} onCatalogToggle={toggleCatalog} onPosition={setCatalogPosition} />)}
+                  {!channelRowsFiltered.length ? <p className="rounded-2xl border border-white/10 p-5 text-center text-sm text-zinc-500">No channels match these filters.</p> : null}
+                </> : <p className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-zinc-500">No source catalog loaded. This keeps service-panel startup fast.</p>}
               </div> : null}
 
               {tab === 'main' ? <div className="space-y-3">
                 <div className="rounded-3xl border border-purple-300/20 bg-purple-500/10 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-black text-white">Main Panel Preview</p><p className="text-xs text-zinc-400">This list is fetched from /api/live-tv and should exactly match the main Live TV panel.</p></div><button onClick={loadMainPanelPreview} className="rounded-full border border-purple-300/30 px-3 py-1.5 text-xs font-black text-purple-100">Reload</button></div>
                   <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                    <select value={mainPanelCategory} onChange={(event) => setMainPanelCategory(event.target.value)} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none"><option value="all">All categories</option>{mainPanelCategories.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+                    <select value={mainPanelCategory} onChange={(event) => setMainPanelCategory(event.target.value)} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none"><option value="all">All catalogs</option>{LIVE_CATALOGS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
                     <select value={mainPanelSource} onChange={(event) => setMainPanelSource(event.target.value)} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none"><option value="all">All sources</option>{mainPanelSources.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
                     <input value={mainPanelQuery} onChange={(event) => setMainPanelQuery(event.target.value)} placeholder="Search main panel" className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none" />
                   </div>
                 </div>
-                {mainPanelFiltered.map((channel) => <ChannelManagerRow key={channel.channelId || channel.id} channel={channel} selectedMode onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} />)}
+                {mainPanelFiltered.map((channel) => <ChannelManagerRow key={channel.channelId || channel.id} channel={channel} selectedMode positionCatalog={mainPanelCategory === 'all' ? '' : mainPanelCategory} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} onCatalogToggle={toggleCatalog} onPosition={setCatalogPosition} />)}
                 {!mainPanelFiltered.length ? <p className="rounded-2xl border border-white/10 p-5 text-center text-sm text-zinc-500">No main panel channels for this filter.</p> : null}
               </div> : null}
 
               {tab === 'selected' ? <div className="space-y-3">
-                {selectedChannels.map((channel) => <ChannelManagerRow key={channel.channelId} channel={channel} selectedMode onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} onUp={(ch) => reorder(ch, -10)} onDown={(ch) => reorder(ch, 10)} />)}
-                {!selectedChannels.length ? <p className="rounded-2xl border border-white/10 p-5 text-center text-sm text-zinc-500">No selected channels in this profile.</p> : null}
+                <div className="rounded-3xl border border-purple-300/20 bg-purple-500/10 p-3">
+                  <p className="text-sm font-black text-white">Per-catalog channel order</p>
+                  <p className="mt-1 text-xs leading-5 text-zinc-400">A channel can have a different position in every catalog. Use arrows for quick changes or click its position badge to enter an exact number.</p>
+                  <select value={orderCatalog} onChange={(event) => setOrderCatalog(event.target.value)} className="mt-3 w-full rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white sm:max-w-xs">{LIVE_CATALOGS.map((catalog) => <option key={catalog.id} value={catalog.id}>{catalog.name}</option>)}</select>
+                </div>
+                {orderedCatalogChannels.map((channel) => <ChannelManagerRow key={channel.channelId} channel={channel} selectedMode positionCatalog={orderCatalog} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} onCatalogToggle={toggleCatalog} onPosition={setCatalogPosition} onUp={(ch) => reorder(ch, -10)} onDown={(ch) => reorder(ch, 10)} />)}
+                {!orderedCatalogChannels.length ? <p className="rounded-2xl border border-white/10 p-5 text-center text-sm text-zinc-500">No channels mapped to {catalogLabel(orderCatalog)}.</p> : null}
               </div> : null}
 
               {tab === 'tools' ? <div className="space-y-4">
@@ -1257,8 +1367,8 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
             <aside className="min-h-0 space-y-3 overflow-y-auto rounded-3xl border border-white/10 bg-black/25 p-3">
               <ServicePreviewPlayer channel={previewChannel} />
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-xs leading-5 text-zinc-400">
-                <p className="font-black text-white">Main panel</p>
-                <p>Use Add to Main to make channels appear in Live TV. Remove only hides from the main panel; Delete removes the database channel.</p>
+                <p className="font-black text-white">Manual publishing</p>
+                <p>Only channels with at least one catalog chip are published. Removing the final chip immediately unmaps the channel. Source sync never changes your mappings or positions.</p>
               </div>
             </aside>
           </div>
@@ -1268,19 +1378,51 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
   );
 }
 
-function ChannelManagerRow({ channel, onPreview, onAction, selectedMode = false, onUp, onDown }) {
+function ChannelManagerRow({
+  channel,
+  onPreview,
+  onAction,
+  onCatalogToggle,
+  onPosition,
+  selectedMode = false,
+  positionCatalog = '',
+  onUp,
+  onDown,
+}) {
+  const catalogIds = getChannelCatalogIds(channel);
+  const mapped = catalogIds.length > 0;
+  const focusedPosition = positionCatalog ? getCatalogPosition(channel, positionCatalog) : null;
+
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-2.5">
+    <div className={`rounded-2xl border p-2.5 ${mapped ? 'border-green-400/20 bg-green-500/[0.045]' : 'border-white/10 bg-white/[0.03]'}`}>
       <div className="flex gap-3">
         <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/5">{channel.logo ? <img src={channel.logo} alt="" className="max-h-full max-w-full object-contain" /> : <span className="text-[10px] text-zinc-500">TV</span>}</div>
-        <div className="min-w-0 flex-1"><p className="truncate text-sm font-black text-white">{channel.name}</p><p className="truncate text-xs text-zinc-500">{channel.category} • {channel.source} • {channel.format?.toUpperCase()} • {channel.workingStatus}</p></div>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <p className="truncate text-sm font-black text-white">{channel.name}</p>
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${mapped ? 'bg-green-500/15 text-green-200' : 'bg-zinc-500/15 text-zinc-400'}`}>{mapped ? 'Mapped' : 'Unmapped'}</span>
+          </div>
+          <p className="truncate text-xs text-zinc-500">{channel.category} • {channel.source} • {channel.format?.toUpperCase()} • {channel.workingStatus}</p>
+          {mapped ? <div className="mt-1 flex flex-wrap gap-1">{catalogIds.map((id) => <button key={id} type="button" onClick={() => onPosition?.(channel, id)} className="rounded-full bg-purple-500/15 px-2 py-0.5 text-[9px] font-bold text-purple-100" title="Set exact position">{catalogLabel(id)} · {getCatalogPosition(channel, id)}</button>)}</div> : null}
+        </div>
       </div>
+
+      {onCatalogToggle ? <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+        {LIVE_CATALOGS.map((catalog) => {
+          const active = catalogIds.includes(catalog.id);
+          return <button key={catalog.id} type="button" onClick={() => onCatalogToggle(channel, catalog.id)} className={`rounded-xl border px-2 py-1.5 text-[10px] font-black transition ${active ? 'border-green-400/45 bg-green-500/20 text-green-100' : 'border-white/10 bg-black/20 text-zinc-400 hover:border-purple-400/50 hover:text-white'}`}>{active ? '✓ ' : ''}{catalog.name}</button>;
+        })}
+      </div> : null}
+
       <div className="mt-2 flex flex-wrap gap-1.5">
-        <button onClick={() => onPreview?.(channel)} className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-black">Preview</button>
-        {channel.selected ? <button onClick={() => onAction?.(channel, 'remove')} className="rounded-full border border-orange-400/30 px-2.5 py-1 text-[11px] font-black text-orange-100">Remove</button> : <button onClick={() => onAction?.(channel, 'add')} className="rounded-full bg-green-500 px-2.5 py-1 text-[11px] font-black text-black">Add to Main</button>}
-        <button onClick={() => onAction?.(channel, channel.favorite ? 'unfavorite' : 'favorite')} className="rounded-full border border-yellow-400/30 px-2.5 py-1 text-[11px] font-black text-yellow-100">{channel.favorite ? '★' : '☆'}</button>
-        <button onClick={() => onAction?.(channel, channel.hidden ? 'unhide' : 'hide')} className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-black">{channel.hidden ? 'Unhide' : 'Hide'}</button>
-        {selectedMode ? <><button onClick={() => onUp?.(channel)} className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-black">↑</button><button onClick={() => onDown?.(channel)} className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-black">↓</button></> : null}
+        <button type="button" onClick={() => onPreview?.(channel)} className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-black">Preview</button>
+        {mapped ? <button type="button" onClick={() => onAction?.(channel, 'unmap')} className="rounded-full border border-orange-400/30 px-2.5 py-1 text-[11px] font-black text-orange-100">Unmap all</button> : null}
+        <button type="button" onClick={() => onAction?.(channel, channel.favorite ? 'unfavorite' : 'favorite')} className="rounded-full border border-yellow-400/30 px-2.5 py-1 text-[11px] font-black text-yellow-100">{channel.favorite ? '★' : '☆'}</button>
+        <button type="button" onClick={() => onAction?.(channel, channel.hidden ? 'unhide' : 'hide')} className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-black">{channel.hidden ? 'Unhide' : 'Hide'}</button>
+        {selectedMode && positionCatalog && focusedPosition < 999999 && (onUp || onDown) ? <>
+          <button type="button" onClick={() => onUp?.(channel)} className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-black">↑ Move</button>
+          <button type="button" onClick={() => onDown?.(channel)} className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-black">↓ Move</button>
+        </> : null}
       </div>
     </div>
   );

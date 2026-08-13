@@ -1430,3 +1430,32 @@ Then open:
 ```txt
 http://localhost:7860
 ```
+
+---
+
+## 14. Live TV Manual Catalogs
+
+Live TV uses six fixed public catalogs:
+
+- `MainCH` (`main`)
+- `Music` (`music`)
+- `LocalCH` (`local`)
+- `Sports` (`sports`)
+- `Kids` (`kids`)
+- `Others` (`others`)
+
+### Administrator workflow
+
+1. Open `/live`, then open **Live Service** and unlock it with the service password.
+2. Synchronize a source to import/update candidate channels. Synchronization never publishes channels automatically.
+3. In **Manual mapping**, choose one source and click **Load source channels**. The panel deliberately does not download every stored channel when it opens.
+4. Search or filter the loaded source. Every row shows **Mapped** or **Unmapped**.
+5. Toggle one or more catalog chips on a channel. A mapped channel can belong to multiple catalogs.
+6. Open **Catalog order**, choose a catalog, and use **Move** or the position badge to set that catalog's independent order.
+7. Use **Main preview** to verify exactly what the public Live TV panel will receive.
+
+Only manually mapped channels that are selected, visible, playable, and compatible with the requested profile are returned by the main `/api/live-tv?source=all&playable=1` feed. Source categories remain available only as service-panel filters; they are not public catalogs.
+
+Before the first catalog mapping exists, `/api/live-tv` may return the Jio Tamil source as an initial bootstrap fallback. Once any catalog mapping exists, raw Jio or other source catalogs are never merged into the main feed. If catalog storage is unavailable, the endpoint fails closed rather than assuming the service is unconfigured.
+
+Live Service export format version 2 includes catalog memberships and each membership's position. Import restores and normalizes these values. Cleanup and source deletion preserve mapped channels unless the administrator explicitly deletes/unmaps them.

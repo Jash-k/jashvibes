@@ -5,6 +5,7 @@ import LiveSource from '@/models/LiveSource';
 import LiveChannel from '@/models/LiveChannel';
 import LiveProfile from '@/models/LiveProfile';
 import { recalcSourceCounts } from '@/lib/liveService';
+import { normalizeCatalogMemberships } from '@/lib/liveCatalogs';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -31,7 +32,27 @@ export async function POST(request) {
     for (const channel of channels) {
       const channelId = channel.channelId || channel.id;
       if (!channelId || !channel.url) continue;
-      await LiveChannel.updateOne({ channelId }, { $set: { ...channel, channelId, selected: channel.selected !== false, hidden: Boolean(channel.hidden), favorite: Boolean(channel.favorite), profiles: channel.profiles?.length ? channel.profiles : ['default'] } }, { upsert: true });
+      const normalizedCatalogs = normalizeCatalogMemberships(channel.catalogs || []);
+      // Version-1 backups predate canonical catalogs. Preserve their explicit
+      // selected list by restoring those channels into MainCH at the old order.
+      const catalogs = normalizedCatalogs.length || Number(body.version || 1) >= 2 || !channel.selected
+        ? normalizedCatalogs
+        : normalizeCatalogMemberships([{ catalogId: 'main', position: channel.order ?? 9999 }]);
+      await LiveChannel.updateOne(
+        { channelId },
+        {
+          $set: {
+            ...channel,
+            channelId,
+            catalogs,
+            selected: catalogs.length > 0,
+            hidden: Boolean(channel.hidden),
+            favorite: Boolean(channel.favorite),
+            profiles: channel.profiles?.length ? channel.profiles : ['default'],
+          },
+        },
+        { upsert: true },
+      );
     }
     await recalcSourceCounts();
     return json({ ok: true, sources: sources.length, channels: channels.length, profiles: profiles.length });

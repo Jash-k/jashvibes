@@ -64,7 +64,7 @@ export async function DELETE(request) {
     await LiveSource.deleteOne({ sourceId });
     let removedChannels = 0;
     if (deleteChannels) {
-      const res = await LiveChannel.deleteMany({ sourceId, selected: { $ne: true }, favorite: { $ne: true } });
+      const res = await LiveChannel.deleteMany({ sourceId, 'catalogs.0': { $exists: false }, favorite: { $ne: true } });
       removedChannels = res.deletedCount || 0;
     }
     await recalcSourceCounts();

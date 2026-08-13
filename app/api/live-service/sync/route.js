@@ -17,15 +17,25 @@ export async function POST(request) {
     const body = await request.json().catch(() => ({}));
     const sourceId = String(body.sourceId || '').trim();
     const includeAll = body.includeAll !== false;
-    const autoSelectPopular = Boolean(body.autoSelectPopular);
     const sources = sourceId ? await LiveSource.find({ sourceId }) : await LiveSource.find({ enabled: { $ne: false } }).sort({ priority: 1 });
     if (!sources.length) return json({ ok: false, error: 'No source found' }, 404);
     const results = [];
     for (const source of sources) {
       try {
-        const result = await syncLiveSource(source, { includeAll, autoSelectPopular });
+        const syncStartedAt = new Date();
+        const result = await syncLiveSource(source, { includeAll });
         if (source.autoPurge) {
-          await LiveChannel.deleteMany({ sourceId: source.sourceId, selected: { $ne: true }, favorite: { $ne: true } });
+          // Remove only stale candidates not present in this sync. Deleting every
+          // unmapped row here would erase the fresh catalog before it can be mapped.
+          await LiveChannel.deleteMany({
+            sourceId: source.sourceId,
+            'catalogs.0': { $exists: false },
+            favorite: { $ne: true },
+            $or: [
+              { lastSeenAt: { $lt: syncStartedAt } },
+              { lastSeenAt: { $exists: false } },
+            ],
+          });
           await recalcSourceCounts(source.sourceId);
         }
         results.push({ sourceId: source.sourceId, ok: true, ...result });

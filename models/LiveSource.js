@@ -12,6 +12,7 @@ const LiveSourceSchema = new mongoose.Schema({
   autoPurge: { type: Boolean, default: false },
   channelCount: { type: Number, default: 0 },
   selectedCount: { type: Number, default: 0 },
+  mappedCount: { type: Number, default: 0 },
   lastSyncedAt: { type: Date, default: null },
   lastError: { type: String, default: '' },
 }, { timestamps: true });

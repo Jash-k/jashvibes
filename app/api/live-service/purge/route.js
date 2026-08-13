@@ -17,15 +17,19 @@ export async function POST(request) {
     const mode = body.mode || 'unused';
     const filter = {};
     if (sourceId) filter.sourceId = sourceId;
-    if (mode === 'broken') filter.workingStatus = 'broken';
-    else if (mode === 'notSeen') {
+    if (mode === 'broken') {
+      filter.workingStatus = 'broken';
+      filter['catalogs.0'] = { $exists: false };
+    } else if (mode === 'notSeen') {
       const days = Math.max(1, Number(body.days || 30));
       filter.lastSeenAt = { $lt: new Date(Date.now() - days * 86400000) };
-      filter.selected = { $ne: true };
+      filter['catalogs.0'] = { $exists: false };
       filter.favorite = { $ne: true };
-    } else if (mode === 'hidden') filter.hidden = true;
-    else {
-      filter.selected = { $ne: true };
+    } else if (mode === 'hidden') {
+      filter.hidden = true;
+      filter['catalogs.0'] = { $exists: false };
+    } else {
+      filter['catalogs.0'] = { $exists: false };
       filter.favorite = { $ne: true };
     }
     const res = await LiveChannel.deleteMany(filter);
