@@ -127,6 +127,7 @@ export default function LiveTVPage() {
   const [favorites, setFavorites] = useState([]);
   const [pocketProxyIds, setPocketProxyIds] = useState([]);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [serviceOpen, setServiceOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -587,7 +588,14 @@ export default function LiveTVPage() {
             <BrandLogo />
             <p className="text-[10px] font-black uppercase tracking-[0.26em] text-red-500 sm:text-xs sm:tracking-[0.32em]">Tamil Live TV</p>
           </div>
-          <span className="hidden lg:block" />
+          <button
+            type="button"
+            onClick={() => setServiceOpen(true)}
+            className="justify-self-end rounded-full border border-purple-300/25 bg-purple-500/10 px-3 py-2 text-xs font-black text-purple-100 transition hover:border-purple-300/70"
+            title="Live TV Service Panel"
+          >
+            ⚙
+          </button>
         </div>
       </header>
 
@@ -750,6 +758,385 @@ export default function LiveTVPage() {
           </div>
         </aside>
       </section>
+      <LiveServicePanel
+        open={serviceOpen}
+        onClose={() => setServiceOpen(false)}
+        onPreview={(channel) => selectChannel(channel)}
+        onMainRefresh={() => loadChannelsForSource('all')}
+      />
     </main>
+  );
+}
+
+const SERVICE_TOKEN_KEY = 'jash_live_service_token';
+
+function ServicePreviewPlayer({ channel }) {
+  const videoRef = useRef(null);
+  const playerRef = useRef(null);
+  const [status, setStatus] = useState('idle');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!channel?.url || !videoRef.current) return;
+    let cancelled = false;
+    async function destroy() {
+      if (playerRef.current) {
+        try { await playerRef.current.destroy(); } catch {}
+        playerRef.current = null;
+      }
+    }
+    async function load() {
+      try {
+        setStatus('loading');
+        setError('');
+        await destroy();
+        const video = videoRef.current;
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+        if (['hls', 'dash'].includes(channel.format)) {
+          const shakaModule = await import('shaka-player/dist/shaka-player.compiled.js');
+          const shaka = shakaModule.default || window.shaka || shakaModule;
+          shaka.polyfill?.installAll?.();
+          const player = new shaka.Player();
+          playerRef.current = player;
+          await player.attach(video);
+          await player.load(channel.url, undefined, channel.format === 'hls' ? 'application/x-mpegurl' : undefined);
+        } else {
+          video.src = channel.url;
+          video.load();
+        }
+        if (!cancelled) {
+          setStatus('ready');
+          video.play().catch(() => {});
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setStatus('error');
+          setError(err.message || 'Preview failed');
+        }
+      }
+    }
+    load();
+    return () => { cancelled = true; destroy(); };
+  }, [channel?.channelId, channel?.url]);
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/10 bg-black">
+      <div className="aspect-video bg-black">
+        {channel?.url ? <video ref={videoRef} className="h-full w-full object-fill" controls playsInline /> : <div className="grid h-full place-items-center text-xs text-zinc-500">Select a channel to preview</div>}
+      </div>
+      <div className="border-t border-white/10 px-3 py-2 text-[11px] text-zinc-400">
+        {channel?.name || 'No preview'} {status === 'loading' ? '• Loading…' : ''} {error ? `• ${error}` : ''}
+      </div>
+    </div>
+  );
+}
+
+function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
+  const [token, setToken] = useState('');
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [tab, setTab] = useState('sources');
+  const [sources, setSources] = useState([]);
+  const [channels, setChannels] = useState([]);
+  const [selectedChannels, setSelectedChannels] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [profiles, setProfiles] = useState([]);
+  const [duplicates, setDuplicates] = useState([]);
+  const [sourceFilter, setSourceFilter] = useState('');
+  const [channelQuery, setChannelQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [activeProfile, setActiveProfile] = useState('default');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [previewChannel, setPreviewChannel] = useState(null);
+  const [sourceForm, setSourceForm] = useState({ label: '', url: '', type: 'm3u', priority: 50 });
+  const [importText, setImportText] = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    try { setToken(window.sessionStorage.getItem(SERVICE_TOKEN_KEY) || ''); } catch {}
+  }, [open]);
+
+  const api = async (path, options = {}) => {
+    const response = await fetch(path, {
+      cache: 'no-store',
+      ...options,
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'x-jash-token': token,
+        ...(options.headers || {}),
+      },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.ok === false) throw new Error(data.error || `Request failed: ${response.status}`);
+    return data;
+  };
+
+  async function unlock(event) {
+    event?.preventDefault?.();
+    try {
+      setAuthError('');
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Invalid password');
+      setToken(data.token);
+      window.sessionStorage.setItem(SERVICE_TOKEN_KEY, data.token);
+      setPassword('');
+    } catch (err) {
+      setAuthError(err.message || 'Unable to unlock service panel');
+    }
+  }
+
+  async function loadSources() {
+    if (!token) return;
+    const data = await api('/api/live-service/sources');
+    setSources(data.sources || []);
+  }
+
+  async function loadProfiles() {
+    if (!token) return;
+    const data = await api('/api/live-service/profiles');
+    setProfiles(data.profiles || []);
+  }
+
+  async function loadChannels({ selected = false } = {}) {
+    if (!token) return;
+    const params = new URLSearchParams({ limit: selected ? '500' : '800', hidden: '0' });
+    if (selected) params.set('selected', '1');
+    if (selected) params.set('profile', activeProfile);
+    if (!selected && sourceFilter) params.set('sourceId', sourceFilter);
+    if (!selected && channelQuery.trim()) params.set('q', channelQuery.trim());
+    if (!selected && categoryFilter) params.set('category', categoryFilter);
+    const data = await api(`/api/live-service/channels?${params.toString()}`);
+    if (selected) setSelectedChannels(data.channels || []);
+    else {
+      setChannels(data.channels || []);
+      setCategories(data.categories || []);
+    }
+  }
+
+  async function refreshAll() {
+    if (!token) return;
+    setLoading(true);
+    setMessage('');
+    try {
+      await Promise.all([loadSources(), loadProfiles(), loadChannels(), loadChannels({ selected: true })]);
+    } catch (err) {
+      setMessage(err.message || 'Load failed');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { if (open && token) refreshAll(); }, [open, token]);
+  useEffect(() => { if (open && token) loadChannels(); }, [sourceFilter, categoryFilter]);
+  useEffect(() => {
+    if (!open || !token) return;
+    const timer = window.setTimeout(() => loadChannels(), 260);
+    return () => window.clearTimeout(timer);
+  }, [channelQuery]);
+  useEffect(() => { if (open && token) loadChannels({ selected: true }); }, [activeProfile]);
+
+  async function syncSource(sourceId = '') {
+    setLoading(true);
+    try {
+      const data = await api('/api/live-service/sync', { method: 'POST', body: JSON.stringify({ sourceId, includeAll: true, autoSelectPopular: true }) });
+      setMessage(`Synced ${data.results?.length || 0} source(s).`);
+      await refreshAll();
+      onMainRefresh?.();
+    } catch (err) { setMessage(err.message || 'Sync failed'); } finally { setLoading(false); }
+  }
+
+  async function saveSource(event) {
+    event.preventDefault();
+    setLoading(true);
+    try {
+      await api('/api/live-service/sources', { method: 'POST', body: JSON.stringify(sourceForm) });
+      setSourceForm({ label: '', url: '', type: 'm3u', priority: 50 });
+      setMessage('Source saved.');
+      await loadSources();
+    } catch (err) { setMessage(err.message || 'Save source failed'); } finally { setLoading(false); }
+  }
+
+  async function patchSource(source, patch) {
+    await api('/api/live-service/sources', { method: 'PATCH', body: JSON.stringify({ sourceId: source.sourceId || source.id, ...patch }) });
+    await loadSources();
+  }
+
+  async function deleteSource(source, channels = false) {
+    if (!window.confirm(`Delete source ${source.label}?`)) return;
+    await api(`/api/live-service/sources?sourceId=${encodeURIComponent(source.sourceId || source.id)}&channels=${channels ? '1' : '0'}`, { method: 'DELETE' });
+    await refreshAll();
+  }
+
+  async function channelAction(channel, action, patch = {}) {
+    await api('/api/live-service/channels', { method: 'PATCH', body: JSON.stringify({ channelId: channel.channelId || channel.id, action, ...patch }) });
+    await Promise.all([loadChannels(), loadChannels({ selected: true }), loadSources()]);
+    onMainRefresh?.();
+  }
+
+  async function reorder(channel, direction) {
+    const next = Math.max(0, Number(channel.order || 9999) + direction);
+    await channelAction(channel, '', { order: next, selected: true });
+  }
+
+  async function purge(mode = 'unused') {
+    if (!window.confirm(`Purge ${mode} channels${sourceFilter ? ' for selected source' : ''}?`)) return;
+    setLoading(true);
+    try {
+      const data = await api('/api/live-service/purge', { method: 'POST', body: JSON.stringify({ sourceId: sourceFilter, mode }) });
+      setMessage(`Purged ${data.removed || 0} channel(s).`);
+      await refreshAll();
+      onMainRefresh?.();
+    } catch (err) { setMessage(err.message || 'Purge failed'); } finally { setLoading(false); }
+  }
+
+  async function checkBroken() {
+    setLoading(true);
+    try {
+      const data = await api('/api/live-service/check', { method: 'POST', body: JSON.stringify({ sourceId: sourceFilter, limit: 60 }) });
+      setMessage(`Checked ${data.checked || 0} channel(s).`);
+      await loadChannels();
+    } catch (err) { setMessage(err.message || 'Check failed'); } finally { setLoading(false); }
+  }
+
+  async function loadDuplicates() {
+    const params = new URLSearchParams();
+    if (sourceFilter) params.set('sourceId', sourceFilter);
+    const data = await api(`/api/live-service/duplicates?${params.toString()}`);
+    setDuplicates(data.groups || []);
+    setTab('duplicates');
+  }
+
+  async function exportBackup() {
+    const data = await api('/api/live-service/export');
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `jash-live-tv-backup-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function importBackup() {
+    try {
+      const parsed = JSON.parse(importText);
+      const data = await api('/api/live-service/import', { method: 'POST', body: JSON.stringify(parsed) });
+      setMessage(`Imported ${data.sources || 0} sources and ${data.channels || 0} channels.`);
+      setImportText('');
+      await refreshAll();
+      onMainRefresh?.();
+    } catch (err) { setMessage(err.message || 'Import failed'); }
+  }
+
+  async function addProfile() {
+    const name = window.prompt('Profile name', 'Kids');
+    if (!name) return;
+    await api('/api/live-service/profiles', { method: 'POST', body: JSON.stringify({ name }) });
+    await loadProfiles();
+  }
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[120] bg-black/75 p-2 backdrop-blur-xl sm:p-4">
+      <section className="mx-auto flex h-full max-w-7xl flex-col overflow-hidden rounded-[1.6rem] border border-purple-300/20 bg-[#080411] text-white shadow-2xl sm:rounded-[2rem]">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+          <div><h2 className="text-lg font-black sm:text-2xl">Live TV Service Panel</h2><p className="text-[11px] text-zinc-500">Sources • channels • profiles • cleanup</p></div>
+          <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/5 text-xl">×</button>
+        </div>
+
+        {!token ? (
+          <form onSubmit={unlock} className="m-auto w-full max-w-sm rounded-3xl border border-white/10 bg-black/35 p-5">
+            <p className="text-sm font-bold text-zinc-300">Enter password to manage Live TV services.</p>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus className="mt-4 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none" placeholder="Service password" />
+            {authError ? <p className="mt-3 text-sm text-red-300">{authError}</p> : null}
+            <button className="mt-4 w-full rounded-2xl bg-purple-500 px-4 py-3 text-sm font-black text-black">Unlock</button>
+          </form>
+        ) : (
+          <div className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-[16rem_minmax(0,1fr)_22rem]">
+            <aside className="min-h-0 overflow-y-auto rounded-3xl border border-white/10 bg-black/25 p-3">
+              <div className="grid gap-2">
+                {['sources', 'channels', 'selected', 'tools', 'duplicates'].map((id) => <button key={id} onClick={() => setTab(id)} className={`rounded-2xl px-4 py-3 text-left text-sm font-black capitalize ${tab === id ? 'bg-purple-500 text-black' : 'bg-white/[0.04] text-zinc-300'}`}>{id}</button>)}
+              </div>
+              <div className="mt-4 space-y-2">
+                <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white"><option value="">All sources</option>{sources.map((s) => <option key={s.sourceId || s.id} value={s.sourceId || s.id}>{s.label}</option>)}</select>
+                <select value={activeProfile} onChange={(e) => setActiveProfile(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white">{(profiles.length ? profiles : [{ profileId: 'default', name: 'Main' }]).map((p) => <option key={p.profileId} value={p.profileId}>{p.name}</option>)}</select>
+                <button onClick={refreshAll} disabled={loading} className="w-full rounded-2xl border border-white/10 px-3 py-2 text-xs font-black text-zinc-200">{loading ? 'Working…' : 'Refresh'}</button>
+                {message ? <p className="rounded-2xl bg-white/[0.04] p-3 text-xs leading-5 text-zinc-300">{message}</p> : null}
+              </div>
+            </aside>
+
+            <main className="min-h-0 overflow-y-auto rounded-3xl border border-white/10 bg-black/20 p-3">
+              {tab === 'sources' ? <div className="space-y-4">
+                <form onSubmit={saveSource} className="grid gap-2 rounded-3xl border border-white/10 bg-white/[0.03] p-3 sm:grid-cols-2">
+                  <input value={sourceForm.label} onChange={(e) => setSourceForm((f) => ({ ...f, label: e.target.value }))} placeholder="Source name" className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white" />
+                  <input value={sourceForm.url} onChange={(e) => setSourceForm((f) => ({ ...f, url: e.target.value }))} placeholder="M3U/JSON URL" className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white" />
+                  <select value={sourceForm.type} onChange={(e) => setSourceForm((f) => ({ ...f, type: e.target.value }))} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white"><option value="m3u">M3U</option><option value="json">JSON</option></select>
+                  <button className="rounded-2xl bg-purple-500 px-3 py-2 text-sm font-black text-black">Add / Save Source</button>
+                </form>
+                {sources.map((source) => <div key={source.sourceId || source.id} className="rounded-3xl border border-white/10 bg-white/[0.03] p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-black">{source.label}</p><p className="break-all text-xs text-zinc-500">{source.url}</p><p className="mt-1 text-xs text-zinc-500">{source.channelCount || 0} channels • {source.selectedCount || 0} selected • priority {source.priority}</p></div><span className="rounded-full bg-white/[0.06] px-2 py-1 text-[10px] font-bold uppercase">{source.type}</span></div>
+                  <div className="mt-3 flex flex-wrap gap-2"><button onClick={() => syncSource(source.sourceId || source.id)} className="rounded-full bg-green-500 px-3 py-1.5 text-xs font-black text-black">Sync</button><button onClick={() => patchSource(source, { enabled: !source.enabled })} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-black">{source.enabled ? 'Disable' : 'Enable'}</button><button onClick={() => patchSource(source, { autoPurge: !source.autoPurge })} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-black">Auto purge {source.autoPurge ? 'On' : 'Off'}</button><button onClick={() => deleteSource(source, false)} className="rounded-full border border-red-400/30 px-3 py-1.5 text-xs font-black text-red-200">Delete</button></div>
+                </div>)}
+              </div> : null}
+
+              {tab === 'channels' ? <div className="space-y-3">
+                <div className="grid gap-2 sm:grid-cols-3"><input value={channelQuery} onChange={(e) => setChannelQuery(e.target.value)} placeholder="Search all channels" className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white" /><select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white"><option value="">All categories</option>{categories.map((c) => <option key={c} value={c}>{c}</option>)}</select><button onClick={() => loadChannels()} className="rounded-2xl border border-white/10 px-3 py-2 text-sm font-black">Apply</button></div>
+                {channels.map((channel) => <ChannelManagerRow key={channel.channelId} channel={channel} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} />)}
+              </div> : null}
+
+              {tab === 'selected' ? <div className="space-y-3">
+                {selectedChannels.map((channel) => <ChannelManagerRow key={channel.channelId} channel={channel} selectedMode onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} onUp={(ch) => reorder(ch, -10)} onDown={(ch) => reorder(ch, 10)} />)}
+                {!selectedChannels.length ? <p className="rounded-2xl border border-white/10 p-5 text-center text-sm text-zinc-500">No selected channels in this profile.</p> : null}
+              </div> : null}
+
+              {tab === 'tools' ? <div className="space-y-4">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"><button onClick={() => purge('unused')} className="rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white">Purge unused</button><button onClick={() => purge('broken')} className="rounded-2xl border border-red-400/30 px-4 py-3 text-sm font-black text-red-200">Purge broken</button><button onClick={checkBroken} className="rounded-2xl border border-green-400/30 px-4 py-3 text-sm font-black text-green-200">Check broken</button><button onClick={loadDuplicates} className="rounded-2xl border border-yellow-400/30 px-4 py-3 text-sm font-black text-yellow-100">Find duplicates</button><button onClick={addProfile} className="rounded-2xl border border-purple-400/30 px-4 py-3 text-sm font-black text-purple-100">Add profile</button><button onClick={exportBackup} className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-black">Export backup</button></div>
+                <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="Paste exported JSON backup here" className="h-36 w-full rounded-2xl border border-white/10 bg-black p-3 text-xs text-white" />
+                <button onClick={importBackup} className="rounded-2xl bg-purple-500 px-4 py-3 text-sm font-black text-black">Import backup</button>
+              </div> : null}
+
+              {tab === 'duplicates' ? <div className="space-y-3">{duplicates.map((group) => <div key={group.key} className="rounded-3xl border border-white/10 bg-white/[0.03] p-3"><p className="mb-2 text-sm font-black">{group.key} • {group.count}</p><div className="space-y-2">{group.channels.map((channel) => <ChannelManagerRow key={channel.channelId} channel={channel} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} />)}</div></div>)}{!duplicates.length ? <p className="rounded-2xl border border-white/10 p-5 text-center text-sm text-zinc-500">Click Find duplicates in Tools.</p> : null}</div> : null}
+            </main>
+
+            <aside className="min-h-0 space-y-3 overflow-y-auto rounded-3xl border border-white/10 bg-black/25 p-3">
+              <ServicePreviewPlayer channel={previewChannel} />
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-xs leading-5 text-zinc-400">
+                <p className="font-black text-white">Main panel</p>
+                <p>Use Add to Main to make channels appear in Live TV. Remove only hides from the main panel; Delete removes the database channel.</p>
+              </div>
+            </aside>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ChannelManagerRow({ channel, onPreview, onAction, selectedMode = false, onUp, onDown }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-2.5">
+      <div className="flex gap-3">
+        <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/5">{channel.logo ? <img src={channel.logo} alt="" className="max-h-full max-w-full object-contain" /> : <span className="text-[10px] text-zinc-500">TV</span>}</div>
+        <div className="min-w-0 flex-1"><p className="truncate text-sm font-black text-white">{channel.name}</p><p className="truncate text-xs text-zinc-500">{channel.category} • {channel.source} • {channel.format?.toUpperCase()} • {channel.workingStatus}</p></div>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        <button onClick={() => onPreview?.(channel)} className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-black">Preview</button>
+        {channel.selected ? <button onClick={() => onAction?.(channel, 'remove')} className="rounded-full border border-orange-400/30 px-2.5 py-1 text-[11px] font-black text-orange-100">Remove</button> : <button onClick={() => onAction?.(channel, 'add')} className="rounded-full bg-green-500 px-2.5 py-1 text-[11px] font-black text-black">Add to Main</button>}
+        <button onClick={() => onAction?.(channel, channel.favorite ? 'unfavorite' : 'favorite')} className="rounded-full border border-yellow-400/30 px-2.5 py-1 text-[11px] font-black text-yellow-100">{channel.favorite ? '★' : '☆'}</button>
+        <button onClick={() => onAction?.(channel, channel.hidden ? 'unhide' : 'hide')} className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-black">{channel.hidden ? 'Unhide' : 'Hide'}</button>
+        {selectedMode ? <><button onClick={() => onUp?.(channel)} className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-black">↑</button><button onClick={() => onDown?.(channel)} className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-black">↓</button></> : null}
+      </div>
+    </div>
   );
 }
