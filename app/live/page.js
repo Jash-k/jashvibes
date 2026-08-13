@@ -146,31 +146,32 @@ export default function LiveTVPage() {
       setError('');
       let data;
       if (nextSource === 'all') {
-        const [regularResult, pocketResult] = await Promise.allSettled([
-          fetch('/api/live-tv?playable=1', { cache: 'no-store' }).then(async (response) => {
-            const json = await response.json();
-            if (!response.ok) throw new Error(json?.error || 'Unable to load Live TV');
-            return json;
-          }),
-          fetch('/api/live-pocket?playable=1', { cache: 'no-store' }).then(async (response) => {
-            const json = await response.json();
-            if (!response.ok) throw new Error(json?.error || 'Unable to load Pocket Live');
-            return json;
-          }),
-        ]);
+        const regularPayload = await fetch('/api/live-tv?playable=1', { cache: 'no-store' }).then(async (response) => {
+          const json = await response.json();
+          if (!response.ok) throw new Error(json?.error || 'Unable to load Live TV');
+          return json;
+        });
 
-        const payloads = [regularResult, pocketResult]
-          .filter((result) => result.status === 'fulfilled')
-          .map((result) => result.value);
-        if (!payloads.length) throw new Error(regularResult.reason?.message || pocketResult.reason?.message || 'Unable to load Live TV');
-        data = {
-          updatedAt: new Date().toISOString(),
-          sources: payloads.flatMap((payload) => payload.sources || []),
-          channels: payloads.flatMap((payload) => payload.channels || []),
-          errors: [regularResult, pocketResult]
-            .filter((result) => result.status === 'rejected')
-            .map((result) => result.reason?.message || 'Source failed'),
-        };
+        // When the service DB has selected channels, /api/live-tv returns exactly
+        // the main panel list. Do not merge Pocket/default fallback channels here,
+        // otherwise unselected items appear in the main panel.
+        if (regularPayload.fromDb) {
+          data = regularPayload;
+        } else {
+          const pocketResult = await fetch('/api/live-pocket?playable=1', { cache: 'no-store' })
+            .then(async (response) => {
+              const json = await response.json();
+              if (!response.ok) throw new Error(json?.error || 'Unable to load Pocket Live');
+              return json;
+            })
+            .catch((error) => ({ channels: [], sources: [], errors: [error.message || 'Pocket Live failed'] }));
+          data = {
+            updatedAt: new Date().toISOString(),
+            sources: [...(regularPayload.sources || []), ...(pocketResult.sources || [])],
+            channels: [...(regularPayload.channels || []), ...(pocketResult.channels || [])],
+            errors: [...(regularPayload.errors || []), ...(pocketResult.errors || [])],
+          };
+        }
       } else if (nextSource === 'pocket-tamil') {
         const response = await fetch('/api/live-pocket?playable=1', { cache: 'no-store' });
         data = await response.json();
@@ -219,6 +220,9 @@ export default function LiveTVPage() {
       setShowFavoritesOnly(false);
       setLastUpdated(cached.lastUpdated || null);
       restoreScroll(LIVE_CACHE_KEY);
+      // Always revalidate from DB/service after painting cache. This prevents
+      // old fallback or unselected channels from staying in the main panel.
+      loadChannelsForSource('all');
       return;
     }
 
@@ -773,52 +777,142 @@ const SERVICE_TOKEN_KEY = 'jash_live_service_token';
 function ServicePreviewPlayer({ channel }) {
   const videoRef = useRef(null);
   const playerRef = useRef(null);
+  const loadSeqRef = useRef(0);
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!channel?.url || !videoRef.current) return;
+    const video = videoRef.current;
+    if (!channel?.url || !video) return;
+    const seq = loadSeqRef.current + 1;
+    loadSeqRef.current = seq;
     let cancelled = false;
+    let timeout = null;
+    let debounce = null;
+
     async function destroy() {
-      if (playerRef.current) {
-        try { await playerRef.current.destroy(); } catch {}
-        playerRef.current = null;
+      const player = playerRef.current;
+      playerRef.current = null;
+      if (player) {
+        try { await player.destroy(); } catch {}
       }
     }
+
     async function load() {
+      await destroy();
+      if (cancelled || loadSeqRef.current !== seq) return;
+      setStatus('loading');
+      setError('');
+      timeout = window.setTimeout(() => {
+        if (cancelled || loadSeqRef.current !== seq) return;
+        setStatus('error');
+        setError('Preview timed out. Try channel in main panel or another source.');
+        destroy();
+      }, 18000);
+
       try {
-        setStatus('loading');
-        setError('');
-        await destroy();
-        const video = videoRef.current;
         video.pause();
         video.removeAttribute('src');
         video.load();
+        video.controls = true;
+
         if (['hls', 'dash'].includes(channel.format)) {
-          const shakaModule = await import('shaka-player/dist/shaka-player.compiled.js');
+          const [shakaModule, muxModule] = await Promise.all([
+            import('shaka-player/dist/shaka-player.compiled.js'),
+            import('mux.js'),
+          ]);
+          if (cancelled || loadSeqRef.current !== seq) return;
           const shaka = shakaModule.default || window.shaka || shakaModule;
+          const muxjs = muxModule.default || muxModule;
+          window.muxjs = muxjs;
           shaka.polyfill?.installAll?.();
           const player = new shaka.Player();
           playerRef.current = player;
           await player.attach(video);
+          if (cancelled || loadSeqRef.current !== seq) return;
+
+          const clearKeys = buildClearKeys(channel);
+          player.configure({
+            drm: Object.keys(clearKeys).length ? { clearKeys } : {},
+            streaming: { bufferingGoal: 8, rebufferingGoal: 2, lowLatencyMode: true },
+            abr: { enabled: true, defaultBandwidthEstimate: 1_000_000 },
+          });
+
+          player.getNetworkingEngine()?.registerRequestFilter((requestType, request) => {
+            const uri = request.uris?.[0] || '';
+            const jioLike = isJioLike(channel, uri);
+            const hotstarLike = uri.includes('hotstar.com');
+            const fancodeLike = uri.includes('fancode.com') || uri.includes('fblive.fancode.com') || normalize(channel.category) === 'fancode' || normalize(channel.name).includes('fancode');
+
+            if (channel.headers && typeof channel.headers === 'object') {
+              Object.entries(channel.headers).forEach(([key, val]) => {
+                if (!key || val == null || /^cookie$/i.test(key)) return;
+                request.headers[key] = String(val);
+              });
+            }
+
+            if (channel.referer) request.headers.Referer = channel.referer;
+            else if (jioLike) request.headers.Referer = 'https://www.jiotv.co/';
+            else if (hotstarLike) request.headers.Referer = 'https://www.hotstar.com/';
+            else if (fancodeLike) request.headers.Referer = 'https://www.fancode.com/';
+
+            const userAgent = channel.userAgent ||
+              (jioLike ? 'plaYtv/7.1.5 (Linux;Android 13) ExoPlayerLib/2.11.6' : '') ||
+              (fancodeLike ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36' : '');
+            if (userAgent) request.headers['User-Agent'] = userAgent;
+
+            let nextUri = uri;
+            if (channel.cookie && (jioLike || (hotstarLike && !uri.includes('?'))) &&
+              (requestType === shaka.net.NetworkingEngine.RequestType.MANIFEST || requestType === shaka.net.NetworkingEngine.RequestType.SEGMENT)) {
+              nextUri = appendCookieToken(uri, channel.cookie);
+              request.uris[0] = nextUri;
+            }
+
+            if (isPocketChannel(channel) && /^https?:\/\//i.test(nextUri)) {
+              const fallbackReferer = channel.referer || (jioLike ? 'https://www.jiotv.co/' : '') || (hotstarLike ? 'https://www.hotstar.com/' : '') || (fancodeLike ? 'https://www.fancode.com/' : '');
+              request.uris[0] = buildPocketProxyUrl(nextUri, channel, fallbackReferer);
+              delete request.headers['User-Agent'];
+              delete request.headers.Referer;
+              delete request.headers.Cookie;
+            }
+          });
+
+          player.getNetworkingEngine()?.registerResponseFilter((requestType, response) => {
+            if (isPocketChannel(channel) && response?.uri) response.uri = restorePocketProxyUri(response.uri);
+          });
+
+          player.addEventListener('error', (event) => {
+            if (cancelled || loadSeqRef.current !== seq) return;
+            const detail = event.detail;
+            setStatus('error');
+            setError(`Preview error ${detail?.code || ''}`);
+          });
+
           await player.load(channel.url, undefined, channel.format === 'hls' ? 'application/x-mpegurl' : undefined);
         } else {
           video.src = channel.url;
           video.load();
         }
-        if (!cancelled) {
-          setStatus('ready');
-          video.play().catch(() => {});
-        }
+
+        if (cancelled || loadSeqRef.current !== seq) return;
+        if (timeout) window.clearTimeout(timeout);
+        setStatus('ready');
+        video.play().catch(() => {});
       } catch (err) {
-        if (!cancelled) {
-          setStatus('error');
-          setError(err.message || 'Preview failed');
-        }
+        if (cancelled || loadSeqRef.current !== seq) return;
+        if (timeout) window.clearTimeout(timeout);
+        setStatus('error');
+        setError(err.message || 'Preview failed');
       }
     }
-    load();
-    return () => { cancelled = true; destroy(); };
+
+    debounce = window.setTimeout(load, 180);
+    return () => {
+      cancelled = true;
+      if (debounce) window.clearTimeout(debounce);
+      if (timeout) window.clearTimeout(timeout);
+      destroy();
+    };
   }, [channel?.channelId, channel?.url]);
 
   return (
@@ -827,7 +921,7 @@ function ServicePreviewPlayer({ channel }) {
         {channel?.url ? <video ref={videoRef} className="h-full w-full object-fill" controls playsInline /> : <div className="grid h-full place-items-center text-xs text-zinc-500">Select a channel to preview</div>}
       </div>
       <div className="border-t border-white/10 px-3 py-2 text-[11px] text-zinc-400">
-        {channel?.name || 'No preview'} {status === 'loading' ? '• Loading…' : ''} {error ? `• ${error}` : ''}
+        {channel?.name || 'No preview'} {status === 'loading' ? '• Loading…' : ''} {status === 'ready' ? '• Ready' : ''} {error ? `• ${error}` : ''}
       </div>
     </div>
   );
@@ -841,6 +935,10 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
   const [sources, setSources] = useState([]);
   const [channels, setChannels] = useState([]);
   const [selectedChannels, setSelectedChannels] = useState([]);
+  const [mainPanelChannels, setMainPanelChannels] = useState([]);
+  const [mainPanelQuery, setMainPanelQuery] = useState('');
+  const [mainPanelCategory, setMainPanelCategory] = useState('all');
+  const [mainPanelSource, setMainPanelSource] = useState('all');
   const [categories, setCategories] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [duplicates, setDuplicates] = useState([]);
@@ -923,12 +1021,21 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
     }
   }
 
+
+  async function loadMainPanelPreview() {
+    if (!token) return;
+    const response = await fetch(`/api/live-tv?playable=1&profile=${encodeURIComponent(activeProfile)}`, { cache: 'no-store' });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Main panel preview failed');
+    setMainPanelChannels(data.channels || []);
+  }
+
   async function refreshAll() {
     if (!token) return;
     setLoading(true);
     setMessage('');
     try {
-      await Promise.all([loadSources(), loadProfiles(), loadChannels(), loadChannels({ selected: true })]);
+      await Promise.all([loadSources(), loadProfiles(), loadChannels(), loadChannels({ selected: true }), loadMainPanelPreview()]);
     } catch (err) {
       setMessage(err.message || 'Load failed');
     } finally {
@@ -943,7 +1050,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
     const timer = window.setTimeout(() => loadChannels(), 260);
     return () => window.clearTimeout(timer);
   }, [channelQuery]);
-  useEffect(() => { if (open && token) loadChannels({ selected: true }); }, [activeProfile]);
+  useEffect(() => { if (open && token) { loadChannels({ selected: true }); loadMainPanelPreview(); } }, [activeProfile]);
 
   async function syncSource(sourceId = '') {
     setLoading(true);
@@ -979,7 +1086,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
 
   async function channelAction(channel, action, patch = {}) {
     await api('/api/live-service/channels', { method: 'PATCH', body: JSON.stringify({ channelId: channel.channelId || channel.id, action, ...patch }) });
-    await Promise.all([loadChannels(), loadChannels({ selected: true }), loadSources()]);
+    await Promise.all([loadChannels(), loadChannels({ selected: true }), loadMainPanelPreview(), loadSources()]);
     onMainRefresh?.();
   }
 
@@ -1045,6 +1152,27 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
     await loadProfiles();
   }
 
+  const mainPanelCategories = useMemo(() => unique(mainPanelChannels.map((channel) => channel.category || 'Tamil')).sort(), [mainPanelChannels]);
+  const mainPanelSources = useMemo(() => {
+    const map = new Map();
+    sources.forEach((source) => map.set(source.sourceId || source.id, { id: source.sourceId || source.id, label: source.label }));
+    mainPanelChannels.forEach((channel) => {
+      const id = channel.sourceId || channel.source;
+      if (id && !map.has(id)) map.set(id, { id, label: channel.source || id });
+    });
+    return [...map.values()];
+  }, [sources, mainPanelChannels]);
+  const mainPanelFiltered = useMemo(() => {
+    const q = normalize(mainPanelQuery);
+    return mainPanelChannels.filter((channel) => {
+      if (!channel.playable) return false;
+      if (mainPanelCategory !== 'all' && channel.category !== mainPanelCategory) return false;
+      if (mainPanelSource !== 'all' && channel.sourceId !== mainPanelSource && channel.source !== mainPanelSource) return false;
+      if (!q) return true;
+      return normalize(`${channel.name} ${channel.category} ${channel.region} ${channel.source}`).includes(q);
+    });
+  }, [mainPanelChannels, mainPanelQuery, mainPanelCategory, mainPanelSource]);
+
   if (!open) return null;
 
   return (
@@ -1066,7 +1194,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
           <div className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-[16rem_minmax(0,1fr)_22rem]">
             <aside className="min-h-0 overflow-y-auto rounded-3xl border border-white/10 bg-black/25 p-3">
               <div className="grid gap-2">
-                {['sources', 'channels', 'selected', 'tools', 'duplicates'].map((id) => <button key={id} onClick={() => setTab(id)} className={`rounded-2xl px-4 py-3 text-left text-sm font-black capitalize ${tab === id ? 'bg-purple-500 text-black' : 'bg-white/[0.04] text-zinc-300'}`}>{id}</button>)}
+                {['sources', 'channels', 'main', 'selected', 'tools', 'duplicates'].map((id) => <button key={id} onClick={() => setTab(id)} className={`rounded-2xl px-4 py-3 text-left text-sm font-black capitalize ${tab === id ? 'bg-purple-500 text-black' : 'bg-white/[0.04] text-zinc-300'}`}>{id}</button>)}
               </div>
               <div className="mt-4 space-y-2">
                 <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white"><option value="">All sources</option>{sources.map((s) => <option key={s.sourceId || s.id} value={s.sourceId || s.id}>{s.label}</option>)}</select>
@@ -1097,6 +1225,19 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
               {tab === 'channels' ? <div className="space-y-3">
                 <div className="grid gap-2 sm:grid-cols-3"><input value={channelQuery} onChange={(e) => setChannelQuery(e.target.value)} placeholder="Search all channels" className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white" /><select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white"><option value="">All categories</option>{categories.map((c) => <option key={c} value={c}>{c}</option>)}</select><button onClick={() => loadChannels()} className="rounded-2xl border border-white/10 px-3 py-2 text-sm font-black">Apply</button></div>
                 {channels.map((channel) => <ChannelManagerRow key={channel.channelId} channel={channel} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} />)}
+              </div> : null}
+
+              {tab === 'main' ? <div className="space-y-3">
+                <div className="rounded-3xl border border-purple-300/20 bg-purple-500/10 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-black text-white">Main Panel Preview</p><p className="text-xs text-zinc-400">This list is fetched from /api/live-tv and should exactly match the main Live TV panel.</p></div><button onClick={loadMainPanelPreview} className="rounded-full border border-purple-300/30 px-3 py-1.5 text-xs font-black text-purple-100">Reload</button></div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                    <select value={mainPanelCategory} onChange={(event) => setMainPanelCategory(event.target.value)} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none"><option value="all">All categories</option>{mainPanelCategories.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+                    <select value={mainPanelSource} onChange={(event) => setMainPanelSource(event.target.value)} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none"><option value="all">All sources</option>{mainPanelSources.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
+                    <input value={mainPanelQuery} onChange={(event) => setMainPanelQuery(event.target.value)} placeholder="Search main panel" className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none" />
+                  </div>
+                </div>
+                {mainPanelFiltered.map((channel) => <ChannelManagerRow key={channel.channelId || channel.id} channel={channel} selectedMode onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} />)}
+                {!mainPanelFiltered.length ? <p className="rounded-2xl border border-white/10 p-5 text-center text-sm text-zinc-500">No main panel channels for this filter.</p> : null}
               </div> : null}
 
               {tab === 'selected' ? <div className="space-y-3">

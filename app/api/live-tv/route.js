@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getLiveTVChannels } from '@/lib/liveTv';
 import { getSelectedLiveChannels } from '@/lib/liveService';
 import LiveSource from '@/models/LiveSource';
+import LiveChannel from '@/models/LiveChannel';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,14 +17,26 @@ export async function GET(request) {
     if (source === 'all' && !workingOnly) {
       try {
         const selectedChannels = await getSelectedLiveChannels({ profileId });
+        const sources = await LiveSource.find({}).sort({ priority: 1 }).lean().catch(() => []);
         if (selectedChannels.length) {
-          const sources = await LiveSource.find({}).sort({ priority: 1 }).lean().catch(() => []);
           return NextResponse.json({
             updatedAt: new Date().toISOString(),
             source: 'db-selected',
             profile: profileId,
             count: selectedChannels.length,
             channels: playableOnly ? selectedChannels.filter((channel) => channel.playable) : selectedChannels,
+            sources: sources.map((item) => ({ id: item.sourceId, label: item.label, url: item.url, type: item.type })),
+            fromDb: true,
+          }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
+        }
+        const dbChannelCount = await LiveChannel.countDocuments({ hidden: { $ne: true } }).catch(() => 0);
+        if (dbChannelCount > 0) {
+          return NextResponse.json({
+            updatedAt: new Date().toISOString(),
+            source: 'db-selected-empty',
+            profile: profileId,
+            count: 0,
+            channels: [],
             sources: sources.map((item) => ({ id: item.sourceId, label: item.label, url: item.url, type: item.type })),
             fromDb: true,
           }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
