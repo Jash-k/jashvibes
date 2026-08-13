@@ -1078,6 +1078,10 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
 
             <main className="min-h-0 overflow-y-auto rounded-3xl border border-white/10 bg-black/20 p-3">
               {tab === 'sources' ? <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-3xl border border-white/10 bg-white/[0.03] p-3">
+                  <div><p className="text-sm font-black text-white">Sources</p><p className="text-xs text-zinc-500">Sync Jio first, then other sources. Channel counts update after sync.</p></div>
+                  <button onClick={() => syncSource('')} disabled={loading} className="rounded-full bg-green-500 px-4 py-2 text-xs font-black text-black disabled:opacity-60">Sync all enabled</button>
+                </div>
                 <form onSubmit={saveSource} className="grid gap-2 rounded-3xl border border-white/10 bg-white/[0.03] p-3 sm:grid-cols-2">
                   <input value={sourceForm.label} onChange={(e) => setSourceForm((f) => ({ ...f, label: e.target.value }))} placeholder="Source name" className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white" />
                   <input value={sourceForm.url} onChange={(e) => setSourceForm((f) => ({ ...f, url: e.target.value }))} placeholder="M3U/JSON URL" className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white" />
@@ -1085,7 +1089,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
                   <button className="rounded-2xl bg-purple-500 px-3 py-2 text-sm font-black text-black">Add / Save Source</button>
                 </form>
                 {sources.map((source) => <div key={source.sourceId || source.id} className="rounded-3xl border border-white/10 bg-white/[0.03] p-3">
-                  <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-black">{source.label}</p><p className="break-all text-xs text-zinc-500">{source.url}</p><p className="mt-1 text-xs text-zinc-500">{source.channelCount || 0} channels • {source.selectedCount || 0} selected • priority {source.priority}</p></div><span className="rounded-full bg-white/[0.06] px-2 py-1 text-[10px] font-bold uppercase">{source.type}</span></div>
+                  <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-black">{source.label}</p><p className="break-all text-xs text-zinc-500">{source.url}</p><p className="mt-1 text-xs text-zinc-500">{source.channelCount || 0} channels • {source.selectedCount || 0} selected • priority {source.priority}</p>{source.lastError ? <p className="mt-2 rounded-xl border border-red-400/25 bg-red-500/10 p-2 text-xs text-red-200">{source.lastError}</p> : null}</div><span className="rounded-full bg-white/[0.06] px-2 py-1 text-[10px] font-bold uppercase">{source.type}</span></div>
                   <div className="mt-3 flex flex-wrap gap-2"><button onClick={() => syncSource(source.sourceId || source.id)} className="rounded-full bg-green-500 px-3 py-1.5 text-xs font-black text-black">Sync</button><button onClick={() => patchSource(source, { enabled: !source.enabled })} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-black">{source.enabled ? 'Disable' : 'Enable'}</button><button onClick={() => patchSource(source, { autoPurge: !source.autoPurge })} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-black">Auto purge {source.autoPurge ? 'On' : 'Off'}</button><button onClick={() => deleteSource(source, false)} className="rounded-full border border-red-400/30 px-3 py-1.5 text-xs font-black text-red-200">Delete</button></div>
                 </div>)}
               </div> : null}
