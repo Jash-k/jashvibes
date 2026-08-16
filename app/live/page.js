@@ -72,6 +72,12 @@ function buildClearKeys(channel) {
   return {};
 }
 
+function isShakaDrmLoadError(err) {
+  if (!err) return false;
+  // 6001 = REQUESTED_KEY_SYSTEM_CONFIG_UNAVAILABLE; 6 = Shaka's DRM error bucket.
+  return err.code === 6001 || err.category === 6;
+}
+
 function getLocalJioCookie() {
   if (typeof window === 'undefined') return '';
   try {
@@ -364,6 +370,7 @@ export default function LiveTVPage() {
         }
 
         const clearKeys = buildClearKeys(active);
+        let drmKeysEnabled = Object.keys(clearKeys).length > 0;
         player.configure({
           drm: Object.keys(clearKeys).length ? { clearKeys } : {},
           manifest: { defaultPresentationDelay: 5 },
@@ -460,10 +467,32 @@ export default function LiveTVPage() {
         setPlayerStatus('loading');
         const mimeType = active.format === 'hls' ? 'application/x-mpegurl' : undefined;
         const directUrl = activeUsesJio ? appendJioCookieToUrl(jioPlaybackUrl, jioCookie) : active.url;
-        try {
-          await player.load(directUrl, undefined, mimeType);
-        } catch (directError) {
-          if (!activeUsesJio || !isCurrentLoad()) throw directError;
+        // Stream4Liv parity: feeds occasionally ship stale or mislabeled
+        // ClearKey pairs, and a DRM config failure must not kill an otherwise
+        // working stream — retry once with the keys dropped before giving up.
+        const loadWithDrmRetry = async (uri) => {
+          try {
+            await player.load(uri, undefined, mimeType);
+            return null;
+          } catch (firstError) {
+            if (drmKeysEnabled && isShakaDrmLoadError(firstError)) {
+              drmKeysEnabled = false;
+              player.configure({ drm: { clearKeys: {} } });
+              console.warn('[live-tv] DRM load failed; retrying without ClearKey', firstError);
+              try {
+                await player.load(uri, undefined, mimeType);
+                return null;
+              } catch (retryError) {
+                return retryError;
+              }
+            }
+            return firstError;
+          }
+        };
+        let loadFailure = await loadWithDrmRetry(directUrl);
+        if (!isCurrentLoad()) return;
+        if (loadFailure) {
+          if (!activeUsesJio) throw loadFailure;
           setPlayerStatus('loading');
           setPlayerError('Direct Jio playback failed. Refreshing the token and trying the secure server route…');
           jioAccess = await resolveJioAccess(active, { force: true });
@@ -473,9 +502,10 @@ export default function LiveTVPage() {
           jioProxyEnabled = true;
           await player.unload().catch(() => {});
           const proxiedUrl = buildJioProxyUrl(appendJioCookieToUrl(jioPlaybackUrl, jioCookie), jioCookie);
-          await player.load(proxiedUrl, undefined, mimeType);
+          loadFailure = await loadWithDrmRetry(proxiedUrl);
+          if (!isCurrentLoad()) return;
+          if (loadFailure) throw loadFailure;
         }
-        if (!isCurrentLoad()) return;
 
         if (loadTimeout) window.clearTimeout(loadTimeout);
         setPlayerError('');
@@ -859,6 +889,7 @@ function ServicePreviewPlayer({ channel }) {
           if (jioPlayback && !jioCookie) throw new Error('No valid Jio token is available. Add one in Tools.');
 
           const clearKeys = buildClearKeys(channel);
+          let drmKeysEnabled = Object.keys(clearKeys).length > 0;
           player.configure({
             drm: Object.keys(clearKeys).length ? { clearKeys } : {},
             streaming: { bufferingGoal: 8, rebufferingGoal: 2, lowLatencyMode: true },
@@ -924,17 +955,37 @@ function ServicePreviewPlayer({ channel }) {
 
           const mimeType = channel.format === 'hls' ? 'application/x-mpegurl' : undefined;
           const directUrl = jioPlayback ? appendJioCookieToUrl(jioPlaybackUrl, jioCookie) : channel.url;
-          try {
-            await player.load(directUrl, undefined, mimeType);
-          } catch (directError) {
-            if (!jioPlayback || cancelled || loadSeqRef.current !== seq) throw directError;
+          const loadWithDrmRetry = async (uri) => {
+            try {
+              await player.load(uri, undefined, mimeType);
+              return null;
+            } catch (firstError) {
+              // Streams can ship stale ClearKey pairs; drop the keys once and
+              // retry before giving up on the route (Stream4Liv parity).
+              if (drmKeysEnabled && isShakaDrmLoadError(firstError)) {
+                drmKeysEnabled = false;
+                player.configure({ drm: { clearKeys: {} } });
+                try {
+                  await player.load(uri, undefined, mimeType);
+                  return null;
+                } catch (retryError) {
+                  return retryError;
+                }
+              }
+              return firstError;
+            }
+          };
+          let loadFailure = await loadWithDrmRetry(directUrl);
+          if (!cancelled && loadSeqRef.current === seq && loadFailure) {
+            if (!jioPlayback) throw loadFailure;
             jioAccess = await resolveJioAccess(channel, { force: true });
             jioCookie = jioAccess.cookie;
             jioPlaybackUrl = jioAccess.playbackUrl || channel.url;
             if (!jioCookie) throw new Error('Jio token refresh failed. Add a fresh token in Tools.');
             jioProxyEnabled = true;
             await player.unload().catch(() => {});
-            await player.load(buildJioProxyUrl(appendJioCookieToUrl(jioPlaybackUrl, jioCookie), jioCookie), undefined, mimeType);
+            loadFailure = await loadWithDrmRetry(buildJioProxyUrl(appendJioCookieToUrl(jioPlaybackUrl, jioCookie), jioCookie));
+            if (loadFailure) throw loadFailure;
           }
         } else {
           video.src = channel.url;

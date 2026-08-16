@@ -21,7 +21,7 @@ Tamil-first private streaming hub — movies, series, live TV, music, sports and
 - **Movies & Series** — TamilMV daily catalog + TMDB metadata, MiX (TamilOTT) catalog, multi-provider embed playback with per-provider health checks.
 - **▶ Continue Watching & ❤ My List** — automatic watch history with playback-position resume (direct streams), favorites, per-title server memory. Stored in `localStorage` — no account, no DB cost.
 - **Gesture video player** — double-tap seek ±10s (stacks), vertical swipe = volume (right) / brightness (left), horizontal swipe = scrub, long-press = 2× speed, screen lock, quality/subtitle/speed panels, external `.srt/.vtt` upload.
-- **Live TV** — Jio (ClearKey/Shaka), M3U sources, manual 6-catalog admin panel (Live Service).
+- **Live TV** — Jio (ClearKey/Shaka), Sony Ten/Sports Jio re-stream source, M3U sources, manual 6-catalog admin panel (Live Service). New default sources self-seed with a one-time background sync; only the curated Tamil cricket feeds auto-publish, everything else needs manual mapping.
 - **Music (ராக வானம்)** — JioSaavn search, charts, albums, artists, playlists, Spotify import.
 - **Sports** — cricket live/scores (BCCI/ICC/IPL/WT20) + match center.
 - **Classics** — VOD M3U catalogs with TMDB matching.
