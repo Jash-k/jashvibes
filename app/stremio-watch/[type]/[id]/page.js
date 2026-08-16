@@ -21,6 +21,16 @@ function isDash(url = '') {
   return String(url).toLowerCase().includes('.mpd');
 }
 
+// Telegram-based addons stream MP4 as sequential chunks with no Range
+// support, which makes the browser video element unseekable. Routing those
+// streams through our Range-emulating relay makes seeking work; sources that
+// already honour Range pass straight through, so this is always safe.
+function proxiedStreamUrl(url = '') {
+  const value = String(url || '');
+  if (!/^https?:\/\//i.test(value) || isDash(value)) return value;
+  return `/api/stream-proxy?u=${encodeURIComponent(value)}`;
+}
+
 function compactQualityLabel(stream = {}, index = 0) {
   const text = `${stream.label || ''} ${stream.title || ''} ${stream.name || ''} ${stream.size || ''}`;
   const resolution = text.match(/\b(2160p|1440p|1080p|720p|576p|540p|480p|360p|240p|4k)\b/i)?.[1]?.replace(/^4k$/i, '4K') || '';
@@ -76,6 +86,7 @@ export default function StremioPlayerPage() {
   const [selectedEpisodeNumber, setSelectedEpisodeNumber] = useState(Number(searchParams?.get('episode') || idEpisodeMatch?.[2] || 1));
   const [streams, setStreams] = useState([]);
   const [streamIndex, setStreamIndex] = useState(0);
+  const [seekInfo, setSeekInfo] = useState(null);
 
   function seekBy(seconds) {
     const video = videoRef.current;
@@ -228,6 +239,32 @@ export default function StremioPlayerPage() {
     : item?.title || activeStream?.title || 'Stremio';
   const directStremioActive = Boolean(activeStream?.url && !isDash(activeStream.url));
 
+  // Ask the relay whether this stream is seekable (native Range, emulated
+  // Range, or unseekable because the source hides its size entirely).
+  useEffect(() => {
+    setSeekInfo(null);
+    const url = activeStream?.url;
+    if (!url || isDash(url) || !/^https?:\/\//i.test(url)) return;
+    let cancelled = false;
+    fetch(`/api/stream-proxy?u=${encodeURIComponent(url)}&ping=1`, { cache: 'no-store' })
+      .then((response) => response.json())
+      .then((data) => { if (!cancelled) setSeekInfo(data?.ok ? data : null); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeStream?.url]);
+
+  // "Single screen": turn the player shell into a full-tab theatre view —
+  // same tab, same player UI, nothing else on screen.
+  async function enterSingleScreen() {
+    const shell = shellRef.current;
+    if (!shell) return;
+    try {
+      if (window.jashRequestFullscreen) await window.jashRequestFullscreen(shell);
+      else if (shell.requestFullscreen) await shell.requestFullscreen();
+      else if (shell.webkitRequestFullscreen) shell.webkitRequestFullscreen();
+    } catch {}
+  }
+
   return (
     <main className="min-h-dvh bg-[#050012] text-zinc-100">
       <header className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/92 px-3 py-2 backdrop-blur-xl sm:px-4 sm:py-5">
@@ -253,7 +290,7 @@ export default function StremioPlayerPage() {
             <div className="relative aspect-video h-full w-full bg-black fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:aspect-auto">
               {directStremioActive ? (
                 <VideoPlayer
-                  src={activeStream.url}
+                  src={proxiedStreamUrl(activeStream.url)}
                   title={activePlayerTitle}
                   poster={currentEpisodeInfo?.thumbnail || item?.backdropUrl || item?.posterUrl || ''}
                   qualityOptions={streamQualityOptions}
@@ -285,7 +322,36 @@ export default function StremioPlayerPage() {
           ) : null}
 
           <div className="rounded-2xl border border-white/10 bg-zinc-950/80 p-3 sm:rounded-3xl sm:p-4">
-            <h1 className="text-2xl font-black text-white">{item?.title || 'Stremio'}</h1>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="text-2xl font-black text-white">{item?.title || 'Stremio'}</h1>
+                {directStremioActive && seekInfo ? (
+                  <p className={`mt-1 inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${seekInfo.seekable ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200' : 'border-amber-400/30 bg-amber-500/10 text-amber-100'}`}>
+                    {seekInfo.emulatedRange ? '⤾ Seeking enabled · Jash relay' : seekInfo.nativeRange ? '⤾ Seeking enabled' : 'Seeking limited — source streams as chunks without a size'}
+                  </p>
+                ) : null}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={enterSingleScreen}
+                  disabled={!activeStream?.url}
+                  className="rounded-2xl border border-fuchsia-400/25 bg-fuchsia-500/10 px-4 py-2.5 text-xs font-black text-fuchsia-100 transition hover:border-fuchsia-300/70 disabled:cursor-not-allowed disabled:opacity-40"
+                  title="Player fills this entire tab (single screen theatre)"
+                >
+                  🎬 Single Screen
+                </button>
+                {activeStream?.url ? (
+                  <a
+                    href={activeStream.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-2xl border border-white/10 px-4 py-2.5 text-xs font-black text-zinc-300 transition hover:border-fuchsia-400/50 hover:text-white"
+                    title="Open the raw stream URL bypassing the relay"
+                  >Direct</a>
+                ) : null}
+              </div>
+            </div>
             {currentEpisodeInfo ? <p className="mt-1 text-sm text-fuchsia-200">S{currentEpisodeInfo.season} E{currentEpisodeInfo.episode} • {currentEpisodeInfo.title}</p> : null}
             <p className="mt-2 text-sm leading-6 text-zinc-400">{currentEpisodeInfo?.synopsis || item?.synopsis || ''}</p>
             <div className="mt-4 space-y-3">

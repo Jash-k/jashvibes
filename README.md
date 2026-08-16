@@ -23,9 +23,9 @@ Tamil-first private streaming hub — movies, series, live TV, music, sports and
 - **Gesture video player** — double-tap seek ±10s (stacks), vertical swipe = volume (right) / brightness (left), horizontal swipe = scrub, long-press = 2× speed, screen lock, quality/subtitle/speed panels, external `.srt/.vtt` upload.
 - **Live TV** — Jio (ClearKey/Shaka), Sony Ten/Sports Jio re-stream source, M3U sources, manual 6-catalog admin panel (Live Service). New default sources self-seed with a one-time background sync; only the curated Tamil cricket feeds auto-publish, everything else needs manual mapping.
 - **Music (ராக வானம்)** — JioSaavn search, charts, albums, artists, playlists, Spotify import.
-- **Sports** — cricket live/scores (BCCI/ICC/IPL/WT20) + match center.
+- **Sports** — cricket live/scores (BCCI/ICC/IPL/WT20) + match center with match-id-canonical scorecards (same mechanism as the reference match-center links).
 - **Classics** — VOD M3U catalogs with TMDB matching.
-- **Stremio** — in-app catalog/meta/stream browser.
+- **Stremio** — in-app catalog/meta/stream browser. Telegram chunk-stream sources are relayed through `/api/stream-proxy`, which emulates HTTP Range so seeking works; single-screen theatre mode on the watch page.
 - **PWA** — installable, offline page, day/night toggle, fullscreen landscape lock.
 
 ---

@@ -95,6 +95,22 @@ function inningsArray(payload = {}) {
   return asArray(payload?.innings || payload?.Innings || payload?.data?.innings || payload?.data?.Innings);
 }
 
+// One-line score for a team, taken from the scorecard's own innings so the
+// header always reflects THIS match — e.g. "158/6 (20 ov)".
+function inningsScoreLine(innings = [], teamId = '') {
+  if (!teamId) return '';
+  const owned = innings.filter((inn) => String(
+    inn.Battingteam || inn.BattingTeam || inn.battingteam || inn.teamId || '',
+  ) === String(teamId));
+  const inn = owned[owned.length - 1];
+  if (!inn) return '';
+  const total = pick(inn, ['Total', 'Runs', 'TotalRuns'], '');
+  if (total === '') return '';
+  const wickets = pick(inn, ['Wickets', 'Wkts'], '');
+  const overs = pick(inn, ['Overs', 'Ov'], '');
+  return `${total}${wickets !== '' ? `/${wickets}` : ''}${overs !== '' ? ` (${overs} ov)` : ''}`;
+}
+
 function battingRows(inn = {}) {
   return asArray(inn.BattingCard || inn.Batsmen || inn.batsmen || inn.batting || inn.Batting);
 }
@@ -428,8 +444,19 @@ function Wt20MatchCenter({ payload }) {
   const awayTeam = teams?.[md?.Team_Away] || {};
   const home = pick(matchData, ['teama', 'home'], pick(homeTeam, ['Name_Full', 'Name', 'Team_Name'], 'Team A'));
   const away = pick(matchData, ['teamb', 'away'], pick(awayTeam, ['Name_Full', 'Name', 'Team_Name'], 'Team B'));
-  const isLive = md?.Match?.Live === true || md?.Match?.live === true;
-  const status = isLive ? 'live' : innings.some((inn) => pick(inn, ['Total', 'Runs'], '')) ? 'completed' : 'upcoming';
+  // Canonical state from the scorecard itself, not from the listing payload:
+  // live only when the feed marks it live, completed when it carries a result.
+  const resultText = String(md?.Result?.Text || md?.Equation || matchData.match_result || '').trim();
+  const isLive = md?.Match?.Live === true || md?.Match?.live === true || matchData.live === true || matchData.Live === true;
+  const status = isLive
+    ? 'live'
+    : (resultText || innings.some((inn) => pick(inn, ['Total', 'Runs'], ''))) ? 'completed' : 'upcoming';
+  // Hero scores come from this match's innings (backend-canonical), with the
+  // schedule payload's scores as fallback while the card is still upcoming.
+  const homeScore = inningsScoreLine(innings, md?.Team_Home)
+    || matchData.teama_score || matchData.score1 || '';
+  const awayScore = inningsScoreLine(innings, md?.Team_Away)
+    || matchData.teamb_score || matchData.score2 || '';
   const overview = [
     { label: 'Series', value: md?.Series?.Name || matchData.series_name },
     { label: 'Venue', value: md?.Venue?.Name || matchData.venue_name },
@@ -441,7 +468,7 @@ function Wt20MatchCenter({ payload }) {
 
   return (
     <div className="space-y-5">
-      <Hero provider="ICC WT20" title={`${teamShort(home)} vs ${teamShort(away)}`} subtitle={`${home} vs ${away}`} status={status} scoreA={{ team: home, score: '' }} scoreB={{ team: away, score: '' }} meta={overview.slice(0, 4)} />
+      <Hero provider="ICC WT20" title={`${teamShort(home)} vs ${teamShort(away)}`} subtitle={resultText || `${home} vs ${away}`} status={status} scoreA={{ team: home, score: homeScore }} scoreB={{ team: away, score: awayScore }} meta={overview.slice(0, 4)} />
       <TabBar tabs={['Overview', 'Scorecard', 'Bowling']} active={tab} onChange={setTab} />
       {error ? <EmptyPanel text={error} /> : null}
       {!data && !error ? <EmptyPanel text="Loading ICC scorecard…" /> : null}
