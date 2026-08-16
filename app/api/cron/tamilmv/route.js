@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { scrapeTamilMV } from '@/lib/tamilmvScraper';
 import dbConnect from '@/lib/db';
+import { verifyRequestToken } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -8,10 +9,17 @@ export const dynamic = 'force-dynamic';
 const COLLECTION_NAME = 'tamilmv_scrapes';
 
 function isAuthorized(request) {
+  // A logged-in owner (valid app session) may always trigger the cron.
+  if (verifyRequestToken(request)) return true;
+
   const token = new URL(request.url).searchParams.get('token') || request.headers.get('x-cron-token') || '';
   const expected = process.env.CRON || process.env.CRON_SECRET || process.env.SCRAPE || process.env.SCRAPE_TOKEN || '';
-  if (!expected) return true;
-  return token && token === expected;
+
+  // Fail CLOSED: this route is exempt from the middleware session check so
+  // external schedulers can call it, therefore its own token check must never
+  // fail open. Previously it allowed everyone when no CRON secret was set.
+  if (!expected) return false;
+  return Boolean(token) && token === expected;
 }
 
 export async function GET(request) {

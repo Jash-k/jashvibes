@@ -76,41 +76,12 @@ export default function StremioPlayerPage() {
   const [selectedEpisodeNumber, setSelectedEpisodeNumber] = useState(Number(searchParams?.get('episode') || idEpisodeMatch?.[2] || 1));
   const [streams, setStreams] = useState([]);
   const [streamIndex, setStreamIndex] = useState(0);
-  const [audioTracks, setAudioTracks] = useState([]);
-  const [audioTrackIndex, setAudioTrackIndex] = useState(0);
 
   function seekBy(seconds) {
     const video = videoRef.current;
     if (!video) return;
     const max = Number.isFinite(video.duration) ? video.duration : Number.MAX_SAFE_INTEGER;
     video.currentTime = Math.max(0, Math.min(max, (video.currentTime || 0) + seconds));
-  }
-
-  function refreshAudioTracks() {
-    const tracks = videoRef.current?.audioTracks;
-    if (!tracks?.length) {
-      setAudioTracks([]);
-      setAudioTrackIndex(0);
-      return;
-    }
-    const list = Array.from({ length: tracks.length }, (_, index) => ({
-      index,
-      label: tracks[index].label || tracks[index].language || `A${index + 1}`,
-      language: tracks[index].language || '',
-      enabled: Boolean(tracks[index].enabled),
-    }));
-    const enabledIndex = list.find((item) => item.enabled)?.index ?? 0;
-    setAudioTracks(list);
-    setAudioTrackIndex(enabledIndex);
-  }
-
-  function cycleAudioTrack() {
-    const tracks = videoRef.current?.audioTracks;
-    if (!tracks?.length) return;
-    const next = (audioTrackIndex + 1) % tracks.length;
-    for (let index = 0; index < tracks.length; index += 1) tracks[index].enabled = index === next;
-    setAudioTrackIndex(next);
-    refreshAudioTracks();
   }
 
   useEffect(() => {
@@ -222,8 +193,6 @@ export default function StremioPlayerPage() {
 
     if (!url || !isDash(url)) {
       destroyPlayer();
-      setAudioTracks([]);
-      setAudioTrackIndex(0);
       return () => { cancelled = true; };
     }
 
@@ -236,8 +205,6 @@ export default function StremioPlayerPage() {
         video.pause();
         video.removeAttribute('src');
         video.load();
-        setAudioTracks([]);
-        setAudioTrackIndex(0);
 
         const shakaModule = await import('shaka-player/dist/shaka-player.compiled.js');
         const shaka = shakaModule.default || window.shaka || shakaModule;
@@ -246,7 +213,7 @@ export default function StremioPlayerPage() {
         playerRef.current = player;
         await player.attach(video);
         await player.load(url);
-        if (!cancelled) { refreshAudioTracks(); window.setTimeout(refreshAudioTracks, 900); video.play().catch(() => {}); }
+        if (!cancelled) video.play().catch(() => {});
       } catch (err) {
         if (!cancelled) setError(err.message || 'DASH playback failed. Try another stream quality.');
       }
@@ -254,18 +221,6 @@ export default function StremioPlayerPage() {
 
     loadDash();
     return () => { cancelled = true; destroyPlayer(); };
-  }, [activeStream?.url]);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const onLoaded = () => refreshAudioTracks();
-    video.addEventListener('loadedmetadata', onLoaded);
-    video.addEventListener('loadeddata', onLoaded);
-    return () => {
-      video.removeEventListener('loadedmetadata', onLoaded);
-      video.removeEventListener('loadeddata', onLoaded);
-    };
   }, [activeStream?.url]);
 
   const activePlayerTitle = currentEpisodeInfo
@@ -318,16 +273,14 @@ export default function StremioPlayerPage() {
 
           {!directStremioActive ? (
             <div className="rounded-3xl border border-fuchsia-400/15 bg-zinc-950/85 p-3 shadow-xl shadow-black/25">
-              <div className="grid grid-cols-4 gap-2 sm:flex sm:flex-wrap sm:items-center">
+              <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center">
                 <SymbolButton onClick={() => seekBy(-60)} title="Back 1 minute">↶1m</SymbolButton>
                 <SymbolButton onClick={() => seekBy(-30)} title="Back 30 seconds">↶30</SymbolButton>
                 <SymbolButton onClick={() => seekBy(-10)} title="Back 10 seconds">↶10</SymbolButton>
-                <SymbolButton onClick={cycleAudioTrack} disabled={!audioTracks.length} title={audioTracks.length ? `Audio ${audioTracks[audioTrackIndex]?.label || audioTrackIndex + 1}` : 'No alternate audio tracks detected'}>🔊</SymbolButton>
                 <SymbolButton onClick={() => seekBy(10)} title="Forward 10 seconds">10↷</SymbolButton>
                 <SymbolButton onClick={() => seekBy(30)} title="Forward 30 seconds">30↷</SymbolButton>
                 <SymbolButton onClick={() => seekBy(60)} title="Forward 1 minute">1m↷</SymbolButton>
               </div>
-              {audioTracks.length ? <p className="mt-2 truncate px-1 text-[11px] font-semibold text-zinc-500">🔊 {audioTracks[audioTrackIndex]?.label || `A${audioTrackIndex + 1}`}</p> : null}
             </div>
           ) : null}
 

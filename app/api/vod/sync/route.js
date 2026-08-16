@@ -6,15 +6,21 @@ import {
   matchMovieToTMDB,
   runLimitedConcurrency,
 } from '@/lib/vodM3u';
+import { verifyRequestToken } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 function isAuthorized(request) {
+  // A logged-in owner (valid app session) may always sync.
+  if (verifyRequestToken(request)) return true;
+
   const token = new URL(request.url).searchParams.get('token') || request.headers.get('x-sync-token') || '';
   const expected = process.env.SYNC || process.env.VOD_SYNC || process.env.VOD_SYNC_TOKEN || '';
-  if (!expected) return true;
-  return token && token === expected;
+
+  // Fail CLOSED: previously allowed everyone when no sync token was set.
+  if (!expected) return false;
+  return Boolean(token) && token === expected;
 }
 
 function mergeByKey(entries = []) {

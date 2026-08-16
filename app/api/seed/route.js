@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import Media from '@/models/Media';
+import { verifyRequestToken } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -8,11 +9,15 @@ export const dynamic = 'force-dynamic';
 const SCREENSCAPE_BASE_URL = 'https://screenscapeapi.dev';
 
 function requireSeedToken(request) {
+  // A logged-in owner (valid app session) may always seed.
+  if (verifyRequestToken(request)) return true;
+
   const seedToken = process.env.SEED || process.env.SEED_TOKEN;
 
-  // If SEED_TOKEN is configured, require it. This prevents public users from
-  // repeatedly inserting demo data into your database.
-  if (!seedToken) return true;
+  // Fail CLOSED: when no seed token is configured the route must not be
+  // publicly callable. Previously this returned true (fail-open), letting
+  // anyone write demo data into the database.
+  if (!seedToken) return false;
 
   const { searchParams } = new URL(request.url);
   return searchParams.get('token') === seedToken;

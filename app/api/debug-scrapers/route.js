@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { autoSearchScrapers } from '@/lib/autoScraper';
+import { verifyRequestToken } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -9,8 +10,13 @@ export async function GET(request) {
     const debugToken = process.env.SEED || process.env.SEED_TOKEN;
     const { searchParams } = new URL(request.url);
 
-    if (debugToken && searchParams.get('token') !== debugToken) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    // Fail CLOSED: this route exposes internal scraper behavior. Allow only a
+    // valid app session, or the SEED token when one is configured. Previously
+    // it was open to everyone when SEED_TOKEN was unset.
+    if (!verifyRequestToken(request)) {
+      if (!debugToken || searchParams.get('token') !== debugToken) {
+        return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+      }
     }
 
     const tmdbId = Number(searchParams.get('tmdbId'));

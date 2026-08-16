@@ -3,6 +3,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
+import {
+  getHistoryEntry,
+  getLastProvider,
+  isFavoriteItem,
+  makeWatchKey,
+  saveWatchProgress,
+  setLastProvider,
+  toggleFavoriteItem,
+  upsertHistoryEntry,
+  useLibraryVersion,
+} from '@/lib/watchStore';
 
 function isHlsUrl(url = '') {
   return String(url || '').toLowerCase().includes('.m3u8') || String(url || '').toLowerCase().includes('m3u8');
@@ -177,6 +188,11 @@ export default function WatchByTMDBPage() {
   const [seriesMetaStatus, setSeriesMetaStatus] = useState('idle');
   const language = 'tam';
   const [provider, setProvider] = useState(isOttTitleOnly ? 'tamilott' : 'auto');
+  const [providerChecked, setProviderChecked] = useState(false);
+  const [titleMeta, setTitleMeta] = useState(null);
+  const [pageMounted, setPageMounted] = useState(false);
+  const metaRef = useRef(null);
+  useLibraryVersion();
   const [popupBlocker, setPopupBlocker] = useState(true);
   const [streamUrl, setStreamUrl] = useState('');
   const [streamFallbacks, setStreamFallbacks] = useState([]);
@@ -200,6 +216,57 @@ export default function WatchByTMDBPage() {
   const [resolvedOttStreamId, setResolvedOttStreamId] = useState('');
   const [stremioCheck, setStremioCheck] = useState({ status: 'idle', available: false, href: '', count: 0, error: '' });
   const activeProvider = playerMode === 'trailer' ? 'trailer' : (resolvedProviderId || (isOttTitleOnly ? 'tamilott' : provider));
+
+  const watchKey = useMemo(
+    () => makeWatchKey({ type: isSeries ? 'series' : 'movie', tmdbId, ottTitle: isOttTitleOnly ? ottTitle : '' }),
+    [isSeries, tmdbId, isOttTitleOnly, ottTitle],
+  );
+
+  // Mark mounted (library data lives in localStorage — client only).
+  useEffect(() => setPageMounted(true), []);
+
+  // Restore the last manually selected server for this title BEFORE the first
+  // resolve attempt, so returning users skip straight to their working source.
+  useEffect(() => {
+    if (isOttTitleOnly) {
+      setProviderChecked(true);
+      return;
+    }
+    try {
+      const saved = getLastProvider(watchKey);
+      if (saved && saved !== provider) setProvider(saved);
+    } catch {}
+    setProviderChecked(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchKey]);
+
+  // Load lightweight title metadata used for Continue Watching / My List.
+  useEffect(() => {
+    let cancelled = false;
+    metaRef.current = null;
+    setTitleMeta(null);
+
+    async function loadMeta() {
+      if (isOttTitleOnly) {
+        const meta = { title: ottTitle || 'TamilOTT Title', posterUrl: '', year: ottYear || '' };
+        metaRef.current = meta;
+        if (!cancelled) setTitleMeta(meta);
+        return;
+      }
+      if (!tmdbId || !type) return;
+      try {
+        const response = await fetch(`/api/tmdb/meta?type=${encodeURIComponent(type)}&tmdbId=${encodeURIComponent(tmdbId)}`, { cache: 'no-store' });
+        const data = await response.json().catch(() => ({}));
+        if (!cancelled && data?.ok) {
+          metaRef.current = data;
+          setTitleMeta(data);
+        }
+      } catch {}
+    }
+
+    loadMeta();
+    return () => { cancelled = true; };
+  }, [type, tmdbId, isOttTitleOnly, ottTitle, ottYear]);
 
   const resolveUrl = useMemo(() => {
     if (!type || !tmdbId) return null;
@@ -364,7 +431,8 @@ export default function WatchByTMDBPage() {
   }, [episodeOptions, episode]);
 
   useEffect(() => {
-    if (!resolveUrl) return;
+    // Wait until the saved-provider check ran, so we don't resolve twice.
+    if (!resolveUrl || !providerChecked) return;
 
     const controller = new AbortController();
 
@@ -420,7 +488,26 @@ export default function WatchByTMDBPage() {
     resolveSources();
 
     return () => controller.abort();
-  }, [resolveUrl]);
+  }, [resolveUrl, providerChecked]);
+
+  // Record a Continue Watching entry whenever a stream resolves successfully.
+  useEffect(() => {
+    if (status !== 'ready' || playerMode !== 'stream' || !activePlayerUrl) return;
+    if (typeof window === 'undefined') return;
+    const meta = metaRef.current || titleMeta || {};
+    upsertHistoryEntry({
+      key: watchKey,
+      type: isSeries ? 'series' : 'movie',
+      tmdbId: isOttTitleOnly ? null : Number(tmdbId) || null,
+      title: meta.title || ottTitle || `TMDB ${tmdbId}`,
+      posterUrl: meta.posterUrl || '',
+      year: meta.year || ottYear || '',
+      season: isSeries ? season : 0,
+      episode: isSeries ? episode : 0,
+      provider: activeProvider || '',
+      href: `${window.location.pathname}${window.location.search}`,
+    });
+  }, [status, playerMode, activePlayerUrl, watchKey, isSeries, tmdbId, isOttTitleOnly, ottTitle, ottYear, season, episode, activeProvider, titleMeta]);
 
   useEffect(() => {
     const video = directVideoRef.current;
@@ -494,6 +581,95 @@ export default function WatchByTMDBPage() {
 
   const directStreamActive = playerMode === 'stream' && isDirectPlayerType(streamType, activePlayerUrl);
 
+  // Resume the saved playback position and persist progress for direct
+  // (non-iframe) streams. Embed iframes cannot report progress.
+  useEffect(() => {
+    if (!directStreamActive || playerMode !== 'stream' || !activePlayerUrl) return;
+    const video = directVideoRef.current;
+    if (!video) return;
+
+    const FINISHED_RATIO = 0.95;
+    const applyResume = () => {
+      const saved = getHistoryEntry(watchKey);
+      if (!saved?.progress) return;
+      const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : saved.duration;
+      // Only resume if meaningfully into the title and it wasn't finished.
+      if (saved.progress > 20 && (!duration || saved.progress < duration * FINISHED_RATIO)) {
+        try { video.currentTime = saved.progress; } catch {}
+      }
+    };
+
+    if (video.readyState >= 1) applyResume();
+    else video.addEventListener('loadedmetadata', applyResume, { once: true });
+
+    const persistNow = () => saveWatchProgress(
+      watchKey,
+      video.currentTime || 0,
+      Number.isFinite(video.duration) ? video.duration : 0,
+    );
+    let lastSave = 0;
+    const onTimeUpdate = () => {
+      const now = Date.now();
+      if (now - lastSave < 5000) return; // throttle writes to every 5s
+      lastSave = now;
+      persistNow();
+    };
+
+    video.addEventListener('timeupdate', onTimeUpdate);
+    video.addEventListener('pause', persistNow);
+    return () => {
+      video.removeEventListener('timeupdate', onTimeUpdate);
+      video.removeEventListener('pause', persistNow);
+      persistNow();
+    };
+  }, [directStreamActive, playerMode, activePlayerUrl, watchKey]);
+
+  const nextEpisodeTarget = useMemo(() => {
+    if (!isSeries) return null;
+    const eps = [...new Set((episodeOptions || []).map((item) => Number(item.episodeNumber)).filter(Boolean))].sort((a, b) => a - b);
+    const epIndex = eps.indexOf(Number(episode));
+    if (epIndex >= 0 && epIndex < eps.length - 1) {
+      return { season: Number(season), episode: eps[epIndex + 1] };
+    }
+    const seasons = (seasonOptions || []).map((item) => Number(item.seasonNumber)).sort((a, b) => a - b);
+    const seasonIndex = seasons.indexOf(Number(season));
+    if (seasonIndex >= 0 && seasonIndex < seasons.length - 1) {
+      const nextSeasonNumber = seasons[seasonIndex + 1];
+      const nextSeasonMetaItem = (seasonOptions || []).find((item) => Number(item.seasonNumber) === nextSeasonNumber);
+      return { season: nextSeasonNumber, episode: Number(nextSeasonMetaItem?.episodes?.[0]?.episodeNumber) || 1 };
+    }
+    return null;
+  }, [isSeries, episodeOptions, seasonOptions, season, episode]);
+
+  const isFav = pageMounted ? isFavoriteItem(watchKey) : false;
+
+  const handleProviderSelect = (providerId) => {
+    setProvider(providerId);
+    setLastProvider(watchKey, providerId);
+  };
+
+  const handleToggleFavorite = () => {
+    const meta = metaRef.current || titleMeta || {};
+    toggleFavoriteItem({
+      key: watchKey,
+      type: isSeries ? 'series' : 'movie',
+      tmdbId: isOttTitleOnly ? null : Number(tmdbId) || null,
+      title: meta.title || ottTitle || `TMDB ${tmdbId}`,
+      posterUrl: meta.posterUrl || '',
+      year: meta.year || ottYear || '',
+      href: isOttTitleOnly
+        ? `${window.location.pathname}${window.location.search}`
+        : `/watch/${isSeries ? 'series' : 'movie'}/${tmdbId}`,
+    });
+  };
+
+  const handleNextEpisode = () => {
+    if (!nextEpisodeTarget) return;
+    setSelectedOttStreamId('');
+    setSeason(nextEpisodeTarget.season);
+    setEpisode(nextEpisodeTarget.episode);
+  };
+
   return (
     <main className="min-h-dvh overflow-x-hidden bg-black text-zinc-100">
       <header className="border-b border-white/10 bg-zinc-950/80 backdrop-blur">
@@ -526,8 +702,9 @@ export default function WatchByTMDBPage() {
                     <button
                       key={server.id}
                       type="button"
-                      onClick={() => !isOttTitleOnly && setProvider(server.id)}
+                      onClick={() => !isOttTitleOnly && handleProviderSelect(server.id)}
                       disabled={isOttTitleOnly && server.id !== 'tamilott'}
+                      title={providerChecked && getLastProvider(watchKey) === server.id ? 'Your last used server for this title' : server.name}
                       className={`min-h-[3.1rem] rounded-xl border px-2 py-2 text-left transition active:scale-[0.98] sm:rounded-2xl ${active ? 'border-blue-400/60 bg-blue-500/15 shadow-lg shadow-blue-950/20' : 'border-white/10 bg-white/[0.035] hover:border-blue-300/35 hover:bg-blue-500/10'} disabled:opacity-70`}
                     >
                       <span className={`block text-xs font-black uppercase tracking-[0.12em] ${active ? 'text-blue-100' : 'text-white'}`}>{server.name}</span>
@@ -673,6 +850,28 @@ export default function WatchByTMDBPage() {
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:flex sm:flex-wrap sm:gap-3">
+          <button
+            type="button"
+            onClick={handleToggleFavorite}
+            className={`rounded-xl border px-3 py-2.5 text-xs font-bold transition sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm ${
+              isFav
+                ? 'border-rose-400/60 bg-rose-500/20 text-rose-100 hover:border-rose-300'
+                : 'border-white/10 bg-white/[0.035] text-zinc-200 hover:border-rose-400/50 hover:bg-rose-500/10'
+            }`}
+            title={isFav ? 'Remove from My List' : 'Add to My List'}
+          >
+            {isFav ? '❤ My List' : '♡ My List'}
+          </button>
+          {nextEpisodeTarget ? (
+            <button
+              type="button"
+              onClick={handleNextEpisode}
+              className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5 text-xs font-bold text-emerald-100 transition hover:border-emerald-400 hover:bg-emerald-500/20 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
+              title={`Jump to Season ${nextEpisodeTarget.season} Episode ${nextEpisodeTarget.episode}`}
+            >
+              Next ▶ S{nextEpisodeTarget.season} E{nextEpisodeTarget.episode}
+            </button>
+          ) : null}
           {stremioCheck.available && stremioCheck.href ? (
             <Link
               href={stremioCheck.href}

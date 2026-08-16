@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import LibraryRows from '@/components/LibraryRows';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 
 const PAGE_SIZE = 15;
@@ -595,6 +596,14 @@ export default function LandingPage() {
                 >
                   StReMiO📡
                 </a>
+                <Link
+                  href="/my-list"
+                  aria-label="My Library"
+                  title="My List & Continue Watching"
+                  className="rounded-full border border-rose-500/25 bg-rose-500/10 px-4 py-2 text-sm font-black text-rose-100 transition hover:border-rose-400/70 hover:bg-rose-500/20"
+                >
+                  My❤
+                </Link>
                 <CleanEmbedButtons />
               </div>
             </div>
@@ -606,6 +615,8 @@ export default function LandingPage() {
 
         </div>
       </section>
+
+      <LibraryRows />
 
       <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
         <div className="mb-6 rounded-2xl border border-white/10 bg-zinc-950/70 p-4 shadow-2xl shadow-black/20 sm:mb-8 sm:rounded-3xl sm:p-5">

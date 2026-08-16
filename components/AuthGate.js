@@ -149,6 +149,8 @@ export default function AuthGate({ children }) {
 
   function resetAccess() {
     window.localStorage.removeItem(STORAGE_KEY);
+    // Clear the HttpOnly session cookie server-side so API access is revoked too.
+    fetch('/api/auth', { method: 'DELETE', cache: 'no-store' }).catch(() => {});
     setPassword('');
     setStatus('locked');
   }

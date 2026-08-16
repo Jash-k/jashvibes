@@ -5,6 +5,13 @@ import Hls from 'hls.js';
 
 const AUDIO_PREF_KEY = 'jash:video:audio-pref';
 const BW_KEY = 'jash:video:hls-bw-estimate';
+const VOLUME_KEY = 'jash:video:volume';
+const BRIGHTNESS_KEY = 'jash:video:brightness';
+
+const BRIGHTNESS_MIN = 0.3;
+const BRIGHTNESS_MAX = 1.5;
+const DOUBLE_TAP_SEEK_SECONDS = 10;
+const LONG_PRESS_RATE = 2;
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -76,6 +83,20 @@ function buildHlsErrorMessage(data = {}) {
   return `HLS playback failed (${details}).`;
 }
 
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function readStoredNumber(key, fallback) {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const value = Number(window.localStorage.getItem(key));
+    return Number.isFinite(value) && value > 0 ? value : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function VideoPlayer({
   src,
   title = 'JaSH ViBeS',
@@ -100,6 +121,26 @@ export default function VideoPlayer({
   const retryRef = useRef({ media: 0, network: 0 });
   const externalSubRef = useRef(null);
 
+  // Gesture system refs
+  const gestureRef = useRef({
+    mode: 'none', // 'tap' | 'horizontal' | 'vertical'
+    startX: 0,
+    startY: 0,
+    baseVolume: 1,
+    baseBrightness: 1,
+    baseTime: 0,
+    seekTarget: null,
+    longPressTimer: null,
+    longPressActive: false,
+    prevRate: 1,
+  });
+  const tapRef = useRef({ lastTapTime: 0, lastTapX: 0, singleTimer: null });
+  const seekAccumRef = useRef({ side: null, total: 0, resetTimer: null });
+  const hudTimerRef = useRef(null);
+  const lastTouchAtRef = useRef(0);
+  const controlsLockedRef = useRef(false);
+  const showControlsRef = useRef(true);
+
   startTimeRef.current = startTime;
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -108,18 +149,19 @@ export default function VideoPlayer({
   const [showControls, setShowControls] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(1);
+  const [volume, setVolume] = useState(() => clampNumber(readStoredNumber(VOLUME_KEY, 1), 0, 1));
   const [isMuted, setIsMuted] = useState(false);
+  const [brightness, setBrightness] = useState(() => clampNumber(readStoredNumber(BRIGHTNESS_KEY, 1), BRIGHTNESS_MIN, BRIGHTNESS_MAX));
   const [playbackRate, setPlaybackRate] = useState(1);
   const [levels, setLevels] = useState([]);
   const [currentLevel, setCurrentLevel] = useState(-1);
-  const [audioTracks, setAudioTracks] = useState([]);
-  const [currentAudioTrackId, setCurrentAudioTrackId] = useState(-1);
   const [subtitleTracks, setSubtitleTracks] = useState([]);
   const [currentSubtitleId, setCurrentSubtitleId] = useState(-1);
   const [settingsPanel, setSettingsPanel] = useState(null);
   const [externalSubUrl, setExternalSubUrl] = useState('');
   const [localError, setLocalError] = useState('');
+  const [hud, setHud] = useState(null); // { icon, text, pct?, key }
+  const [controlsLocked, setControlsLocked] = useState(false);
 
   const progressPct = useMemo(() => {
     if (!duration) return 0;
@@ -147,16 +189,33 @@ export default function VideoPlayer({
   }, [onError]);
 
   const bumpControls = useCallback((visible = true) => {
+    showControlsRef.current = visible;
     setShowControls(visible);
     clearTimeout(hideTimerRef.current);
     if (visible) {
       hideTimerRef.current = setTimeout(() => {
         const video = videoRef.current;
-        if (video && !video.paused) setShowControls(false);
+        // Never auto-hide mid-gesture or when locked.
+        if (video && !video.paused && gestureRef.current.mode === 'none' && !controlsLockedRef.current) {
+          showControlsRef.current = false;
+          setShowControls(false);
+        }
       }, 3200);
     }
   }, []);
 
+  // -------------------------------------------------------------------------
+  // HUD (on-screen gesture feedback)
+  // -------------------------------------------------------------------------
+  const showHud = useCallback((partial, timeout = 750) => {
+    setHud({ ...partial, key: Date.now() });
+    clearTimeout(hudTimerRef.current);
+    hudTimerRef.current = setTimeout(() => setHud(null), timeout);
+  }, []);
+
+  // -------------------------------------------------------------------------
+  // Playback helpers
+  // -------------------------------------------------------------------------
   const tryAutoplay = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -181,6 +240,69 @@ export default function VideoPlayer({
     setSubtitleTracks(tracks);
   }, []);
 
+  const togglePlay = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) video.play().catch(() => {});
+    else video.pause();
+    bumpControls(true);
+  }, [bumpControls]);
+
+  const seekBy = useCallback((seconds) => {
+    const video = videoRef.current;
+    if (!video || !Number.isFinite(video.duration)) return;
+    video.currentTime = clampNumber(video.currentTime + seconds, 0, video.duration - 0.25);
+    bumpControls(true);
+  }, [bumpControls]);
+
+  const applyVolume = useCallback((value, { hudFeedback = true } = {}) => {
+    const next = clampNumber(value, 0, 1);
+    setVolume(next);
+    if (next > 0) setIsMuted(false);
+    try { window.localStorage.setItem(VOLUME_KEY, String(next)); } catch {}
+    if (hudFeedback) {
+      showHud({
+        icon: next === 0 ? '🔇' : next < 0.5 ? '🔉' : '🔊',
+        text: `Volume ${Math.round(next * 100)}%`,
+        pct: next,
+      });
+    }
+  }, [showHud]);
+
+  const applyBrightness = useCallback((value, { hudFeedback = true } = {}) => {
+    const next = clampNumber(value, BRIGHTNESS_MIN, BRIGHTNESS_MAX);
+    setBrightness(next);
+    try { window.localStorage.setItem(BRIGHTNESS_KEY, String(next)); } catch {}
+    if (hudFeedback) {
+      showHud({
+        icon: '☀️',
+        text: `Brightness ${Math.round(next * 100)}%`,
+        pct: (next - BRIGHTNESS_MIN) / (BRIGHTNESS_MAX - BRIGHTNESS_MIN),
+      });
+    }
+  }, [showHud]);
+
+  const toggleControlsLock = useCallback(() => {
+    setControlsLocked((locked) => {
+      const next = !locked;
+      controlsLockedRef.current = next;
+      if (next) {
+        clearTimeout(hideTimerRef.current);
+        showControlsRef.current = false;
+        setShowControls(false);
+        setSettingsPanel(null);
+        showHud({ icon: '🔒', text: 'Screen locked' }, 1200);
+      } else {
+        showHud({ icon: '🔓', text: 'Screen unlocked' }, 1200);
+        bumpControls(true);
+      }
+      return next;
+    });
+  }, [bumpControls, showHud]);
+
+  // -------------------------------------------------------------------------
+  // Main playback effect (HLS + native/direct)
+  // -------------------------------------------------------------------------
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !src) return undefined;
@@ -192,8 +314,6 @@ export default function VideoPlayer({
     setDuration(0);
     setLevels([]);
     setCurrentLevel(-1);
-    setAudioTracks([]);
-    setCurrentAudioTrackId(-1);
     setSubtitleTracks([]);
     setCurrentSubtitleId(-1);
     setSettingsPanel(null);
@@ -276,8 +396,6 @@ export default function VideoPlayer({
 
       const syncHlsTracks = () => {
         setLevels(hls.levels || []);
-        setAudioTracks(hls.audioTracks || []);
-        setCurrentAudioTrackId(hls.audioTrack);
         setSubtitleTracks(hls.subtitleTracks || []);
         setCurrentSubtitleId(hls.subtitleTrack ?? -1);
       };
@@ -288,10 +406,7 @@ export default function VideoPlayer({
         let pref = preferredAudioLang;
         try { pref = localStorage.getItem(AUDIO_PREF_KEY) || pref; } catch {}
         const index = tracks.findIndex((track) => audioMatchesPreference(track, pref));
-        if (index >= 0) {
-          hls.audioTrack = index;
-          setCurrentAudioTrackId(index);
-        }
+        if (index >= 0) hls.audioTrack = index;
       };
 
       hls.loadSource(src);
@@ -314,7 +429,6 @@ export default function VideoPlayer({
       hls.on(Hls.Events.LEVEL_LOADED, syncHlsTracks);
       hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => { syncHlsTracks(); applyPreferredAudio(); });
       hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, syncHlsTracks);
-      hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, (_, data) => setCurrentAudioTrackId(data.id));
       hls.on(Hls.Events.SUBTITLE_TRACK_SWITCH, (_, data) => setCurrentSubtitleId(data.id));
       hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => setCurrentLevel(hls.autoLevelEnabled ? -1 : data.level));
       hls.on(Hls.Events.FRAG_BUFFERED, () => {
@@ -435,26 +549,15 @@ export default function VideoPlayer({
 
   useEffect(() => () => {
     clearTimeout(hideTimerRef.current);
+    clearTimeout(hudTimerRef.current);
+    clearTimeout(tapRef.current.singleTimer);
+    clearTimeout(seekAccumRef.current.resetTimer);
+    clearTimeout(gestureRef.current.longPressTimer);
     if (externalSubRef.current) URL.revokeObjectURL(externalSubRef.current);
     if (hlsRef.current) {
       try { hlsRef.current.destroy(); } catch {}
     }
   }, []);
-
-  const togglePlay = useCallback(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    if (video.paused) video.play().catch(() => {});
-    else video.pause();
-    bumpControls(true);
-  }, [bumpControls]);
-
-  const seekBy = useCallback((seconds) => {
-    const video = videoRef.current;
-    if (!video || !Number.isFinite(video.duration)) return;
-    video.currentTime = Math.max(0, Math.min(video.duration - 0.25, video.currentTime + seconds));
-    bumpControls(true);
-  }, [bumpControls]);
 
   const seekToClientX = useCallback((clientX) => {
     const video = videoRef.current;
@@ -483,6 +586,208 @@ export default function VideoPlayer({
     } catch {}
   }, []);
 
+  // -------------------------------------------------------------------------
+  // Touch gesture system
+  // -------------------------------------------------------------------------
+  const endLongPress = useCallback((completed) => {
+    const gesture = gestureRef.current;
+    clearTimeout(gesture.longPressTimer);
+    gesture.longPressTimer = null;
+    if (gesture.longPressActive) {
+      gesture.longPressActive = false;
+      setPlaybackRate(gesture.prevRate || 1);
+      if (!completed) return;
+      showHud({ icon: '▶', text: `${gesture.prevRate || 1}x speed` }, 450);
+    }
+  }, [showHud]);
+
+  const handleDoubleTapSeek = useCallback((side) => {
+    const accum = seekAccumRef.current;
+    clearTimeout(accum.resetTimer);
+    if (accum.side !== side) accum.total = 0;
+    accum.side = side;
+    accum.total += DOUBLE_TAP_SEEK_SECONDS;
+    accum.resetTimer = setTimeout(() => { accum.side = null; accum.total = 0; }, 900);
+
+    seekBy(side === 'left' ? -DOUBLE_TAP_SEEK_SECONDS : DOUBLE_TAP_SEEK_SECONDS);
+    showHud({
+      icon: side === 'left' ? '⟪' : '⟫',
+      text: `${side === 'left' ? '-' : '+'}${accum.total}s`,
+    }, 650);
+  }, [seekBy, showHud]);
+
+  const handleTap = useCallback((clientX) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    const tap = tapRef.current;
+    const now = Date.now();
+    const isDouble = now - tap.lastTapTime < 300 && Math.abs(clientX - tap.lastTapX) < 48;
+
+    clearTimeout(tap.singleTimer);
+    tap.singleTimer = null;
+
+    if (isDouble) {
+      tap.lastTapTime = 0;
+      const rel = rect ? (clientX - rect.left) / rect.width : 0.5;
+      if (rel < 0.35) handleDoubleTapSeek('left');
+      else if (rel > 0.65) handleDoubleTapSeek('right');
+      else togglePlay();
+      return;
+    }
+
+    tap.lastTapTime = now;
+    tap.lastTapX = clientX;
+    // Wait to be sure no second tap is coming, then treat as single tap.
+    tap.singleTimer = setTimeout(() => {
+      tap.singleTimer = null;
+      if (controlsLockedRef.current) return;
+      // Single tap toggles the control overlay (standard mobile-player UX).
+      if (showControlsRef.current) {
+        clearTimeout(hideTimerRef.current);
+        setShowControls(false);
+      } else {
+        bumpControls(true);
+      }
+    }, 280);
+  }, [bumpControls, handleDoubleTapSeek, togglePlay]);
+
+  const onGestureTouchStart = useCallback((event) => {
+    lastTouchAtRef.current = Date.now();
+    if (controlsLockedRef.current) return;
+    const touch = event.touches?.[0];
+    if (!touch) return;
+
+    const gesture = gestureRef.current;
+    gesture.mode = 'tap';
+    gesture.startX = touch.clientX;
+    gesture.startY = touch.clientY;
+    gesture.baseVolume = isMuted ? 0 : volume;
+    gesture.baseBrightness = brightness;
+    gesture.baseTime = videoRef.current?.currentTime || 0;
+    gesture.seekTarget = null;
+    gesture.prevRate = playbackRateRef.current || 1;
+
+    // Long-press-and-hold → temporary fast-forward (YouTube/Reels style).
+    clearTimeout(gesture.longPressTimer);
+    gesture.longPressTimer = setTimeout(() => {
+      if (gestureRef.current.mode !== 'tap' || controlsLockedRef.current) return;
+      gesture.longPressActive = true;
+      setPlaybackRate(LONG_PRESS_RATE);
+      showHud({ icon: '⏩', text: `${LONG_PRESS_RATE}x speed`, pct: 1 }, 120000);
+    }, 480);
+  }, [brightness, isMuted, showHud, volume]);
+
+  const onGestureTouchMove = useCallback((event) => {
+    const gesture = gestureRef.current;
+    if (gesture.mode === 'none' || controlsLockedRef.current) return;
+    const touch = event.touches?.[0];
+    if (!touch) return;
+
+    const rect = containerRef.current?.getBoundingClientRect();
+    const width = rect?.width || window.innerWidth || 1;
+    const height = rect?.height || window.innerHeight || 1;
+    const dx = touch.clientX - gesture.startX;
+    const dy = touch.clientY - gesture.startY;
+
+    // Cancel long-press as soon as the finger becomes a swipe.
+    if (Math.abs(dx) > 14 || Math.abs(dy) > 14) {
+      clearTimeout(gesture.longPressTimer);
+      gesture.longPressTimer = null;
+      if (gesture.longPressActive) endLongPress(false);
+    }
+
+    if (gesture.mode === 'tap') {
+      if (gesture.longPressActive) return;
+      if (Math.abs(dy) > 18 && Math.abs(dy) > Math.abs(dx) * 1.2) gesture.mode = 'vertical';
+      else if (Math.abs(dx) > 18 && Math.abs(dx) > Math.abs(dy) * 1.2) gesture.mode = 'horizontal';
+      else return;
+      bumpControls(true);
+    }
+
+    if (gesture.mode === 'vertical') {
+      event.preventDefault();
+      const delta = (-dy / height) * 1.6; // full-height swipe ≈ 160% of range
+      const isBrightnessZone = gesture.startX < (rect?.left || 0) + width / 2;
+      if (isBrightnessZone) applyBrightness(gesture.baseBrightness + delta);
+      else applyVolume(gesture.baseVolume + delta);
+      return;
+    }
+
+    if (gesture.mode === 'horizontal') {
+      event.preventDefault();
+      const video = videoRef.current;
+      const videoDuration = Number.isFinite(video?.duration) ? video.duration : 0;
+      const scrubRange = videoDuration > 0 ? clampNumber(videoDuration / 8, 30, 120) : 60;
+      const deltaSeconds = (dx / width) * scrubRange;
+      const target = videoDuration > 0
+        ? clampNumber(gesture.baseTime + deltaSeconds, 0, videoDuration)
+        : Math.max(0, gesture.baseTime + deltaSeconds);
+      gesture.seekTarget = target;
+      showHud({
+        icon: deltaSeconds >= 0 ? '⟫' : '⟪',
+        text: `${formatTime(target)}  (${deltaSeconds >= 0 ? '+' : ''}${Math.round(deltaSeconds)}s)`,
+      }, 120000);
+    }
+  }, [applyBrightness, applyVolume, bumpControls, endLongPress, showHud]);
+
+  const onGestureTouchEnd = useCallback((event) => {
+    const gesture = gestureRef.current;
+    const mode = gesture.mode;
+
+    if (controlsLockedRef.current) {
+      const touch = event.changedTouches?.[0];
+      if (touch) showHud({ icon: '🔒', text: 'Locked — tap 🔓 to unlock' }, 1200);
+      gesture.mode = 'none';
+      return;
+    }
+
+    if (gesture.longPressActive) {
+      endLongPress(true);
+      gesture.mode = 'none';
+      return;
+    }
+    clearTimeout(gesture.longPressTimer);
+    gesture.longPressTimer = null;
+
+    if (mode === 'horizontal') {
+      const video = videoRef.current;
+      if (video && gesture.seekTarget != null) {
+        try { video.currentTime = gesture.seekTarget; } catch {}
+      }
+      showHud({ icon: '✓', text: formatTime(gesture.seekTarget ?? 0) }, 400);
+    }
+
+    if (mode === 'tap') {
+      const touch = event.changedTouches?.[0];
+      if (touch) handleTap(touch.clientX);
+    }
+
+    gesture.mode = 'none';
+    gesture.seekTarget = null;
+    bumpControls(true);
+  }, [bumpControls, endLongPress, handleTap, showHud]);
+
+  // Desktop mouse: single click = play/pause, double click = fullscreen.
+  const clickTimerRef = useRef(null);
+  const onGestureClick = useCallback(() => {
+    // Ignore the synthetic click browsers fire right after a touch.
+    if (Date.now() - lastTouchAtRef.current < 500) return;
+    if (controlsLockedRef.current) return;
+    clearTimeout(clickTimerRef.current);
+    clickTimerRef.current = setTimeout(() => {
+      togglePlay();
+    }, 240);
+  }, [togglePlay]);
+
+  const onGestureDoubleClick = useCallback(() => {
+    if (Date.now() - lastTouchAtRef.current < 500) return;
+    clearTimeout(clickTimerRef.current);
+    clickTimerRef.current = null;
+    toggleFullscreen();
+  }, [toggleFullscreen]);
+
+  // -------------------------------------------------------------------------
+  // Settings panels
+  // -------------------------------------------------------------------------
   const changeLevel = (level) => {
     if (hlsRef.current) hlsRef.current.currentLevel = level;
     setCurrentLevel(level);
@@ -500,12 +805,9 @@ export default function VideoPlayer({
     setSettingsPanel(null);
   };
 
-  const changeAudio = (index) => {
-    if (hlsRef.current) hlsRef.current.audioTrack = index;
-    setCurrentAudioTrackId(index);
-    try { localStorage.setItem(AUDIO_PREF_KEY, audioTracks[index]?.lang || audioTracks[index]?.name || ''); } catch {}
-    setSettingsPanel(null);
-  };
+  // Note: audio-track selection is fully automatic (preferredAudioLang / the
+  // saved preference). The manual Audio button and panel were removed per
+  // request; applyPreferredAudio() still picks the best matching track.
 
   const changeSubtitles = (index) => {
     if (hlsRef.current) {
@@ -549,16 +851,15 @@ export default function VideoPlayer({
       ref={containerRef}
       className={`${inline ? 'relative h-full w-full' : 'fixed inset-0 z-[9999] h-dvh w-screen'} overflow-hidden bg-black text-white select-none`}
       onMouseMove={() => bumpControls(true)}
-      onDoubleClick={toggleFullscreen}
       style={{ touchAction: 'manipulation' }}
     >
       <video
         ref={videoRef}
         poster={poster || undefined}
         className="h-full w-full bg-black object-fill"
+        style={brightness !== 1 ? { filter: `brightness(${brightness})` } : undefined}
         playsInline
         autoPlay
-        onClick={togglePlay}
         onTimeUpdate={() => {
           const video = videoRef.current;
           if (!video) return;
@@ -578,14 +879,42 @@ export default function VideoPlayer({
         {externalSubUrl ? <track key={externalSubUrl} kind="subtitles" src={externalSubUrl} srcLang="en" label="Uploaded" default /> : null}
       </video>
 
+      {/* Gesture layer: taps, double-tap seek, swipe volume/brightness, scrub, long-press */}
+      <div
+        className="absolute inset-0 z-20"
+        style={{ touchAction: 'none' }}
+        onTouchStart={onGestureTouchStart}
+        onTouchMove={onGestureTouchMove}
+        onTouchEnd={onGestureTouchEnd}
+        onTouchCancel={onGestureTouchEnd}
+        onClick={onGestureClick}
+        onDoubleClick={onGestureDoubleClick}
+      />
+
+      {/* Gesture HUD feedback */}
+      {hud ? (
+        <div
+          key={hud.key}
+          className="pointer-events-none absolute left-1/2 top-[26%] z-[45] -translate-x-1/2 rounded-2xl border border-white/10 bg-black/70 px-5 py-3 text-center shadow-2xl backdrop-blur"
+        >
+          <p className="text-2xl font-black leading-none">{hud.icon}</p>
+          <p className="mt-1.5 whitespace-nowrap text-sm font-black text-white">{hud.text}</p>
+          {typeof hud.pct === 'number' ? (
+            <div className="mx-auto mt-2 h-1.5 w-32 overflow-hidden rounded-full bg-white/20">
+              <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-300" style={{ width: `${Math.round(clampNumber(hud.pct, 0, 1) * 100)}%` }} />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {isBuffering && !localError ? (
-        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/35 backdrop-blur-[1px]">
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/35 backdrop-blur-[1px]">
           <div className="h-12 w-12 animate-spin rounded-full border-4 border-white/20 border-t-blue-500" />
         </div>
       ) : null}
 
       {reconnecting && !localError ? (
-        <div className="absolute top-4 left-1/2 z-40 -translate-x-1/2 rounded-full border border-white/10 bg-black/75 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-blue-100">
+        <div className="pointer-events-none absolute top-4 left-1/2 z-40 -translate-x-1/2 rounded-full border border-white/10 bg-black/75 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-blue-100">
           Reconnecting…
         </div>
       ) : null}
@@ -599,19 +928,31 @@ export default function VideoPlayer({
         </div>
       ) : null}
 
-      <div className={`absolute inset-x-0 top-0 z-50 bg-gradient-to-b from-black/90 to-transparent p-3 transition duration-300 sm:p-5 ${showControls ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
+      {/* Lock chip: the only control visible while the screen is locked */}
+      {controlsLocked ? (
+        <button
+          type="button"
+          onClick={toggleControlsLock}
+          className="absolute right-3 top-[calc(0.75rem+env(safe-area-inset-top))] z-[65] rounded-full border border-white/15 bg-black/70 px-4 py-2 text-sm font-black text-white backdrop-blur transition hover:border-blue-400"
+          title="Unlock screen"
+        >
+          🔓 Unlock
+        </button>
+      ) : null}
+
+      <div className={`absolute inset-x-0 top-0 z-50 bg-gradient-to-b from-black/90 to-transparent p-3 transition duration-300 sm:p-5 ${showControls && !controlsLocked ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
         <div className="flex items-center gap-3">
           {onBackClick ? (
             <button type="button" onClick={onBackClick} className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-lg font-black hover:bg-white/20">‹</button>
           ) : null}
           <div className="min-w-0">
             <p className="truncate text-sm font-black sm:text-lg">{title || 'JaSH ViBeS'}</p>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-300">HLS.js / Native Video Player</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-300">Double-tap to seek • Swipe for volume/brightness</p>
           </div>
         </div>
       </div>
 
-      <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+      <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
         {!isPlaying && !isBuffering && !localError ? (
           <div className="rounded-full border border-white/10 bg-black/45 p-6 text-4xl shadow-2xl">▶</div>
         ) : null}
@@ -649,14 +990,6 @@ export default function VideoPlayer({
                 ) : <p className="px-4 py-4 text-sm text-zinc-500">No quality options found.</p>
               ) : null}
 
-              {settingsPanel === 'audio' ? (
-                audioTracks.length ? audioTracks.map((track, index) => (
-                  <button key={`${track.id ?? index}-${track.name || track.lang || index}`} type="button" onClick={() => changeAudio(index)} className={`${panelButton} ${currentAudioTrackId === index ? 'bg-blue-500/15 text-blue-300' : 'text-zinc-100'}`}>
-                    <span>{getLanguageName(track, index)}</span><span>{currentAudioTrackId === index ? '✓' : ''}</span>
-                  </button>
-                )) : <p className="px-4 py-4 text-sm text-zinc-500">No alternate audio tracks found.</p>
-              ) : null}
-
               {settingsPanel === 'subtitles' ? (
                 <>
                   <button type="button" onClick={() => changeSubtitles(-1)} className={`${panelButton} ${currentSubtitleId === -1 ? 'bg-blue-500/15 text-blue-300' : 'text-zinc-100'}`}>
@@ -689,7 +1022,7 @@ export default function VideoPlayer({
         </>
       ) : null}
 
-      <div className={`absolute inset-x-0 bottom-0 z-50 bg-gradient-to-t from-black via-black/85 to-transparent p-2 transition duration-300 sm:p-5 ${showControls ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>
+      <div className={`absolute inset-x-0 bottom-0 z-50 bg-gradient-to-t from-black via-black/85 to-transparent p-2 transition duration-300 sm:p-5 ${showControls && !controlsLocked ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>
         <div className="mb-2 flex justify-between px-1 text-[11px] font-bold text-white/70">
           <span>{formatTime(currentTime)}</span>
           <span>{formatTime(duration)}</span>
@@ -699,6 +1032,7 @@ export default function VideoPlayer({
           className="group mb-3 cursor-pointer py-2"
           onClick={(event) => seekToClientX(event.clientX)}
           onTouchEnd={(event) => {
+            event.stopPropagation();
             const touch = event.changedTouches?.[0];
             if (touch) seekToClientX(touch.clientX);
           }}
@@ -722,15 +1056,15 @@ export default function VideoPlayer({
               max="1"
               step="0.05"
               value={volume}
-              onChange={(event) => { setVolume(Number(event.target.value)); setIsMuted(false); }}
+              onChange={(event) => applyVolume(Number(event.target.value), { hudFeedback: false })}
               className="hidden w-20 accent-blue-500 sm:block"
             />
           </div>
 
           <div className="flex max-w-full items-center gap-1 overflow-x-auto sm:gap-2">
+            <button type="button" onClick={toggleControlsLock} className={controlsButton} title="Lock screen (prevent accidental touches)">🔒</button>
             <button type="button" onClick={() => setSettingsPanel('speed')} className={controlsButton}>{playbackRate === 1 ? '1x' : `${playbackRate}x`}</button>
             <button type="button" onClick={() => setSettingsPanel('subtitles')} className={`${controlsButton} ${currentSubtitleId !== -1 ? 'text-blue-200' : ''}`}>CC</button>
-            <button type="button" onClick={() => setSettingsPanel('audio')} className={controlsButton}>Audio</button>
             <button type="button" onClick={() => setSettingsPanel('quality')} className={`${controlsButton} max-w-[6rem] truncate sm:max-w-[9rem]`}>{qualityButtonLabel}</button>
             <button type="button" onClick={toggleFullscreen} className={controlsButton}>⛶</button>
           </div>

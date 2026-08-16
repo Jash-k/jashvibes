@@ -1,6 +1,6 @@
 {
-  "name": "jash-theatre-next-streaming-prototype",
-  "version": "0.1.0",
+  "name": "jashvibes",
+  "version": "6.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

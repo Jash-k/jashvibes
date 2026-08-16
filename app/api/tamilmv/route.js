@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import { scrapeTamilMV } from '@/lib/tamilmvScraper';
+import { verifyRequestToken } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -43,14 +44,18 @@ function hasTMDBConfig() {
 }
 
 function isAuthorized(request) {
+  // A logged-in owner (valid app session) may always force a refresh.
+  if (verifyRequestToken(request)) return true;
+
   const token = new URL(request.url).searchParams.get('token') || request.headers.get('x-scrape-token') || '';
   const expected = process.env.SCRAPE || process.env.SCRAPE_TOKEN || '';
 
   // Only SCRAPE_TOKEN protects forced refresh. SEED_TOKEN is intentionally not used here,
   // because many deployments already have SEED_TOKEN for old seed routes and the user
   // may still want TamilMV refresh to work without a separate scrape token.
-  if (!expected) return true;
-  return token && token === expected;
+  // Fail CLOSED when no scrape token is configured (an app session is then required).
+  if (!expected) return false;
+  return Boolean(token) && token === expected;
 }
 
 function emptyPayload(extra = {}) {
