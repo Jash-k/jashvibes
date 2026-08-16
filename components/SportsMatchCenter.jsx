@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import MatchWatchLive from '@/components/MatchWatchLive';
 
 function pick(obj, keys, fallback = '') {
   for (const key of keys) {
@@ -345,8 +344,7 @@ function SharedBcciIplCenter({ payload, providerType }) {
       }
     }
     load();
-    const timer = window.setInterval(load, 30000);
-    return () => { cancelled = true; window.clearInterval(timer); };
+    return () => { cancelled = true; };
   }, [matchId, providerType]);
 
   const rawSummary = summary?.data || summary?.MatchSummary || summary?.Matchsummary || summary || {};
@@ -377,7 +375,6 @@ function SharedBcciIplCenter({ payload, providerType }) {
         scoreB={{ team: away, score: teamScore(rawSummary, 'away') || teamScore(matchData, 'away') }}
         meta={overview.slice(0, 4)}
       />
-      <MatchWatchLive isLive={statusValue === 'live'} />
       <TabBar tabs={tabs} active={tab} onChange={setTab} />
       {status === 'loading' ? <EmptyPanel text="Loading match center…" /> : null}
       {error ? <EmptyPanel text={error} /> : null}
@@ -434,8 +431,7 @@ function Wt20MatchCenter({ payload }) {
       }
     }
     load();
-    const timer = window.setInterval(load, 30000);
-    return () => { cancelled = true; window.clearInterval(timer); };
+    return () => { cancelled = true; };
   }, [matchId]);
 
   const md = data?.Matchdetail || {};
@@ -471,7 +467,6 @@ function Wt20MatchCenter({ payload }) {
   return (
     <div className="space-y-5">
       <Hero provider="ICC WT20" title={`${teamShort(home)} vs ${teamShort(away)}`} subtitle={resultText || `${home} vs ${away}`} status={status} scoreA={{ team: home, score: homeScore }} scoreB={{ team: away, score: awayScore }} meta={overview.slice(0, 4)} />
-      <MatchWatchLive isLive={status === 'live'} />
       <TabBar tabs={['Overview', 'Scorecard', 'Bowling']} active={tab} onChange={setTab} />
       {error ? <EmptyPanel text={error} /> : null}
       {!data && !error ? <EmptyPanel text="Loading ICC scorecard…" /> : null}

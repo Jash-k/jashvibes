@@ -12,7 +12,7 @@ app_port: 7860
 
 Tamil-first private streaming hub — movies, series, live TV, music, sports and classics in one Next.js app.
 
-> **v6.3** — sports-first home page (live cricket cards open the match center with the stream **and** the scorecard, 1anchormovies-style), sports TV channels row on home, Live TV service panel password `tv2010` with a pre-filled box.
+> **v6.5** — live-cricket match feeds and all background polling revoked (the Render free-tier usage spike it caused got the service suspended). /sports is now static Live-TV + FanCode streams; match-center scorecards fetch once per open.
 > **v6** — API firewall (all routes authenticated), gesture player, personal library. Personal, single-tenant deployment.
 
 ---
@@ -24,7 +24,7 @@ Tamil-first private streaming hub — movies, series, live TV, music, sports and
 - **Gesture video player** — double-tap seek ±10s (stacks), vertical swipe = volume (right) / brightness (left), horizontal swipe = scrub, long-press = 2× speed, screen lock, quality/subtitle/speed panels, external `.srt/.vtt` upload.
 - **Live TV** — Jio (ClearKey/Shaka), Sony Ten/Sports Jio re-stream source, M3U sources, manual 6-catalog admin panel (Live Service). New default sources self-seed with a one-time background sync; only the curated Tamil cricket feeds auto-publish, everything else needs manual mapping.
 - **Music (ராக வானம்)** — JioSaavn search, charts, albums, artists, playlists, Spotify import.
-- **Sports** — cricket live/scores (BCCI/ICC/IPL/WT20) + match center with match-id-canonical scorecards. The **/sports page** leads with big 1anchorhd-style **hero cards** for live cricket (tap = match center with the embedded live stream + full scorecard), an upcoming-fixtures row, other-sports live streams (kept separate), and Cricket Live TV channels. The home page shows only Latest Releases; all live sports content lives on /sports. Live-stream cards play inline in the page's own player (no new windows).
+- **Sports** — FanCode/Willow **Cricket Live TV** channels with an in-page player, plus other-sports FanCode live streams (separate section). Cricket match-center scorecards load on demand. Nothing polls in the background — every sports page fetch runs once on load (free-tier friendly).
 - **Classics** — VOD M3U catalogs with TMDB matching.
 - **Stremio** — in-app catalog/meta/stream browser. Telegram chunk-stream sources are relayed through `/api/stream-proxy`, which emulates HTTP Range so seeking works; single-screen theatre mode on the watch page.
 - **PWA** — installable, offline page, day/night toggle, fullscreen landscape lock.

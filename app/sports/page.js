@@ -7,12 +7,7 @@ import {
   FANCODE_FEED,
   bestFancodeVariant,
   isCricketFeedItem,
-  isSeniorMenBcci,
-  normalizeBcciMatch,
   normalizeFancodeEvent,
-  normalizeIplMatch,
-  normalizeWt20Match,
-  pickArray,
   playerUrlFromHls,
 } from '@/lib/sportsFeed';
 const WILLOW_URL = 'https://m3u8-player-ashen.vercel.app/?sid=mzo8bm6chvg8&src=https%3A%2F%2Famg01269-amg01269c1-sportstribal-emea-5204.playouts.now.amagi.tv%2Fts-eu-w1-n2%2Fplaylist%2Famg01269-willowtvfast-willowplus-sportstribalemea%2Fcb7f3e1a7b7b6f8a9ac33e6cd9f143a5d1073183573a80303aac5e9e7792155d80b9f7c9b84aeb4a19e24094385631004262d519ce647c968d23f6156b3f4f7f8ae1ec3f8cc50274e38b1f5549a3120e50fe6114d54a543b99c80a188938827c0738e11d210361daf35aab664abef86ef603359bf1843a6c6d2d0acc0602fcb02dfbbdbe0010c76da5b802488b2f5be7922198824df9d9cb5e9d449875f7068993a38dd1438486967eaf50e0304409737bc8cd7bcb9c04fb88cc393cc82170401f57e2a1a1d42453eed19c71829de291279a3ac08d2c801258d162b97cf4fb0ef6c873c3c05da9acc1bf08216be6ac5f10ba36f020769a6113c4ac6a10c4df534fb9bc785954c06c970924349bfcdf15be1274fca30e8aae601134c1de10d5cdf2cbc2b18e439231c5d4fcc37d6b4077010ec670a3992df41a9d40e89f431e0d187bfad315e596c95235554a84ab57c05c4eea8cc5d0894e73e1482f77c42c99570c67c9744b79e626f6d37c4f813405883072aa0c6cce12b2e862a5e7e8e4003aa7d78817ac38a1e65ca09968cd420f193ac1957d0f7a1d28efb91c4a5a1fe44aebd4c6e4056c21fce7c1fbba3e1b0f2b185f09cbafa75fa8cef86b7a32c4402d747b001df4528089beb6b4d99faf0b36e6b65dc6267bd08a8272ae04501d%2F66%2F1920x1080_5859480%2Findex.m3u8&title=Willow-cricket-live';
@@ -50,75 +45,6 @@ function StreamPlayer({ channel, switching, playerRef }) {
       </div>
       <div className="relative aspect-video w-full bg-black">{switching ? <div className="absolute inset-0 z-20 grid place-items-center bg-black/90 text-xs font-black uppercase tracking-widest" style={{ color: channel.color }}>Switching…</div> : null}<iframe key={channel.id + channel.url} src={channel.url} className="h-full w-full border-0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen scrolling="no" /></div>
     </div>
-  );
-}
-
-function MatchCard({ match, compact = false }) {
-  const statusClass = match.status === 'live' ? 'border-red-400/30 bg-red-500/10 text-red-200' : match.status === 'completed' ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-200' : 'border-amber-400/25 bg-amber-500/10 text-amber-100';
-  return (
-    <Link href={match.href} className="group block rounded-2xl border border-white/10 bg-white/[0.025] p-3 transition hover:border-amber-400/40 hover:bg-amber-500/10">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0"><p className="truncate text-[9px] font-black uppercase tracking-[0.2em] text-gray-500">{match.provider} · {match.competition}</p><p className="mt-1 truncate text-sm font-black text-white group-hover:text-amber-100">{match.title}</p><p className="mt-0.5 truncate text-[10px] text-zinc-500">{match.venue || match.date || 'Match Center'}</p></div>
-        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[8px] font-black uppercase ${statusClass}`}>{match.status}</span>
-      </div>
-      {!compact ? <div className="mt-3 grid gap-1.5 text-xs"><div className="flex justify-between gap-3"><span className="truncate text-zinc-400">{match.subtitle.split(' vs ')[0]}</span><span className="font-mono text-white">{match.score1 || '-'}</span></div><div className="flex justify-between gap-3"><span className="truncate text-zinc-400">{match.subtitle.split(' vs ')[1]}</span><span className="font-mono text-white">{match.score2 || '-'}</span></div></div> : null}
-      {match.result ? <p className="mt-2 line-clamp-2 text-[10px] font-bold text-emerald-300">{match.result}</p> : null}
-    </Link>
-  );
-}
-
-function TeamBlock({ code, name, score, right = false }) {
-  return (
-    <div className={right ? 'text-right' : ''}>
-      <p className="text-2xl font-black leading-none tracking-tight text-white sm:text-3xl">{code || 'TBD'}</p>
-      <p className="mt-1 truncate text-[10px] font-semibold leading-3 text-white/50">{name || ''}</p>
-      <p className={`mt-2 min-h-[14px] font-mono text-[12px] font-bold ${score ? 'text-amber-300' : 'text-white/25'}`}>{score || '—'}</p>
-    </div>
-  );
-}
-
-// 1anchorhd-style hero card: big VS layout, live glow, CTA -> match-center
-// page (embedded live stream + full scorecard).
-function HeroMatchCard({ match }) {
-  const live = match.status === 'live';
-  const [homeCode, awayCode = ''] = (match.title || '').split(' vs ');
-  const [homeName, awayName = ''] = (match.subtitle || '').split(' vs ');
-  return (
-    <Link
-      href={match.href || '/sports'}
-      prefetch={false}
-      className={`group relative w-[300px] shrink-0 snap-start overflow-hidden rounded-3xl border bg-zinc-950/80 p-4 transition sm:w-[350px] ${
-        live
-          ? 'border-rose-500/35 bg-[radial-gradient(130%_130%_at_15%_0%,rgba(244,63,94,0.22),transparent_60%)] shadow-[0_0_50px_rgba(244,63,94,0.12)] hover:border-rose-400/70'
-          : 'border-sky-500/25 bg-[radial-gradient(130%_130%_at_15%_0%,rgba(56,189,248,0.15),transparent_60%)] hover:border-sky-400/60'
-      }`}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.22em] text-white/70">{match.provider}</span>
-        {live ? (
-          <span className="flex items-center gap-1.5 rounded-full bg-rose-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-rose-200">
-            <PulsingDot /> Live
-          </span>
-        ) : (
-          <span className="rounded-full bg-sky-500/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-sky-200">{match.date || 'Upcoming'}</span>
-        )}
-      </div>
-      <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-start gap-2">
-        <TeamBlock code={homeCode} name={homeName} score={match.score1} />
-        <span className="pt-3 text-[11px] font-black uppercase text-white/35">VS</span>
-        <TeamBlock code={awayCode} name={awayName} score={match.score2} right />
-      </div>
-      {match.result ? <p className="mt-3 line-clamp-2 rounded-xl bg-emerald-500/10 px-3 py-1.5 text-[11px] font-bold leading-4 text-emerald-200">{match.result}</p> : null}
-      <div className="mt-3 flex items-end justify-between gap-2 border-t border-white/10 pt-3">
-        <div className="min-w-0">
-          <p className="truncate text-[10px] font-bold uppercase tracking-wider text-white/50">{match.competition}</p>
-          <p className="truncate text-[9px] text-white/35">{match.venue || 'Match Center'}</p>
-        </div>
-        <span className="shrink-0 rounded-lg bg-white/10 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-amber-300 transition group-hover:bg-amber-500/20 group-hover:text-amber-200">
-          Stream + Scorecard →
-        </span>
-      </div>
-    </Link>
   );
 }
 
@@ -168,10 +94,7 @@ export default function SportsPage() {
   const [channels, setChannels] = useState(BASE_CHANNELS);
   const [active, setActive] = useState(BASE_CHANNELS[0]);
   const [switching, setSwitching] = useState(false);
-  const [cricketLive, setCricketLive] = useState([]);
-  const [cricketUpcoming, setCricketUpcoming] = useState([]);
   const [otherLive, setOtherLive] = useState([]);
-  const [feedError, setFeedError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const playerRef = useRef(null);
 
@@ -202,88 +125,36 @@ export default function SportsPage() {
     }, 220);
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function loadFanCode() {
-      try {
-        const response = await fetch(`${FANCODE_FEED}?_=${Date.now()}`, { cache: 'no-store' });
-        const data = await response.json();
-        const live = (data.matches || []).filter((m) => String(m.status || '').toUpperCase() === 'LIVE' && m.auto_streams?.[0]?.auto).slice(0, 8).map((m) => {
-          const stream = bestFancodeVariant(m.auto_streams?.[0]?.auto || '') || m.STREAMING_CDN?.Primary_Playback_URL || '';
-          return channelCardBase({ id: `fc-${m.match_id}`, name: m.title || 'FanCode', sub: 'FanCode', group: 'FanCode', color: '#ec1c24', logo: m.image_cdn?.LOGO || '/fancode.svg', url: stream ? playerUrlFromHls(stream, m.title || 'FanCode') : FANCODE_PERMANENT_URL, desc: m.tournament || 'Live FanCode event' });
-        });
-        const others = (data.matches || [])
-          .filter((m) => String(m.status || '').toUpperCase() === 'LIVE')
-          .slice(0, 20)
-          .map(normalizeFancodeEvent)
-          .filter((m) => m.href && !isCricketFeedItem(m));
-        if (!cancelled) {
-          const nextChannels = live.length ? [...live, ...BASE_CHANNELS] : BASE_CHANNELS;
-          setChannels(nextChannels);
-          setActive((current) => nextChannels.some((item) => item.id === current?.id) ? current : nextChannels[0]);
-          setOtherLive(others);
-        }
-      } catch {}
-    }
-    loadFanCode();
-    const timer = window.setInterval(loadFanCode, 60000);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, []);
-
-  const loadSports = useCallback(async () => {
+  // Free-tier friendly: fetch exactly once on mount; the header Refresh button
+  // re-fetches manually. No background polling anywhere on this page.
+  const loadChannels = useCallback(async () => {
     setRefreshing(true);
-    setFeedError('');
     try {
-      const [bcciLive, bcciUpcoming, wt20, ipl] = await Promise.all([
-        fetch('/api/bcci/live', { cache: 'no-store' }).then((r) => r.json()).catch((error) => ({ liveMatches: [], unavailable: true, error: error.message })),
-        fetch('/api/bcci/upcoming', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({})),
-        // Large game_count so the backend windowing keeps today's live matches.
-        fetch('/api/wt20/schedule?game_count=50', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ data: { matches: [] } })),
-        fetch('/api/ipl/2026/all-matches', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ matches: [] })),
-      ]);
-
-      const bcci = pickArray(bcciLive, ['liveMatches'])
-        .filter(isSeniorMenBcci)
-        .map((row) => normalizeBcciMatch(row, 'live'))
-        .filter((match) => match.status === 'live');
-      const wt20Rows = pickArray(wt20?.data || wt20, ['matches']).map(normalizeWt20Match);
-      const iplRows = pickArray(ipl, ['matches', 'Matchsummary', 'MatchSummary']).map(normalizeIplMatch);
-
-      const seen = new Set();
-      const dedupe = (m) => {
-        const key = `${m.type}-${m.id}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      };
-
-      setCricketLive([
-        ...bcci,
-        ...wt20Rows.filter((m) => m.status === 'live'),
-        ...iplRows.filter((m) => m.status === 'live' && m.id),
-      ].filter(dedupe));
-
-      setCricketUpcoming([
-        ...pickArray(bcciUpcoming, ['upcomingMatches'])
-          .filter(isSeniorMenBcci)
-          .map((row) => normalizeBcciMatch(row, 'upcoming'))
-          .filter((match) => match.status === 'upcoming'),
-        ...wt20Rows.filter((m) => m.status === 'upcoming'),
-        ...iplRows.filter((m) => m.status === 'upcoming'),
-      ].filter(dedupe).slice(0, 10));
-      if (bcciLive?.upstreamUnavailable || bcciLive?.unavailable) setFeedError(bcciLive.error || 'BCCI live feed is unavailable right now.');
-    } catch (err) {
-      setFeedError(err.message || 'Sports feeds unavailable');
-    } finally {
+      const response = await fetch(`${FANCODE_FEED}?_=${Date.now()}`, { cache: 'no-store' });
+      const data = await response.json();
+      const live = (data.matches || []).filter((m) => String(m.status || '').toUpperCase() === 'LIVE' && m.auto_streams?.[0]?.auto).slice(0, 8).map((m) => {
+        const stream = bestFancodeVariant(m.auto_streams?.[0]?.auto || '') || m.STREAMING_CDN?.Primary_Playback_URL || '';
+        return channelCardBase({ id: `fc-${m.match_id}`, name: m.title || 'FanCode', sub: 'FanCode', group: 'FanCode', color: '#ec1c24', logo: m.image_cdn?.LOGO || '/fancode.svg', url: stream ? playerUrlFromHls(stream, m.title || 'FanCode') : FANCODE_PERMANENT_URL, desc: m.tournament || 'Live FanCode event' });
+      });
+      const others = (data.matches || [])
+        .filter((m) => String(m.status || '').toUpperCase() === 'LIVE')
+        .slice(0, 20)
+        .map(normalizeFancodeEvent)
+        .filter((m) => m.href && !isCricketFeedItem(m));
+      const nextChannels = live.length ? [...live, ...BASE_CHANNELS] : BASE_CHANNELS;
+      setChannels(nextChannels);
+      setActive((current) => nextChannels.some((item) => item.id === current?.id) ? current : nextChannels[0]);
+      setOtherLive(others);
+    } catch {} finally {
       setRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
-    loadSports();
-    const timer = window.setInterval(loadSports, 60000);
-    return () => window.clearInterval(timer);
-  }, [loadSports]);
+    loadChannels();
+  }, [loadChannels]);
+
+
 
 
   return (
@@ -293,37 +164,15 @@ export default function SportsPage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <Link href="/" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300">← Home</Link>
           <div className="flex flex-col items-center gap-1"><BrandLogo size="compact" /><p className="text-[10px] font-black uppercase tracking-[0.28em] text-amber-400">Live Sports</p></div>
-          <button type="button" onClick={loadSports} className="rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-amber-300">{refreshing ? 'Sync…' : 'Refresh'}</button>
+          <button type="button" onClick={loadChannels} className="rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-amber-300">{refreshing ? 'Sync…' : 'Refresh'}</button>
         </div>
       </header>
 
       <section className="relative z-10 mx-auto max-w-6xl space-y-10 px-4 py-5 pb-24">
         <div>
-          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-600">Cricket · BCCI · ICC · IPL · WT20</p>
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-600">FanCode · Willow · Live TV</p>
           <h1 className="text-3xl font-black uppercase italic leading-none tracking-tighter sm:text-5xl">Live <span className="text-amber-400">Sports</span></h1>
         </div>
-
-        <Section kicker="Tap a card — stream + scorecard" title="Live now — Cricket">
-          {feedError ? <p className="mb-3 rounded-2xl border border-yellow-400/20 bg-yellow-500/10 p-3 text-[10px] leading-5 text-yellow-100">{feedError}</p> : null}
-          {cricketLive.length ? (
-            <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 [scrollbar-width:thin]">
-              {cricketLive.map((match) => <HeroMatchCard key={`${match.type}-${match.id}`} match={match} />)}
-            </div>
-          ) : (
-            <div className="rounded-3xl border border-dashed border-white/15 bg-white/[0.03] p-6 text-center">
-              <p className="text-sm font-bold text-white/70">No live cricket right now.</p>
-              <p className="mt-1 text-xs text-white/40">Check the fixtures below, or open Cricket Live TV further down.</p>
-            </div>
-          )}
-        </Section>
-
-        {cricketUpcoming.length ? (
-          <Section kicker="Fixtures" title="Upcoming — Cricket">
-            <div className="flex gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
-              {cricketUpcoming.map((match) => <div key={`up-${match.type}-${match.id}`} className="w-[270px] shrink-0 snap-start"><MatchCard match={match} compact /></div>)}
-            </div>
-          </Section>
-        ) : null}
 
         {otherLive.length ? (
           <Section kicker="FanCode · Football · Kabaddi" title="Other sports — Live">
