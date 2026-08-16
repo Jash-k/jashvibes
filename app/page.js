@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import LibraryRows from '@/components/LibraryRows';
-import HomeLiveSports from '@/components/HomeLiveSports';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 
 const PAGE_SIZE = 15;
@@ -616,8 +615,6 @@ export default function LandingPage() {
 
         </div>
       </section>
-
-      <HomeLiveSports />
 
       <LibraryRows />
 

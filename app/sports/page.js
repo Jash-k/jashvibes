@@ -122,13 +122,14 @@ function HeroMatchCard({ match }) {
   );
 }
 
-function OtherLiveCard({ m }) {
+function OtherLiveCard({ m, active = false, onPlay }) {
   return (
-    <a
-      href={m.href}
-      target="_blank"
-      rel="noreferrer"
-      className="group w-[240px] shrink-0 snap-start rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition hover:border-amber-400/50 hover:bg-amber-500/10"
+    <button
+      type="button"
+      onClick={() => onPlay?.(m)}
+      className={`group w-[240px] shrink-0 snap-start rounded-2xl border p-3 text-left transition hover:border-amber-400/50 hover:bg-amber-500/10 ${
+        active ? 'border-amber-400/70 bg-amber-500/15 shadow-[0_0_30px_rgba(251,191,36,0.15)]' : 'border-white/10 bg-white/[0.03]'
+      }`}
     >
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-1.5 rounded-full bg-rose-500/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-rose-300">
@@ -138,8 +139,8 @@ function OtherLiveCard({ m }) {
       </div>
       <p className="mt-2 line-clamp-2 text-[13px] font-black leading-4 text-white group-hover:text-amber-100">{m.title}</p>
       <p className="mt-1.5 truncate text-[9px] uppercase tracking-wider text-white/40">{m.competition}</p>
-      <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-amber-300/80">Watch stream →</p>
-    </a>
+      <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-amber-300/80">{active ? 'Playing below ▼' : 'Play here ▸'}</p>
+    </button>
   );
 }
 
@@ -179,6 +180,27 @@ export default function SportsPage() {
     setSwitching(true);
     setTimeout(() => { setActive(channel); setSwitching(false); }, 260);
   }, [active?.id]);
+
+  // Other Sports Live cards play *inline* in this page's player (no new tab).
+  const playOtherLive = useCallback((m) => {
+    const ch = channelCardBase({
+      id: `other-${m.id}`,
+      name: m.title || 'FanCode Live',
+      sub: m.category || 'FanCode',
+      group: 'FanCode',
+      color: '#ec1c24',
+      logo: '/fancode.svg',
+      url: m.href,
+      desc: m.competition || 'Live stream',
+    });
+    setChannels((current) => current.some((c) => c.id === ch.id) ? current : [ch, ...current]);
+    setSwitching(true);
+    setTimeout(() => {
+      setActive(ch);
+      setSwitching(false);
+      playerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 220);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -306,7 +328,7 @@ export default function SportsPage() {
         {otherLive.length ? (
           <Section kicker="FanCode · Football · Kabaddi" title="Other sports — Live">
             <div className="flex snap-x gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
-              {otherLive.map((m) => <OtherLiveCard key={`o-${m.type}-${m.id}`} m={m} />)}
+              {otherLive.map((m) => <OtherLiveCard key={`o-${m.type}-${m.id}`} m={m} active={active?.id === `other-${m.id}`} onPlay={playOtherLive} />)}
             </div>
           </Section>
         ) : null}
