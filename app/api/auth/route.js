@@ -22,6 +22,16 @@ function safeEqual(a, b) {
 }
 
 /**
+ * Secondary unlock password for the Live TV service panel. Curation/demo
+ * deployments use a friendlier password than the owner PASS. Overridable via
+ * LIVE_TV_PASS (or TV_PASS); defaults to 'tv2010'. A successful login issues
+ * the same session token as the main password, so middleware is unaffected.
+ */
+function getTvPanelPassword() {
+  return process.env.LIVE_TV_PASS || process.env.TV_PASS || 'tv2010';
+}
+
+/**
  * Sets the HttpOnly session cookie.
  * - sameSite 'none' + secure in production so the cookie also works when the
  *   app is embedded (e.g. inside a Hugging Face Spaces iframe).
@@ -84,7 +94,11 @@ export async function POST(request) {
       return withSessionCookie(NextResponse.json({ success: true, token: expectedToken }), expectedToken);
     }
 
-    if (!password || !safeEqual(password, configuredPassword)) {
+    const tvPanelPassword = getTvPanelPassword();
+    const passwordOk = Boolean(password) &&
+      (safeEqual(password, configuredPassword) || safeEqual(password, tvPanelPassword));
+
+    if (!passwordOk) {
       return NextResponse.json(
         { success: false, error: 'Invalid password' },
         { status: 401 }

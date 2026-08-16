@@ -3,35 +3,18 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import BrandLogo from '@/components/BrandLogo';
-
-const FANCODE_FEED = 'https://raw.githubusercontent.com/doctor-8trange/zyphx8/refs/heads/main/data/fancode.json';
-const M3U8_PLAYER = 'https://m3u8-player-ashen.vercel.app/';
+import {
+  FANCODE_FEED,
+  bestFancodeVariant,
+  isSeniorMenBcci,
+  normalizeBcciMatch,
+  normalizeIplMatch,
+  normalizeWt20Match,
+  pickArray,
+  playerUrlFromHls,
+} from '@/lib/sportsFeed';
 const WILLOW_URL = 'https://m3u8-player-ashen.vercel.app/?sid=mzo8bm6chvg8&src=https%3A%2F%2Famg01269-amg01269c1-sportstribal-emea-5204.playouts.now.amagi.tv%2Fts-eu-w1-n2%2Fplaylist%2Famg01269-willowtvfast-willowplus-sportstribalemea%2Fcb7f3e1a7b7b6f8a9ac33e6cd9f143a5d1073183573a80303aac5e9e7792155d80b9f7c9b84aeb4a19e24094385631004262d519ce647c968d23f6156b3f4f7f8ae1ec3f8cc50274e38b1f5549a3120e50fe6114d54a543b99c80a188938827c0738e11d210361daf35aab664abef86ef603359bf1843a6c6d2d0acc0602fcb02dfbbdbe0010c76da5b802488b2f5be7922198824df9d9cb5e9d449875f7068993a38dd1438486967eaf50e0304409737bc8cd7bcb9c04fb88cc393cc82170401f57e2a1a1d42453eed19c71829de291279a3ac08d2c801258d162b97cf4fb0ef6c873c3c05da9acc1bf08216be6ac5f10ba36f020769a6113c4ac6a10c4df534fb9bc785954c06c970924349bfcdf15be1274fca30e8aae601134c1de10d5cdf2cbc2b18e439231c5d4fcc37d6b4077010ec670a3992df41a9d40e89f431e0d187bfad315e596c95235554a84ab57c05c4eea8cc5d0894e73e1482f77c42c99570c67c9744b79e626f6d37c4f813405883072aa0c6cce12b2e862a5e7e8e4003aa7d78817ac38a1e65ca09968cd420f193ac1957d0f7a1d28efb91c4a5a1fe44aebd4c6e4056c21fce7c1fbba3e1b0f2b185f09cbafa75fa8cef86b7a32c4402d747b001df4528089beb6b4d99faf0b36e6b65dc6267bd08a8272ae04501d%2F66%2F1920x1080_5859480%2Findex.m3u8&title=Willow-cricket-live';
 const FANCODE_PERMANENT_URL = 'https://m3u8-player-ashen.vercel.app/?sid=7cswis4w7cn1&chid=FRttXFtDHQ&t=g-emhBJmCgNJIxIWWVESYhcHDAFTLkEQYlQTAxobEhYSZ11YHQQ&lg=GwxGQEEPV0UeGARWVFFcVhcODEEQF18fQV4RBgUaA1VHQF5aGQ4aQBAVQR1fUBwDCEAgNB9GQRgoKyJBAxZV';
-
-function encodeMatchHash(payload) {
-  try {
-    return btoa(unescape(encodeURIComponent(JSON.stringify(payload)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  } catch {
-    return '';
-  }
-}
-
-function matchCenterHref(payload) {
-  const hash = encodeMatchHash(payload);
-  return hash ? `/match-center/${hash}` : '/sports';
-}
-
-function bestFancodeVariant(autoText = '') {
-  const text = String(autoText || '');
-  const matches = [...text.matchAll(/RESOLUTION=(\d+)x(\d+)[\s\S]*?\n(https?:\/\/[^\r\n]+)/g)];
-  if (!matches.length) return text.match(/https?:\/\/[^\r\n]+\.m3u8[^\r\n]*/i)?.[0] || '';
-  return matches.map((match) => ({ width: Number(match[1]), height: Number(match[2]), url: match[3].trim() })).sort((a, b) => (b.width * b.height) - (a.width * a.height))[0]?.url || '';
-}
-
-function playerUrlFromHls(url = '', title = 'Live') {
-  return `${M3U8_PLAYER}?${new URLSearchParams({ src: url, title }).toString()}`;
-}
 
 function channelCardBase({ id, name, sub, group, color, logo, url, desc }) {
   return { id, name, sub, group, color, glow: `${color}4d`, border: `${color}40`, bg: `${color}12`, tag: sub || 'LIVE', logo, url, desc };
@@ -41,103 +24,6 @@ const BASE_CHANNELS = [
   channelCardBase({ id: 'fancode-live', name: 'FanCode', sub: 'Live', group: 'FanCode', color: '#ec1c24', logo: '/fancode.svg', url: FANCODE_PERMANENT_URL, desc: 'Current FanCode live event' }),
   channelCardBase({ id: 'willow', name: 'Willow TV', sub: 'English', group: 'Willow', color: '#f97316', logo: '/willow.svg', url: WILLOW_URL, desc: 'Willow by Cricbuzz live cricket' }),
 ];
-
-function pickArray(payload = {}, preferredKeys = []) {
-  for (const key of preferredKeys) if (Array.isArray(payload?.[key])) return payload[key];
-  for (const value of Object.values(payload || {})) if (Array.isArray(value)) return value;
-  return [];
-}
-
-function teamCode(name = '') {
-  const clean = String(name || '').trim();
-  const map = { India: 'IND', Australia: 'AUS', England: 'ENG', Pakistan: 'PAK', 'South Africa': 'SA', 'New Zealand': 'NZ', 'Sri Lanka': 'SL', Bangladesh: 'BAN', Afghanistan: 'AFG', 'West Indies': 'WI' };
-  return map[clean] || clean.split(/\s+/).map((part) => part[0]).join('').slice(0, 4).toUpperCase() || 'TBD';
-}
-
-function isSeniorMenBcci(row = {}) {
-  const text = `${row.CompetitionName || ''} ${row.SeriesName || ''} ${row.HomeTeamName || ''} ${row.AwayTeamName || ''}`.toLowerCase();
-  return !/(women|u-?19|under\s*19|india\s*a|emerging|academy|girls)/i.test(text);
-}
-
-function normalizeBcciMatch(row = {}, feed = 'live') {
-  const home = row.HomeTeamName || row.HomeTeam || row.Team1 || row.FirstBattingTeamName || '';
-  const away = row.AwayTeamName || row.AwayTeam || row.Team2 || row.SecondBattingTeamName || '';
-  const statusRaw = String(row.MatchStatus || row.Status || '').toLowerCase();
-  const result = row.Comments || row.MatchResult || row.Result || '';
-  const status = /post|result|complete|ended/.test(statusRaw) || result ? 'completed' : (feed === 'live' || /live|progress|innings|break/.test(statusRaw)) ? 'live' : 'upcoming';
-  const matchData = {
-    ...row,
-    MatchID: row.MatchID || row.MatchId || row.matchID || row.id,
-    CompetitionID: row.CompetitionID || row.CompetitionId || row.SeriesID,
-    MatchOrder: row.MatchOrder || row.MatchName || row.MatchNo,
-    CompetitionName: row.CompetitionName || row.SeriesName || row.TournamentName,
-    HomeTeamName: home,
-    AwayTeamName: away,
-    GroundName: row.GroundName || row.VenueName || row.Venue,
-  };
-  return {
-    id: String(matchData.MatchID || `${home}-${away}-${feed}`),
-    provider: 'BCCI',
-    type: 'bcci',
-    status,
-    title: `${teamCode(home)} vs ${teamCode(away)}`,
-    subtitle: `${home || 'Team A'} vs ${away || 'Team B'}`,
-    competition: matchData.CompetitionName || 'BCCI Cricket',
-    venue: matchData.GroundName || '',
-    date: row.MatchDateNew || row.MatchDate || row.StartDate || '',
-    score1: row['1Summary'] || row.FirstBattingSummary || row.HomeTeamScore || '',
-    score2: row['2Summary'] || row.SecondBattingSummary || row.AwayTeamScore || '',
-    result,
-    href: matchCenterHref({ sport: 'cricket', type: 'bcci', matchData }),
-  };
-}
-
-function normalizeWt20Match(row = {}) {
-  const live = row.live === true || row.Live === true;
-  const recent = row.recent === true || /ended|complete|won|beat/.test(String(row.match_status || row.match_result || '').toLowerCase());
-  const status = live ? 'live' : recent ? 'completed' : 'upcoming';
-  const home = row.teama || row.home || row.teama_short || 'Team A';
-  const away = row.teamb || row.away || row.teamb_short || 'Team B';
-  return {
-    id: String(row.match_id || row.game_id || `${home}-${away}`),
-    provider: 'ICC',
-    type: 'wt20',
-    status,
-    title: `${row.teama_short || teamCode(home)} vs ${row.teamb_short || teamCode(away)}`,
-    subtitle: `${home} vs ${away}`,
-    competition: row.series_name || 'ICC WT20',
-    venue: row.venue_name || row.ground_name || '',
-    date: row.match_date_ist || row.start_date || '',
-    score1: row.teama_score || '',
-    score2: row.teamb_score || '',
-    result: row.match_result || row.match_status || '',
-    href: matchCenterHref({ sport: 'cricket', type: 'wt20', matchId: row.match_id, matchData: row }),
-  };
-}
-
-function normalizeIplMatch(row = {}) {
-  const id = row.MatchID || row.matchId || row.id;
-  const home = row.Team1Name || row.HomeTeamName || row.team1 || row.TeamA || row.home || row.HomeTeamShortName || 'Team A';
-  const away = row.Team2Name || row.AwayTeamName || row.team2 || row.TeamB || row.away || row.AwayTeamShortName || 'Team B';
-  const result = row.Comments || row.Result || row.result || row.MatchResult || '';
-  const statusText = String(row.MatchStatus || row.status || '').toLowerCase();
-  const completed = result || /complete|post|result|ended/.test(statusText) || row.IsMatchEnd === '1';
-  return {
-    id: String(id || `${home}-${away}`),
-    provider: 'IPL',
-    type: 'ipl',
-    status: completed ? 'completed' : /live|innings/.test(statusText) ? 'live' : 'upcoming',
-    title: row.title || `${teamCode(home)} vs ${teamCode(away)}`,
-    subtitle: `${home} vs ${away}`,
-    competition: row.CompetitionName || row.competition || 'IPL',
-    venue: row.GroundName || row.venue || row.Venue || '',
-    date: row.MatchDate || row.date || '',
-    score1: row['1Summary'] || row.score1 || '',
-    score2: row['2Summary'] || row.score2 || '',
-    result,
-    href: matchCenterHref({ sport: 'cricket', type: 'ipl', matchId: id, matchData: row }),
-  };
-}
 
 function PulsingDot({ color = '#ef4444' }) { return <span className="inline-block h-2 w-2 animate-pulse rounded-full" style={{ background: color }} />; }
 
