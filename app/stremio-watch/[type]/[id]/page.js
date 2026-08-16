@@ -21,16 +21,6 @@ function isDash(url = '') {
   return String(url).toLowerCase().includes('.mpd');
 }
 
-// Telegram-based addons stream MP4 as sequential chunks with no Range
-// support, which makes the browser video element unseekable. Routing those
-// streams through our Range-emulating relay makes seeking work; sources that
-// already honour Range pass straight through, so this is always safe.
-function proxiedStreamUrl(url = '') {
-  const value = String(url || '');
-  if (!/^https?:\/\//i.test(value) || isDash(value)) return value;
-  return `/api/stream-proxy?u=${encodeURIComponent(value)}`;
-}
-
 function compactQualityLabel(stream = {}, index = 0) {
   const text = `${stream.label || ''} ${stream.title || ''} ${stream.name || ''} ${stream.size || ''}`;
   const resolution = text.match(/\b(2160p|1440p|1080p|720p|576p|540p|480p|360p|240p|4k)\b/i)?.[1]?.replace(/^4k$/i, '4K') || '';
@@ -86,7 +76,6 @@ export default function StremioPlayerPage() {
   const [selectedEpisodeNumber, setSelectedEpisodeNumber] = useState(Number(searchParams?.get('episode') || idEpisodeMatch?.[2] || 1));
   const [streams, setStreams] = useState([]);
   const [streamIndex, setStreamIndex] = useState(0);
-  const [seekInfo, setSeekInfo] = useState(null);
 
   function seekBy(seconds) {
     const video = videoRef.current;
@@ -109,9 +98,14 @@ export default function StremioPlayerPage() {
         if (type === 'series' && data.item?.videos?.length) {
           const wantedSeason = Number(searchParams?.get('season') || idEpisodeMatch?.[1] || 1);
           const wantedEpisode = Number(searchParams?.get('episode') || idEpisodeMatch?.[2] || 1);
-          const wanted = data.item.videos.find((video) => Number(video.season) === wantedSeason && Number(video.episode) === wantedEpisode) || data.item.videos[0];
-          setSelectedSeason(Number(wanted?.season || wantedSeason || 1));
-          setSelectedEpisodeNumber(Number(wanted?.episode || wantedEpisode || 1));
+          // Only adopt meta's numbering when it actually contains the episode
+          // the viewer asked for. Falling back to videos[0] used to silently
+          // swap the selection to the first episode and reload wrong streams.
+          const wanted = data.item.videos.find((video) => Number(video.season) === wantedSeason && Number(video.episode) === wantedEpisode);
+          if (wanted) {
+            setSelectedSeason(Number(wanted?.season || wantedSeason || 1));
+            setSelectedEpisodeNumber(Number(wanted?.episode || wantedEpisode || 1));
+          }
         }
         setMetaStatus('ready');
       } catch (err) {
@@ -143,12 +137,16 @@ export default function StremioPlayerPage() {
     return episodesForSeason.find((video) => Number(video.episode) === Number(selectedEpisodeNumber)) || episodesForSeason[0] || null;
   }, [episodesForSeason, selectedEpisodeNumber]);
 
+  // Stream requests are built only from the route id / IMDb base + the
+  // currently selected season/episode. Meta-embedded video ids must not feed
+  // this — episode-level ids (a bare episode IMDb id, a tmdb: series ref,
+  // etc.) made the second stream fetch resolve to the wrong episode, which
+  // showed correct streams at first and then replaced them with wrong ones.
   const streamRequestId = useMemo(() => {
     if (type !== 'series') return id;
-    if (currentEpisodeInfo?.id) return currentEpisodeInfo.id;
     const baseId = String(item?.imdbId || id || '').split(':')[0];
     return baseId ? `${baseId}:${selectedSeason || 1}:${selectedEpisodeNumber || 1}` : '';
-  }, [type, id, item?.imdbId, currentEpisodeInfo?.id, selectedSeason, selectedEpisodeNumber]);
+  }, [type, id, item?.imdbId, selectedSeason, selectedEpisodeNumber]);
 
   useEffect(() => {
     if (!streamRequestId) return;
@@ -239,20 +237,6 @@ export default function StremioPlayerPage() {
     : item?.title || activeStream?.title || 'Stremio';
   const directStremioActive = Boolean(activeStream?.url && !isDash(activeStream.url));
 
-  // Ask the relay whether this stream is seekable (native Range, emulated
-  // Range, or unseekable because the source hides its size entirely).
-  useEffect(() => {
-    setSeekInfo(null);
-    const url = activeStream?.url;
-    if (!url || isDash(url) || !/^https?:\/\//i.test(url)) return;
-    let cancelled = false;
-    fetch(`/api/stream-proxy?u=${encodeURIComponent(url)}&ping=1`, { cache: 'no-store' })
-      .then((response) => response.json())
-      .then((data) => { if (!cancelled) setSeekInfo(data?.ok ? data : null); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [activeStream?.url]);
-
   // "Single screen": turn the player shell into a full-tab theatre view —
   // same tab, same player UI, nothing else on screen.
   async function enterSingleScreen() {
@@ -290,7 +274,7 @@ export default function StremioPlayerPage() {
             <div className="relative aspect-video h-full w-full bg-black fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:aspect-auto">
               {directStremioActive ? (
                 <VideoPlayer
-                  src={proxiedStreamUrl(activeStream.url)}
+                  src={activeStream.url}
                   title={activePlayerTitle}
                   poster={currentEpisodeInfo?.thumbnail || item?.backdropUrl || item?.posterUrl || ''}
                   qualityOptions={streamQualityOptions}
@@ -325,11 +309,6 @@ export default function StremioPlayerPage() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <h1 className="text-2xl font-black text-white">{item?.title || 'Stremio'}</h1>
-                {directStremioActive && seekInfo ? (
-                  <p className={`mt-1 inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${seekInfo.seekable ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200' : 'border-amber-400/30 bg-amber-500/10 text-amber-100'}`}>
-                    {seekInfo.emulatedRange ? '⤾ Seeking enabled · Jash relay' : seekInfo.nativeRange ? '⤾ Seeking enabled' : 'Seeking limited — source streams as chunks without a size'}
-                  </p>
-                ) : null}
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <button
@@ -347,7 +326,7 @@ export default function StremioPlayerPage() {
                     target="_blank"
                     rel="noreferrer"
                     className="rounded-2xl border border-white/10 px-4 py-2.5 text-xs font-black text-zinc-300 transition hover:border-fuchsia-400/50 hover:text-white"
-                    title="Open the raw stream URL bypassing the relay"
+                    title="Open the raw stream URL in a new tab"
                   >Direct</a>
                 ) : null}
               </div>

@@ -26,7 +26,7 @@ Tamil-first private streaming hub — movies, series, live TV, music, sports and
 - **Music (ராக வானம்)** — JioSaavn search, charts, albums, artists, playlists, Spotify import.
 - **Sports** — FanCode/Willow **Cricket Live TV** channels with an in-page player, plus other-sports FanCode live streams (separate section). Cricket match-center scorecards load on demand. Nothing polls in the background — every sports page fetch runs once on load (free-tier friendly).
 - **Classics** — VOD M3U catalogs with TMDB matching.
-- **Stremio** — in-app catalog/meta/stream browser. Telegram chunk-stream sources are relayed through `/api/stream-proxy`, which emulates HTTP Range so seeking works; single-screen theatre mode on the watch page.
+- **Stremio** — in-app catalog/meta/stream browser with direct playback and a single-screen theatre mode on the watch page. Series stream requests are pinned to the IMDb base id + selected season/episode so the episode you picked is the one that plays.
 - **PWA** — installable, offline page, day/night toggle, fullscreen landscape lock.
 
 ---
