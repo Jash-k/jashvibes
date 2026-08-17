@@ -6,19 +6,15 @@ import BrandLogo from '@/components/BrandLogo';
 import {
   FANCODE_FEED,
   bestFancodeVariant,
-  isCricketFeedItem,
-  normalizeFancodeEvent,
   playerUrlFromHls,
 } from '@/lib/sportsFeed';
 const WILLOW_URL = 'https://m3u8-player-ashen.vercel.app/?sid=mzo8bm6chvg8&src=https%3A%2F%2Famg01269-amg01269c1-sportstribal-emea-5204.playouts.now.amagi.tv%2Fts-eu-w1-n2%2Fplaylist%2Famg01269-willowtvfast-willowplus-sportstribalemea%2Fcb7f3e1a7b7b6f8a9ac33e6cd9f143a5d1073183573a80303aac5e9e7792155d80b9f7c9b84aeb4a19e24094385631004262d519ce647c968d23f6156b3f4f7f8ae1ec3f8cc50274e38b1f5549a3120e50fe6114d54a543b99c80a188938827c0738e11d210361daf35aab664abef86ef603359bf1843a6c6d2d0acc0602fcb02dfbbdbe0010c76da5b802488b2f5be7922198824df9d9cb5e9d449875f7068993a38dd1438486967eaf50e0304409737bc8cd7bcb9c04fb88cc393cc82170401f57e2a1a1d42453eed19c71829de291279a3ac08d2c801258d162b97cf4fb0ef6c873c3c05da9acc1bf08216be6ac5f10ba36f020769a6113c4ac6a10c4df534fb9bc785954c06c970924349bfcdf15be1274fca30e8aae601134c1de10d5cdf2cbc2b18e439231c5d4fcc37d6b4077010ec670a3992df41a9d40e89f431e0d187bfad315e596c95235554a84ab57c05c4eea8cc5d0894e73e1482f77c42c99570c67c9744b79e626f6d37c4f813405883072aa0c6cce12b2e862a5e7e8e4003aa7d78817ac38a1e65ca09968cd420f193ac1957d0f7a1d28efb91c4a5a1fe44aebd4c6e4056c21fce7c1fbba3e1b0f2b185f09cbafa75fa8cef86b7a32c4402d747b001df4528089beb6b4d99faf0b36e6b65dc6267bd08a8272ae04501d%2F66%2F1920x1080_5859480%2Findex.m3u8&title=Willow-cricket-live';
-const FANCODE_PERMANENT_URL = 'https://m3u8-player-ashen.vercel.app/?sid=7cswis4w7cn1&chid=FRttXFtDHQ&t=g-emhBJmCgNJIxIWWVESYhcHDAFTLkEQYlQTAxobEhYSZ11YHQQ&lg=GwxGQEEPV0UeGARWVFFcVhcODEEQF18fQV4RBgUaA1VHQF5aGQ4aQBAVQR1fUBwDCEAgNB9GQRgoKyJBAxZV';
 
 function channelCardBase({ id, name, sub, group, color, logo, url, desc }) {
   return { id, name, sub, group, color, glow: `${color}4d`, border: `${color}40`, bg: `${color}12`, tag: sub || 'LIVE', logo, url, desc };
 }
 
 const BASE_CHANNELS = [
-  channelCardBase({ id: 'fancode-live', name: 'FanCode', sub: 'Live', group: 'FanCode', color: '#ec1c24', logo: '/fancode.svg', url: FANCODE_PERMANENT_URL, desc: 'Current FanCode live event' }),
   channelCardBase({ id: 'willow', name: 'Willow TV', sub: 'English', group: 'Willow', color: '#f97316', logo: '/willow.svg', url: WILLOW_URL, desc: 'Willow by Cricbuzz live cricket' }),
 ];
 
@@ -48,27 +44,6 @@ function StreamPlayer({ channel, switching, playerRef }) {
   );
 }
 
-function OtherLiveCard({ m, active = false, onPlay }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onPlay?.(m)}
-      className={`group w-[240px] shrink-0 snap-start rounded-2xl border p-3 text-left transition hover:border-amber-400/50 hover:bg-amber-500/10 ${
-        active ? 'border-amber-400/70 bg-amber-500/15 shadow-[0_0_30px_rgba(251,191,36,0.15)]' : 'border-white/10 bg-white/[0.03]'
-      }`}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5 rounded-full bg-rose-500/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-rose-300">
-          <PulsingDot /> Live
-        </span>
-        <span className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest text-white/50">{m.category || 'Sport'}</span>
-      </div>
-      <p className="mt-2 line-clamp-2 text-[13px] font-black leading-4 text-white group-hover:text-amber-100">{m.title}</p>
-      <p className="mt-1.5 truncate text-[9px] uppercase tracking-wider text-white/40">{m.competition}</p>
-      <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-amber-300/80">{active ? 'Playing below ▼' : 'Play here ▸'}</p>
-    </button>
-  );
-}
 
 function Section({ title, kicker, children, right }) {
   return <section className="space-y-3"><div className="flex items-end justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[0.26em] text-gray-600">{kicker}</p><h2 className="text-xl font-black uppercase italic tracking-tight text-white sm:text-2xl">{title}</h2></div>{right}</div>{children}</section>;
@@ -94,7 +69,6 @@ export default function SportsPage() {
   const [channels, setChannels] = useState(BASE_CHANNELS);
   const [active, setActive] = useState(BASE_CHANNELS[0]);
   const [switching, setSwitching] = useState(false);
-  const [otherLive, setOtherLive] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const playerRef = useRef(null);
 
@@ -104,26 +78,6 @@ export default function SportsPage() {
     setTimeout(() => { setActive(channel); setSwitching(false); }, 260);
   }, [active?.id]);
 
-  // Other Sports Live cards play *inline* in this page's player (no new tab).
-  const playOtherLive = useCallback((m) => {
-    const ch = channelCardBase({
-      id: `other-${m.id}`,
-      name: m.title || 'FanCode Live',
-      sub: m.category || 'FanCode',
-      group: 'FanCode',
-      color: '#ec1c24',
-      logo: '/fancode.svg',
-      url: m.href,
-      desc: m.competition || 'Live stream',
-    });
-    setChannels((current) => current.some((c) => c.id === ch.id) ? current : [ch, ...current]);
-    setSwitching(true);
-    setTimeout(() => {
-      setActive(ch);
-      setSwitching(false);
-      playerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 220);
-  }, []);
 
   // Free-tier friendly: fetch exactly once on mount; the header Refresh button
   // re-fetches manually. No background polling anywhere on this page.
@@ -132,19 +86,19 @@ export default function SportsPage() {
     try {
       const response = await fetch(`${FANCODE_FEED}?_=${Date.now()}`, { cache: 'no-store' });
       const data = await response.json();
-      const live = (data.matches || []).filter((m) => String(m.status || '').toUpperCase() === 'LIVE' && m.auto_streams?.[0]?.auto).slice(0, 8).map((m) => {
-        const stream = bestFancodeVariant(m.auto_streams?.[0]?.auto || '') || m.STREAMING_CDN?.Primary_Playback_URL || '';
-        return channelCardBase({ id: `fc-${m.match_id}`, name: m.title || 'FanCode', sub: 'FanCode', group: 'FanCode', color: '#ec1c24', logo: m.image_cdn?.LOGO || '/fancode.svg', url: stream ? playerUrlFromHls(stream, m.title || 'FanCode') : FANCODE_PERMANENT_URL, desc: m.tournament || 'Live FanCode event' });
-      });
-      const others = (data.matches || [])
-        .filter((m) => String(m.status || '').toUpperCase() === 'LIVE')
-        .slice(0, 20)
-        .map(normalizeFancodeEvent)
-        .filter((m) => m.href && !isCricketFeedItem(m));
-      const nextChannels = live.length ? [...live, ...BASE_CHANNELS] : BASE_CHANNELS;
+      // Only genuinely-live FanCode events become channel cards. No static
+      // placeholder ever appears — Willow always stays via BASE_CHANNELS.
+      const live = (data.matches || [])
+        .filter((m) => String(m.status || '').toUpperCase() === 'LIVE' && m.auto_streams?.[0]?.auto)
+        .slice(0, 8)
+        .map((m) => {
+          const stream = bestFancodeVariant(m.auto_streams?.[0]?.auto || '') || m.STREAMING_CDN?.Primary_Playback_URL || '';
+          return stream ? channelCardBase({ id: `fc-${m.match_id}`, name: m.title || 'FanCode', sub: 'FanCode', group: 'FanCode', color: '#ec1c24', logo: m.image_cdn?.LOGO || '/fancode.svg', url: playerUrlFromHls(stream, m.title || 'FanCode'), desc: m.tournament || 'Live FanCode event' }) : null;
+        })
+        .filter(Boolean);
+      const nextChannels = [...live, ...BASE_CHANNELS];
       setChannels(nextChannels);
       setActive((current) => nextChannels.some((item) => item.id === current?.id) ? current : nextChannels[0]);
-      setOtherLive(others);
     } catch {} finally {
       setRefreshing(false);
     }
@@ -170,19 +124,11 @@ export default function SportsPage() {
 
       <section className="relative z-10 mx-auto max-w-6xl space-y-10 px-4 py-5 pb-24">
         <div>
-          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-600">FanCode · Willow · Live TV</p>
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-600">Real live events · Willow</p>
           <h1 className="text-3xl font-black uppercase italic leading-none tracking-tighter sm:text-5xl">Live <span className="text-amber-400">Sports</span></h1>
         </div>
 
-        {otherLive.length ? (
-          <Section kicker="FanCode · Football · Kabaddi" title="Other sports — Live">
-            <div className="flex snap-x gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
-              {otherLive.map((m) => <OtherLiveCard key={`o-${m.type}-${m.id}`} m={m} active={active?.id === `other-${m.id}`} onPlay={playOtherLive} />)}
-            </div>
-          </Section>
-        ) : null}
-
-        <Section kicker="FanCode · Willow" title="Cricket Live TV">
+        <Section kicker="On air now" title="Live Channels">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{channels.map((channel) => <ChannelCard key={channel.id} ch={channel} active={active?.id === channel.id} onClick={selectChannel} />)}</div>
           <div className="mt-4">{active ? <StreamPlayer channel={active} switching={switching} playerRef={playerRef} /> : null}</div>
         </Section>
