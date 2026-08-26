@@ -66,7 +66,7 @@ Common optional ones:
 
 ```env
 LIVE_TV_PASS=tv2010                                  # Live TV service panel password (default tv2010); also works at the main unlock
-PROVIDERS=omega,vidlink,videasy,vidzee,vidrock,mirchi      # embed priority order
+PROVIDERS=tamilott,mirchi,vidlink,videasy,vidzee,vidrock      # embed priority order
 TAMILMV=https://www.1tamilmv.report/                 # current scraper domain
 OTT=https://tamilott.vercel.app/tamil_movies.json,https://tamilott.vercel.app/tamil_dubbed.json
 CRON_SECRET=token_for_/api/cron/tamilmv              # external scheduler

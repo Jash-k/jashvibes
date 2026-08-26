@@ -4,7 +4,7 @@ import { SCRAPER_PROVIDERS } from '@/lib/providers';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const DEFAULT_PRIORITY = 'tamilott,omega,vidlink,videasy,vidzee,vidrock';
+const DEFAULT_PRIORITY = 'tamilott,mirchi,vidlink,videasy,vidzee,vidrock';
 
 export async function GET() {
   const valid = new Set(SCRAPER_PROVIDERS.map((provider) => provider.id));
