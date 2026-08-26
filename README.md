@@ -13,6 +13,7 @@ app_port: 7860
 Tamil-first private streaming hub — movies, series, live TV, music, sports and classics in one Next.js app.
 
 > **v6.5** — live-cricket match feeds and all background polling revoked (the Render free-tier usage spike it caused got the service suspended). /sports is now static Live-TV + FanCode streams; match-center scorecards fetch once per open.
+> **v6.5.4** — internal keep-alive: the server pings its own `/api/health` every 10 minutes so the Render free tier never sleeps (auto URL via `RENDER_EXTERNAL_URL`; disable with `KEEPALIVE=0`). Stremio works out of the box via the built-in Global Stremio addon default.
 > **v6** — API firewall (all routes authenticated), gesture player, personal library. Personal, single-tenant deployment.
 
 ---
@@ -65,7 +66,7 @@ Common optional ones:
 
 ```env
 LIVE_TV_PASS=tv2010                                  # Live TV service panel password (default tv2010); also works at the main unlock
-PROVIDERS=omega,vidlink,videasy,vidzee,vidrock      # embed priority order
+PROVIDERS=omega,vidlink,videasy,vidzee,vidrock,mirchi      # embed priority order
 TAMILMV=https://www.1tamilmv.report/                 # current scraper domain
 OTT=https://tamilott.vercel.app/tamil_movies.json,https://tamilott.vercel.app/tamil_dubbed.json
 CRON_SECRET=token_for_/api/cron/tamilmv              # external scheduler
