@@ -94,9 +94,9 @@ function getStatusStyle(status) {
 }
 
 const WATCH_SERVER_OPTIONS = [
-  { id: 'auto', name: 'Auto', label: 'TamilOTT → Mirchi' },
-  { id: 'tamilott', name: 'TamilOTT', label: 'OTT' },
+  { id: 'auto', name: 'Auto', label: 'Mirchi → TamilOTT' },
   { id: 'mirchi', name: 'Global Mirchi', label: 'Embed' },
+  { id: 'tamilott', name: 'TamilOTT', label: 'OTT' },
   { id: 'vidlink', name: 'VidLink', label: 'Embed' },
   { id: 'videasy', name: 'VidEasy', label: 'Embed' },
   { id: 'vidzee', name: 'VidZee', label: 'Backup' },

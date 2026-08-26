@@ -8,10 +8,17 @@ const DEFAULT_PRIORITY = 'tamilott,mirchi,vidlink,videasy,vidzee,vidrock';
 
 export async function GET() {
   const valid = new Set(SCRAPER_PROVIDERS.map((provider) => provider.id));
-  const priority = (process.env.PROVIDERS || process.env.EMBED_PROVIDER_PRIORITY || DEFAULT_PRIORITY)
+  const envPriority = (process.env.PROVIDERS || process.EMBED_PROVIDER_PRIORITY || '')
     .split(',')
     .map((item) => item.trim().toLowerCase())
     .filter((item) => valid.has(item));
+
+  // Fixed chain for every auto flow: Global Mirchi first, TamilOTT second,
+  // then the rest of the providers (stale PROVIDERS env values cannot reorder
+  // the front of the chain; they may only re-order the tail).
+  const tail = (envPriority.length ? envPriority : DEFAULT_PRIORITY.split(','))
+    .filter((id) => id !== 'mirchi' && id !== 'tamilott');
+  const priority = ['mirchi', 'tamilott', ...tail];
 
   return NextResponse.json({
     success: true,
