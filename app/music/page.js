@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Icon from '@/components/Icons';
+import CircularGallery from '@/components/CircularGallery';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 
 const FAVORITES_KEY = 'jash_music_favorites';
@@ -12,8 +14,6 @@ const VOLUME_KEY = 'jash_music_volume';
 const MUTED_KEY = 'jash_music_muted';
 const MUSIC_CACHE_KEY = 'jash:music:v7';
 const SONG_DETAIL_CACHE_KEY = 'jash:music:songs:v1';
-const SLEEP_TIMER_KEY = 'jash_music_sleep_timer';
-const SLEEP_PRESETS = [5, 10, 15, 30, 45, 60];
 
 const QUALITY_LABELS = {
   '320kbps': '320k',
@@ -43,15 +43,6 @@ function formatTime(value = 0) {
   const min = Math.floor(seconds / 60);
   const sec = String(seconds % 60).padStart(2, '0');
   return `${min}:${sec}`;
-}
-
-function formatCountdown(ms = 0) {
-  const totalSeconds = Math.max(0, Math.ceil(Number(ms || 0) / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  if (hours > 0) return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
 function dedupeQueue(tracks = []) {
@@ -139,6 +130,18 @@ function plainFromSyncedLyrics(value = '') {
     .map((line) => line.replace(/\[[^\]]+\]/g, '').trim())
     .filter(Boolean)
     .join('\n');
+}
+
+function VinylArt({ src, playing = false, size = 'lg' }) {
+  return (
+    <div className={`jv-vinyl ${size === 'sm' ? 'sm' : ''} ${playing ? 'is-playing' : ''}`}>
+      <div className="jv-vinyl-spin">
+        {src ? <img src={src} alt="" className="h-full w-full rounded-full object-cover" /> : <div className="grid h-full w-full place-items-center rounded-full bg-gradient-to-br from-fuchsia-950 via-black to-zinc-950 text-4xl">♫</div>}
+        <div className="jv-vinyl-groove" />
+        <div className="jv-vinyl-label" />
+      </div>
+    </div>
+  );
 }
 
 function IconButton({ active = false, children, onClick, title }) {
@@ -318,14 +321,12 @@ export default function MusicPage() {
   const [active, setActive] = useState(null);
   const [activeDetail, setActiveDetail] = useState(null);
   const [showMiniPlayer, setShowMiniPlayer] = useState(false);
+  const dragStartRef = useRef(null);
+  const barTouchRef = useRef(null);
+  const [dragDy, setDragDy] = useState(0);
   const [showSongCrud, setShowSongCrud] = useState(false);
-  const [showSleepMenu, setShowSleepMenu] = useState(false);
   const [listeningMode, setListeningMode] = useState(false);
   const [wakeLockStatus, setWakeLockStatus] = useState('idle');
-  const [sleepEndAt, setSleepEndAt] = useState(0);
-  const [sleepDurationMs, setSleepDurationMs] = useState(0);
-  const [sleepRemainingMs, setSleepRemainingMs] = useState(0);
-  const [sleepOverlay, setSleepOverlay] = useState(false);
   const [quality, setQuality] = useState('');
   const [status, setStatus] = useState('loading');
   const [searchStatus, setSearchStatus] = useState('idle');
@@ -364,14 +365,6 @@ export default function MusicPage() {
       window.localStorage.setItem(MUTED_KEY, '0');
       const cachedSongs = JSON.parse(window.sessionStorage.getItem(SONG_DETAIL_CACHE_KEY) || '{}');
       Object.entries(cachedSongs).forEach(([key, value]) => songCacheRef.current.set(key, value));
-      const savedSleep = JSON.parse(window.localStorage.getItem(SLEEP_TIMER_KEY) || '{}');
-      if (savedSleep?.endAt && Number(savedSleep.endAt) > Date.now()) {
-        setSleepEndAt(Number(savedSleep.endAt));
-        setSleepDurationMs(Number(savedSleep.durationMs || Math.max(0, Number(savedSleep.endAt) - Date.now())));
-        setSleepRemainingMs(Math.max(0, Number(savedSleep.endAt) - Date.now()));
-      } else {
-        window.localStorage.removeItem(SLEEP_TIMER_KEY);
-      }
     } catch {}
   }, []);
 
@@ -492,22 +485,6 @@ export default function MusicPage() {
       if (window.updatePlayerStatus) delete window.updatePlayerStatus;
     };
   }, [activeDetail, active, quality, isPlaying]);
-
-  useEffect(() => {
-    if (!sleepEndAt) return;
-    let cancelled = false;
-    const tick = () => {
-      if (cancelled) return;
-      const remaining = Math.max(0, sleepEndAt - Date.now());
-      setSleepRemainingMs(remaining);
-      if (remaining <= 0) {
-        stopForSleepTimer();
-      }
-    };
-    tick();
-    const timer = window.setInterval(tick, 1000);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, [sleepEndAt]);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -834,7 +811,6 @@ export default function MusicPage() {
   async function enableListeningMode() {
     setListeningMode(true);
     setWakeLockStatus('requesting');
-    setShowSleepMenu(false);
     await requestWakeLock();
   }
 
@@ -875,54 +851,6 @@ export default function MusicPage() {
     if (wakeLockStatus === 'released') return 'Wake Lock was released; keep app visible to reactivate';
     if (wakeLockStatus === 'error') return 'Wake Lock failed, touch lock is active';
     return 'Touch lock active';
-  }
-
-  function startSleepTimer(minutes) {
-    const durationMs = Math.max(1, Number(minutes || 0)) * 60 * 1000;
-    const endAt = Date.now() + durationMs;
-    setSleepEndAt(endAt);
-    setSleepDurationMs(durationMs);
-    setSleepRemainingMs(durationMs);
-    setSleepOverlay(false);
-    setShowSleepMenu(false);
-    try { window.localStorage.setItem(SLEEP_TIMER_KEY, JSON.stringify({ endAt, durationMs })); } catch {}
-  }
-
-  function cancelSleepTimer() {
-    setSleepEndAt(0);
-    setSleepDurationMs(0);
-    setSleepRemainingMs(0);
-    setSleepOverlay(false);
-    setShowSleepMenu(false);
-    try { window.localStorage.removeItem(SLEEP_TIMER_KEY); } catch {}
-  }
-
-  function stopMedianBackgroundMedia() {
-    try { window.median?.backgroundMedia?.stop?.(); } catch {}
-    try { window.gonative?.backgroundMedia?.stop?.(); } catch {}
-  }
-
-  function stopForSleepTimer() {
-    if (!sleepEndAt) return;
-    const video = videoRef.current;
-    try { video?.pause?.(); } catch {}
-    try { video?.removeAttribute?.('src'); video?.load?.(); } catch {}
-    try { playerRef.current?.destroy?.(); playerRef.current = null; } catch {}
-    stopMedianBackgroundMedia();
-    setIsPlaying(false);
-    setShouldAutoplay(false);
-    setPlayerStatus('idle');
-    setActive(null);
-    setActiveDetail(null);
-    setQuality('');
-    setSleepEndAt(0);
-    setSleepDurationMs(0);
-    setSleepRemainingMs(0);
-    setShowSleepMenu(false);
-    if (listeningMode) disableListeningMode();
-    setSleepOverlay(true);
-    try { window.localStorage.removeItem(SLEEP_TIMER_KEY); } catch {}
-    setTimeout(() => { try { window.close(); } catch {} }, 350);
   }
 
   async function openLyrics() {
@@ -1201,6 +1129,12 @@ export default function MusicPage() {
 
   const rawSections = home.sections || [];
   const mainSections = rawSections.filter((section) => (section.items || []).length);
+  const circularSource = mainSections
+    .map((section) => ({ section, songs: (section.items || []).filter((item) => item?.type === 'song' || item?.seokey || item?.trackId) }))
+    .find((entry) => entry.songs.length >= 6);
+  const circularItems = circularSource
+    ? circularSource.songs.slice(0, 10).map((track) => ({ key: trackKey(track), image: track.image, text: track.title, sub: track.artists || 'Tamil', track }))
+    : [];
   const importedPlaylists = home.playlists || [];
   const homeHasAnySongCards = mainSections.length || home.releases?.tracks?.length || home.releases?.albums?.length;
   const activeKeyValue = activeKey;
@@ -1224,10 +1158,6 @@ export default function MusicPage() {
   }, [syncedLyricLines, currentTime]);
   const effectiveVolume = muted ? 0 : Math.min(1, Math.max(0, Number(volume) || 0));
   const volumeIcon = effectiveVolume === 0 ? '🔇' : effectiveVolume < 0.45 ? '🔉' : '🔊';
-  const sleepActive = sleepEndAt > 0 && sleepRemainingMs > 0;
-  const sleepProgress = sleepActive && sleepDurationMs ? Math.max(0, Math.min(1, sleepRemainingMs / sleepDurationMs)) : 0;
-  const sleepCircle = 2 * Math.PI * 17;
-
   useEffect(() => {
     if (showLyrics && activeLyricRef.current) {
       activeLyricRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -1404,6 +1334,13 @@ export default function MusicPage() {
               </section>
             ) : null}
 
+            {view === 'home' && circularItems.length >= 6 ? (
+              <section className="jv-reveal">
+                <SectionHeader title="Sound Wheel" subtitle="Drag or scroll to spin — tap the front card to play" />
+                <CircularGallery items={circularItems} onItemClick={(entry) => playTrack(entry.track, circularSource.songs, true)} />
+              </section>
+            ) : null}
+
             {(view === 'home' || view === 'search') && mainSections.map((section) => {
               const songItems = (section.items || []).filter((item) => item?.type === 'song' || item?.seokey || item?.trackId);
               return (
@@ -1455,62 +1392,78 @@ export default function MusicPage() {
         </div>
       ) : null}
 
-      {sleepOverlay ? (
-        <div className="fixed inset-0 z-[90] grid place-items-center bg-black p-6 text-center text-white" onClick={() => setSleepOverlay(false)}>
-          <div>
-            <div className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-fuchsia-300/30 bg-fuchsia-500/10 text-4xl">☾</div>
-            <h2 className="mt-5 text-3xl font-black">Sleep timer ended</h2>
-            <p className="mt-2 text-sm text-zinc-400">Music stopped. Tap anywhere to wake the app.</p>
-          </div>
-        </div>
-      ) : null}
-
       {showMiniPlayer && playingTrack ? (
-        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/70 p-3 pb-28 backdrop-blur-xl sm:items-center sm:p-5" onClick={closeMiniPlayer}>
+        <div className="fixed inset-0 z-[70] overflow-hidden" role="dialog" aria-modal="true" aria-label="Now playing">
+          {playingImage ? (
+            <img src={playingImage} alt="" aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-60 blur-3xl saturate-150" />
+          ) : null}
+          <div aria-hidden="true" className="absolute inset-0 bg-[#070008]/75" />
+          <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,_rgba(217,70,239,0.3),_transparent_55%)]" />
+
           <section
-            className="mini-player-shell w-full max-w-sm overflow-hidden rounded-[2.25rem] border border-fuchsia-300/25 bg-[radial-gradient(circle_at_20%_0%,rgba(217,70,239,0.34),transparent_30%),linear-gradient(160deg,#1a061b,#050008_58%,#120012)] p-4 shadow-2xl shadow-fuchsia-950/60 sm:max-w-md sm:p-5"
-            onClick={(event) => event.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Now playing"
+            className="relative flex h-full flex-col px-5 pb-5 pt-4 sm:px-8 sm:pt-6"
+            onTouchStart={(event) => { dragStartRef.current = event.touches[0].clientY; }}
+            onTouchMove={(event) => {
+              if (dragStartRef.current == null) return;
+              const dy = event.touches[0].clientY - dragStartRef.current;
+              if (dy > 0) setDragDy(dy);
+            }}
+            onTouchEnd={() => { if (dragDy > 120) closeMiniPlayer(); setDragDy(0); dragStartRef.current = null; }}
+            style={{ transform: dragDy ? `translateY(${dragDy}px)` : undefined, transition: dragDy ? 'none' : 'transform 320ms cubic-bezier(0.16,1,0.3,1)' }}
           >
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.34em] text-fuchsia-300/80">Now Playing</p>
-                <p className="mt-1 text-xs font-semibold text-zinc-500">Tap artist name to open songs/albums</p>
-              </div>
-              <button type="button" onClick={closeMiniPlayer} className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/[0.05] text-sm font-black text-zinc-200 transition hover:border-fuchsia-300/50 hover:text-white" aria-label="Close player">×</button>
+            <div className="mx-auto flex w-full max-w-xl items-center justify-between">
+              <button type="button" onClick={closeMiniPlayer} aria-label="Close player" className="jv-btn-icon !h-10 !w-10">
+                <Icon name="chevD" className="h-5 w-5" />
+              </button>
+              <p className="text-[10px] font-black uppercase tracking-[0.34em] text-fuchsia-200/90">Now Playing</p>
+              <button type="button" onClick={() => (showLyrics ? setShowLyrics(false) : openLyrics())} className="rounded-full border border-white/10 bg-white/[0.05] px-3.5 py-2 text-[11px] font-black text-zinc-200 transition hover:border-fuchsia-300/40 hover:text-white">
+                {showLyrics ? 'Art' : 'Lyrics'}
+              </button>
             </div>
 
-            <div className="relative mx-auto mt-4 aspect-square w-full max-w-[min(74vw,19rem)] overflow-hidden rounded-[2rem] border border-white/10 bg-zinc-950 shadow-2xl shadow-black/50 sm:max-w-[20rem]">
+            <div className="relative mx-auto mt-3 w-full max-w-xl flex-1 overflow-hidden">
               {showLyrics ? (
-                <div className="mini-lyrics-panel h-full overflow-y-auto p-4 pr-10 text-left">
-                  <button type="button" onClick={() => setShowLyrics(false)} className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-black/45 text-lg font-black text-zinc-100" aria-label="Show album art" title="Show album art">×</button>
-                  <p className="mb-2 text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-300/80">Lyrics</p>
+                <div
+                  className="h-full overflow-y-auto px-2 py-4 text-center"
+                  style={{ WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 12%, black 88%, transparent)', maskImage: 'linear-gradient(to bottom, transparent, black 12%, black 88%, transparent)' }}
+                >
+                  <p className="mb-3 text-[10px] font-black uppercase tracking-[0.26em] text-fuchsia-300/80">Karaoke Lyrics</p>
                   {lyricsStatus === 'loading' ? <p className="text-sm leading-7 text-zinc-200">Loading lyrics...</p> : null}
                   {lyricsStatus !== 'loading' && syncedLyricLines.length ? (
-                    <div className="space-y-2 pb-4">
+                    <div className="space-y-1.5 pb-6">
                       {syncedLyricLines.map((line, index) => (
                         <p
                           key={`${line.time}-${index}`}
                           ref={index === activeLyricLineIndex ? activeLyricRef : null}
-                          className={`rounded-2xl px-3 py-2 text-sm leading-6 transition ${index === activeLyricLineIndex ? 'bg-fuchsia-400/15 text-fuchsia-50 shadow-lg shadow-fuchsia-950/20' : index < activeLyricLineIndex ? 'text-zinc-500' : 'text-zinc-200'}`}
+                          className={`rounded-2xl px-3 py-1.5 transition-all duration-300 ${
+                            index === activeLyricLineIndex
+                              ? 'bg-gradient-to-r from-amber-300 via-fuchsia-300 to-purple-300 bg-clip-text text-xl font-black text-transparent sm:text-2xl'
+                              : index < activeLyricLineIndex
+                                ? 'text-sm text-zinc-500'
+                                : 'text-base text-zinc-300/90'
+                          }`}
                         >
                           {line.text}
                         </p>
                       ))}
                     </div>
                   ) : null}
-                  {lyricsStatus !== 'loading' && !syncedLyricLines.length ? <p className="whitespace-pre-wrap text-sm leading-7 text-zinc-200">{lyrics || 'Lyrics unavailable for this song.'}</p> : null}
+                  {lyricsStatus !== 'loading' && !syncedLyricLines.length ? (
+                    <p className="whitespace-pre-wrap text-sm leading-7 text-zinc-200">{lyrics || 'Lyrics unavailable for this song.'}</p>
+                  ) : null}
                 </div>
-              ) : playingImage ? <img src={playingImage} alt="" className="h-full w-full object-cover" /> : <div className="grid h-full w-full place-items-center bg-gradient-to-br from-fuchsia-950 via-black to-zinc-950 text-5xl">♫</div>}
+              ) : (
+                <div className="grid h-full place-items-center py-1">
+                  <VinylArt src={playingImage} playing={isPlaying} />
+                </div>
+              )}
             </div>
 
-            <div className="mt-4 text-center">
+            <div className="mx-auto mt-3 w-full max-w-xl text-center">
               <h3 className="line-clamp-2 text-xl font-black leading-tight text-white sm:text-2xl">{playingTrack.title || 'Select a song'}</h3>
               {playingTrack.album ? <p className="mt-1 truncate text-xs font-semibold text-zinc-500">{playingTrack.album}</p> : null}
               {currentArtistChips.length ? (
-                <div className="mt-3 flex flex-wrap justify-center gap-2">
+                <div className="mt-2.5 flex flex-wrap justify-center gap-2">
                   {currentArtistChips.map((artist) => (
                     <button
                       key={artist.id || artist.name}
@@ -1523,139 +1476,151 @@ export default function MusicPage() {
                     </button>
                   ))}
                 </div>
-              ) : <p className="mt-2 text-sm font-semibold text-zinc-400">{playingTrack.artists || 'Tamil Music'}</p>}
-            </div>
+              ) : null}
 
-            <div className="mt-5">
-              <input type="range" min="0" max={Math.max(duration, 0)} value={Math.min(currentTime, duration || currentTime || 0)} onChange={(event) => seekTo(event.target.value)} className="h-1 w-full accent-fuchsia-300" aria-label="Seek now playing" />
-              <div className="mt-1 flex justify-between text-[11px] font-bold text-zinc-500"><span>{formatTime(currentTime)}</span><span>{duration ? formatTime(duration) : '--:--'}</span></div>
-            </div>
+              <div className="mt-4">
+                <input
+                  type="range"
+                  min="0"
+                  max={Math.max(duration, 0)}
+                  value={Math.min(currentTime, duration || currentTime || 0)}
+                  onChange={(event) => seekTo(event.target.value)}
+                  className="jv-seek w-full"
+                  style={{ '--jv-progress': `${Math.min(100, duration ? (currentTime / duration) * 100 : 0).toFixed(1)}%` }}
+                  aria-label="Seek now playing"
+                />
+                <div className="mt-1 flex justify-between text-[11px] font-bold text-zinc-500"><span>{formatTime(currentTime)}</span><span>{duration ? formatTime(duration) : '--:--'}</span></div>
+              </div>
 
-            <div className="mt-4 flex items-center justify-center gap-3">
-              <IconButton active={shuffleEnabled} onClick={() => setShuffleEnabled((value) => !value)} title="Shuffle">🔀</IconButton>
-              <IconButton onClick={playPrevious} title="Previous">⏮</IconButton>
-              <button type="button" onClick={togglePlay} className="grid h-14 w-14 place-items-center rounded-full bg-fuchsia-300 text-xl font-black text-black shadow-xl shadow-fuchsia-500/35 transition active:scale-95 hover:bg-fuchsia-200" aria-label={isPlaying ? 'Pause' : 'Play'}>{isPlaying ? 'Ⅱ' : '▶'}</button>
-              <IconButton onClick={() => playNext(false)} title="Next">⏭</IconButton>
-              <IconButton active={repeatMode !== 'off'} onClick={cycleRepeat} title={`Repeat: ${repeatMode}`}>{repeatMode === 'one' ? '↻1' : '↻'}</IconButton>
-            </div>
+              <div className="mt-3 flex items-center justify-center gap-5">
+                <button type="button" onClick={() => setShuffleEnabled((value) => !value)} aria-label="Shuffle" title="Shuffle" className={`transition active:scale-95 ${shuffleEnabled ? 'text-amber-300' : 'text-zinc-400 hover:text-white'}`}>
+                  <Icon name="shuffle" className="h-5 w-5" />
+                </button>
+                <button type="button" onClick={playPrevious} aria-label="Previous" title="Previous" className="text-zinc-200 transition active:scale-95 hover:text-white">
+                  <Icon name="skipBack" className="h-7 w-7" />
+                </button>
+                <button type="button" onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} className={`grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br from-amber-400 via-fuchsia-500 to-purple-500 text-white shadow-2xl shadow-fuchsia-600/40 transition hover:brightness-110 active:scale-95 ${isPlaying ? 'jv-glow-pulse' : ''}`}>
+                  <Icon name={isPlaying ? 'pause' : 'play'} className="h-7 w-7" />
+                </button>
+                <button type="button" onClick={() => playNext(false)} aria-label="Next" title="Next" className="text-zinc-200 transition active:scale-95 hover:text-white">
+                  <Icon name="skipFwd" className="h-7 w-7" />
+                </button>
+                <button type="button" onClick={cycleRepeat} aria-label={`Repeat: ${repeatMode}`} title={`Repeat: ${repeatMode}`} className={`transition active:scale-95 ${repeatMode !== 'off' ? 'text-amber-300' : 'text-zinc-400 hover:text-white'}`}>
+                  <Icon name={repeatMode === 'one' ? 'repeatOne' : 'repeat'} className="h-5 w-5" />
+                </button>
+              </div>
 
-            <div className="mt-4 flex items-center justify-center gap-2">
-              <button type="button" onClick={() => showLyrics ? setShowLyrics(false) : openLyrics()} className={`rounded-full border px-4 py-2 text-xs font-black transition ${showLyrics ? 'border-fuchsia-300 bg-fuchsia-500/20 text-fuchsia-100' : 'border-white/10 bg-white/[0.05] text-zinc-200 hover:border-fuchsia-300/40 hover:text-white'}`}>{showLyrics ? 'Art' : 'Lyrics'}</button>
-              <button type="button" onClick={() => setShowSleepMenu((value) => !value)} className="rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-xs font-black text-zinc-200 transition hover:border-fuchsia-300/40 hover:text-white">Sleep</button>
-              <button type="button" onClick={toggleListeningMode} className={`rounded-full border px-4 py-2 text-xs font-black transition ${listeningMode ? 'border-fuchsia-300 bg-fuchsia-500/20 text-fuchsia-100' : 'border-white/10 bg-white/[0.05] text-zinc-200 hover:border-fuchsia-300/40 hover:text-white'}`}>🎧</button>
-              <button type="button" onClick={() => toggleFavorite(playingTrack)} className={`rounded-full border px-4 py-2 text-xs font-black transition ${favoriteSet.has(trackKey(playingTrack)) ? 'border-yellow-300 bg-yellow-300/15 text-yellow-100' : 'border-white/10 bg-white/[0.05] text-zinc-200 hover:border-yellow-300/40'}`}>{favoriteSet.has(trackKey(playingTrack)) ? '★ Saved' : '☆ Save'}</button>
+              <div className="mt-4 flex items-center justify-center gap-3">
+                <button type="button" onClick={toggleMute} aria-label={effectiveVolume === 0 ? 'Unmute' : 'Mute'} className="text-zinc-300 transition hover:text-white">
+                  <Icon name={effectiveVolume === 0 ? 'mute' : effectiveVolume < 0.45 ? 'volLow' : 'volHigh'} className="h-5 w-5" />
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={effectiveVolume}
+                  onChange={(event) => changeVolume(event.target.value)}
+                  className="jv-seek w-40"
+                  style={{ '--jv-progress': `${Math.round(effectiveVolume * 100)}%` }}
+                  aria-label="Volume"
+                />
+                <span className="w-8 text-right text-[10px] font-black text-zinc-500">{Math.round(effectiveVolume * 100)}%</span>
+              </div>
             </div>
-
-            {playerStatus === 'loading' ? <p className="mt-3 text-center text-xs font-semibold text-fuchsia-200">Loading stream...</p> : null}
-            {playerStatus === 'error' ? <p className="mt-3 line-clamp-2 text-center text-xs font-semibold text-red-300">{error}</p> : null}
           </section>
         </div>
       ) : null}
 
-      {false && showLyrics ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 p-4 pb-28 backdrop-blur-md sm:p-6" onClick={() => setShowLyrics(false)}>
-          <div
-            className="lyrics-panel lyrics-panel-3d relative max-h-[72dvh] w-full max-w-lg overflow-y-auto rounded-[2.25rem] border border-fuchsia-300/25 bg-[radial-gradient(circle_at_20%_0%,rgba(217,70,239,0.30),transparent_30%),linear-gradient(160deg,#1a061b,#050008_58%,#120012)] p-5 pr-12 shadow-2xl shadow-fuchsia-950/60 sm:max-w-xl sm:p-6 sm:pr-14"
-            onClick={(event) => event.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Lyrics"
-          >
-            <button
-              type="button"
-              onClick={() => setShowLyrics(false)}
-              className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-black/35 text-xl font-black text-zinc-100 shadow-lg shadow-black/20 transition hover:border-fuchsia-300/50 hover:text-white"
-              aria-label="Close lyrics"
-              title="Close lyrics"
-            >
-              ×
-            </button>
-            <div className="mb-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.34em] text-fuchsia-300/80">Now Singing</p>
-              <h3 className="mt-1 line-clamp-2 text-2xl font-black tracking-tight text-white">Lyrics</h3>
-              {playingTrack?.title ? <p className="mt-1 truncate text-sm font-semibold text-zinc-400">{playingTrack.title}</p> : null}
-              {lyricsData?.source ? <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-600">{lyricsData.source === 'lrclib' ? 'LRCLIB' : lyricsData.source}</p> : null}
+      <div
+        className="fixed inset-x-3 bottom-[calc(4.9rem+env(safe-area-inset-bottom))] z-50 sm:inset-x-auto sm:left-1/2 sm:w-[min(46rem,calc(100vw-2.5rem))] sm:-translate-x-1/2 lg:bottom-6"
+        onTouchStart={(event) => { barTouchRef.current = event.touches[0].clientY; }}
+        onTouchEnd={(event) => {
+          const start = barTouchRef.current;
+          barTouchRef.current = null;
+          if (start != null && start - event.changedTouches[0].clientY > 56 && playingTrack) setShowMiniPlayer(true);
+        }}
+      >
+        <div className="relative overflow-hidden rounded-[1.6rem] border border-fuchsia-300/25 bg-[#160016]/80 shadow-[0_18px_50px_-12px_rgba(217,70,239,0.45)] backdrop-blur-2xl">
+          {playingImage ? <img src={playingImage} alt="" aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-25 blur-2xl" /> : null}
+          <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-[#160016]/60 via-transparent to-[#160016]/60" />
+          <div className="relative px-3 pb-2.5 pt-4 sm:px-4 sm:pb-3">
+            <div className="absolute inset-x-4 top-1.5">
+              <input
+                type="range"
+                min="0"
+                max={Math.max(duration, 0)}
+                value={Math.min(currentTime, duration || currentTime || 0)}
+                onChange={(event) => seekTo(event.target.value)}
+                className="jv-seek w-full"
+                style={{ '--jv-progress': `${Math.min(100, duration ? (currentTime / duration) * 100 : 0).toFixed(1)}%` }}
+                aria-label="Seek"
+              />
             </div>
-            {lyricsStatus === 'loading' ? <p className="text-sm leading-7 text-zinc-200">Loading lyrics...</p> : null}
-            {lyricsStatus !== 'loading' && syncedLyricLines.length ? (
-              <div className="space-y-2 py-2">
-                {syncedLyricLines.map((line, index) => (
-                  <p
-                    key={`${line.time}-${index}`}
-                    ref={index === activeLyricLineIndex ? activeLyricRef : null}
-                    className={`rounded-2xl px-3 py-2 text-base leading-7 transition sm:text-lg ${index === activeLyricLineIndex ? 'bg-fuchsia-400/15 text-fuchsia-50 shadow-lg shadow-fuchsia-950/20' : index < activeLyricLineIndex ? 'text-zinc-500' : 'text-zinc-200'}`}
-                  >
-                    {line.text}
-                  </p>
-                ))}
-              </div>
-            ) : null}
-            {lyricsStatus !== 'loading' && !syncedLyricLines.length ? <p className="whitespace-pre-wrap text-base leading-8 text-zinc-200 sm:text-lg">{lyrics || 'Lyrics unavailable for this song.'}</p> : null}
-            {lyricsData?.matched ? <p className="mt-4 border-t border-white/10 pt-3 text-[11px] leading-5 text-zinc-500">Matched: {lyricsData.matched.trackName} • {lyricsData.matched.artistName}</p> : null}
-          </div>
-        </div>
-      ) : null}
-
-      {showSleepMenu ? (
-        <div className="fixed inset-x-3 bottom-28 z-[65] rounded-3xl border border-fuchsia-400/20 bg-[#120012]/95 p-4 shadow-2xl shadow-fuchsia-950/40 backdrop-blur-xl sm:left-auto sm:right-5 sm:w-[24rem]">
-          <div className="mb-3 flex items-center justify-between gap-3"><h3 className="text-sm font-black uppercase tracking-[0.24em] text-fuchsia-200">Sleep Timer</h3><button type="button" onClick={() => setShowSleepMenu(false)} className="rounded-full border border-white/10 px-3 py-1 text-xs font-bold text-zinc-300">Close</button></div>
-          {sleepActive ? <p className="mb-3 rounded-2xl border border-fuchsia-300/20 bg-fuchsia-500/10 p-3 text-sm font-bold text-fuchsia-100">Stopping in {formatCountdown(sleepRemainingMs)}</p> : null}
-          <div className="grid grid-cols-3 gap-2">
-            {SLEEP_PRESETS.map((minutes) => <button key={minutes} type="button" onClick={() => startSleepTimer(minutes)} className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 text-sm font-black text-white hover:border-fuchsia-300/40">{minutes}m</button>)}
-          </div>
-          <div className="mt-3 flex gap-2"><button type="button" onClick={() => { const custom = window.prompt('Sleep timer minutes', '20'); if (custom) startSleepTimer(Number(custom)); }} className="flex-1 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 text-sm font-black text-white hover:border-fuchsia-300/40">Custom</button><button type="button" onClick={cancelSleepTimer} className="flex-1 rounded-2xl border border-red-400/20 bg-red-500/10 px-3 py-3 text-sm font-black text-red-100 hover:border-red-300/60">Off</button></div>
-          <p className="mt-3 text-xs leading-5 text-zinc-500">At zero, music stops and the app tries to close. If Android blocks closing, a black sleep screen is shown.</p>
-        </div>
-      ) : null}
-
-      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-fuchsia-400/20 bg-[#080008]/95 px-3 py-3 shadow-2xl shadow-fuchsia-950/30 backdrop-blur-xl sm:px-5">
-        <div className="mx-auto max-w-7xl">
-          <input type="range" min="0" max={Math.max(duration, 0)} value={Math.min(currentTime, duration || currentTime || 0)} onChange={(event) => seekTo(event.target.value)} className="mb-3 h-1 w-full accent-fuchsia-400" aria-label="Seek" />
-          <div className="flex items-center gap-2 sm:gap-3">
-            <IconButton active={shuffleEnabled} onClick={() => setShuffleEnabled((value) => !value)} title="Shuffle">🔀</IconButton>
-            <IconButton onClick={playPrevious} title="Previous">⏮</IconButton>
-            <button type="button" onClick={togglePlay} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-fuchsia-400 text-base font-black text-black shadow-lg shadow-fuchsia-500/30 transition hover:bg-fuchsia-300" aria-label={isPlaying ? 'Pause' : 'Play'}>{isPlaying ? 'Ⅱ' : '▶'}</button>
-            <IconButton onClick={() => playNext(false)} title="Next">⏭</IconButton>
-            <IconButton active={repeatMode !== 'off'} onClick={cycleRepeat} title={`Repeat: ${repeatMode}`}>{repeatMode === 'one' ? '↻1' : '↻'}</IconButton>
-            <button type="button" onClick={() => playingTrack && setShowMiniPlayer(true)} disabled={!playingTrack} className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-zinc-900 text-left shadow-lg shadow-black/35 outline-none transition active:scale-95 disabled:opacity-60 focus:ring-2 focus:ring-fuchsia-300" aria-label="Open now playing player" title="Open now playing">
-              {playingImage ? <img src={playingImage} alt="" className="h-full w-full object-cover transition group-hover:scale-105" /> : null}
-              <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/0 text-[10px] font-black text-white opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100">OPEN</span>
-            </button>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-black text-white">{activeDetail?.title || active?.title || 'Select a song'}</p>
-              {currentArtistChips.length ? (
-                <div className="mt-1 flex max-w-full gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  {currentArtistChips.map((artist) => (
-                    <button
-                      key={artist.id || artist.name}
-                      type="button"
-                      onClick={() => openArtist({ id: artist.id || artist.name, name: artist.name, image: artist.image })}
-                      className="max-w-[8rem] shrink-0 truncate rounded-full border border-fuchsia-400/20 bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-black text-fuchsia-100 transition hover:border-fuchsia-300 hover:bg-fuchsia-400 hover:text-black"
-                      title={`Open ${artist.name}`}
-                    >
-                      {artist.name}
-                    </button>
-                  ))}
+            <div className="relative flex items-center gap-2.5 sm:gap-3">
+              <button type="button" onClick={() => playingTrack && setShowMiniPlayer(true)} disabled={!playingTrack} className="group relative shrink-0 outline-none transition active:scale-95 disabled:opacity-60" aria-label="Open now playing player" title="Open now playing">
+                <VinylArt src={playingImage} playing={isPlaying} size="sm" />
+                <span className="pointer-events-none absolute inset-0 grid place-items-center rounded-full bg-black/0 text-[8px] font-black uppercase tracking-wider text-white opacity-0 transition group-hover:bg-black/40 group-hover:opacity-100">Open</span>
+              </button>
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center">
+                  <p className="truncate text-sm font-black text-white">{activeDetail?.title || active?.title || 'Select a song'}</p>
+                  {isPlaying ? <span className="jv-eq ml-2 shrink-0" aria-hidden="true"><span /><span /><span /><span /></span> : null}
                 </div>
-              ) : <p className="truncate text-xs text-zinc-500">{activeDetail?.artists || active?.artists || 'Tamil Music'}</p>}
-              <p className="text-[11px] text-zinc-600">{formatTime(currentTime)} / {duration ? formatTime(duration) : '--:--'}</p>
-              {playerStatus === 'loading' ? <p className="text-[11px] text-fuchsia-300">Loading stream...</p> : null}
-              {playerStatus === 'error' ? <p className="truncate text-[11px] text-red-300">{error}</p> : null}
+                {currentArtistChips.length ? (
+                  <div className="mt-1 flex max-w-full gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    {currentArtistChips.map((artist) => (
+                      <button
+                        key={artist.id || artist.name}
+                        type="button"
+                        onClick={() => openArtist({ id: artist.id || artist.name, name: artist.name, image: artist.image })}
+                        className="max-w-[8rem] shrink-0 truncate rounded-full border border-fuchsia-400/20 bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-black text-fuchsia-100 transition hover:border-fuchsia-300 hover:bg-fuchsia-400 hover:text-black"
+                        title={`Open ${artist.name}`}
+                      >
+                        {artist.name}
+                      </button>
+                    ))}
+                  </div>
+                ) : <p className="truncate text-xs text-zinc-500">{activeDetail?.artists || active?.artists || 'Tamil Music'}</p>}
+                <p className="text-[11px] text-zinc-600">{formatTime(currentTime)} / {duration ? formatTime(duration) : '--:--'}</p>
+                {playerStatus === 'loading' ? <p className="text-[11px] text-fuchsia-300">Loading stream...</p> : null}
+                {playerStatus === 'error' ? <p className="truncate text-[11px] text-red-300">{error}</p> : null}
+              </div>
+              <button type="button" onClick={() => setShuffleEnabled((value) => !value)} aria-label="Shuffle" title="Shuffle" className={`hidden shrink-0 transition active:scale-95 sm:block ${shuffleEnabled ? 'text-amber-300' : 'text-zinc-500 hover:text-white'}`}>
+                <Icon name="shuffle" className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+              </button>
+              <button type="button" onClick={playPrevious} aria-label="Previous" title="Previous" className="shrink-0 text-zinc-300 transition active:scale-95 hover:text-white">
+                <Icon name="skipBack" className="h-6 w-6" />
+              </button>
+              <button type="button" onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} className={`grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gradient-to-br from-amber-400 via-fuchsia-500 to-purple-500 text-white shadow-xl shadow-fuchsia-600/40 transition hover:brightness-110 active:scale-95 ${isPlaying ? 'jv-glow-pulse' : ''}`}>
+                <Icon name={isPlaying ? 'pause' : 'play'} className="h-5 w-5" />
+              </button>
+              <button type="button" onClick={() => playNext(false)} aria-label="Next" title="Next" className="shrink-0 text-zinc-300 transition active:scale-95 hover:text-white">
+                <Icon name="skipFwd" className="h-6 w-6" />
+              </button>
+              <button type="button" onClick={cycleRepeat} aria-label={`Repeat: ${repeatMode}`} title={`Repeat: ${repeatMode}`} className={`hidden shrink-0 transition active:scale-95 sm:block ${repeatMode !== 'off' ? 'text-amber-300' : 'text-zinc-500 hover:text-white'}`}>
+                <Icon name={repeatMode === 'one' ? 'repeatOne' : 'repeat'} className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+              </button>
+              <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.5 lg:flex" title="Volume">
+                <button type="button" onClick={toggleMute} className="grid h-7 w-7 place-items-center rounded-full text-zinc-300 transition hover:bg-fuchsia-400/15 hover:text-white" aria-label={effectiveVolume === 0 ? 'Unmute' : 'Mute'}>
+                  <Icon name={effectiveVolume === 0 ? 'mute' : effectiveVolume < 0.45 ? 'volLow' : 'volHigh'} className="h-4 w-4" />
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={effectiveVolume}
+                  onChange={(event) => changeVolume(event.target.value)}
+                  className="jv-seek w-20"
+                  style={{ '--jv-progress': `${Math.round(effectiveVolume * 100)}%` }}
+                  aria-label="Volume"
+                />
+                <span className="w-8 text-right text-[10px] font-black text-zinc-500">{Math.round(effectiveVolume * 100)}%</span>
+              </div>
+              <button type="button" onClick={openLyrics} aria-label="Lyrics" className={`hidden shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-black transition sm:block ${showLyrics ? 'border-fuchsia-300 bg-fuchsia-500/20 text-fuchsia-100' : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-fuchsia-400/40'}`}>Lyrics</button>
+              <audio ref={videoRef} className="hidden" preload="auto" />
             </div>
-            <button type="button" onClick={toggleListeningMode} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border text-sm font-black transition sm:h-11 sm:w-11 ${listeningMode ? 'border-fuchsia-300 bg-fuchsia-500/20 text-fuchsia-100 shadow-lg shadow-fuchsia-950/30' : 'border-white/10 bg-white/[0.04] text-zinc-400 hover:border-fuchsia-400/40 hover:text-white'}`} title="Listening mode" aria-label="Listening mode">🎧</button>
-            <button type="button" onClick={() => setShowSleepMenu((value) => !value)} className={`relative hidden h-11 w-11 shrink-0 place-items-center rounded-full border text-sm font-black transition sm:grid ${sleepActive ? 'border-fuchsia-300 bg-fuchsia-500/15 text-fuchsia-100' : 'border-white/10 bg-white/[0.04] text-zinc-400 hover:border-fuchsia-400/40 hover:text-white'}`} title={sleepActive ? `Sleep ${formatCountdown(sleepRemainingMs)}` : 'Sleep timer'} aria-label="Sleep timer">
-              <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="3" /><circle cx="20" cy="20" r="17" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeDasharray={sleepCircle} strokeDashoffset={sleepCircle * (1 - sleepProgress)} /></svg>
-              <span className="relative">⏱</span>
-            </button>
-            <button type="button" onClick={() => setShowSleepMenu((value) => !value)} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border text-sm font-black transition sm:hidden ${sleepActive ? 'border-fuchsia-300 bg-fuchsia-500/15 text-fuchsia-100' : 'border-white/10 bg-white/[0.04] text-zinc-400'}`} title={sleepActive ? `Sleep ${formatCountdown(sleepRemainingMs)}` : 'Sleep timer'}>⏱</button>
-            <audio ref={videoRef} className="hidden" preload="auto" />
-            <div className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-2.5 py-2 lg:flex" title="Volume">
-              <button type="button" onClick={toggleMute} className="grid h-7 w-7 place-items-center rounded-lg text-sm transition hover:bg-fuchsia-400/15" aria-label={effectiveVolume === 0 ? 'Unmute' : 'Mute'}>{volumeIcon}</button>
-              <input type="range" min="0" max="1" step="0.01" value={effectiveVolume} onChange={(event) => changeVolume(event.target.value)} className="h-1 w-24 accent-fuchsia-400" aria-label="Volume" />
-              <span className="w-8 text-right text-[10px] font-black text-zinc-500">{Math.round(effectiveVolume * 100)}%</span>
-            </div>
-            {activeDetail?.streamUrls ? <select value={quality} onChange={(event) => setQuality(event.target.value)} className="hidden rounded-xl border border-white/10 bg-black px-3 py-2 text-xs font-bold text-white outline-none sm:block">{Object.entries(activeDetail.streamUrls).filter(([, url]) => Boolean(url)).map(([key]) => <option key={key} value={key}>{QUALITY_LABELS[key] || key}</option>)}</select> : null}
-            <button type="button" onClick={openLyrics} className={`hidden rounded-xl border px-3 py-2 text-xs font-black transition sm:block ${showLyrics ? 'border-fuchsia-300 bg-fuchsia-500/20 text-fuchsia-100' : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-fuchsia-400/40'}`}>Lyrics</button>
           </div>
         </div>
       </div>

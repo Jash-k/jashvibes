@@ -25,6 +25,15 @@ const SHAPES = {
   fullscreen: [{ d: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5' }],
   target:  [{ circle: { cx: 12, cy: 12, r: 8 } }, { circle: { cx: 12, cy: 12, r: 3 } }],
   arrow:   [{ d: 'M5 12h14M13 6l6 6-6 6' }],
+  shuffle: [{ d: 'M16 3h5v5' }, { d: 'M4 20L21 3' }, { d: 'M21 16v5h-5' }, { d: 'M13.5 13.5L21 21' }, { d: 'M4 4l5.5 5.5' }],
+  skipBack: [{ d: 'M19 20L9 12l10-8v16z' }, { d: 'M5 19V5' }],
+  skipFwd: [{ d: 'M5 4l10 8-10 8V4z' }, { d: 'M19 5v14' }],
+  repeat:  [{ d: 'M17 1l4 4-4 4' }, { d: 'M3 11V9a4 4 0 0 1 4-4h14' }, { d: 'M7 23l-4-4 4-4' }, { d: 'M21 13v2a4 4 0 0 1-4 4H3' }],
+  repeatOne: [{ d: 'M17 1l4 4-4 4' }, { d: 'M3 11V9a4 4 0 0 1 4-4h14' }, { d: 'M7 23l-4-4 4-4' }, { d: 'M21 13v2a4 4 0 0 1-4 4H3' }, { text: { x: '12', y: '15.5', content: '1' } }],
+  pause:   [{ d: 'M9 5v14' }, { d: 'M15 5v14' }],
+  mute:    [{ d: 'M11 5L6 9H2.5v6H6l5 4V5z' }, { d: 'M22 9l-6 6M16 9l6 6' }],
+  volLow:  [{ d: 'M11 5L6 9H2.5v6H6l5 4V5z' }, { d: 'M15.5 8.5a5 5 0 0 1 0 7' }],
+  volHigh: [{ d: 'M11 5L6 9H2.5v6H6l5 4V5z' }, { d: 'M15.5 8.5a5 5 0 0 1 0 7' }, { d: 'M18.5 5.5a9 9 0 0 1 0 13' }],
 };
 
 export default function Icon({ name, className = 'h-4 w-4', strokeWidth = 2 }) {
@@ -45,6 +54,7 @@ export default function Icon({ name, className = 'h-4 w-4', strokeWidth = 2 }) {
         if (shape.fill) return <path key={i} d={shape.fill} fill="currentColor" stroke="none" />;
         if (shape.circle) return <circle key={i} {...shape.circle} />;
         if (shape.rect) return <rect key={i} {...shape.rect} />;
+        if (shape.text) return <text key={i} x={shape.text.x} y={shape.text.y} textAnchor="middle" fontSize="9.5" fontWeight="900" fill="currentColor" stroke="none">{shape.text.content}</text>;
         return <path key={i} d={shape.d} />;
       })}
     </svg>

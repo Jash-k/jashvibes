@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import LibraryRows from '@/components/LibraryRows';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 import Icon from '@/components/Icons';
+import MasonryGrid from '@/components/MasonryGrid';
 import { isFavoriteItem, makeWatchKey, toggleFavoriteItem, useLibraryVersion } from '@/lib/watchStore';
 
 const PAGE_SIZE = 15;
@@ -259,9 +260,23 @@ function MediaCard({ item, onItemMatched, delay = 0 }) {
     <>
       <Wrapper
         href={href}
-        className={`jv-reveal group block overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 shadow-lg shadow-black/25 transition duration-300 active:scale-[0.99] hover:-translate-y-1 hover:border-red-400/50 hover:bg-zinc-900 hover:shadow-2xl hover:shadow-red-950/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 sm:rounded-3xl sm:shadow-xl ${hasTMDB ? '' : 'cursor-pointer'}`}
-        style={{ '--jv-delay': `${delay}ms` }}
+        className={`jv-card group relative block overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 shadow-lg shadow-black/25 transition duration-300 active:scale-[0.99] hover:border-red-400/50 hover:bg-zinc-900 hover:shadow-2xl hover:shadow-red-950/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 sm:rounded-3xl sm:shadow-xl ${hasTMDB ? '' : 'cursor-pointer'}`}
+        onPointerMove={(event) => {
+          if (event.pointerType !== 'mouse') return;
+          const rect = event.currentTarget.getBoundingClientRect();
+          const pxI = (event.clientX - rect.left) / rect.width - 0.5;
+          const pyI = (event.clientY - rect.top) / rect.height - 0.5;
+          event.currentTarget.style.setProperty('--rx', `${(-pyI * 8).toFixed(2)}deg`);
+          event.currentTarget.style.setProperty('--ry', `${(pxI * 8).toFixed(2)}deg`);
+          event.currentTarget.style.setProperty('--gx', `${((pxI + 0.5) * 100).toFixed(1)}%`);
+          event.currentTarget.style.setProperty('--gy', `${((pyI + 0.5) * 100).toFixed(1)}%`);
+        }}
+        onPointerLeave={(event) => {
+          event.currentTarget.style.removeProperty('--rx');
+          event.currentTarget.style.removeProperty('--ry');
+        }}
       >
+        <div className="jv-tilt-inner">
         <div className="relative aspect-[2/3] overflow-hidden bg-zinc-900">
           {item.posterUrl ? (
             <img
@@ -329,6 +344,8 @@ function MediaCard({ item, onItemMatched, delay = 0 }) {
             {item.title}
           </h3>
         </div>
+        </div>
+        <div className="jv-card-glare" aria-hidden="true" />
       </Wrapper>
 
       {matchOpen ? (
@@ -355,11 +372,11 @@ function MediaGrid({ items, onItemMatched }) {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-      {items.map((item, index) => (
-        <MediaCard key={`${item.type}-${item.tmdbId || item.id || item.title}`} item={item} onItemMatched={onItemMatched} delay={Math.min(index, 11) * 40} />
+    <MasonryGrid gap={14} minItemWidth={155}>
+      {items.map((item) => (
+        <MediaCard key={`${item.type}-${item.tmdbId || item.id || item.title}`} item={item} onItemMatched={onItemMatched} />
       ))}
-    </div>
+    </MasonryGrid>
   );
 }
 
@@ -435,9 +452,19 @@ function HeroCarousel({ items }) {
   return (
     <section aria-label="Featured releases" className="mx-auto mt-6 max-w-7xl px-4 sm:mt-8 sm:px-6 lg:px-8">
       <div
-        className="jv-reveal relative h-[54svh] min-h-[300px] max-h-[560px] overflow-hidden rounded-3xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/50"
+        className="jv-hero jv-reveal relative h-[54svh] min-h-[300px] max-h-[560px] overflow-hidden rounded-3xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/50"
         onMouseEnter={() => { pausedRef.current = true; }}
         onMouseLeave={() => { pausedRef.current = false; }}
+        onPointerMove={(event) => {
+          if (event.pointerType !== 'mouse') return;
+          const rect = event.currentTarget.getBoundingClientRect();
+          event.currentTarget.style.setProperty('--hpx', ((event.clientX - rect.left) / rect.width - 0.5).toFixed(3));
+          event.currentTarget.style.setProperty('--hpy', ((event.clientY - rect.top) / rect.height - 0.5).toFixed(3));
+        }}
+        onPointerLeave={(event) => {
+          event.currentTarget.style.removeProperty('--hpx');
+          event.currentTarget.style.removeProperty('--hpy');
+        }}
         onTouchStart={(event) => { touchRef.current = event.touches[0].clientX; }}
         onTouchEnd={(event) => {
           const start = touchRef.current;
@@ -464,14 +491,14 @@ function HeroCarousel({ items }) {
               className={`absolute inset-0 transition-opacity duration-[900ms] ease-out ${active ? 'z-10 opacity-100' : 'pointer-events-none z-0 opacity-0'}`}
               aria-hidden={!active}
             >
-              <img src={art} alt={item.title} loading={slideIdx === 0 ? "eager" : "lazy"} decoding="async" className="h-full w-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/30 to-transparent" />
-              <div className="absolute inset-0 bg-gradient-to-r from-[#050505]/85 via-[#050505]/25 to-transparent" />
+              <img src={art} alt={item.title} loading={slideIdx === 0 ? "eager" : "lazy"} decoding="async" className="jv-hero-art h-full w-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/40 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-r from-[#050505]/90 via-[#050505]/40 to-transparent" />
               <div className="absolute inset-x-0 bottom-0 max-w-2xl p-4 sm:p-8 lg:p-10">
                 <p className="mb-1.5 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.26em] text-amber-300 sm:mb-2.5 sm:text-xs">
                   <Icon name="sparkle" className="h-3.5 w-3.5" /> New Release
                 </p>
-                <h3 className="line-clamp-2 text-2xl font-extrabold leading-tight text-white drop-shadow-lg sm:text-4xl lg:text-5xl">{item.title}</h3>
+                <h3 className="jv-hero-title line-clamp-2 text-2xl font-black leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">{item.title}</h3>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-zinc-300 sm:mt-3 sm:text-xs">
                   <span className="rounded-full border border-white/15 bg-black/50 px-2 py-0.5 uppercase tracking-wider backdrop-blur">{item.type === 'series' ? 'Series' : 'Movie'}</span>
                   {year ? <span className="rounded-full border border-white/15 bg-black/50 px-2 py-0.5 backdrop-blur">{year}</span> : null}
@@ -835,7 +862,7 @@ export default function LandingPage() {
           <section className="scroll-mt-8">
             <div className="mb-4 flex items-end justify-between gap-3 sm:mb-5 sm:gap-4">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-red-500 sm:text-xs sm:tracking-[0.28em]">
+                <p className="jv-shimmer-text text-[10px] font-black uppercase tracking-[0.22em] sm:text-xs sm:tracking-[0.28em]">
                   {activeTab === 'movies' ? 'Movies' : 'Series'}
                 </p>
                 <h2 className="mt-1 text-2xl font-extrabold text-white sm:mt-2 sm:text-3xl">

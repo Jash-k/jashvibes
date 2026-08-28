@@ -775,3 +775,261 @@ html.day-mode :is([class*="border-cyan-300/"], [class*="border-cyan-400/"], [cla
 html.day-mode :is([class*="border-blue-300/"], [class*="border-blue-400/"], [class*="border-blue-500/"]) { border-color: rgba(59, 130, 246, 0.5) !important; }
 html.day-mode :is([class*="border-indigo-300/"], [class*="border-indigo-400/"], [class*="border-indigo-500/"], [class*="border-violet-300/"], [class*="border-violet-400/"], [class*="border-violet-500/"], [class*="border-purple-300/"], [class*="border-purple-400/"], [class*="border-purple-500/"]) { border-color: rgba(124, 58, 237, 0.5) !important; }
 html.day-mode :is([class*="border-fuchsia-300/"], [class*="border-fuchsia-400/"], [class*="border-fuchsia-500/"], [class*="border-pink-300/"], [class*="border-pink-400/"], [class*="border-pink-500/"]) { border-color: rgba(217, 70, 239, 0.5) !important; }
+
+/* Hero banner: always cinematic. The title must stay BRIGHT over the artwork
+   in both themes (day-mode blankets would otherwise darken it). */
+.jv-hero-title {
+  color: #ffffff !important;
+  text-shadow:
+    0 2px 26px rgba(0, 0, 0, 0.95),
+    0 1px 8px rgba(0, 0, 0, 0.85),
+    0 0 44px rgba(0, 0, 0, 0.6);
+}
+html.day-mode .jv-hero [class*="text-white"] { color: #ffffff !important; }
+html.day-mode .jv-hero [class*="text-zinc-300"] { color: #e4e4e7 !important; }
+html.day-mode .jv-hero [class*="text-amber-300"] { color: #fcd34d !important; }
+html.day-mode .jv-hero [class*="bg-black/50"] { background-color: rgba(0, 0, 0, 0.5) !important; }
+html.day-mode .jv-hero .jv-btn-ghost {
+  color: #f4f4f5;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow: none;
+}
+html.day-mode .jv-hero .jv-btn-ghost:hover { background: rgba(255, 255, 255, 0.18); border-color: rgba(255, 255, 255, 0.45); }
+
+/* ===========================================================================
+ * JV MUSIC PLAYER (v7.1) — aurora takeover, spinning vinyl, equalizer,
+ * glow-pulse play button, gradient seek ribbon.
+ * ========================================================================= */
+@keyframes jv-spin { to { transform: rotate(360deg); } }
+
+/* vinyl disc (artwork that spins only while playing) */
+.jv-vinyl {
+  position: relative;
+  width: min(72vw, 19rem);
+  aspect-ratio: 1 / 1;
+  border-radius: 9999px;
+  box-shadow: 0 22px 60px -18px rgba(240, 171, 252, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+.jv-vinyl.sm {
+  width: 3.25rem;
+  box-shadow: 0 8px 24px -8px rgba(240, 171, 252, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+.jv-vinyl-spin {
+  height: 100%;
+  width: 100%;
+  border-radius: 9999px;
+  overflow: hidden;
+  animation: jv-spin 16s linear infinite;
+  animation-play-state: paused;
+}
+.jv-vinyl.is-playing .jv-vinyl-spin { animation-play-state: running; }
+.jv-vinyl-groove {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  pointer-events: none;
+  background: repeating-radial-gradient(circle at center, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 5px);
+}
+.jv-vinyl-label {
+  position: absolute;
+  inset: 36%;
+  border-radius: 9999px;
+  background: radial-gradient(circle, #f0abfc 0%, #a21caf 60%, #4c1d95 100%);
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.4), 0 0 18px rgba(240, 171, 252, 0.4);
+}
+.jv-vinyl-label::after {
+  content: '';
+  position: absolute;
+  inset: 42%;
+  border-radius: 9999px;
+  background: #050008;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+/* equalizer bars */
+.jv-eq { display: inline-flex; align-items: flex-end; gap: 2.5px; height: 13px; }
+.jv-eq span {
+  width: 3px;
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(to top, #d946ef, #f59e0b);
+  transform-origin: bottom;
+  animation: jv-eqb 0.9s ease-in-out infinite;
+}
+.jv-eq span:nth-child(2) { animation-delay: 0.18s; }
+.jv-eq span:nth-child(3) { animation-delay: 0.36s; }
+.jv-eq span:nth-child(4) { animation-delay: 0.54s; }
+@keyframes jv-eqb { 0%, 100% { transform: scaleY(0.32); } 50% { transform: scaleY(1); } }
+
+/* breathing glow behind the main play buttons while music plays */
+.jv-glow-pulse { animation: jv-glow 2.2s ease-in-out infinite; }
+@keyframes jv-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(217, 70, 239, 0), 0 10px 26px rgba(217, 70, 239, 0.45); }
+  50%      { box-shadow: 0 0 0 11px rgba(217, 70, 239, 0), 0 10px 34px rgba(217, 70, 239, 0.8); }
+}
+
+/* gradient seek / volume ribbon (fills with --jv-progress) */
+.jv-seek {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  outline: none;
+  background:
+    linear-gradient(to right, #f59e0b, #d946ef var(--jv-progress, 0%), rgba(255, 255, 255, 0.15) var(--jv-progress, 0%));
+  cursor: pointer;
+}
+.jv-seek::-webkit-slider-runnable-track { background: transparent; height: 4px; border-radius: 9999px; }
+.jv-seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: none;
+  margin-top: -4.5px;
+  box-shadow: 0 0 10px rgba(240, 171, 252, 0.9);
+}
+.jv-seek::-moz-range-track { background: transparent; height: 4px; border-radius: 9999px; }
+.jv-seek::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: none;
+  box-shadow: 0 0 10px rgba(240, 171, 252, 0.9);
+}
+html.day-mode .jv-seek {
+  background:
+    linear-gradient(to right, #b45309, #a21caf var(--jv-progress, 0%), rgba(15, 23, 42, 0.16) var(--jv-progress, 0%));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jv-vinyl-spin { animation: none !important; }
+  .jv-eq span { animation: none !important; transform: scaleY(0.6); }
+  .jv-glow-pulse { animation: none !important; }
+}
+
+/* ===========================================================================
+ * JvReactBits (v7.2) — measured masonry, target+glow cursor, card tilt/glare,
+ * hero parallax, shimmer kicker. Cursor effects are desktop(pointer:fine) only.
+ * ========================================================================= */
+
+/* --- Masonry (ReactBits port): blur-to-focus stagger entrance, 0.95 hover --- */
+.jv-masonry-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  filter: blur(8px);
+  translate: 0 26px;
+  transition: transform 420ms var(--jv-ease);
+  will-change: transform;
+  animation: jv-masonry-in 600ms var(--jv-ease) forwards;
+  animation-delay: var(--jv-masonry-delay, 0ms);
+}
+@keyframes jv-masonry-in {
+  to { opacity: 1; filter: blur(0); translate: 0 0; }
+}
+.jv-masonry-item .jv-card {
+  transform-origin: center;
+}
+.jv-masonry-item:hover .jv-card {
+  transform: scale(0.95);
+}
+
+/* --- Card tilt inner + travel glare --- */
+.jv-tilt-inner {
+  transform: perspective(760px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 160ms ease-out;
+  will-change: transform;
+}
+.jv-card-glare {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(300px circle at var(--gx, 50%) var(--gy, 50%), rgba(255, 255, 255, 0.16), transparent 62%);
+  mix-blend-mode: soft-light;
+  opacity: 0;
+  transition: opacity 250ms var(--jv-ease);
+  z-index: 3;
+}
+.jv-card:hover .jv-card-glare { opacity: 1; }
+
+/* --- Hero backdrop parallax --- */
+.jv-hero .jv-hero-art {
+  transform: translate3d(calc(var(--hpx, 0) * -14px), calc(var(--hpy, 0) * -9px), 0) scale(1.08);
+  transition: transform 700ms var(--jv-ease);
+}
+
+/* --- Shimmer kicker text --- */
+.jv-shimmer-text {
+  background: linear-gradient(110deg, #f59e0b 20%, #ef4444 40%, #c026d3 60%, #a855f7 80%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent !important;
+  animation: jv-shimmer 3.2s linear infinite;
+}
+@keyframes jv-shimmer { to { background-position: -220% 0; } }
+
+/* --- Circular gallery ring --- */
+.jv-cgal { cursor: grab; }
+.jv-cgal:active { cursor: grabbing; }
+html.day-mode .jv-cgal-card { border-color: rgba(168, 85, 247, 0.35); }
+
+/* --- Target cursor (reticle) + glow trail --- */
+html.jv-cursor-fx, html.jv-cursor-fx * { cursor: none !important; }
+.jv-reticle {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  pointer-events: none;
+  mix-blend-mode: difference;
+}
+.jv-reticle-dot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #ffffff;
+}
+.jv-reticle-c {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  transition: transform 90ms ease-out;
+}
+.jv-reticle.is-target .jv-reticle-c { transition: transform 190ms var(--jv-ease); }
+.jv-reticle-c.tl { border-top: 2px solid #ffffff; border-left: 2px solid #ffffff; }
+.jv-reticle-c.tr { border-top: 2px solid #ffffff; border-right: 2px solid #ffffff; }
+.jv-reticle-c.bl { border-bottom: 2px solid #ffffff; border-left: 2px solid #ffffff; }
+.jv-reticle-c.br { border-bottom: 2px solid #ffffff; border-right: 2px solid #ffffff; }
+.jv-reticle.is-target .jv-reticle-c {
+  border-color: #fbbf24;
+  filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.85));
+}
+.jv-reticle.is-target .jv-reticle-c { animation: none; }
+.jv-glowcursor {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483645;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+html.day-mode .jv-glowcursor { display: none; } /* light theme keeps the reticle */
+
+@media (prefers-reduced-motion: reduce) {
+  .jv-masonry-item { animation: none; opacity: 1; filter: none; translate: none; }
+  .jv-tilt-inner { transform: none !important; }
+  .jv-card-glare { display: none; }
+  .jv-shimmer-text { animation: none; }
+}
