@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Icon from '@/components/Icons';
 import { useEffect, useState } from 'react';
 import { LibraryCard } from '@/components/LibraryRows';
 import {
@@ -84,7 +85,7 @@ export default function MyListPage() {
             <span className="sm:hidden">← Back</span>
             <span className="hidden sm:inline">← Back to JaSH ViBeS</span>
           </Link>
-          <h1 className="text-lg font-black tracking-tight text-white sm:text-xl">My❤Library</h1>
+          <h1 className="inline-flex items-center gap-2 text-lg font-extrabold tracking-tight text-white sm:text-xl"><Icon name="heart" className="h-5 w-5 text-rose-400" />My Library</h1>
           {items.length ? (
             <button
               type="button"

@@ -1,9 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import LibraryRows from '@/components/LibraryRows';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
+import Icon from '@/components/Icons';
+import { isFavoriteItem, makeWatchKey, toggleFavoriteItem, useLibraryVersion } from '@/lib/watchStore';
 
 const PAGE_SIZE = 15;
 const HOME_CACHE_KEY = 'jash:home:v5';
@@ -245,7 +247,7 @@ function MatchDialog({ item, onClose, onMatched }) {
   );
 }
 
-function MediaCard({ item, onItemMatched }) {
+function MediaCard({ item, onItemMatched, delay = 0 }) {
   const [matchOpen, setMatchOpen] = useState(false);
   const hasTMDB = Boolean(item.tmdbId);
   const href = hasTMDB
@@ -257,7 +259,8 @@ function MediaCard({ item, onItemMatched }) {
     <>
       <Wrapper
         href={href}
-        className={`group block overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 shadow-lg shadow-black/25 transition duration-300 active:scale-[0.99] hover:-translate-y-1 hover:border-red-500/60 hover:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-red-500 sm:rounded-3xl sm:shadow-xl ${hasTMDB ? '' : 'cursor-pointer'}`}
+        className={`jv-reveal group block overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 shadow-lg shadow-black/25 transition duration-300 active:scale-[0.99] hover:-translate-y-1 hover:border-red-400/50 hover:bg-zinc-900 hover:shadow-2xl hover:shadow-red-950/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 sm:rounded-3xl sm:shadow-xl ${hasTMDB ? '' : 'cursor-pointer'}`}
+        style={{ '--jv-delay': `${delay}ms` }}
       >
         <div className="relative aspect-[2/3] overflow-hidden bg-zinc-900">
           {item.posterUrl ? (
@@ -275,6 +278,21 @@ function MediaCard({ item, onItemMatched }) {
           )}
 
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/15 to-transparent opacity-95" />
+
+          {hasTMDB && Number(item.rating) > 0 ? (
+            <div className="absolute right-2 top-2 sm:right-3 sm:top-3">
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/30 bg-black/70 px-2 py-0.5 text-[10px] font-bold text-amber-300 backdrop-blur">
+                ★ {Number(item.rating).toFixed(1)}
+              </span>
+            </div>
+          ) : null}
+
+          {hasTMDB ? (
+            <div className="absolute bottom-3 right-3 grid h-9 w-9 place-items-center rounded-full bg-[linear-gradient(115deg,#f59e0b,#dc2626_50%,#a855f7)] text-white opacity-0 shadow-xl shadow-red-950/40 transition duration-300 group-hover:scale-110 group-hover:opacity-100">
+              <Icon name="play" className="h-4 w-4" />
+            </div>
+          ) : null}
+
           <div className="absolute left-2 top-2 sm:left-3 sm:top-3">
             <span className="rounded-full bg-black/75 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.16em] text-white backdrop-blur sm:px-2.5 sm:py-1 sm:text-[10px]">
               {item.type === 'series' ? 'Series' : 'Movie'}
@@ -296,9 +314,10 @@ function MediaCard({ item, onItemMatched }) {
                     event.stopPropagation();
                     setMatchOpen(true);
                   }}
-                  className="w-full rounded-xl bg-red-600/95 px-3 py-2 text-xs font-black uppercase tracking-[0.16em] text-white shadow-lg shadow-red-950/40 transition hover:bg-red-500"
+                  className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 px-3 py-2 text-xs font-black uppercase tracking-[0.16em] text-white shadow-lg shadow-red-950/40 transition hover:bg-red-500"
                 >
-                  🎯 Match
+                  <Icon name="target" className="h-3.5 w-3.5" />
+                  Match
                 </button>
               </div>
             </>
@@ -337,8 +356,8 @@ function MediaGrid({ items, onItemMatched }) {
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-      {items.map((item) => (
-        <MediaCard key={`${item.type}-${item.tmdbId || item.id || item.title}`} item={item} onItemMatched={onItemMatched} />
+      {items.map((item, index) => (
+        <MediaCard key={`${item.type}-${item.tmdbId || item.id || item.title}`} item={item} onItemMatched={onItemMatched} delay={Math.min(index, 11) * 40} />
       ))}
     </div>
   );
@@ -380,13 +399,134 @@ function TabButton({ active, children, count, onClick }) {
       onClick={onClick}
       className={`rounded-2xl border px-4 py-3 text-left transition active:scale-[0.99] sm:px-5 ${
         active
-          ? 'border-red-500/60 bg-red-600 text-white shadow-lg shadow-red-950/30'
-          : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-red-500/40 hover:text-white'
+          ? 'border-transparent bg-[linear-gradient(115deg,#f59e0b,#dc2626_50%,#a855f7)] text-white shadow-lg shadow-red-950/30'
+          : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-white/25 hover:text-white'
       }`}
     >
       <span className="block text-[10px] font-black uppercase tracking-[0.22em] opacity-75 sm:text-xs sm:tracking-[0.25em]">{children}</span>
       <span className="mt-1 block text-xl font-black sm:text-2xl">{count}</span>
     </button>
+  );
+}
+
+function HeroCarousel({ items }) {
+  const slides = useMemo(
+    () => (items || []).filter((item) => item.tmdbId && (item.backdropUrl || item.posterUrl)).slice(0, 6),
+    [items],
+  );
+  const [idx, setIdx] = useState(0);
+  const pausedRef = useRef(false);
+  const touchRef = useRef(null);
+  useLibraryVersion(); // heart state stays in sync with My List
+
+  useEffect(() => {
+    if (slides.length < 2) return undefined;
+    const timer = setInterval(() => {
+      if (!pausedRef.current) setIdx((value) => (value + 1) % slides.length);
+    }, 7000);
+    return () => clearInterval(timer);
+  }, [slides.length]);
+
+  if (!slides.length) return null;
+
+  const current = Math.min(idx, slides.length - 1);
+  const go = (dir) => setIdx((value) => (value + dir + slides.length) % slides.length);
+
+  return (
+    <section aria-label="Featured releases" className="mx-auto mt-6 max-w-7xl px-4 sm:mt-8 sm:px-6 lg:px-8">
+      <div
+        className="jv-reveal relative h-[54svh] min-h-[300px] max-h-[560px] overflow-hidden rounded-3xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/50"
+        onMouseEnter={() => { pausedRef.current = true; }}
+        onMouseLeave={() => { pausedRef.current = false; }}
+        onTouchStart={(event) => { touchRef.current = event.touches[0].clientX; }}
+        onTouchEnd={(event) => {
+          const start = touchRef.current;
+          touchRef.current = null;
+          if (start == null) return;
+          const delta = event.changedTouches[0].clientX - start;
+          if (Math.abs(delta) > 48) {
+            pausedRef.current = true;
+            go(delta < 0 ? 1 : -1);
+            setTimeout(() => { pausedRef.current = false; }, 9000);
+          }
+        }}
+      >
+        {slides.map((item, slideIdx) => {
+          const active = slideIdx === current;
+          const href = `/watch/${item.type}/${item.tmdbId}${item.type === 'series' ? `?season=${item.season || 1}&episode=${item.episode || 1}` : ''}`;
+          const art = item.backdropUrl || item.posterUrl;
+          const favKey = makeWatchKey({ type: item.type, tmdbId: item.tmdbId });
+          const favorite = isFavoriteItem(favKey);
+          const year = String(item.releaseDate || '').slice(0, 4);
+          return (
+            <div
+              key={`${item.type}-${item.tmdbId}`}
+              className={`absolute inset-0 transition-opacity duration-[900ms] ease-out ${active ? 'z-10 opacity-100' : 'pointer-events-none z-0 opacity-0'}`}
+              aria-hidden={!active}
+            >
+              <img src={art} alt={item.title} loading={slideIdx === 0 ? "eager" : "lazy"} decoding="async" className="h-full w-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/30 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-r from-[#050505]/85 via-[#050505]/25 to-transparent" />
+              <div className="absolute inset-x-0 bottom-0 max-w-2xl p-4 sm:p-8 lg:p-10">
+                <p className="mb-1.5 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.26em] text-amber-300 sm:mb-2.5 sm:text-xs">
+                  <Icon name="sparkle" className="h-3.5 w-3.5" /> New Release
+                </p>
+                <h3 className="line-clamp-2 text-2xl font-extrabold leading-tight text-white drop-shadow-lg sm:text-4xl lg:text-5xl">{item.title}</h3>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-zinc-300 sm:mt-3 sm:text-xs">
+                  <span className="rounded-full border border-white/15 bg-black/50 px-2 py-0.5 uppercase tracking-wider backdrop-blur">{item.type === 'series' ? 'Series' : 'Movie'}</span>
+                  {year ? <span className="rounded-full border border-white/15 bg-black/50 px-2 py-0.5 backdrop-blur">{year}</span> : null}
+                  {Number(item.rating) > 0 ? <span className="rounded-full border border-amber-300/30 bg-black/50 px-2 py-0.5 text-amber-300 backdrop-blur">★ {Number(item.rating).toFixed(1)}</span> : null}
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2.5 sm:mt-5 sm:gap-3">
+                  <Link href={href} className="jv-btn-solid !px-5 !py-2.5 text-sm sm:!px-7 sm:!py-3 sm:text-base">
+                    <Icon name="play" className="h-4 w-4 sm:h-5 sm:w-5" /> Play Now
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => toggleFavoriteItem({
+                      key: favKey,
+                      type: item.type,
+                      tmdbId: item.tmdbId,
+                      title: item.title,
+                      posterUrl: item.posterUrl,
+                      backdropUrl: item.backdropUrl,
+                      rating: item.rating,
+                      releaseDate: item.releaseDate,
+                    })}
+                    className="jv-btn-ghost !px-4 !py-2.5 text-sm sm:!py-3"
+                  >
+                    <span className={favorite ? "text-emerald-300" : ""}><Icon name={favorite ? "check" : "plus"} className="h-4 w-4" /></span>
+                    {favorite ? 'In My List' : 'My List'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {slides.length > 1 ? (
+          <>
+            <button type="button" aria-label="Previous featured title" onClick={() => go(-1)} className="absolute left-3 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur transition hover:bg-black/70 sm:grid">
+              <Icon name="chevL" className="h-5 w-5" />
+            </button>
+            <button type="button" aria-label="Next featured title" onClick={() => go(1)} className="absolute right-3 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur transition hover:bg-black/70 sm:grid">
+              <Icon name="chevR" className="h-5 w-5" />
+            </button>
+            <div className="absolute bottom-4 right-4 z-20 flex items-center gap-1.5 sm:bottom-6 sm:right-8">
+              {slides.map((item, dotIdx) => (
+                <button
+                  key={`dot-${item.type}-${item.tmdbId}`}
+                  type="button"
+                  aria-label={`Featured slide ${dotIdx + 1}`}
+                  onClick={() => setIdx(dotIdx)}
+                  className={`h-1.5 rounded-full transition-all duration-300 ${dotIdx === current ? 'w-7 bg-gradient-to-r from-amber-400 via-red-500 to-purple-500' : 'w-1.5 bg-white/40 hover:bg-white/70'}`}
+                />
+              ))}
+            </div>
+          </>
+        ) : null}
+      </div>
+    </section>
   );
 }
 
@@ -574,6 +714,8 @@ export default function LandingPage() {
   // it becomes a normal /watch/{type}/{tmdbId} card immediately.
   const handleItemMatched = useCallback((prevItem, matched) => {
     if (!matched?.tmdbId) return;
+    const featuredItems = useMemo(() => [...movies, ...series], [movies, series]);
+
     const isTarget = (entry) =>
       (prevItem.id && entry.id === prevItem.id) ||
       (entry.title === prevItem.title && (entry.type || 'movie') === (prevItem.type || 'movie'));
@@ -615,41 +757,21 @@ export default function LandingPage() {
                   JaSH ViBeS
                 </h1>
               </div>
-              <div className="mt-5 flex flex-wrap gap-2">
-                <Link
-                  href="/music"
-                  aria-label="Music"
-                  title="ராக வானம்"
-                  className="grid h-10 w-10 place-items-center rounded-full border border-emerald-400/30 bg-emerald-400/10 text-xl font-black text-emerald-200 shadow-lg shadow-emerald-950/20 transition hover:border-emerald-300 hover:bg-emerald-400/20 hover:text-emerald-100"
-                >
-                  ♫
+              <div className="mt-6 flex flex-wrap gap-2">
+                <Link href="/music" title="Music — ராக வானம்" className="jv-btn-ghost">
+                  <span className="text-emerald-300"><Icon name="music" className="h-4 w-4" /></span> Music
                 </Link>
-                <Link
-                  href="/sports"
-                  className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-sm font-black text-emerald-100 transition hover:border-emerald-400/70 hover:bg-emerald-500/20"
-                >
-                  SPoRTS🏏
+                <Link href="/sports" className="jv-btn-ghost">
+                  <span className="text-amber-300"><Icon name="trophy" className="h-4 w-4" /></span> Sports
                 </Link>
-                <Link
-                  href="/live"
-                  className="rounded-full border border-green-500/25 bg-green-500/10 px-4 py-2 text-sm font-black text-green-100 transition hover:border-green-400/70 hover:bg-green-500/20"
-                >
-                  LiVe📺
+                <Link href="/live" className="jv-btn-ghost">
+                  <span className="text-red-400"><Icon name="live" className="h-4 w-4" /></span> Live TV
                 </Link>
-                <a
-                  href="/stremio?home=1"
-                  onClick={(event) => { event.preventDefault(); window.location.assign('/stremio?home=1'); }}
-                  className="rounded-full border border-fuchsia-500/25 bg-fuchsia-500/10 px-4 py-2 text-sm font-black text-fuchsia-100 transition hover:border-fuchsia-400/70 hover:bg-fuchsia-500/20"
-                >
-                  StReMiO📡
+                <a href="/stremio?home=1" onClick={(event) => { event.preventDefault(); window.location.assign('/stremio?home=1'); }} className="jv-btn-ghost">
+                  <span className="text-fuchsia-300"><Icon name="sparkle" className="h-4 w-4" /></span> Stremio
                 </a>
-                <Link
-                  href="/my-list"
-                  aria-label="My Library"
-                  title="My List & Continue Watching"
-                  className="rounded-full border border-rose-500/25 bg-rose-500/10 px-4 py-2 text-sm font-black text-rose-100 transition hover:border-rose-400/70 hover:bg-rose-500/20"
-                >
-                  My❤
+                <Link href="/my-list" title="My List & Continue Watching" className="jv-btn-ghost">
+                  <span className="text-rose-400"><Icon name="heart" className="h-4 w-4" /></span> My List
                 </Link>
                 <CleanEmbedButtons />
               </div>
@@ -663,6 +785,8 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <HeroCarousel items={featuredItems} />
+
       <LibraryRows />
 
       <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
@@ -670,7 +794,7 @@ export default function LandingPage() {
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-3">
-                <h2 className="text-2xl font-black text-white">Latest Releases</h2>
+                <h2 className="text-2xl font-extrabold text-white">Latest Releases</h2>
                 <button
                   type="button"
                   onClick={syncLatestReleases}
@@ -714,7 +838,7 @@ export default function LandingPage() {
                 <p className="text-[10px] font-black uppercase tracking-[0.22em] text-red-500 sm:text-xs sm:tracking-[0.28em]">
                   {activeTab === 'movies' ? 'Movies' : 'Series'}
                 </p>
-                <h2 className="mt-1 text-2xl font-black text-white sm:mt-2 sm:text-3xl">
+                <h2 className="mt-1 text-2xl font-extrabold text-white sm:mt-2 sm:text-3xl">
                   {activeTab === 'movies' ? 'Movies' : 'Series'}
                 </h2>
               </div>

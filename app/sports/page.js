@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import BrandLogo from '@/components/BrandLogo';
+import Icon from '@/components/Icons';
 import {
   FANCODE_FEED,
   bestFancodeVariant,
@@ -125,7 +126,7 @@ export default function SportsPage() {
       <section className="relative z-10 mx-auto max-w-6xl space-y-10 px-4 py-5 pb-24">
         <div>
           <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-gray-600">Real live events · Willow</p>
-          <h1 className="text-3xl font-black uppercase italic leading-none tracking-tighter sm:text-5xl">Live <span className="text-amber-400">Sports</span></h1>
+          <h1 className="inline-flex flex-wrap items-center gap-3 text-3xl font-black uppercase italic leading-none tracking-tighter sm:text-5xl">Live <span className="text-amber-400">Sports</span><span className="jv-badge-live not-italic"><span className="jv-livepulse" />On Air</span></h1>
         </div>
 
         <Section kicker="On air now" title="Live Channels">

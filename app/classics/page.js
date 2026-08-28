@@ -8,11 +8,12 @@ import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '
 const PAGE_SIZE = 24;
 const CLASSICS_CACHE_KEY = 'jash:classics:v1';
 
-function Card({ item }) {
+function Card({ item, delay = 0 }) {
   return (
     <Link
       href={`/classics/${item.id}`}
-      className="group overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-lg shadow-black/30 transition hover:-translate-y-1 hover:border-red-500/60 sm:rounded-3xl"
+      className="jv-reveal group overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-lg shadow-black/30 transition hover:-translate-y-1 hover:border-red-400/50 hover:shadow-2xl hover:shadow-red-950/25 sm:rounded-3xl"
+      style={{ '--jv-delay': `${delay}ms` }}
     >
       <div className="relative aspect-[2/3] bg-zinc-900">
         {item.posterUrl ? (
@@ -250,7 +251,7 @@ export default function TamilClassicsPage() {
         {status === 'ready' ? (
           <>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-6">
-              {items.map((item) => <Card key={item.id} item={item} />)}
+              {items.map((item, index) => <Card key={item.id} item={item} delay={Math.min(index, 11) * 40} />)}
             </div>
             <div ref={sentinelRef} className="mt-10 flex min-h-24 items-center justify-center">
               {hasMore ? (

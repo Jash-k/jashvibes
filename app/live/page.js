@@ -693,7 +693,7 @@ export default function LiveTVPage() {
           <div className="rounded-2xl border border-white/10 bg-zinc-950/80 p-3 sm:rounded-3xl sm:p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
-                <h1 className="truncate text-xl font-black text-white sm:text-2xl">{active?.name || 'Tamil Live TV'}</h1>
+                <div className="flex items-center gap-2.5"><h1 className="truncate text-xl font-black text-white sm:text-2xl">{active?.name || 'Tamil Live TV'}</h1><span className="jv-badge-live shrink-0"><span className="jv-livepulse" />Live</span></div>
                 <p className="mt-1 text-xs text-zinc-500 sm:text-sm">
                   {active ? `${getChannelCatalogIds(active).map(catalogLabel).join(' + ') || 'Initial Jio'} • ${active.source} • ${active.format.toUpperCase()}${active.keyId && active.key ? ' • ClearKey DRM' : ''}` : `Loaded ${channels.length} manually mapped channels`}
                 </p>

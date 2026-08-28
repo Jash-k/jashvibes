@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import MobileDock from '@/components/MobileDock';
 
 const STORAGE_KEY = 'jash_theatre_access_token';
 
@@ -168,6 +169,7 @@ export default function AuthGate({ children }) {
       <>
         {children}
         <DayNightToggle />
+        <MobileDock />
       </>
     );
   }
@@ -176,9 +178,10 @@ export default function AuthGate({ children }) {
     <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-[#050505] px-4 py-6 text-zinc-100 sm:px-6">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(220,38,38,0.32),_transparent_36%),radial-gradient(circle_at_bottom_right,_rgba(234,179,8,0.12),_transparent_35%)]" />
 
+      <div className="relative w-full max-w-md rounded-[1.75rem] bg-[linear-gradient(115deg,#f59e0b,#dc2626_50%,#a855f7)] p-[1.5px] shadow-2xl shadow-red-950/40">
       <form
         onSubmit={unlock}
-        className="relative w-full max-w-md rounded-3xl border border-white/10 bg-zinc-950/90 p-5 shadow-2xl shadow-black backdrop-blur sm:p-8"
+        className="w-full rounded-[calc(1.75rem-1.5px)] bg-zinc-950/[0.97] p-5 backdrop-blur sm:p-8"
       >
         <p className="text-xs font-bold uppercase tracking-[0.35em] text-red-500">
           Private Space
@@ -201,7 +204,7 @@ export default function AuthGate({ children }) {
         </label>
 
         {error ? (
-          <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-950/20 p-3 text-sm text-red-200">
+          <div className="jv-shake mt-4 rounded-2xl border border-red-500/30 bg-red-950/20 p-3 text-sm text-red-200">
             {error}
           </div>
         ) : null}
@@ -209,11 +212,12 @@ export default function AuthGate({ children }) {
         <button
           type="submit"
           disabled={status === 'verifying' || !password}
-          className="mt-6 w-full rounded-2xl bg-red-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+          className="jv-btn-solid mt-6 w-full justify-center !rounded-2xl disabled:cursor-not-allowed disabled:opacity-60"
         >
           {status === 'verifying' ? 'Checking...' : 'Enter Theatre'}
         </button>
       </form>
+      </div>
     </main>
   );
 }

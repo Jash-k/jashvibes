@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'jash-vibes-pwa-v24';
+const CACHE_VERSION = 'jash-vibes-pwa-v26';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const STATIC_PATHS = [
   '/manifest.webmanifest',

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
+import Icon from '@/components/Icons';
 import {
   getHistoryEntry,
   getLastProvider,
@@ -572,7 +573,7 @@ export default function WatchByTMDBPage() {
   };
 
   return (
-    <main className="min-h-dvh overflow-x-hidden bg-black text-zinc-100">
+    <main className="watch-page min-h-dvh overflow-x-hidden bg-black text-zinc-100">
       <header className="border-b border-white/10 bg-zinc-950/80 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
           <Link
@@ -588,12 +589,32 @@ export default function WatchByTMDBPage() {
         </div>
       </header>
 
-      <section className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
-        <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3 sm:mb-5 sm:p-4">
+      <section className="relative mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
+        {titleMeta?.posterUrl ? (
+          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 hidden h-[560px] overflow-hidden sm:block">
+            <img src={titleMeta.posterUrl} alt="" className="h-full w-full scale-125 object-cover opacity-25 blur-3xl saturate-150" />
+          </div>
+        ) : null}
+
+        <div className="relative mb-4 flex flex-wrap items-end justify-between gap-3 sm:mb-6">
+          <div className="min-w-0">
+            <p className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.26em] text-amber-400 sm:text-xs">
+              <Icon name="film" className="h-3.5 w-3.5" /> Now Watching
+            </p>
+            <h1 className="mt-1 line-clamp-2 text-xl font-extrabold text-white sm:text-3xl">{titleMeta?.title || `TMDB ${tmdbId}`}</h1>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-zinc-400">
+              {titleMeta?.year ? <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5">{titleMeta.year}</span> : null}
+              {Number(titleMeta?.rating) > 0 ? <span className="rounded-full border border-amber-300/25 bg-white/[0.04] px-2 py-0.5 text-amber-300">★ {Number(titleMeta.rating).toFixed(1)}</span> : null}
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5">{isSeries ? `Series · S${season} E${episode}` : 'Movie'}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative mb-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3 sm:mb-5 sm:p-4">
           <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
             <div className="col-span-2 rounded-2xl border border-white/10 bg-black/40 p-3 sm:col-span-4">
               <div className="mb-2 flex items-center justify-between gap-3">
-                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-zinc-500">Servers</p>
+                <p className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.24em] text-zinc-500"><Icon name="gear" className="h-3.5 w-3.5" /> Servers</p>
               </div>
               <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-7">
                 {WATCH_SERVER_OPTIONS.map((server) => {
@@ -604,11 +625,11 @@ export default function WatchByTMDBPage() {
                       type="button"
                       onClick={() => handleProviderSelect(server.id)}
                       title={providerChecked && getLastProvider(watchKey) === server.id ? 'Your last used server for this title' : server.name}
-                      className={`min-h-[3.1rem] rounded-xl border px-2 py-2 text-left transition active:scale-[0.98] sm:rounded-2xl ${active ? 'border-blue-400/60 bg-blue-500/15 shadow-lg shadow-blue-950/20' : 'border-white/10 bg-white/[0.035] hover:border-blue-300/35 hover:bg-blue-500/10'} disabled:opacity-70`}
+                      className={`min-h-[3.1rem] rounded-xl border px-2 py-2 text-left transition active:scale-[0.98] sm:rounded-2xl ${active ? 'border-transparent bg-gradient-to-br from-amber-500 via-red-600 to-purple-600 shadow-lg shadow-red-950/30' : 'border-white/10 bg-white/[0.035] hover:border-white/30 hover:bg-white/[0.08]'} disabled:opacity-70`}
                     >
-                      <span className={`block text-xs font-black uppercase tracking-[0.12em] ${active ? 'text-blue-100' : 'text-white'}`}>{server.name}</span>
-                      <span className="mt-1 block truncate text-[10px] font-semibold text-zinc-500">{server.label}</span>
-                      {active ? <span className="mt-2 block h-1 w-8 rounded-full bg-blue-400" /> : null}
+                      <span className={`block text-xs font-black uppercase tracking-[0.12em] ${active ? 'text-white' : 'text-zinc-100'}`}>{server.name}</span>
+                      <span className={`mt-1 block truncate text-[10px] font-semibold ${active ? 'text-amber-50/90' : 'text-zinc-500'}`}>{server.label}</span>
+                      {active ? <span className="mt-2 block h-1 w-8 rounded-full bg-white/80" /> : null}
                     </button>
                   );
                 })}
@@ -686,7 +707,7 @@ export default function WatchByTMDBPage() {
 
         <div
           ref={playerShellRef}
-          className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-screen fullscreen:w-screen fullscreen:rounded-none fullscreen:border-0 sm:rounded-3xl"
+          className="relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-screen fullscreen:w-screen fullscreen:rounded-none fullscreen:border-0 sm:rounded-3xl"
         >
           <div className="relative aspect-video w-full bg-zinc-950 fullscreen:h-screen fullscreen:aspect-auto">
             {status === 'loading' ? (
@@ -750,14 +771,15 @@ export default function WatchByTMDBPage() {
           <button
             type="button"
             onClick={handleToggleFavorite}
-            className={`rounded-xl border px-3 py-2.5 text-xs font-bold transition sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm ${
+            className={`inline-flex items-center rounded-xl border px-3 py-2.5 text-xs font-bold transition sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm ${
               isFav
                 ? 'border-rose-400/60 bg-rose-500/20 text-rose-100 hover:border-rose-300'
                 : 'border-white/10 bg-white/[0.035] text-zinc-200 hover:border-rose-400/50 hover:bg-rose-500/10'
             }`}
             title={isFav ? 'Remove from My List' : 'Add to My List'}
           >
-            {isFav ? '❤ My List' : '♡ My List'}
+            <Icon name="heart" className="mr-1.5 h-4 w-4" />
+            {isFav ? 'In My List' : 'My List'}
           </button>
           {nextEpisodeTarget ? (
             <button
@@ -766,7 +788,7 @@ export default function WatchByTMDBPage() {
               className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5 text-xs font-bold text-emerald-100 transition hover:border-emerald-400 hover:bg-emerald-500/20 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
               title={`Jump to Season ${nextEpisodeTarget.season} Episode ${nextEpisodeTarget.episode}`}
             >
-              Next ▶ S{nextEpisodeTarget.season} E{nextEpisodeTarget.episode}
+              <Icon name="play" className="mr-1.5 h-3.5 w-3.5" />Next S{nextEpisodeTarget.season} E{nextEpisodeTarget.episode}
             </button>
           ) : null}
           {streamUrl ? (
@@ -777,7 +799,7 @@ export default function WatchByTMDBPage() {
                 disabled={trailerStatus === 'loading'}
                 className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-3 py-2.5 text-xs font-bold text-yellow-100 transition hover:border-yellow-400 hover:bg-yellow-500/20 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
               >
-                {trailerStatus === 'loading' ? 'Trailer...' : 'Trailer'}
+                <Icon name="film" className="mr-1.5 h-3.5 w-3.5 inline" />{trailerStatus === 'loading' ? 'Trailer...' : 'Trailer'}
               </button>
               {playerMode === 'trailer' ? (
                 <button
@@ -785,7 +807,7 @@ export default function WatchByTMDBPage() {
                   onClick={() => setPlayerMode('stream')}
                   className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-xs font-bold text-red-100 transition hover:border-red-400 hover:bg-red-500/20 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
                 >
-                  Stream
+                  <Icon name="tv" className="mr-1.5 h-3.5 w-3.5" />Stream
                 </button>
               ) : null}
             </>

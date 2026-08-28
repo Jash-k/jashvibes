@@ -1,8 +1,16 @@
 import './globals.css';
 import 'shaka-player/dist/controls.css';
+import { Playfair_Display } from 'next/font/google';
 import AuthGate from '@/components/AuthGate';
 import PWARegister from '@/components/PWARegister';
 import FullscreenOrientationLock from '@/components/FullscreenOrientationLock';
+
+const playfairDisplay = Playfair_Display({
+  subsets: ['latin'],
+  weight: ['700', '900'],
+  variable: '--font-display',
+  display: 'swap',
+});
 
 export const metadata = {
   title: 'JaSH ViBeS',
@@ -38,7 +46,7 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" className={playfairDisplay.variable}>
       <head>
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
