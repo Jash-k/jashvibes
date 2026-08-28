@@ -545,6 +545,8 @@ export default function LandingPage() {
 
   const sentinelRef = useRef(null);
 
+  const featuredItems = useMemo(() => [...movies, ...series], [movies, series]);
+
   useEffect(() => {
     const cached = readSessionCache(HOME_CACHE_KEY);
     if (cached?.movies?.length || cached?.series?.length) {
@@ -714,8 +716,6 @@ export default function LandingPage() {
   // it becomes a normal /watch/{type}/{tmdbId} card immediately.
   const handleItemMatched = useCallback((prevItem, matched) => {
     if (!matched?.tmdbId) return;
-    const featuredItems = useMemo(() => [...movies, ...series], [movies, series]);
-
     const isTarget = (entry) =>
       (prevItem.id && entry.id === prevItem.id) ||
       (entry.title === prevItem.title && (entry.type || 'movie') === (prevItem.type || 'movie'));
