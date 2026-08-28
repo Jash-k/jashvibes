@@ -207,15 +207,23 @@ export async function GET(request) {
       const mirchiAttemptIndex = attempts.findIndex((attempt) => attempt.providerId === 'mirchi');
       if (mirchiAttemptIndex !== -1) {
         const probe = await checkEmbedUrl(attempts[mirchiAttemptIndex].streamUrl, 4200);
+        // Embed hosts commonly WAF-block datacenter probes (Cloudflare-style 403)
+        // while real browsers load the player fine — the embed iframe runs fully
+        // client-side, so a 403 here is inconclusive and Mirchi stays first. Only
+        // hard failures (DNS/timeout, 404, 5xx, non-HTML) move Auto to TamilOTT.
+        const softBlocked = !probe.ok && probe.status === 403;
+        const mirchiUsable = probe.ok || softBlocked;
         attempts[mirchiAttemptIndex] = {
           ...attempts[mirchiAttemptIndex],
-          health: { ok: probe.ok, status: probe.status, finalUrl: probe.finalUrl },
-          status: probe.ok ? 'available' : 'failed',
+          health: { ok: mirchiUsable, status: probe.status, finalUrl: probe.finalUrl, softBlocked },
+          status: mirchiUsable ? 'available' : 'failed',
           reason: probe.ok
             ? 'Auto Priority selected Global Mirchi first (embed probe passed).'
-            : `Global Mirchi did not respond (probe ${probe.status || probe.error || 'failed'}). Auto Priority falls back to TamilOTT next.`,
+            : softBlocked
+              ? 'Global Mirchi selected first — this host blocks server-side checks (403) but the player still loads in your browser. If it does not play, switch to TamilOTT/VidLink below.'
+              : `Global Mirchi did not respond (probe ${probe.status || probe.error || 'failed'}). Auto Priority falls back to TamilOTT next.`,
         };
-        if (probe.ok) {
+        if (mirchiUsable) {
           selected = resolved.providers.find((provider) => provider.id === 'mirchi') || selected;
           sourcesToSave = resolved.providers;
           attempts.splice(1, 0, createTamilOttAttempt(
@@ -246,24 +254,43 @@ export async function GET(request) {
         });
         selected = tamilOttResult;
         sourcesToSave = hasValidTmdbId ? [tamilOttResult, ...resolved.providers] : [tamilOttResult];
-        attempts = [
-          createTamilOttAttempt(
+        const matchedLabel = tamilOttResult.match?.streamTitle || tamilOttResult.match?.title || tamilOttResult.label;
+        if (requestedProvider === 'auto') {
+          // Keep Global Mirchi listed first (it was genuinely tried first) and
+          // drop the successful TamilOTT attempt immediately after it.
+          const tamilOttSuccess = createTamilOttAttempt(
             tamilOttResult,
             'available',
-            requestedProvider === 'auto'
-              ? `Global Mirchi was unreachable, so Auto Priority selected TamilOTT next. Matched: ${tamilOttResult.match?.streamTitle || tamilOttResult.match?.title || tamilOttResult.label}`
-              : `Matched authorized JSON item: ${tamilOttResult.match?.streamTitle || tamilOttResult.match?.title || tamilOttResult.label}`,
-          ),
-          ...(hasValidTmdbId
-            ? resolved.attempts.map((attempt) => ({
-                ...attempt,
-                status: attempt.providerId === 'mirchi' ? attempt.status : 'configured',
-                reason: requestedProvider === 'auto'
-                  ? (attempt.providerId === 'mirchi' ? attempt.reason : 'Available fallback provider. Auto Priority selected Global Mirchi → TamilOTT; switch manually if needed.')
-                  : 'Available fallback provider. TamilOTT JSON is selected manually.',
-              }))
-            : []),
-        ];
+            `Global Mirchi was unreachable, so Auto Priority selected TamilOTT next. Matched: ${matchedLabel}`,
+          );
+          const reordered = attempts.map((attempt) =>
+            attempt.providerId === 'mirchi'
+              ? attempt
+              : {
+                  ...attempt,
+                  status: 'configured',
+                  reason: 'Available fallback provider. Auto Priority used Global Mirchi → TamilOTT; switch manually if needed.',
+                },
+          );
+          const insertAt = reordered.findIndex((attempt) => attempt.providerId === 'mirchi');
+          reordered.splice(insertAt === -1 ? 0 : insertAt + 1, 0, tamilOttSuccess);
+          attempts = reordered;
+        } else {
+          attempts = [
+            createTamilOttAttempt(
+              tamilOttResult,
+              'available',
+              `Matched authorized JSON item: ${matchedLabel}`,
+            ),
+            ...(hasValidTmdbId
+              ? attempts.map((attempt) => ({
+                  ...attempt,
+                  status: 'configured',
+                  reason: 'Available fallback provider. TamilOTT JSON is selected manually.',
+                }))
+              : []),
+          ];
+        }
       } catch (error) {
         if (requestedProvider === 'tamilott') {
           return NextResponse.json(
@@ -279,14 +306,13 @@ export async function GET(request) {
           );
         }
 
-        attempts = [
-          createTamilOttAttempt(
-            null,
-            'failed',
-            `${error.message || 'TamilOTT JSON match failed'}.`,
-          ),
-          ...attempts,
-        ];
+        const tamilOttFailure = createTamilOttAttempt(
+          null,
+          'failed',
+          `${error.message || 'TamilOTT JSON match failed'}.`,
+        );
+        const failureInsertAt = attempts.findIndex((attempt) => attempt.providerId === 'mirchi');
+        attempts.splice(failureInsertAt === -1 ? 0 : failureInsertAt + 1, 0, tamilOttFailure);
         if (requestedProvider === 'auto' && hasValidTmdbId) {
           const afterMirchi = resolved.providers.find((provider) => provider.id !== 'mirchi');
           if (afterMirchi) {
