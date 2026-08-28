@@ -20,7 +20,7 @@ Tamil-first private streaming hub — movies, series, live TV, music, sports and
 
 ## ✨ Features
 
-- **Movies & Series** — TamilMV daily catalog + TMDB metadata, MiX (TamilOTT) catalog, multi-provider embed playback with per-provider health checks.
+- **Movies & Series** — TamilMV daily catalog + TMDB metadata, manual Match-to-TMDB for unmatched posters, multi-provider embed playback with per-provider health checks.
 - **▶ Continue Watching & ❤ My List** — automatic watch history with playback-position resume (direct streams), favorites, per-title server memory. Stored in `localStorage` — no account, no DB cost.
 - **Gesture video player** — double-tap seek ±10s (stacks), vertical swipe = volume (right) / brightness (left), horizontal swipe = scrub, long-press = 2× speed, screen lock, quality/subtitle/speed panels, external `.srt/.vtt` upload.
 - **Live TV** — Jio (ClearKey/Shaka), Sony Ten/Sports Jio re-stream source, M3U sources, manual 6-catalog admin panel (Live Service). New default sources self-seed with a one-time background sync; only the curated Tamil cricket feeds auto-publish, everything else needs manual mapping.
@@ -66,9 +66,9 @@ Common optional ones:
 
 ```env
 LIVE_TV_PASS=tv2010                                  # Live TV service panel password (default tv2010); also works at the main unlock
-PROVIDERS=mirchi,tamilott,vidlink,videasy,vidzee,vidrock      # embed priority order
+PROVIDERS=mirchi,vidlink,videasy,vidzee,vidrock      # embed priority order
 TAMILMV=https://www.1tamilmv.report/                 # current scraper domain
-OTT=https://tamilott.vercel.app/tamil_movies.json,https://tamilott.vercel.app/tamil_dubbed.json
+# Manual poster-to-TMDB matches persist in MongoDB (title_matches collection)
 CRON_SECRET=token_for_/api/cron/tamilmv              # external scheduler
 SCRAPE_TOKEN=token_for_forced_tamilmv_refresh
 SEED_TOKEN=token_for_/api/seed
@@ -107,7 +107,7 @@ Render free tier: New Web Service → Docker → set the 3 env vars → deploy. 
 ```txt
 middleware.js               # API auth firewall + rate limiting  (v6)
 app/
-  page.js                   # home: Recent / MiX catalogs + library rows
+  page.js                   # home: Latest Releases + Match-to-TMDB posters + library rows
   watch/[type]/[tmdbId]/    # VOD watch page (provider select, S/E picker)
   my-list/                  # favorites + continue-watching library
   live/ music/ sports/ classics/ stremio*/ embed-browser/

@@ -94,9 +94,8 @@ function getStatusStyle(status) {
 }
 
 const WATCH_SERVER_OPTIONS = [
-  { id: 'auto', name: 'Auto', label: 'Mirchi → TamilOTT' },
+  { id: 'auto', name: 'Auto', label: 'Mirchi first' },
   { id: 'mirchi', name: 'Global Mirchi', label: 'Embed' },
-  { id: 'tamilott', name: 'TamilOTT', label: 'OTT' },
   { id: 'vidlink', name: 'VidLink', label: 'Embed' },
   { id: 'videasy', name: 'VidEasy', label: 'Embed' },
   { id: 'vidzee', name: 'VidZee', label: 'Backup' },
@@ -143,11 +142,6 @@ function SourceStatusGrid({ attempts, onSelectProvider, selectedProvider }) {
                 API checked: HTTP {attempt.health.status} • {attempt.health.finalUrl}
               </p>
             ) : null}
-            {attempt.match ? (
-              <p className="mt-2 text-[11px] leading-5 text-orange-200">
-                Match: {attempt.match.streamTitle || attempt.match.title} {attempt.match.quality ? `• ${attempt.match.quality}` : ''}
-              </p>
-            ) : null}
             {attempt.providerId ? (
               <button
                 type="button"
@@ -177,17 +171,16 @@ export default function WatchByTMDBPage() {
 
   const initialSeason = Math.max(1, Number(searchParams?.get('season') || searchParams?.get('s') || 1));
   const initialEpisode = Math.max(1, Number(searchParams?.get('episode') || searchParams?.get('e') || 1));
-  const isOttTitleOnly = String(tmdbId || '').toLowerCase() === 'ott';
-  const ottTitle = searchParams?.get('title') || '';
-  const ottYear = searchParams?.get('year') || '';
-  const initialOttStreamId = searchParams?.get('ottStreamId') || searchParams?.get('streamId') || '';
+  // Legacy direct-TamilOTT links (/watch/*/ott?...) no longer play: titles must
+  // be matched to a TMDB id from the homepage Match button first.
+  const isLegacyOttUrl = String(tmdbId || '').toLowerCase() === 'ott';
 
   const [season, setSeason] = useState(initialSeason);
   const [episode, setEpisode] = useState(initialEpisode);
   const [seriesMeta, setSeriesMeta] = useState(null);
   const [seriesMetaStatus, setSeriesMetaStatus] = useState('idle');
   const language = 'tam';
-  const [provider, setProvider] = useState(isOttTitleOnly ? 'tamilott' : 'auto');
+  const [provider, setProvider] = useState('auto');
   const [providerChecked, setProviderChecked] = useState(false);
   const [titleMeta, setTitleMeta] = useState(null);
   const [pageMounted, setPageMounted] = useState(false);
@@ -209,17 +202,13 @@ export default function WatchByTMDBPage() {
   const [error, setError] = useState('');
   const [attempts, setAttempts] = useState([]);
   const [savedToMongoDB, setSavedToMongoDB] = useState(false);
-  const [resolveMode, setResolveMode] = useState('');
   const [resolvedProviderId, setResolvedProviderId] = useState('');
-  const [ottStreams, setOttStreams] = useState([]);
-  const [selectedOttStreamId, setSelectedOttStreamId] = useState(initialOttStreamId);
-  const [resolvedOttStreamId, setResolvedOttStreamId] = useState('');
   const [stremioCheck, setStremioCheck] = useState({ status: 'idle', available: false, href: '', count: 0, error: '' });
-  const activeProvider = playerMode === 'trailer' ? 'trailer' : (resolvedProviderId || (isOttTitleOnly ? 'tamilott' : provider));
+  const activeProvider = playerMode === 'trailer' ? 'trailer' : (resolvedProviderId || provider);
 
   const watchKey = useMemo(
-    () => makeWatchKey({ type: isSeries ? 'series' : 'movie', tmdbId, ottTitle: isOttTitleOnly ? ottTitle : '' }),
-    [isSeries, tmdbId, isOttTitleOnly, ottTitle],
+    () => makeWatchKey({ type: isSeries ? 'series' : 'movie', tmdbId }),
+    [isSeries, tmdbId],
   );
 
   // Mark mounted (library data lives in localStorage — client only).
@@ -228,10 +217,6 @@ export default function WatchByTMDBPage() {
   // Restore the last manually selected server for this title BEFORE the first
   // resolve attempt, so returning users skip straight to their working source.
   useEffect(() => {
-    if (isOttTitleOnly) {
-      setProviderChecked(true);
-      return;
-    }
     try {
       const saved = getLastProvider(watchKey);
       if (saved && saved !== provider) setProvider(saved);
@@ -240,6 +225,14 @@ export default function WatchByTMDBPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchKey]);
 
+  // Retired direct-TamilOTT links (/watch/*/ott?...) can no longer play.
+  useEffect(() => {
+    if (!isLegacyOttUrl) return;
+    setError('This link was created before manual TMDB matching and cannot play any more. Go back to the homepage, find the same poster, and use its Match button to bind a TMDB/IMDb id first.');
+    setStatus('error');
+    setProviderChecked(true);
+  }, [isLegacyOttUrl]);
+
   // Load lightweight title metadata used for Continue Watching / My List.
   useEffect(() => {
     let cancelled = false;
@@ -247,13 +240,7 @@ export default function WatchByTMDBPage() {
     setTitleMeta(null);
 
     async function loadMeta() {
-      if (isOttTitleOnly) {
-        const meta = { title: ottTitle || 'TamilOTT Title', posterUrl: '', year: ottYear || '' };
-        metaRef.current = meta;
-        if (!cancelled) setTitleMeta(meta);
-        return;
-      }
-      if (!tmdbId || !type) return;
+      if (!tmdbId || !type || isLegacyOttUrl) return;
       try {
         const response = await fetch(`/api/tmdb/meta?type=${encodeURIComponent(type)}&tmdbId=${encodeURIComponent(tmdbId)}`, { cache: 'no-store' });
         const data = await response.json().catch(() => ({}));
@@ -266,41 +253,28 @@ export default function WatchByTMDBPage() {
 
     loadMeta();
     return () => { cancelled = true; };
-  }, [type, tmdbId, isOttTitleOnly, ottTitle, ottYear]);
+  }, [type, tmdbId, isLegacyOttUrl]);
 
   const resolveUrl = useMemo(() => {
-    if (!type || !tmdbId) return null;
+    if (!type || !tmdbId || isLegacyOttUrl) return null;
 
-    const effectiveProvider = isOttTitleOnly ? 'tamilott' : provider;
     const params = new URLSearchParams({
       type,
       lan: language,
-      provider: effectiveProvider,
+      provider,
+      tmdbId,
     });
-
-    if (isOttTitleOnly) {
-      params.set('title', ottTitle);
-      if (ottYear) params.set('year', ottYear);
-    } else {
-      params.set('tmdbId', tmdbId);
-    }
 
     if (isSeries) {
       params.set('season', String(season || 1));
       params.set('episode', String(episode || 1));
     }
 
-    if ((effectiveProvider === 'tamilott' || effectiveProvider === 'auto') && selectedOttStreamId) {
-      params.set('ottStreamId', selectedOttStreamId);
-    }
-
     return `/api/resolve?${params.toString()}`;
-  }, [type, tmdbId, provider, isSeries, season, episode, selectedOttStreamId, isOttTitleOnly, ottTitle, ottYear]);
-
-  const shouldShowOttStreamPicker = isOttTitleOnly || provider === 'tamilott' || resolveMode === 'tamilott-json-provider' || ottStreams.length > 0;
+  }, [type, tmdbId, provider, isSeries, season, episode, isLegacyOttUrl]);
 
   useEffect(() => {
-    if (!type || (!tmdbId && !ottTitle)) {
+    if (!type || !tmdbId || isLegacyOttUrl) {
       setStremioCheck({ status: 'idle', available: false, href: '', count: 0, error: '' });
       return;
     }
@@ -308,13 +282,7 @@ export default function WatchByTMDBPage() {
     async function checkStremio() {
       try {
         setStremioCheck((current) => ({ ...current, status: 'checking', error: '' }));
-        const params = new URLSearchParams({ type, source: 'watch' });
-        if (isOttTitleOnly) {
-          params.set('title', ottTitle);
-          if (ottYear) params.set('year', ottYear);
-        } else {
-          params.set('tmdbId', String(tmdbId));
-        }
+        const params = new URLSearchParams({ type, source: 'watch', tmdbId: String(tmdbId) });
         if (isSeries) {
           params.set('season', String(season || 1));
           params.set('episode', String(episode || 1));
@@ -337,18 +305,10 @@ export default function WatchByTMDBPage() {
     }
     checkStremio();
     return () => controller.abort();
-  }, [type, tmdbId, ottTitle, ottYear, isSeries, season, episode, isOttTitleOnly]);
+  }, [type, tmdbId, isSeries, season, episode, isLegacyOttUrl]);
 
   useEffect(() => {
-    if (!(isOttTitleOnly && initialOttStreamId)) {
-      setSelectedOttStreamId('');
-    }
-    setResolvedOttStreamId('');
-    setOttStreams([]);
-  }, [provider, type, tmdbId, season, episode, isOttTitleOnly, initialOttStreamId]);
-
-  useEffect(() => {
-    if (!isSeries || !tmdbId || isOttTitleOnly) return;
+    if (!isSeries || !tmdbId || isLegacyOttUrl) return;
 
     const controller = new AbortController();
 
@@ -379,53 +339,24 @@ export default function WatchByTMDBPage() {
 
     loadSeriesMetadata();
     return () => controller.abort();
-  }, [isSeries, tmdbId, isOttTitleOnly]);
+  }, [isSeries, tmdbId, isLegacyOttUrl]);
 
   const selectedSeasonMeta = useMemo(() => {
     return seriesMeta?.seasons?.find((item) => item.seasonNumber === season) || null;
   }, [seriesMeta, season]);
 
-  const tamilOttSeriesSeasons = useMemo(() => {
-    const map = new Map();
-    for (const stream of ottStreams || []) {
-      const seasonNumber = Number(stream.season || 0);
-      const episodeNumber = Number(stream.episode || 0);
-      if (!seasonNumber || !episodeNumber) continue;
-      if (!map.has(seasonNumber)) map.set(seasonNumber, new Map());
-      const episodeMap = map.get(seasonNumber);
-      if (!episodeMap.has(episodeNumber)) {
-        episodeMap.set(episodeNumber, {
-          episodeNumber,
-          name: stream.title || stream.streamTitle || `Episode ${episodeNumber}`,
-          streamId: stream.id,
-        });
-      }
-    }
-    return [...map.entries()].map(([seasonNumber, episodeMap]) => ({
-      seasonNumber,
-      name: `Season ${seasonNumber}`,
-      episodes: [...episodeMap.values()].sort((a, b) => a.episodeNumber - b.episodeNumber),
-    })).sort((a, b) => a.seasonNumber - b.seasonNumber);
-  }, [ottStreams]);
-
   const seasonOptions = useMemo(() => {
-    if (isSeries && tamilOttSeriesSeasons.length && shouldShowOttStreamPicker) return tamilOttSeriesSeasons;
     return seriesMeta?.seasons?.length ? seriesMeta.seasons : [{ seasonNumber: season, name: `Season ${season}` }];
-  }, [isSeries, tamilOttSeriesSeasons, shouldShowOttStreamPicker, seriesMeta, season]);
+  }, [seriesMeta, season]);
 
   const episodeOptions = useMemo(() => {
-    const tamilOttSeason = isSeries && tamilOttSeriesSeasons.length && shouldShowOttStreamPicker
-      ? tamilOttSeriesSeasons.find((item) => item.seasonNumber === season)
-      : null;
-    if (tamilOttSeason?.episodes?.length) return tamilOttSeason.episodes;
     return selectedSeasonMeta?.episodes?.length ? selectedSeasonMeta.episodes : [{ episodeNumber: episode, name: `Episode ${episode}` }];
-  }, [isSeries, tamilOttSeriesSeasons, shouldShowOttStreamPicker, season, selectedSeasonMeta, episode]);
+  }, [selectedSeasonMeta, episode]);
 
   useEffect(() => {
     if (!episodeOptions?.length) return;
     const hasEpisode = episodeOptions.some((item) => item.episodeNumber === episode);
     if (!hasEpisode) {
-      setSelectedOttStreamId('');
       setEpisode(episodeOptions[0].episodeNumber || 1);
     }
   }, [episodeOptions, episode]);
@@ -442,10 +373,7 @@ export default function WatchByTMDBPage() {
         setError('');
         setAttempts([]);
         setSavedToMongoDB(false);
-        setResolveMode('');
         setResolvedProviderId('');
-        setOttStreams([]);
-        setResolvedOttStreamId('');
         setStreamUrl('');
         setStreamFallbacks([]);
         setStreamChoiceIndex(0);
@@ -461,14 +389,7 @@ export default function WatchByTMDBPage() {
         const data = await response.json();
         setAttempts(data.attempts || []);
         setSavedToMongoDB(Boolean(data.savedToMongoDB));
-        setResolveMode(data.mode || '');
         setResolvedProviderId(data.providerId || '');
-        setOttStreams(data.availableStreams || []);
-        setResolvedOttStreamId(data.selectedStreamId || '');
-        if (isSeries && !selectedOttStreamId && data.match?.season && data.match?.episode && (data.match.season !== season || data.match.episode !== episode)) {
-          setSeason(Number(data.match.season) || 1);
-          setEpisode(Number(data.match.episode) || 1);
-        }
 
         if (!response.ok) throw new Error(data?.error || 'Unable to build embed URL');
         if (!data.streamUrl) throw new Error('No stream URL returned');
@@ -498,16 +419,16 @@ export default function WatchByTMDBPage() {
     upsertHistoryEntry({
       key: watchKey,
       type: isSeries ? 'series' : 'movie',
-      tmdbId: isOttTitleOnly ? null : Number(tmdbId) || null,
-      title: meta.title || ottTitle || `TMDB ${tmdbId}`,
+      tmdbId: Number(tmdbId) || null,
+      title: meta.title || `TMDB ${tmdbId}`,
       posterUrl: meta.posterUrl || '',
-      year: meta.year || ottYear || '',
+      year: meta.year || '',
       season: isSeries ? season : 0,
       episode: isSeries ? episode : 0,
       provider: activeProvider || '',
       href: `${window.location.pathname}${window.location.search}`,
     });
-  }, [status, playerMode, activePlayerUrl, watchKey, isSeries, tmdbId, isOttTitleOnly, ottTitle, ottYear, season, episode, activeProvider, titleMeta]);
+  }, [status, playerMode, activePlayerUrl, watchKey, isSeries, tmdbId, season, episode, activeProvider, titleMeta]);
 
   useEffect(() => {
     const video = directVideoRef.current;
@@ -653,19 +574,16 @@ export default function WatchByTMDBPage() {
     toggleFavoriteItem({
       key: watchKey,
       type: isSeries ? 'series' : 'movie',
-      tmdbId: isOttTitleOnly ? null : Number(tmdbId) || null,
-      title: meta.title || ottTitle || `TMDB ${tmdbId}`,
+      tmdbId: Number(tmdbId) || null,
+      title: meta.title || `TMDB ${tmdbId}`,
       posterUrl: meta.posterUrl || '',
-      year: meta.year || ottYear || '',
-      href: isOttTitleOnly
-        ? `${window.location.pathname}${window.location.search}`
-        : `/watch/${isSeries ? 'series' : 'movie'}/${tmdbId}`,
+      year: meta.year || '',
+      href: `/watch/${isSeries ? 'series' : 'movie'}/${tmdbId}`,
     });
   };
 
   const handleNextEpisode = () => {
     if (!nextEpisodeTarget) return;
-    setSelectedOttStreamId('');
     setSeason(nextEpisodeTarget.season);
     setEpisode(nextEpisodeTarget.episode);
   };
@@ -693,17 +611,15 @@ export default function WatchByTMDBPage() {
             <div className="col-span-2 rounded-2xl border border-white/10 bg-black/40 p-3 sm:col-span-4">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <p className="text-[10px] font-black uppercase tracking-[0.24em] text-zinc-500">Servers</p>
-                {isOttTitleOnly ? <span className="text-[10px] font-bold text-orange-300">TamilOTT title-search mode</span> : null}
               </div>
               <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-7">
-                {(isOttTitleOnly ? WATCH_SERVER_OPTIONS.filter((item) => item.id === 'tamilott') : WATCH_SERVER_OPTIONS).map((server) => {
-                  const active = (isOttTitleOnly ? 'tamilott' : provider) === server.id;
+                {WATCH_SERVER_OPTIONS.map((server) => {
+                  const active = provider === server.id;
                   return (
                     <button
                       key={server.id}
                       type="button"
-                      onClick={() => !isOttTitleOnly && handleProviderSelect(server.id)}
-                      disabled={isOttTitleOnly && server.id !== 'tamilott'}
+                      onClick={() => handleProviderSelect(server.id)}
                       title={providerChecked && getLastProvider(watchKey) === server.id ? 'Your last used server for this title' : server.name}
                       className={`min-h-[3.1rem] rounded-xl border px-2 py-2 text-left transition active:scale-[0.98] sm:rounded-2xl ${active ? 'border-blue-400/60 bg-blue-500/15 shadow-lg shadow-blue-950/20' : 'border-white/10 bg-white/[0.035] hover:border-blue-300/35 hover:bg-blue-500/10'} disabled:opacity-70`}
                     >
@@ -724,7 +640,6 @@ export default function WatchByTMDBPage() {
                     onChange={(event) => {
                       const nextSeason = Number(event.target.value) || 1;
                       setSeason(nextSeason);
-                      setSelectedOttStreamId('');
                       const nextSeasonMeta = seasonOptions.find((item) => item.seasonNumber === nextSeason);
                       setEpisode(nextSeasonMeta?.episodes?.[0]?.episodeNumber || 1);
                     }}
@@ -742,7 +657,7 @@ export default function WatchByTMDBPage() {
                   Episode
                   <select
                     value={episode}
-                    onChange={(event) => { setSelectedOttStreamId(''); setEpisode(Number(event.target.value) || 1); }}
+                    onChange={(event) => { setEpisode(Number(event.target.value) || 1); }}
                     className="mt-1 w-full rounded-xl border border-white/10 bg-black px-3 py-2 text-white outline-none focus:border-red-500"
                   >
                     {episodeOptions.map((item) => (
@@ -763,27 +678,6 @@ export default function WatchByTMDBPage() {
               />
               Block Popups
             </label>
-            {shouldShowOttStreamPicker ? (
-              <label className="col-span-2 text-sm text-zinc-400 sm:col-span-4">
-                TamilOTT available streams
-                <select
-                  value={selectedOttStreamId || resolvedOttStreamId || ''}
-                  onChange={(event) => setSelectedOttStreamId(event.target.value)}
-                  disabled={status === 'loading' || !ottStreams.length}
-                  className="mt-1 w-full rounded-xl border border-orange-500/20 bg-black px-3 py-2 text-white outline-none focus:border-orange-500 disabled:cursor-wait disabled:opacity-60"
-                >
-                  {!ottStreams.length ? (
-                    <option value="">Loading matching streams...</option>
-                  ) : null}
-                  {ottStreams.map((item) => (
-                    <option key={item.id || item.streamUrl} value={item.id}>
-                      {item.label || item.streamTitle || item.title}
-                    </option>
-                  ))}
-                </select>
-
-              </label>
-            ) : null}
           </div>
         </div>
 
@@ -797,7 +691,7 @@ export default function WatchByTMDBPage() {
                 <div className="h-12 w-12 animate-spin rounded-full border-4 border-zinc-700 border-t-red-600" />
                 <div>
                   <p className="font-semibold text-white">Resolving embed provider...</p>
-                  <p className="mt-2 text-sm text-zinc-400">{isOttTitleOnly ? 'Matching TamilOTT by scraped title...' : provider === 'auto' ? 'Checking TamilOTT first with a fast recent-window scan, then falling back if needed.' : 'Generating direct embed URL from TMDB ID.'}</p>
+                  <p className="mt-2 text-sm text-zinc-400">{provider === 'auto' ? 'Checking Global Mirchi first, then the next server if needed.' : 'Generating direct embed URL from TMDB ID.'}</p>
                 </div>
               </div>
             ) : null}
@@ -841,7 +735,7 @@ export default function WatchByTMDBPage() {
                 src={activePlayerUrl}
                 className="h-full w-full border-0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
-                sandbox={popupBlocker && activeProvider !== 'tamilott' && !/onestream|tamilott|stream\/page/i.test(activePlayerUrl) ? 'allow-scripts allow-same-origin allow-forms allow-presentation' : undefined}
+                sandbox={popupBlocker && !/onestream|stream\/page/i.test(activePlayerUrl) ? 'allow-scripts allow-same-origin allow-forms allow-presentation' : undefined}
                 allowFullScreen
                 referrerPolicy="origin-when-cross-origin"
               />
@@ -892,16 +786,14 @@ export default function WatchByTMDBPage() {
           )}
           {streamUrl ? (
             <>
-              {!isOttTitleOnly ? (
-                <button
-                  type="button"
-                  onClick={playTrailer}
-                  disabled={trailerStatus === 'loading'}
-                  className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-3 py-2.5 text-xs font-bold text-yellow-100 transition hover:border-yellow-400 hover:bg-yellow-500/20 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
-                >
-                  {trailerStatus === 'loading' ? 'Trailer...' : 'Trailer'}
-                </button>
-              ) : null}
+              <button
+                type="button"
+                onClick={playTrailer}
+                disabled={trailerStatus === 'loading'}
+                className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-3 py-2.5 text-xs font-bold text-yellow-100 transition hover:border-yellow-400 hover:bg-yellow-500/20 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
+              >
+                {trailerStatus === 'loading' ? 'Trailer...' : 'Trailer'}
+              </button>
               {playerMode === 'trailer' ? (
                 <button
                   type="button"

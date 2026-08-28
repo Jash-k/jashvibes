@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import { scrapeTamilMV } from '@/lib/tamilmvScraper';
 import { verifyRequestToken } from '@/lib/serverAuth';
+import { applyMatchesToItems, findMatchesForItems } from '@/lib/titleMatch';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -144,6 +145,22 @@ function pageInfo(items = [], paging, cacheLimit = 0, maxCacheLimit = DEFAULT_MA
   };
 }
 
+// Manual poster matches (title_matches collection) must survive rescrapes, so
+// they are merged at read time instead of being baked into the cached scrape.
+async function withTitleMatches(payload) {
+  try {
+    const docs = await findMatchesForItems([...(payload?.movies || []), ...(payload?.series || [])]);
+    if (!docs.length) return payload;
+    return {
+      ...payload,
+      movies: applyMatchesToItems(payload?.movies || [], docs),
+      series: applyMatchesToItems(payload?.series || [], docs),
+    };
+  } catch {
+    return payload;
+  }
+}
+
 function paginatePayload(payload, paging, maxCacheLimit = DEFAULT_MAX_CACHE_LIMIT) {
   const allMovies = payload?.movies || [];
   const allSeries = payload?.series || [];
@@ -246,7 +263,7 @@ export async function GET(request) {
         }
         return NextResponse.json(
           {
-            ...paginatePayload(cached, paging, maxCacheLimit),
+            ...paginatePayload(await withTitleMatches(cached), paging, maxCacheLimit),
             cached: true,
             from: 'mongodb-cache',
             syncDue,
@@ -289,7 +306,7 @@ export async function GET(request) {
 
     return NextResponse.json(
       {
-        ...paginatePayload(cached || payload, paging, maxCacheLimit),
+        ...paginatePayload(await withTitleMatches(cached || payload), paging, maxCacheLimit),
         cached: false,
         from: manual ? 'manual-sync' : 'live-scrape',
         synced: true,
@@ -304,7 +321,7 @@ export async function GET(request) {
       if (cached) {
         return NextResponse.json(
           {
-            ...paginatePayload(cached, paging, maxCacheLimit),
+            ...paginatePayload(await withTitleMatches(cached), paging, maxCacheLimit),
             cached: true,
             from: 'stale-mongodb-cache',
             warning: error.message || 'Live scrape failed; showing cached data.',
