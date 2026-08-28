@@ -20,7 +20,7 @@ Tamil-first private streaming hub — movies, series, live TV, music, sports and
 
 ## ✨ Features
 
-- **Movies & Series** — TamilMV daily catalog + TMDB metadata, manual Match-to-TMDB for unmatched posters, multi-provider embed playback with per-provider health checks.
+- **Movies & Series** — TamilMV daily catalog + TMDB metadata, manual Match-to-TMDB for unmatched posters, multi-provider embed playback with per-provider health checks, plus your Stremio addon as a direct-file server inside the watch page (Auto chain: Mirchi → Stremio → embeds, with an on-page quality dropdown).
 - **▶ Continue Watching & ❤ My List** — automatic watch history with playback-position resume (direct streams), favorites, per-title server memory. Stored in `localStorage` — no account, no DB cost.
 - **Gesture video player** — double-tap seek ±10s (stacks), vertical swipe = volume (right) / brightness (left), horizontal swipe = scrub, long-press = 2× speed, screen lock, quality/subtitle/speed panels, external `.srt/.vtt` upload.
 - **Live TV** — Jio (ClearKey/Shaka), Sony Ten/Sports Jio re-stream source, M3U sources, manual 6-catalog admin panel (Live Service). New default sources self-seed with a one-time background sync; only the curated Tamil cricket feeds auto-publish, everything else needs manual mapping.
@@ -66,7 +66,7 @@ Common optional ones:
 
 ```env
 LIVE_TV_PASS=tv2010                                  # Live TV service panel password (default tv2010); also works at the main unlock
-PROVIDERS=mirchi,vidlink,videasy,vidzee,vidrock      # embed priority order
+PROVIDERS=mirchi,stremio,vidlink,videasy,vidzee,vidrock      # embed priority order
 TAMILMV=https://www.1tamilmv.report/                 # current scraper domain
 # Manual poster-to-TMDB matches persist in MongoDB (title_matches collection)
 CRON_SECRET=token_for_/api/cron/tamilmv              # external scheduler

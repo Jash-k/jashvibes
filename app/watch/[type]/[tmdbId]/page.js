@@ -94,8 +94,9 @@ function getStatusStyle(status) {
 }
 
 const WATCH_SERVER_OPTIONS = [
-  { id: 'auto', name: 'Auto', label: 'Mirchi first' },
+  { id: 'auto', name: 'Auto', label: 'Mirchi → Stremio' },
   { id: 'mirchi', name: 'Global Mirchi', label: 'Embed' },
+  { id: 'stremio', name: 'Stremio', label: 'Direct files' },
   { id: 'vidlink', name: 'VidLink', label: 'Embed' },
   { id: 'videasy', name: 'VidEasy', label: 'Embed' },
   { id: 'vidzee', name: 'VidZee', label: 'Backup' },
@@ -203,8 +204,11 @@ export default function WatchByTMDBPage() {
   const [attempts, setAttempts] = useState([]);
   const [savedToMongoDB, setSavedToMongoDB] = useState(false);
   const [resolvedProviderId, setResolvedProviderId] = useState('');
-  const [stremioCheck, setStremioCheck] = useState({ status: 'idle', available: false, href: '', count: 0, error: '' });
+  const [stremioStreams, setStremioStreams] = useState([]);
+  const [selectedStremioStreamId, setSelectedStremioStreamId] = useState('');
+  const [resolvedStremioStreamId, setResolvedStremioStreamId] = useState('');
   const activeProvider = playerMode === 'trailer' ? 'trailer' : (resolvedProviderId || provider);
+  const showStremioQualityPicker = !isLegacyOttUrl && (resolvedProviderId === 'stremio' || provider === 'stremio');
 
   const watchKey = useMemo(
     () => makeWatchKey({ type: isSeries ? 'series' : 'movie', tmdbId }),
@@ -232,6 +236,11 @@ export default function WatchByTMDBPage() {
     setStatus('error');
     setProviderChecked(true);
   }, [isLegacyOttUrl]);
+
+  // Provider/title/episode changes restart Stremio quality auto-pick.
+  useEffect(() => {
+    setSelectedStremioStreamId('');
+  }, [provider, type, tmdbId, season, episode]);
 
   // Load lightweight title metadata used for Continue Watching / My List.
   useEffect(() => {
@@ -270,42 +279,12 @@ export default function WatchByTMDBPage() {
       params.set('episode', String(episode || 1));
     }
 
-    return `/api/resolve?${params.toString()}`;
-  }, [type, tmdbId, provider, isSeries, season, episode, isLegacyOttUrl]);
+    if (provider === 'stremio' && selectedStremioStreamId) {
+      params.set('stremioStreamId', selectedStremioStreamId);
+    }
 
-  useEffect(() => {
-    if (!type || !tmdbId || isLegacyOttUrl) {
-      setStremioCheck({ status: 'idle', available: false, href: '', count: 0, error: '' });
-      return;
-    }
-    const controller = new AbortController();
-    async function checkStremio() {
-      try {
-        setStremioCheck((current) => ({ ...current, status: 'checking', error: '' }));
-        const params = new URLSearchParams({ type, source: 'watch', tmdbId: String(tmdbId) });
-        if (isSeries) {
-          params.set('season', String(season || 1));
-          params.set('episode', String(episode || 1));
-        }
-        const response = await fetch(`/api/stremio/check?${params.toString()}`, { signal: controller.signal, cache: 'no-store' });
-        const contentType = response.headers.get('content-type') || '';
-        if (!contentType.includes('application/json')) throw new Error('Stremio check returned non-JSON response. Deploy latest API files.');
-        const data = await response.json();
-        setStremioCheck({
-          status: data.available ? 'available' : 'unavailable',
-          available: Boolean(data.available),
-          href: data.href || '',
-          count: data.count || 0,
-          error: data.error || data.reason || '',
-        });
-      } catch (err) {
-        if (err.name === 'AbortError') return;
-        setStremioCheck({ status: 'error', available: false, href: '', count: 0, error: err.message || 'Stremio check failed' });
-      }
-    }
-    checkStremio();
-    return () => controller.abort();
-  }, [type, tmdbId, isSeries, season, episode, isLegacyOttUrl]);
+    return `/api/resolve?${params.toString()}`;
+  }, [type, tmdbId, provider, isSeries, season, episode, isLegacyOttUrl, selectedStremioStreamId]);
 
   useEffect(() => {
     if (!isSeries || !tmdbId || isLegacyOttUrl) return;
@@ -374,6 +353,8 @@ export default function WatchByTMDBPage() {
         setAttempts([]);
         setSavedToMongoDB(false);
         setResolvedProviderId('');
+        setStremioStreams([]);
+        setResolvedStremioStreamId('');
         setStreamUrl('');
         setStreamFallbacks([]);
         setStreamChoiceIndex(0);
@@ -390,6 +371,8 @@ export default function WatchByTMDBPage() {
         setAttempts(data.attempts || []);
         setSavedToMongoDB(Boolean(data.savedToMongoDB));
         setResolvedProviderId(data.providerId || '');
+        setStremioStreams(data.availableStreams || []);
+        setResolvedStremioStreamId(data.selectedStreamId || '');
 
         if (!response.ok) throw new Error(data?.error || 'Unable to build embed URL');
         if (!data.streamUrl) throw new Error('No stream URL returned');
@@ -678,6 +661,26 @@ export default function WatchByTMDBPage() {
               />
               Block Popups
             </label>
+            {showStremioQualityPicker ? (
+              <label className="col-span-2 text-sm text-zinc-400 sm:col-span-4">
+                Stremio Quality
+                <select
+                  value={selectedStremioStreamId || resolvedStremioStreamId || ''}
+                  onChange={(event) => setSelectedStremioStreamId(event.target.value)}
+                  disabled={status === 'loading' || !stremioStreams.length}
+                  className="mt-1 w-full rounded-xl border border-fuchsia-500/25 bg-black px-3 py-2 text-white outline-none focus:border-fuchsia-500 disabled:cursor-wait disabled:opacity-60"
+                >
+                  {!stremioStreams.length ? (
+                    <option value="">Loading Stremio streams...</option>
+                  ) : null}
+                  {stremioStreams.map((stream) => (
+                    <option key={stream.id} value={stream.id}>
+                      {stream.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
           </div>
         </div>
 
@@ -691,7 +694,7 @@ export default function WatchByTMDBPage() {
                 <div className="h-12 w-12 animate-spin rounded-full border-4 border-zinc-700 border-t-red-600" />
                 <div>
                   <p className="font-semibold text-white">Resolving embed provider...</p>
-                  <p className="mt-2 text-sm text-zinc-400">{provider === 'auto' ? 'Checking Global Mirchi first, then the next server if needed.' : 'Generating direct embed URL from TMDB ID.'}</p>
+                  <p className="mt-2 text-sm text-zinc-400">{provider === 'auto' ? 'Checking Global Mirchi first, then Stremio, then the next server if needed.' : 'Generating direct embed URL from TMDB ID.'}</p>
                 </div>
               </div>
             ) : null}
@@ -766,24 +769,6 @@ export default function WatchByTMDBPage() {
               Next ▶ S{nextEpisodeTarget.season} E{nextEpisodeTarget.episode}
             </button>
           ) : null}
-          {stremioCheck.available && stremioCheck.href ? (
-            <Link
-              href={stremioCheck.href}
-              className="rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/15 px-3 py-2.5 text-center text-xs font-bold text-fuchsia-100 transition hover:border-fuchsia-300 hover:bg-fuchsia-500/25 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
-              title={`${stremioCheck.count} Stremio stream${stremioCheck.count === 1 ? '' : 's'} available`}
-            >
-              Stremio📡
-            </Link>
-          ) : (
-            <button
-              type="button"
-              disabled
-              className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2.5 text-xs font-bold text-zinc-500 opacity-60 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
-              title={stremioCheck.error || (stremioCheck.status === 'checking' ? 'Checking Stremio streams...' : 'No Stremio streams found')}
-            >
-              {stremioCheck.status === 'checking' ? 'Stremio…' : 'No Stremio'}
-            </button>
-          )}
           {streamUrl ? (
             <>
               <button

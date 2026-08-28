@@ -6,6 +6,10 @@ import {
   buildStoredSource,
   resolveEmbedProvider,
 } from '@/lib/providers/embedProviders';
+import {
+  createStremioAttempt,
+  resolveStremioProvider,
+} from '@/lib/providers/stremioProvider';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -149,6 +153,7 @@ export async function GET(request) {
     const episode = Number(searchParams.get('episode') || searchParams.get('e') || 1);
     const language = searchParams.get('lan') || searchParams.get('language') || 'tam';
     const provider = searchParams.get('provider') || 'auto';
+    const stremioStreamId = searchParams.get('stremioStreamId') || '';
     const rawRequestedProvider = String(provider || 'auto').toLowerCase();
     // TamilOTT was removed; stale client/bookmarked requests fold into auto.
     const requestedProvider = rawRequestedProvider === 'tamilott' ? 'auto' : rawRequestedProvider;
@@ -192,6 +197,11 @@ export async function GET(request) {
       sourcesToSave = resolved.providers;
     }
 
+    // Auto chain: Global Mirchi first, then Stremio direct-file streams, then
+    // the remaining embed providers. Stremio is also a manual server.
+    let runStremio = requestedProvider === 'stremio';
+    let mirchiProbeFailed = false;
+
     // Auto Priority cascade: Global Mirchi first (live embed probe; a 403 is
     // treated as WAF noise because the embed iframe loads in the user's
     // browser — only hard failures like DNS/timeout, 404, 5xx or non-HTML skip
@@ -210,18 +220,77 @@ export async function GET(request) {
             ? 'Auto Priority selected Global Mirchi first (embed probe passed).'
             : softBlocked
               ? 'Global Mirchi selected first — this host blocks server-side checks (403) but the player still loads in your browser. If it does not play, switch servers below.'
-              : `Global Mirchi did not respond (probe ${probe.status || probe.error || 'failed'}). Auto Priority falls back to the next server.`,
+              : `Global Mirchi did not respond (probe ${probe.status || probe.error || 'failed'}). Auto Priority tries Stremio next.`,
         };
         if (mirchiUsable) {
           selected = resolved.providers.find((provider) => provider.id === 'mirchi') || selected;
           sourcesToSave = resolved.providers;
         } else {
-          const fallback = resolved.providers.find((provider) => provider.id !== 'mirchi');
-          if (fallback) {
-            selected = fallback;
-            sourcesToSave = resolved.providers;
-          }
+          // Hard failure: Stremio is next in Auto; embeds follow after it.
+          mirchiProbeFailed = true;
+          runStremio = true;
         }
+      }
+    }
+
+    // Stremio direct-file streams: second in Auto (only when Mirchi hard-fails)
+    // and selectable manually. Direct HTTPS files stream in the internal
+    // <video> player with range/seek support.
+    if ((requestedProvider === 'stremio' || runStremio) && hasValidTmdbId) {
+      try {
+        const stremioResult = await resolveStremioProvider({
+          tmdbId,
+          type,
+          season,
+          episode,
+          streamId: stremioStreamId,
+          mode: requestedProvider === 'stremio' ? 'manual' : 'auto',
+        });
+        selected = stremioResult;
+        sourcesToSave = [];
+        const stremioAttempt = createStremioAttempt(
+          stremioResult,
+          'available',
+          requestedProvider === 'auto'
+            ? `Global Mirchi was unreachable, so Auto Priority selected Stremio next. ${stremioResult.count} addon stream(s) found; picked ${stremioResult.label}.`
+            : `Selected Stremio manually — picked ${stremioResult.label} from ${stremioResult.count} addon stream(s). Use the Stremio Quality dropdown to switch.`,
+        );
+        if (requestedProvider === 'stremio') {
+          attempts = [
+            stremioAttempt,
+            ...attempts.map((attempt) => ({
+              ...attempt,
+              status: 'configured',
+              reason: 'Available fallback provider. Stremio is selected manually.',
+            })),
+          ];
+        } else {
+          const insertAt = attempts.findIndex((attempt) => attempt.providerId === 'mirchi');
+          attempts.splice(insertAt === -1 ? 0 : insertAt + 1, 0, stremioAttempt);
+        }
+      } catch (error) {
+        const failedAttempt = createStremioAttempt(
+          null,
+          'failed',
+          `${error.message || 'No Stremio stream for this title.'}`,
+        );
+        const insertAt = attempts.findIndex((attempt) => attempt.providerId === 'mirchi');
+        attempts.splice(insertAt === -1 ? 0 : insertAt + 1, 0, failedAttempt);
+        if (requestedProvider === 'stremio') {
+          return NextResponse.json(
+            { error: error.message || 'No Stremio stream for this title', attempts },
+            { status: 404 },
+          );
+        }
+      }
+    }
+
+    // Auto with Mirchi down and no Stremio stream: first remaining embed.
+    if (requestedProvider === 'auto' && mirchiProbeFailed && selected?.id !== 'stremio') {
+      const fallback = resolved.providers.find((provider) => provider.id !== 'mirchi');
+      if (fallback) {
+        selected = fallback;
+        sourcesToSave = resolved.providers;
       }
     }
 
@@ -250,11 +319,13 @@ export async function GET(request) {
         providerId: selected.id,
         label: selected.label,
         streamFallbacks: selected.fallbacks || [],
+        selectedStreamId: selected.selectedStreamId || '',
+        availableStreams: selected.availableStreams || [],
         health: selected.health || null,
         attempts,
         savedToMongoDB: saveResult.saved,
         savedSources: saveResult.sources || [],
-        mode: 'local-embed-provider-module',
+        mode: selected.id === 'stremio' ? 'stremio-direct-provider' : 'local-embed-provider-module',
       },
       {
         headers: {
