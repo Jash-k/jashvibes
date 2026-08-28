@@ -624,8 +624,8 @@ export default function LiveTVPage() {
   }
 
   return (
-    <main className="palette-cybergrape min-h-dvh overflow-x-hidden bg-[#09041a] text-zinc-100">
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-zinc-950/92 backdrop-blur">
+    <main className="palette-cybergrape live-page min-h-dvh overflow-x-hidden bg-[#09041a] text-zinc-100">
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-zinc-950/90 backdrop-blur">
         <div className="mx-auto grid max-w-7xl gap-3 px-3 py-4 sm:px-6 sm:py-5 lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:px-8">
           <div className="flex items-center justify-start gap-3">
             <Link href="/" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-red-500 hover:text-white">
@@ -639,7 +639,7 @@ export default function LiveTVPage() {
           <button
             type="button"
             onClick={() => setServiceOpen(true)}
-            className="justify-self-end rounded-full border border-purple-300/25 bg-purple-500/10 px-3 py-2 text-xs font-black text-purple-100 transition hover:border-purple-300/70"
+            className="mr-14 justify-self-end rounded-full border border-purple-300/25 bg-purple-500/10 px-3 py-2 text-xs font-black text-purple-100 transition hover:border-purple-300/70 sm:mr-[4.75rem]"
             title="Live TV Service Panel"
           >
             ⚙
@@ -671,7 +671,7 @@ export default function LiveTVPage() {
                   <div>
                     <p className="text-xl font-black text-white">{active ? 'Channel unavailable' : 'Choose a channel'}</p>
                     <p className="mt-2 text-sm leading-6 text-zinc-400">
-                      {active ? (playerError || 'This channel could not be loaded by Shaka Player. Try Open Directly or another source.') : 'Tamil preferred channels will appear on the right.'}
+                      {active ? (playerError || 'This channel could not be loaded by Shaka Player. Try another source or switch catalog.') : 'Tamil preferred channels will appear on the right.'}
                     </p>
                   </div>
                 </div>
@@ -684,7 +684,7 @@ export default function LiveTVPage() {
               ) : null}
               {playerStatus === 'error' ? (
                 <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-red-500/30 bg-red-950/80 p-3 text-sm leading-6 text-red-100 backdrop-blur">
-                  {playerError || 'Playback failed. Try another source or Open Directly.'}
+                  {playerError || 'Playback failed. Try another source.'}
                 </div>
               ) : null}
             </div>
@@ -733,8 +733,7 @@ export default function LiveTVPage() {
               {lastViewed?.name ? <p className="truncate px-1 text-[10px] font-semibold text-zinc-600 sm:text-xs">Last viewed: {lastViewed.name}</p> : null}
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                 <button onClick={enterFullscreen} className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-bold text-white transition hover:border-red-500/50">Fullscreen</button>
-                {active?.url ? <a href={active.url} target="_blank" rel="noreferrer" className="rounded-2xl bg-red-600 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-red-500">Open Directly</a> : null}
-              </div>
+                              </div>
             </div>
           </div>
         </div>
@@ -1452,16 +1451,16 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
 
   return (
     <div className="fixed inset-0 z-[120] bg-black/75 p-2 backdrop-blur-xl sm:p-4">
-      <section className="mx-auto flex h-full max-w-7xl flex-col overflow-hidden rounded-[1.6rem] border border-purple-300/20 bg-[#080411] text-white shadow-2xl sm:rounded-[2rem]">
+      <section className="mx-auto flex h-full max-w-7xl flex-col overflow-hidden rounded-[1.6rem] border border-purple-300/20 bg-zinc-950 text-white shadow-2xl sm:rounded-[2rem]">
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
           <div><h2 className="text-lg font-black sm:text-2xl">Live TV Service Panel</h2><p className="text-[11px] text-zinc-500">Manual catalogs • source-on-demand loading • per-catalog order</p></div>
-          <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/5 text-xl">×</button>
+          <button type="button" onClick={onClose} aria-label="Close service panel" title="Close" className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/15 bg-white/10 text-2xl font-black leading-none text-white transition hover:border-red-400 hover:bg-red-500/80">✕</button>
         </div>
 
         {!token ? (
           <form onSubmit={unlock} className="m-auto w-full max-w-sm rounded-3xl border border-white/10 bg-black/35 p-5">
             <p className="text-sm font-bold text-zinc-300">Enter password to manage Live TV services.</p>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus className="mt-4 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none" placeholder="Service password" />
+            <input type="password" name="live-service-password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" spellCheck={false} autoFocus className="mt-4 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none" placeholder="Service password" />
             {authError ? <p className="mt-3 text-sm text-red-300">{authError}</p> : null}
             <button className="mt-4 w-full rounded-2xl bg-purple-500 px-4 py-3 text-sm font-black text-black">Unlock</button>
           </form>
