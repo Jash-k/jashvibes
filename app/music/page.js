@@ -340,6 +340,7 @@ export default function MusicPage() {
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
+  const [dockVolumeOpen, setDockVolumeOpen] = useState(false);
   const [lyrics, setLyrics] = useState('');
   const [lyricsData, setLyricsData] = useState({});
   const [lyricsStatus, setLyricsStatus] = useState('idle');
@@ -1385,6 +1386,13 @@ export default function MusicPage() {
           ) : null}
           <div aria-hidden="true" className="absolute inset-0 bg-[#070008]/75" />
           <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,_rgba(217,70,239,0.3),_transparent_55%)]" />
+          {showLyrics ? (
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+              <div className="absolute inset-0 bg-[#050007]/60 backdrop-blur-[2.6rem] saturate-[1.15]" />
+              <div className="absolute -left-24 top-1/4 h-72 w-72 rounded-full bg-fuchsia-500/20 blur-3xl" />
+              <div className="absolute -right-24 bottom-1/4 h-72 w-72 rounded-full bg-amber-400/15 blur-3xl" />
+            </div>
+          ) : null}
 
           <section
             className="relative flex h-full flex-col px-5 pb-5 pt-4 sm:px-8 sm:pt-6"
@@ -1410,7 +1418,7 @@ export default function MusicPage() {
             <div className="relative mx-auto mt-3 w-full max-w-xl flex-1 overflow-hidden">
               {showLyrics ? (
                 <div
-                  className="h-full overflow-y-auto px-2 py-4 text-center"
+                  className="h-full overflow-y-auto rounded-[1.6rem] border border-fuchsia-300/20 bg-black/45 px-4 py-4 text-center shadow-[0_24px_70px_rgba(2,6,23,.8),0_0_50px_-18px_rgba(217,70,239,.35)] backdrop-blur-2xl"
                   style={{ WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 12%, black 88%, transparent)', maskImage: 'linear-gradient(to bottom, transparent, black 12%, black 88%, transparent)' }}
                 >
                   <p className="mb-3 text-[10px] font-black uppercase tracking-[0.26em] text-fuchsia-300/80">Karaoke Lyrics</p>
@@ -1440,7 +1448,9 @@ export default function MusicPage() {
                 </div>
               ) : (
                 <div className="grid h-full place-items-center py-1">
-                  <VinylArt src={playingImage} playing={isPlaying} />
+                  <div className={`transition-all duration-500 ${showLyrics ? 'scale-95 opacity-25 blur-md' : 'opacity-100'}`}>
+                    <VinylArt src={playingImage} playing={isPlaying} />
+                  </div>
                 </div>
               )}
             </div>
@@ -1519,7 +1529,7 @@ export default function MusicPage() {
       ) : null}
 
       <div
-        className="fixed inset-x-3 bottom-[calc(4.9rem+env(safe-area-inset-bottom))] z-50 sm:inset-x-auto sm:left-1/2 sm:w-[min(46rem,calc(100vw-2.5rem))] sm:-translate-x-1/2 lg:bottom-6"
+        className="fixed inset-x-2.5 bottom-[calc(4.9rem+env(safe-area-inset-bottom))] z-50 flex items-end gap-2 sm:inset-x-auto sm:left-1/2 sm:max-w-[calc(100vw-2.5rem)] sm:-translate-x-1/2 lg:bottom-6"
         onTouchStart={(event) => { barTouchRef.current = event.touches[0].clientY; }}
         onTouchEnd={(event) => {
           const start = barTouchRef.current;
@@ -1527,74 +1537,103 @@ export default function MusicPage() {
           if (start != null && start - event.changedTouches[0].clientY > 56 && playingTrack) setShowMiniPlayer(true);
         }}
       >
-        <div className="relative overflow-hidden rounded-[1.6rem] border border-fuchsia-300/25 bg-[#160016]/80 shadow-[0_18px_50px_-12px_rgba(217,70,239,0.45)] backdrop-blur-2xl">
-          {playingImage ? <img src={playingImage} alt="" aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-25 blur-2xl" /> : null}
-          <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-[#160016]/60 via-transparent to-[#160016]/60" />
-          <div className="relative px-3 pb-2.5 pt-4 sm:px-4 sm:pb-3">
-            <div className="absolute inset-x-4 top-1.5">
+        {/* main pill — artwork, title, transport */}
+        <div className="jv-dock-rim jv-reveal relative min-w-0 flex-1 overflow-hidden rounded-[1.9rem] border border-fuchsia-300/25 bg-[#160016]/80 shadow-[0_18px_50px_-12px_rgba(217,70,239,0.45)] backdrop-blur-2xl">
+          {playingImage ? <img src={playingImage} alt="" aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-20 blur-2xl" /> : null}
+          <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-[#160016]/70 via-transparent to-[#160016]/70" />
+          <div className="absolute inset-x-6 top-1.5">
+            <input
+              type="range"
+              min="0"
+              max={Math.max(duration, 0)}
+              value={Math.min(currentTime, duration || currentTime || 0)}
+              onChange={(event) => seekTo(event.target.value)}
+              className="jv-seek w-full"
+              style={{ '--jv-progress': `${Math.min(100, duration ? (currentTime / duration) * 100 : 0).toFixed(1)}%` }}
+              aria-label="Seek"
+            />
+          </div>
+          <div className="relative flex items-center gap-2.5 px-2.5 pb-2.5 pt-4 sm:gap-3 sm:px-3.5 sm:pb-3">
+            <button type="button" onClick={() => playingTrack && setShowMiniPlayer(true)} disabled={!playingTrack} className="group relative shrink-0 outline-none transition active:scale-95 disabled:opacity-60" aria-label="Open now playing player" title="Open now playing">
+              <div aria-hidden="true" className={`pointer-events-none absolute -inset-2 rounded-full bg-[linear-gradient(135deg,rgba(245,158,11,.5),rgba(217,70,239,.55))] blur-lg transition-opacity duration-500 ${isPlaying ? 'jv-breathe opacity-80' : 'opacity-30'}`} />
+              <VinylArt src={playingImage} playing={isPlaying} size="sm" />
+              <span className="pointer-events-none absolute inset-0 grid place-items-center rounded-full bg-black/0 text-[8px] font-black uppercase tracking-wider text-white opacity-0 transition group-hover:bg-black/40 group-hover:opacity-100">Open</span>
+            </button>
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-center">
+                <p className="truncate text-sm font-black text-white">{activeDetail?.title || active?.title || 'Select a song'}</p>
+                {isPlaying ? <span className="jv-eq ml-2 shrink-0" aria-hidden="true"><span /><span /><span /><span /></span> : null}
+              </div>
+              <p className="text-[11px] text-zinc-600">{formatTime(currentTime)} / {duration ? formatTime(duration) : '--:--'}</p>
+              {playerStatus === 'loading' ? <p className="text-[11px] text-fuchsia-300">Loading stream...</p> : null}
+              {playerStatus === 'error' ? <p className="truncate text-[11px] text-red-300">{error}</p> : null}
+            </div>
+            <button type="button" onClick={() => setShuffleEnabled((value) => !value)} aria-label="Shuffle" title="Shuffle" className={`hidden shrink-0 transition active:scale-95 sm:block ${shuffleEnabled ? 'text-amber-300' : 'text-zinc-500 hover:text-white'}`}>
+              <Icon name="shuffle" className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+            </button>
+            <button type="button" onClick={playPrevious} aria-label="Previous" title="Previous" className="shrink-0 text-zinc-300 transition active:scale-95 hover:text-white">
+              <Icon name="skipBack" className="h-6 w-6" />
+            </button>
+            <button type="button" onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} className={`grid h-11 w-11 shrink-0 -translate-y-1.5 place-items-center rounded-full bg-gradient-to-br from-amber-400 via-fuchsia-500 to-purple-500 text-white shadow-xl shadow-fuchsia-600/40 transition hover:scale-105 hover:brightness-110 active:scale-95 ${isPlaying ? 'jv-glow-pulse' : ''}`}>
+              <Icon name={isPlaying ? 'pause' : 'play'} className="h-5 w-5" />
+            </button>
+            <button type="button" onClick={() => playNext(false)} aria-label="Next" title="Next" className="shrink-0 text-zinc-300 transition active:scale-95 hover:text-white">
+              <Icon name="skipFwd" className="h-6 w-6" />
+            </button>
+            <button type="button" onClick={cycleRepeat} aria-label={`Repeat: ${repeatMode}`} title={`Repeat: ${repeatMode}`} className={`hidden shrink-0 transition active:scale-95 sm:block ${repeatMode !== 'off' ? 'text-amber-300' : 'text-zinc-500 hover:text-white'}`}>
+              <Icon name={repeatMode === 'one' ? 'repeatOne' : 'repeat'} className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+            </button>
+            <audio ref={videoRef} className="hidden" preload="auto" />
+          </div>
+        </div>
+
+        {/* utility pill — volume + lyrics */}
+        <div className="jv-dock-rim jv-reveal relative flex shrink-0 flex-col items-center justify-center gap-1 rounded-[1.4rem] border border-fuchsia-300/25 bg-[#160016]/85 px-2 py-2 shadow-[0_18px_44px_-14px_rgba(217,70,239,.5)] backdrop-blur-2xl sm:gap-1.5 lg:flex-row lg:gap-2 lg:rounded-full lg:px-3" style={{ '--jv-delay': '60ms' }}>
+          <div className="relative flex items-center" title="Volume">
+            <button type="button" onClick={() => setDockVolumeOpen((value) => !value)} aria-label="Volume" aria-expanded={dockVolumeOpen} className={`grid h-9 w-9 place-items-center rounded-full transition active:scale-95 lg:hidden ${dockVolumeOpen ? 'bg-fuchsia-500/25 text-fuchsia-100' : 'text-zinc-300 hover:bg-fuchsia-400/15 hover:text-white'}`}>
+              <Icon name={effectiveVolume === 0 ? 'mute' : effectiveVolume < 0.45 ? 'volLow' : 'volHigh'} className="h-4 w-4" />
+            </button>
+            <button type="button" onClick={toggleMute} aria-label={effectiveVolume === 0 ? 'Unmute' : 'Mute'} className="hidden h-9 w-9 place-items-center rounded-full text-zinc-300 transition hover:bg-fuchsia-400/15 hover:text-white lg:grid">
+              <Icon name={effectiveVolume === 0 ? 'mute' : effectiveVolume < 0.45 ? 'volLow' : 'volHigh'} className="h-4 w-4" />
+            </button>
+            <div className="hidden items-center gap-2 lg:flex">
               <input
                 type="range"
                 min="0"
-                max={Math.max(duration, 0)}
-                value={Math.min(currentTime, duration || currentTime || 0)}
-                onChange={(event) => seekTo(event.target.value)}
-                className="jv-seek w-full"
-                style={{ '--jv-progress': `${Math.min(100, duration ? (currentTime / duration) * 100 : 0).toFixed(1)}%` }}
-                aria-label="Seek"
+                max="1"
+                step="0.01"
+                value={effectiveVolume}
+                onChange={(event) => changeVolume(event.target.value)}
+                className="jv-seek w-20"
+                style={{ '--jv-progress': `${Math.round(effectiveVolume * 100)}%` }}
+                aria-label="Volume"
               />
+              <span className="w-8 text-right text-[10px] font-black text-zinc-500">{Math.round(effectiveVolume * 100)}%</span>
             </div>
-            <div className="relative flex items-center gap-2.5 sm:gap-3">
-              <button type="button" onClick={() => playingTrack && setShowMiniPlayer(true)} disabled={!playingTrack} className="group relative shrink-0 outline-none transition active:scale-95 disabled:opacity-60" aria-label="Open now playing player" title="Open now playing">
-                <VinylArt src={playingImage} playing={isPlaying} size="sm" />
-                <span className="pointer-events-none absolute inset-0 grid place-items-center rounded-full bg-black/0 text-[8px] font-black uppercase tracking-wider text-white opacity-0 transition group-hover:bg-black/40 group-hover:opacity-100">Open</span>
-              </button>
-              <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 items-center">
-                  <p className="truncate text-sm font-black text-white">{activeDetail?.title || active?.title || 'Select a song'}</p>
-                  {isPlaying ? <span className="jv-eq ml-2 shrink-0" aria-hidden="true"><span /><span /><span /><span /></span> : null}
+            {dockVolumeOpen ? (
+              <div className="jv-dock-rim absolute bottom-full right-0 mb-2.5 w-44 rounded-2xl border border-fuchsia-300/30 bg-[#1b0418]/95 p-3 shadow-2xl shadow-black/60 backdrop-blur-2xl lg:hidden">
+                <div className="flex items-center gap-2" onPointerDown={(event) => event.stopPropagation()}>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={effectiveVolume}
+                    onChange={(event) => changeVolume(event.target.value)}
+                    className="jv-seek min-w-0 flex-1"
+                    style={{ '--jv-progress': `${Math.round(effectiveVolume * 100)}%` }}
+                    aria-label="Volume"
+                  />
+                  <span className="w-9 text-right text-[10px] font-black text-zinc-400">{Math.round(effectiveVolume * 100)}%</span>
                 </div>
-                <p className="text-[11px] text-zinc-600">{formatTime(currentTime)} / {duration ? formatTime(duration) : '--:--'}</p>
-                {playerStatus === 'loading' ? <p className="text-[11px] text-fuchsia-300">Loading stream...</p> : null}
-                {playerStatus === 'error' ? <p className="truncate text-[11px] text-red-300">{error}</p> : null}
               </div>
-              <button type="button" onClick={() => setShuffleEnabled((value) => !value)} aria-label="Shuffle" title="Shuffle" className={`hidden shrink-0 transition active:scale-95 sm:block ${shuffleEnabled ? 'text-amber-300' : 'text-zinc-500 hover:text-white'}`}>
-                <Icon name="shuffle" className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
-              </button>
-              <button type="button" onClick={playPrevious} aria-label="Previous" title="Previous" className="shrink-0 text-zinc-300 transition active:scale-95 hover:text-white">
-                <Icon name="skipBack" className="h-6 w-6" />
-              </button>
-              <button type="button" onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} className={`grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gradient-to-br from-amber-400 via-fuchsia-500 to-purple-500 text-white shadow-xl shadow-fuchsia-600/40 transition hover:brightness-110 active:scale-95 ${isPlaying ? 'jv-glow-pulse' : ''}`}>
-                <Icon name={isPlaying ? 'pause' : 'play'} className="h-5 w-5" />
-              </button>
-              <button type="button" onClick={() => playNext(false)} aria-label="Next" title="Next" className="shrink-0 text-zinc-300 transition active:scale-95 hover:text-white">
-                <Icon name="skipFwd" className="h-6 w-6" />
-              </button>
-              <button type="button" onClick={cycleRepeat} aria-label={`Repeat: ${repeatMode}`} title={`Repeat: ${repeatMode}`} className={`hidden shrink-0 transition active:scale-95 sm:block ${repeatMode !== 'off' ? 'text-amber-300' : 'text-zinc-500 hover:text-white'}`}>
-                <Icon name={repeatMode === 'one' ? 'repeatOne' : 'repeat'} className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
-              </button>
-              <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.5 lg:flex" title="Volume">
-                <button type="button" onClick={toggleMute} className="grid h-7 w-7 place-items-center rounded-full text-zinc-300 transition hover:bg-fuchsia-400/15 hover:text-white" aria-label={effectiveVolume === 0 ? 'Unmute' : 'Mute'}>
-                  <Icon name={effectiveVolume === 0 ? 'mute' : effectiveVolume < 0.45 ? 'volLow' : 'volHigh'} className="h-4 w-4" />
-                </button>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={effectiveVolume}
-                  onChange={(event) => changeVolume(event.target.value)}
-                  className="jv-seek w-20"
-                  style={{ '--jv-progress': `${Math.round(effectiveVolume * 100)}%` }}
-                  aria-label="Volume"
-                />
-                <span className="w-8 text-right text-[10px] font-black text-zinc-500">{Math.round(effectiveVolume * 100)}%</span>
-              </div>
-              <button type="button" onClick={openLyrics} aria-label="Lyrics" className={`hidden shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-black transition sm:block ${showLyrics ? 'border-fuchsia-300 bg-fuchsia-500/20 text-fuchsia-100' : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-fuchsia-400/40'}`}>Lyrics</button>
-              <audio ref={videoRef} className="hidden" preload="auto" />
-            </div>
+            ) : null}
           </div>
+          <button type="button" onClick={() => (showLyrics ? setShowLyrics(false) : openLyrics())} aria-label="Lyrics" className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] transition active:scale-95 sm:px-3 sm:py-1.5 sm:text-[11px] sm:tracking-normal ${showLyrics ? 'border-fuchsia-300 bg-fuchsia-500/25 text-fuchsia-100 shadow-[0_0_18px_-4px_rgba(217,70,239,.8)]' : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-fuchsia-400/40 hover:text-white'}`}>Lyrics</button>
         </div>
       </div>
+      {dockVolumeOpen ? <button type="button" aria-label="Close volume" className="fixed inset-0 z-40" onClick={() => setDockVolumeOpen(false)} /> : null}
+
     </main>
   );
 }

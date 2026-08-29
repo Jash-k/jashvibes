@@ -911,6 +911,23 @@ html.day-mode .jv-seek {
   .jv-glow-pulse { animation: none !important; }
 }
 
+/* ---- v7.3.0 dock rim-light (flowing gradient edge) ---- */
+.jv-dock-rim::after{
+  content:''; position:absolute; inset:0; border-radius:inherit; padding:1px;
+  background:linear-gradient(135deg,rgba(217,70,239,.55),rgba(245,158,11,.42) 40%,rgba(236,72,153,.5) 65%,rgba(217,70,239,.55));
+  background-size:260% 260%;
+  animation:jvRimFlow 8s linear infinite;
+  pointer-events:none;
+  -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  -webkit-mask-composite:xor;
+          mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+          mask-composite:exclude;
+}
+@keyframes jvRimFlow{ to{ background-position:260% 260%; } }
+@media (prefers-reduced-motion:reduce){
+  .jv-dock-rim::after{ animation:none; opacity:.45; }
+}
+
 /* ===========================================================================
  * JvReactBits (v7.2) — measured masonry, target+glow cursor, card tilt/glare,
  * hero parallax, shimmer kicker. Cursor effects are desktop(pointer:fine) only.
