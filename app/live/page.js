@@ -230,6 +230,23 @@ export default function LiveTVPage() {
   }, [channels, active, lastViewed, status, error, query, category, showFavoritesOnly, lastUpdated]);
 
   useEffect(() => {
+    const root = document.documentElement;
+    const applyHeaderOffset = () => {
+      const header = document.getElementById('live-header');
+      if (header) root.style.setProperty('--live-header-h', `${Math.round(header.getBoundingClientRect().height)}px`);
+    };
+    applyHeaderOffset();
+    window.addEventListener('resize', applyHeaderOffset);
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(applyHeaderOffset) : null;
+    const node = document.getElementById('live-header');
+    if (observer && node) observer.observe(node);
+    return () => {
+      window.removeEventListener('resize', applyHeaderOffset);
+      if (observer) observer.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
     const onScroll = () => saveScroll(LIVE_CACHE_KEY);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => {
@@ -625,7 +642,7 @@ export default function LiveTVPage() {
 
   return (
     <main className="palette-cybergrape live-page min-h-dvh overflow-x-clip bg-[#09041a] text-zinc-100">
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-zinc-950 shadow-[0_14px_30px_-18px_rgba(0,0,0,.9)]">
+      <header id="live-header" className="sticky top-0 z-50 border-b border-white/10 bg-zinc-950 shadow-[0_14px_30px_-18px_rgba(0,0,0,.9)]">
         <div className="mx-auto grid max-w-7xl gap-3 px-3 py-4 sm:px-6 sm:py-5 lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:px-8">
           <div className="flex items-center justify-start gap-3">
             <Link href="/" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-red-500 hover:text-white">
@@ -648,8 +665,8 @@ export default function LiveTVPage() {
       </header>
 
       <section className="mx-auto flex max-w-7xl flex-col items-stretch gap-3 px-3 py-3 sm:gap-4 sm:px-6 sm:py-5 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(300px,22rem)] lg:items-start xl:grid-cols-[minmax(0,1fr)_minmax(320px,24rem)] lg:px-8">
-        <div className="sticky top-[3.4rem] z-40 min-w-0 space-y-3 bg-[#09041a] pb-2 sm:space-y-4 lg:top-24 lg:self-start lg:pb-0">
-          <div id="live-player-shell" className="overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black/50 fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0 sm:rounded-3xl">
+        <div className="contents min-w-0 space-y-3 sm:space-y-4 lg:block lg:sticky lg:top-24 lg:self-start lg:space-y-3">
+          <div id="live-player-shell" className="sticky top-[var(--live-header-h,84px)] z-40 overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black/50 fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0 sm:rounded-3xl lg:static">
             <div
               ref={playerContainerRef}
               className="relative aspect-video h-full w-full bg-black fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:aspect-auto"
