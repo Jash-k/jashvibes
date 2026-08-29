@@ -3,7 +3,7 @@ import dbConnect from '@/lib/db';
 import { scrapeTamilMV } from '@/lib/tamilmvScraper';
 import { verifyRequestToken } from '@/lib/serverAuth';
 import { applyMatchesToItems, findMatchesForItems } from '@/lib/titleMatch';
-import { parseReleaseQuality } from '@/lib/quality';
+import { parseReleaseQuality, labelForTier } from '@/lib/quality';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -150,11 +150,13 @@ function pageInfo(items = [], paging, cacheLimit = 0, maxCacheLimit = DEFAULT_MA
 // they are merged at read time instead of being baked into the cached scrape.
 function tagItemQuality(item) {
   if (!item) return item;
-  if (item.qualityTier) return item;
   const text = item.rawTitle || item.parsedSource || item.synopsis || item.title || '';
   const parsed = parseReleaseQuality(text);
-  if (!parsed.tier) return item;
-  return { ...item, qualityTier: parsed.tier, qualityLabel: parsed.label };
+  const tier = parsed.tier || item.qualityTier || '';
+  if (!tier) return item;
+  const label = parsed.label || item.qualityLabel || tier;
+  if (item.qualityTier === tier && item.qualityLabel) return item;
+  return { ...item, qualityTier: tier, qualityLabel: label };
 }
 
 function tagListQuality(items = []) {
@@ -170,10 +172,12 @@ async function withTitleMatches(payload) {
   try {
     const docs = await findMatchesForItems([...(payload?.movies || []), ...(payload?.series || [])]);
     if (!docs.length) return tagged;
+    // Contract: manual/TMDB matches only enrich (poster, rating, ids) —
+    // quality is re-computed on top so it can NEVER be dropped by a match.
     return {
       ...tagged,
-      movies: applyMatchesToItems(tagged.movies, docs),
-      series: applyMatchesToItems(tagged.series, docs),
+      movies: tagListQuality(applyMatchesToItems(tagged.movies, docs)),
+      series: tagListQuality(applyMatchesToItems(tagged.series, docs)),
     };
   } catch {
     return tagged;

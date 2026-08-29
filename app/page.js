@@ -179,6 +179,8 @@ function qualitySourceText(item) {
 }
 
 function itemQualityChip(item) {
+  // Server is the single source of truth for quality (see /api/tamilmv).
+  // Client-side parsing remains only as a last-resort fallback.
   if (item?.qualityTier) {
     return { tier: item.qualityTier, label: item.qualityLabel || labelForTier(item.qualityTier), cls: chipClassForTier(item.qualityTier) };
   }
