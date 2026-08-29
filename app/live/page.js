@@ -648,7 +648,7 @@ export default function LiveTVPage() {
       </header>
 
       <section className="mx-auto grid max-w-7xl items-start gap-3 px-3 py-3 sm:gap-4 sm:px-6 sm:py-5 lg:grid-cols-[minmax(0,1fr)_minmax(300px,22rem)] xl:grid-cols-[minmax(0,1fr)_minmax(320px,24rem)] lg:px-8">
-        <div className="min-w-0 space-y-3 sm:space-y-4 lg:sticky lg:top-24 lg:self-start">
+        <div className="sticky top-[3.4rem] z-40 min-w-0 space-y-3 bg-[#09041a] pb-2 sm:space-y-4 lg:top-24 lg:self-start lg:pb-0">
           <div id="live-player-shell" className="overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black/50 fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0 sm:rounded-3xl">
             <div
               ref={playerContainerRef}
