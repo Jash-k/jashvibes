@@ -1,16 +1,13 @@
 'use client';
 
 import { useEffect } from 'react';
-import { usePathname } from 'next/navigation';
 
 // CursorFX — zero-dep ports of ReactBits "Target Cursor" + "Glow Cursor"
 // (official visual APIs: spinning corner brackets that lock onto interactive
 // elements with parallax, plus a luminous tapered glow trail). Desktop only
 // (pointer:fine) and fully disabled under prefers-reduced-motion.
 export default function CursorFX() {
-  const pathname = usePathname() || '/';
   useEffect(() => {
-    if (!pathname.startsWith('/music')) return undefined;
     if (typeof window === 'undefined') return undefined;
     const fine = window.matchMedia('(pointer: fine)').matches;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -166,7 +163,7 @@ export default function CursorFX() {
       canvas.remove();
       root.classList.remove('jv-cursor-fx');
     };
-  }, [pathname]);
+  }, []);
 
   return null;
 }

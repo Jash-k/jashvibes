@@ -1388,7 +1388,7 @@ export default function MusicPage() {
           <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,_rgba(217,70,239,0.3),_transparent_55%)]" />
           {showLyrics ? (
             <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-              <div className="absolute inset-0 bg-[#050007]/60 backdrop-blur-[2.6rem] saturate-[1.15]" />
+              <div className="jv-lyrics-frost absolute inset-0 bg-[#050007]/60 backdrop-blur-[2.6rem] saturate-[1.15]" />
               <div className="absolute -left-24 top-1/4 h-72 w-72 rounded-full bg-fuchsia-500/20 blur-3xl" />
               <div className="absolute -right-24 bottom-1/4 h-72 w-72 rounded-full bg-amber-400/15 blur-3xl" />
             </div>
@@ -1418,7 +1418,7 @@ export default function MusicPage() {
             <div className="relative mx-auto mt-3 w-full max-w-xl flex-1 overflow-hidden">
               {showLyrics ? (
                 <div
-                  className="h-full overflow-y-auto rounded-[1.6rem] border border-fuchsia-300/20 bg-black/45 px-4 py-4 text-center shadow-[0_24px_70px_rgba(2,6,23,.8),0_0_50px_-18px_rgba(217,70,239,.35)] backdrop-blur-2xl"
+                  className="jv-lyrics-pane h-full overflow-y-auto rounded-[1.6rem] border border-fuchsia-300/20 bg-black/45 px-4 py-4 text-center shadow-[0_24px_70px_rgba(2,6,23,.8),0_0_50px_-18px_rgba(217,70,239,.35)] backdrop-blur-2xl"
                   style={{ WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 12%, black 88%, transparent)', maskImage: 'linear-gradient(to bottom, transparent, black 12%, black 88%, transparent)' }}
                 >
                   <p className="mb-3 text-[10px] font-black uppercase tracking-[0.26em] text-fuchsia-300/80">Karaoke Lyrics</p>
@@ -1433,8 +1433,8 @@ export default function MusicPage() {
                             index === activeLyricLineIndex
                               ? 'bg-gradient-to-r from-amber-300 via-fuchsia-300 to-purple-300 bg-clip-text text-xl font-black text-transparent sm:text-2xl'
                               : index < activeLyricLineIndex
-                                ? 'text-sm text-zinc-500'
-                                : 'text-base text-zinc-300/90'
+                                ? 'jv-lyric-past text-sm'
+                                : 'jv-lyric text-base'
                           }`}
                         >
                           {line.text}
@@ -1443,7 +1443,7 @@ export default function MusicPage() {
                     </div>
                   ) : null}
                   {lyricsStatus !== 'loading' && !syncedLyricLines.length ? (
-                    <p className="whitespace-pre-wrap text-sm leading-7 text-zinc-200">{lyrics || 'Lyrics unavailable for this song.'}</p>
+                    <p className="jv-lyric whitespace-pre-wrap text-sm leading-7">{lyrics || 'Lyrics unavailable for this song.'}</p>
                   ) : null}
                 </div>
               ) : (
@@ -1541,19 +1541,19 @@ export default function MusicPage() {
         <div className="jv-dock-rim jv-reveal relative min-w-0 flex-1 overflow-hidden rounded-[1.9rem] border border-fuchsia-300/25 bg-[#160016]/80 shadow-[0_18px_50px_-12px_rgba(217,70,239,0.45)] backdrop-blur-2xl">
           {playingImage ? <img src={playingImage} alt="" aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-20 blur-2xl" /> : null}
           <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-[#160016]/70 via-transparent to-[#160016]/70" />
-          <div className="absolute inset-x-6 top-1.5">
+          <div className="relative z-10 px-3 pt-2 sm:px-4">
             <input
               type="range"
               min="0"
               max={Math.max(duration, 0)}
               value={Math.min(currentTime, duration || currentTime || 0)}
               onChange={(event) => seekTo(event.target.value)}
-              className="jv-seek w-full"
+              className="jv-seek jv-seek-dock block w-full"
               style={{ '--jv-progress': `${Math.min(100, duration ? (currentTime / duration) * 100 : 0).toFixed(1)}%` }}
               aria-label="Seek"
             />
           </div>
-          <div className="relative flex items-center gap-2.5 px-2.5 pb-2.5 pt-4 sm:gap-3 sm:px-3.5 sm:pb-3">
+          <div className="relative flex items-center gap-2.5 px-2.5 pb-2.5 pt-1.5 sm:gap-3 sm:px-3.5 sm:pb-3">
             <button type="button" onClick={() => playingTrack && setShowMiniPlayer(true)} disabled={!playingTrack} className="group relative shrink-0 outline-none transition active:scale-95 disabled:opacity-60" aria-label="Open now playing player" title="Open now playing">
               <div aria-hidden="true" className={`pointer-events-none absolute -inset-2 rounded-full bg-[linear-gradient(135deg,rgba(245,158,11,.5),rgba(217,70,239,.55))] blur-lg transition-opacity duration-500 ${isPlaying ? 'jv-breathe opacity-80' : 'opacity-30'}`} />
               <VinylArt src={playingImage} playing={isPlaying} size="sm" />
@@ -1574,7 +1574,7 @@ export default function MusicPage() {
             <button type="button" onClick={playPrevious} aria-label="Previous" title="Previous" className="shrink-0 text-zinc-300 transition active:scale-95 hover:text-white">
               <Icon name="skipBack" className="h-6 w-6" />
             </button>
-            <button type="button" onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} className={`grid h-11 w-11 shrink-0 -translate-y-1.5 place-items-center rounded-full bg-gradient-to-br from-amber-400 via-fuchsia-500 to-purple-500 text-white shadow-xl shadow-fuchsia-600/40 transition hover:scale-105 hover:brightness-110 active:scale-95 ${isPlaying ? 'jv-glow-pulse' : ''}`}>
+            <button type="button" onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} className={`grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gradient-to-br from-amber-400 via-fuchsia-500 to-purple-500 text-white shadow-xl shadow-fuchsia-600/40 transition hover:scale-105 hover:brightness-110 active:scale-95 ${isPlaying ? 'jv-glow-pulse' : ''}`}>
               <Icon name={isPlaying ? 'pause' : 'play'} className="h-5 w-5" />
             </button>
             <button type="button" onClick={() => playNext(false)} aria-label="Next" title="Next" className="shrink-0 text-zinc-300 transition active:scale-95 hover:text-white">

@@ -911,6 +911,23 @@ html.day-mode .jv-seek {
   .jv-glow-pulse { animation: none !important; }
 }
 
+/* ---- v7.3.1 seek strip + day-mode lyrics crispness ---- */
+.jv-seek-dock{ position:relative; z-index:2; height:5px; }
+.jv-seek-dock::-webkit-slider-runnable-track{ height:5px; }
+.jv-seek-dock::-webkit-slider-thumb{ margin-top:-4px; background:#fff; box-shadow:0 0 12px rgba(240,171,252,1), 0 2px 8px rgba(0,0,0,.6); }
+.jv-lyric{ color:rgba(228,228,231,.94); }
+.jv-lyric-past{ color:#71717a; }
+html.day-mode .jv-lyrics-frost{ background:rgba(10,4,16,.35)!important; -webkit-backdrop-filter:blur(18px) saturate(1.2)!important; backdrop-filter:blur(18px) saturate(1.2)!important; }
+html.day-mode .jv-lyrics-pane{
+  background:rgba(255,250,255,.86)!important;
+  border-color:rgba(150,50,190,.32)!important;
+  -webkit-backdrop-filter:blur(13px) saturate(1.35)!important;
+          backdrop-filter:blur(13px) saturate(1.35)!important;
+  box-shadow:0 24px 70px rgba(120,60,160,.3), 0 0 50px -18px rgba(217,70,239,.3)!important;
+}
+html.day-mode .jv-lyrics-pane .jv-lyric{ color:#553d68; }
+html.day-mode .jv-lyrics-pane .jv-lyric-past{ color:#ab9bbd; }
+
 /* ---- v7.3.0 dock rim-light (flowing gradient edge) ---- */
 .jv-dock-rim::after{
   content:''; position:absolute; inset:0; border-radius:inherit; padding:1px;
