@@ -6,7 +6,7 @@ import LibraryRows from '@/components/LibraryRows';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 import Icon from '@/components/Icons';
 import MasonryGrid from '@/components/MasonryGrid';
-import { releaseQualityChip, parseReleaseQuality } from '@/lib/quality';
+import { releaseQualityChip, parseReleaseQuality, chipClassForTier, labelForTier } from '@/lib/quality';
 import { isFavoriteItem, makeWatchKey, toggleFavoriteItem, useLibraryVersion } from '@/lib/watchStore';
 
 const PAGE_SIZE = 15;
@@ -174,8 +174,19 @@ function CleanEmbedButtons() {
   );
 }
 
+function qualitySourceText(item) {
+  return item?.rawTitle || item?.parsedSource || item?.title || item?.synopsis || '';
+}
+
+function itemQualityChip(item) {
+  if (item?.qualityTier) {
+    return { tier: item.qualityTier, label: item.qualityLabel || labelForTier(item.qualityTier), cls: chipClassForTier(item.qualityTier) };
+  }
+  return releaseQualityChip(qualitySourceText(item));
+}
+
 function watchQualityParam(item, hasQuery = false) {
-  const tier = parseReleaseQuality(item?.rawTitle || item?.title || '').tier;
+  const tier = item?.qualityTier || parseReleaseQuality(qualitySourceText(item)).tier;
   if (!tier) return '';
   return `${hasQuery ? '&' : '?'}quality=${encodeURIComponent(tier)}`;
 }
@@ -264,7 +275,7 @@ function MediaCard({ item, onItemMatched, delay = 0 }) {
   const Wrapper = hasTMDB ? Link : 'div';
   const qualityChip = item?.type === 'series'
     ? { label: 'Series', cls: 'border-white/15 bg-black/60 text-zinc-200' }
-    : { ...(releaseQualityChip(item?.rawTitle || item?.title || '')), fallback: true };
+    : { ...itemQualityChip(item), fallback: true };
 
   return (
     <>
@@ -497,7 +508,7 @@ function HeroCarousel({ items }) {
         {slides.map((item, slideIdx) => {
           const active = slideIdx === current;
           const href = `/watch/${item.type}/${item.tmdbId}${item.type === 'series' ? `?season=${item.season || 1}&episode=${item.episode || 1}` : ''}${watchQualityParam(item, item.type === 'series')}`;
-          const heroChip = item.type === 'series' ? { label: 'Series', cls: 'border-white/15 bg-black/50' } : releaseQualityChip(item.rawTitle || item.title || '');
+          const heroChip = item.type === 'series' ? { label: 'Series', cls: 'border-white/15 bg-black/50' } : itemQualityChip(item);
           const art = item.backdropUrl || item.posterUrl;
           const favKey = makeWatchKey({ type: item.type, tmdbId: item.tmdbId });
           const favorite = isFavoriteItem(favKey);

@@ -3,6 +3,7 @@ import dbConnect from '@/lib/db';
 import { scrapeTamilMV } from '@/lib/tamilmvScraper';
 import { verifyRequestToken } from '@/lib/serverAuth';
 import { applyMatchesToItems, findMatchesForItems } from '@/lib/titleMatch';
+import { parseReleaseQuality } from '@/lib/quality';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -148,16 +149,21 @@ function pageInfo(items = [], paging, cacheLimit = 0, maxCacheLimit = DEFAULT_MA
 // Manual poster matches (title_matches collection) must survive rescrapes, so
 // they are merged at read time instead of being baked into the cached scrape.
 async function withTitleMatches(payload) {
+  const tagged = {
+    ...payload,
+    movies: tagListQuality(payload?.movies || []),
+    series: tagListQuality(payload?.series || []),
+  };
   try {
     const docs = await findMatchesForItems([...(payload?.movies || []), ...(payload?.series || [])]);
-    if (!docs.length) return payload;
+    if (!docs.length) return tagged;
     return {
-      ...payload,
-      movies: applyMatchesToItems(payload?.movies || [], docs),
-      series: applyMatchesToItems(payload?.series || [], docs),
+      ...tagged,
+      movies: applyMatchesToItems(tagged.movies, docs),
+      series: applyMatchesToItems(tagged.series, docs),
     };
   } catch {
-    return payload;
+    return tagged;
   }
 }
 
