@@ -4,7 +4,6 @@ import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '@/components/Icons';
-import CircularGallery from '@/components/CircularGallery';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 
 const FAVORITES_KEY = 'jash_music_favorites';
@@ -1129,12 +1128,6 @@ export default function MusicPage() {
 
   const rawSections = home.sections || [];
   const mainSections = rawSections.filter((section) => (section.items || []).length);
-  const circularSource = mainSections
-    .map((section) => ({ section, songs: (section.items || []).filter((item) => item?.type === 'song' || item?.seokey || item?.trackId) }))
-    .find((entry) => entry.songs.length >= 6);
-  const circularItems = circularSource
-    ? circularSource.songs.slice(0, 10).map((track) => ({ key: trackKey(track), image: track.image, text: track.title, sub: track.artists || 'Tamil', track }))
-    : [];
   const importedPlaylists = home.playlists || [];
   const homeHasAnySongCards = mainSections.length || home.releases?.tracks?.length || home.releases?.albums?.length;
   const activeKeyValue = activeKey;
@@ -1331,13 +1324,6 @@ export default function MusicPage() {
                     {importMessage ? <p className={`mt-3 text-xs font-semibold ${importStatus === 'error' ? 'text-red-300' : 'text-zinc-500'}`}>{importMessage}</p> : null}
                   </div>
                 ) : null}
-              </section>
-            ) : null}
-
-            {view === 'home' && circularItems.length >= 6 ? (
-              <section className="jv-reveal">
-                <SectionHeader title="Sound Wheel" subtitle="Drag or scroll to spin — tap the front card to play" />
-                <CircularGallery items={circularItems} onItemClick={(entry) => playTrack(entry.track, circularSource.songs, true)} />
               </section>
             ) : null}
 
@@ -1567,21 +1553,6 @@ export default function MusicPage() {
                   <p className="truncate text-sm font-black text-white">{activeDetail?.title || active?.title || 'Select a song'}</p>
                   {isPlaying ? <span className="jv-eq ml-2 shrink-0" aria-hidden="true"><span /><span /><span /><span /></span> : null}
                 </div>
-                {currentArtistChips.length ? (
-                  <div className="mt-1 flex max-w-full gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                    {currentArtistChips.map((artist) => (
-                      <button
-                        key={artist.id || artist.name}
-                        type="button"
-                        onClick={() => openArtist({ id: artist.id || artist.name, name: artist.name, image: artist.image })}
-                        className="max-w-[8rem] shrink-0 truncate rounded-full border border-fuchsia-400/20 bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-black text-fuchsia-100 transition hover:border-fuchsia-300 hover:bg-fuchsia-400 hover:text-black"
-                        title={`Open ${artist.name}`}
-                      >
-                        {artist.name}
-                      </button>
-                    ))}
-                  </div>
-                ) : <p className="truncate text-xs text-zinc-500">{activeDetail?.artists || active?.artists || 'Tamil Music'}</p>}
                 <p className="text-[11px] text-zinc-600">{formatTime(currentTime)} / {duration ? formatTime(duration) : '--:--'}</p>
                 {playerStatus === 'loading' ? <p className="text-[11px] text-fuchsia-300">Loading stream...</p> : null}
                 {playerStatus === 'error' ? <p className="truncate text-[11px] text-red-300">{error}</p> : null}
