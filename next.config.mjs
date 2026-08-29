@@ -26,7 +26,13 @@ const nextConfig = {
       },
       {
         source: '/((?!api/).*)',
-        headers: securityHeaders.filter((h) => h.key !== 'X-Frame-Options'),
+        headers: [
+          ...securityHeaders.filter((h) => h.key !== 'X-Frame-Options'),
+          // Pages served with no Cache-Control were being heuristically cached by
+          // mobile Chrome (10% of response age = days), pinning users to OLD app
+          // bundles even after deploys. Revalidate every navigation (304 = cheap).
+          { key: 'Cache-Control', value: 'no-cache' },
+        ],
       },
     ];
   },
