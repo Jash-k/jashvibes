@@ -624,7 +624,7 @@ export default function LiveTVPage() {
   }
 
   return (
-    <main className="palette-cybergrape live-page min-h-dvh overflow-x-hidden bg-[#09041a] text-zinc-100">
+    <main className="palette-cybergrape live-page min-h-dvh overflow-x-clip bg-[#09041a] text-zinc-100">
       <header className="sticky top-0 z-50 border-b border-white/10 bg-zinc-950 shadow-[0_14px_30px_-18px_rgba(0,0,0,.9)]">
         <div className="mx-auto grid max-w-7xl gap-3 px-3 py-4 sm:px-6 sm:py-5 lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:px-8">
           <div className="flex items-center justify-start gap-3">
@@ -647,7 +647,7 @@ export default function LiveTVPage() {
         </div>
       </header>
 
-      <section className="mx-auto grid max-w-7xl items-start gap-3 px-3 py-3 sm:gap-4 sm:px-6 sm:py-5 lg:grid-cols-[minmax(0,1fr)_minmax(300px,22rem)] xl:grid-cols-[minmax(0,1fr)_minmax(320px,24rem)] lg:px-8">
+      <section className="mx-auto flex max-w-7xl flex-col items-stretch gap-3 px-3 py-3 sm:gap-4 sm:px-6 sm:py-5 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(300px,22rem)] lg:items-start xl:grid-cols-[minmax(0,1fr)_minmax(320px,24rem)] lg:px-8">
         <div className="sticky top-[3.4rem] z-40 min-w-0 space-y-3 bg-[#09041a] pb-2 sm:space-y-4 lg:top-24 lg:self-start lg:pb-0">
           <div id="live-player-shell" className="overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black/50 fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0 sm:rounded-3xl">
             <div
