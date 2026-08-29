@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { chipClassForTier, labelForTier } from '@/lib/quality';
+import DirectWatchPlayer from '@/components/player/DirectWatchPlayer';
 import Icon from '@/components/Icons';
 import {
   getHistoryEntry,
@@ -171,6 +172,11 @@ export default function WatchByTMDBPage() {
   const playerShellRef = useRef(null);
   const directVideoRef = useRef(null);
   const directPlayerRef = useRef(null);
+  const [directVideoEl, setDirectVideoEl] = useState(null);
+  const directVideoCallbackRef = useCallback((el) => {
+    directVideoRef.current = el;
+    setDirectVideoEl(el);
+  }, []);
 
   const initialSeason = Math.max(1, Number(searchParams?.get('season') || searchParams?.get('s') || 1));
   const initialEpisode = Math.max(1, Number(searchParams?.get('episode') || searchParams?.get('e') || 1));
@@ -490,6 +496,62 @@ export default function WatchByTMDBPage() {
 
   const directStreamActive = playerMode === 'stream' && isDirectPlayerType(streamType, activePlayerUrl);
 
+  // ---------- DirectWatchPlayer wiring (v7.7.0) ----------
+  // Labelled source list for the player's stream picker menu.
+  const watchSources = useMemo(() => {
+    return streamChoices.map((url, index) => {
+      const matched = (stremioStreams || []).find((s) => s && (s.url === url || s.streamUrl === url));
+      const label = matched
+        ? [matched.title, matched.name, matched.behaviorHints?.bingeGroup, matched.quality]
+            .filter(Boolean)
+            .join(' • ')
+            .replace(/\s+/g, ' ')
+        : `Source ${index + 1}`;
+      return { url, label: label || `Source ${index + 1}` };
+    });
+  }, [streamChoices, stremioStreams]);
+
+  // Next-episode pill data (same-season next ep, else first ep of next season).
+  const nextEpisodeInfo = useMemo(() => {
+    if (!isSeries || !seasonOptions?.length) return null;
+    const episodes = (seasonOptions.find((s) => s.seasonNumber === season)?.episodes) || [];
+    const idx = episodes.findIndex((e) => e.episodeNumber === episode);
+    if (idx >= 0 && idx < episodes.length - 1) {
+      const ne = episodes[idx + 1];
+      return { label: `E${ne.episodeNumber}${ne.name ? ` · ${ne.name}` : ''}`, onPlay: () => setEpisode(ne.episodeNumber) };
+    }
+    const sIdx = seasonOptions.findIndex((s) => s.seasonNumber === season);
+    const ns = sIdx >= 0 ? seasonOptions[sIdx + 1] : null;
+    if (ns?.episodes?.[0]) {
+      const first = ns.episodes[0];
+      return {
+        label: `S${ns.seasonNumber} E${first.episodeNumber}`,
+        onPlay: () => { setSeason(ns.seasonNumber); setEpisode(first.episodeNumber); },
+      };
+    }
+    return null;
+  }, [isSeries, seasonOptions, season, episode]);
+
+  // Auto-fallback: the player reports a stall/error and we rotate to the next
+  // known-good direct URL, preserving position via the saved-history resume.
+  const fallbackCountRef = useRef(0);
+  useEffect(() => { fallbackCountRef.current = 0; }, [type, tmdbId, season, episode, selectedStremioStreamId, qualityParam]);
+  const handleAutoFallback = useCallback(() => {
+    if (!streamChoices.length) return;
+    fallbackCountRef.current += 1;
+    if (fallbackCountRef.current > streamChoices.length * 2) {
+      setError('All direct stream URLs failed to play. Try another quality or provider.');
+      setStatus('error');
+      return;
+    }
+    setStreamChoiceIndex((prev) => (prev + 1) % streamChoices.length);
+  }, [streamChoices.length]);
+
+  const directPlayerTitle = useMemo(() => {
+    const base = titleMeta?.title || titleMeta?.name || 'Now Playing';
+    return isSeries ? `${base} · S${season} E${episode}` : base;
+  }, [titleMeta, isSeries, season, episode]);
+
   // Resume the saved playback position and persist progress for direct
   // (non-iframe) streams. Embed iframes cannot report progress.
   useEffect(() => {
@@ -737,13 +799,23 @@ export default function WatchByTMDBPage() {
             ) : null}
 
             {status === 'ready' && activePlayerUrl && directStreamActive ? (
-              <video
-                ref={directVideoRef}
-                className="h-full w-full bg-black object-fill"
-                controls
-                playsInline
-                autoPlay
-              />
+              <DirectWatchPlayer
+                videoEl={directVideoEl}
+                watchKey={watchKey}
+                title={directPlayerTitle}
+                sources={watchSources}
+                activeSource={streamChoiceIndex}
+                onPickSource={(i) => { fallbackCountRef.current = 0; setStreamChoiceIndex(i); }}
+                onAutoFallback={handleAutoFallback}
+                nextEpisode={nextEpisodeInfo}
+              >
+                <video
+                  ref={directVideoCallbackRef}
+                  className="h-full w-full bg-black object-fill"
+                  playsInline
+                  autoPlay
+                />
+              </DirectWatchPlayer>
             ) : null}
 
             {status === 'ready' && activePlayerUrl && !directStreamActive && !popupBlocker && shouldUseObjectPlayer(activeProvider, activePlayerUrl) ? (
