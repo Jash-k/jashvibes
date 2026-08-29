@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
 import VideoPlayer from '@/components/VideoPlayer';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import DirectWatchPlayer from '@/components/player/DirectWatchPlayer';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 
 async function readJsonResponse(response, fallbackMessage = 'Request failed') {
@@ -67,6 +68,11 @@ export default function StremioPlayerPage() {
   const videoRef = useRef(null);
   const shellRef = useRef(null);
   const playerRef = useRef(null);
+  const [videoEl, setVideoEl] = useState(null);
+  const videoCallbackRef = useCallback((el) => {
+    videoRef.current = el;
+    setVideoEl(el);
+  }, []);
   const [item, setItem] = useState(null);
   const [metaStatus, setMetaStatus] = useState('loading');
   const [streamStatus, setStreamStatus] = useState('idle');
@@ -285,7 +291,18 @@ export default function StremioPlayerPage() {
                   onError={(message) => setError(message || 'Stremio playback failed. Try another stream quality.')}
                 />
               ) : (
-                <video ref={videoRef} className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-fill" controls playsInline preload="metadata" poster={currentEpisodeInfo?.thumbnail || item?.backdropUrl || item?.posterUrl || undefined} />
+                <DirectWatchPlayer
+                  videoEl={videoEl}
+                  watchKey={`stremio:${type}:${id}:${selectedSeason}:${selectedEpisodeNumber}`}
+                  title={activePlayerTitle}
+                  sources={streamQualityOptions.map((o) => ({ label: o.label }))}
+                  activeSource={streamIndex}
+                  onPickSource={(i) => setStreamIndex(i)}
+                  onAutoFallback={() => { if (streams.length > 1) setStreamIndex((prev) => (prev + 1) % streams.length); }}
+                  nextEpisode={null}
+                >
+                  <video ref={videoCallbackRef} className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-fill" playsInline preload="metadata" poster={currentEpisodeInfo?.thumbnail || item?.backdropUrl || item?.posterUrl || undefined} />
+                </DirectWatchPlayer>
               )}
               {streamStatus === 'loading' ? <div className="absolute inset-0 grid place-items-center bg-black/50"><span className="rounded-full bg-black/80 px-5 py-3 text-sm font-bold">Loading Stremio stream...</span></div> : null}
               {streamStatus === 'error' ? <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-red-500/30 bg-red-950/80 p-3 text-sm text-red-100">{error}</div> : null}
