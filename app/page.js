@@ -6,6 +6,7 @@ import LibraryRows from '@/components/LibraryRows';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 import Icon from '@/components/Icons';
 import MasonryGrid from '@/components/MasonryGrid';
+import { releaseQualityChip, parseReleaseQuality } from '@/lib/quality';
 import { isFavoriteItem, makeWatchKey, toggleFavoriteItem, useLibraryVersion } from '@/lib/watchStore';
 
 const PAGE_SIZE = 15;
@@ -109,7 +110,7 @@ function SearchBox() {
           {results.map((item) => (
             <Link
               key={`${item.type}-${item.tmdbId}`}
-              href={`/watch/${item.type}/${item.tmdbId}`}
+              href={`/watch/${item.type}/${item.tmdbId}${watchQualityParam(item)}`}
               className="flex gap-3 rounded-2xl p-2 transition hover:bg-white/[0.06]"
               onClick={() => setQuery('')}
             >
@@ -171,6 +172,12 @@ function CleanEmbedButtons() {
       ))}
     </>
   );
+}
+
+function watchQualityParam(item, hasQuery = false) {
+  const tier = parseReleaseQuality(item?.rawTitle || item?.title || '').tier;
+  if (!tier) return '';
+  return `${hasQuery ? '&' : '?'}quality=${encodeURIComponent(tier)}`;
 }
 
 function MatchDialog({ item, onClose, onMatched }) {
@@ -252,9 +259,12 @@ function MediaCard({ item, onItemMatched, delay = 0 }) {
   const [matchOpen, setMatchOpen] = useState(false);
   const hasTMDB = Boolean(item.tmdbId);
   const href = hasTMDB
-    ? `/watch/${item.type}/${item.tmdbId}${item.type === 'series' && (item.season || item.episode) ? `?season=${item.season || 1}&episode=${item.episode || 1}` : ''}`
+    ? `/watch/${item.type}/${item.tmdbId}${item.type === 'series' && (item.season || item.episode) ? `?season=${item.season || 1}&episode=${item.episode || 1}` : ''}${watchQualityParam(item, item.type === 'series' && Boolean(item.season || item.episode))}`
     : undefined;
   const Wrapper = hasTMDB ? Link : 'div';
+  const qualityChip = item?.type === 'series'
+    ? { label: 'Series', cls: 'border-white/15 bg-black/60 text-zinc-200' }
+    : { ...(releaseQualityChip(item?.rawTitle || item?.title || '')), fallback: true };
 
   return (
     <>
@@ -293,6 +303,12 @@ function MediaCard({ item, onItemMatched, delay = 0 }) {
           )}
 
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/15 to-transparent opacity-95" />
+
+          <div className="absolute left-2 top-2 sm:left-3 sm:top-3">
+            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider backdrop-blur ${qualityChip.cls || 'border-white/15 bg-black/60 text-zinc-200'}`}>
+              {qualityChip.label || (item?.type === 'series' ? 'Series' : 'Movie')}
+            </span>
+          </div>
 
           {hasTMDB && Number(item.rating) > 0 ? (
             <div className="absolute right-2 top-2 sm:right-3 sm:top-3">
@@ -480,7 +496,8 @@ function HeroCarousel({ items }) {
       >
         {slides.map((item, slideIdx) => {
           const active = slideIdx === current;
-          const href = `/watch/${item.type}/${item.tmdbId}${item.type === 'series' ? `?season=${item.season || 1}&episode=${item.episode || 1}` : ''}`;
+          const href = `/watch/${item.type}/${item.tmdbId}${item.type === 'series' ? `?season=${item.season || 1}&episode=${item.episode || 1}` : ''}${watchQualityParam(item, item.type === 'series')}`;
+          const heroChip = item.type === 'series' ? { label: 'Series', cls: 'border-white/15 bg-black/50' } : releaseQualityChip(item.rawTitle || item.title || '');
           const art = item.backdropUrl || item.posterUrl;
           const favKey = makeWatchKey({ type: item.type, tmdbId: item.tmdbId });
           const favorite = isFavoriteItem(favKey);
@@ -500,7 +517,7 @@ function HeroCarousel({ items }) {
                 </p>
                 <h3 className="jv-hero-title line-clamp-2 text-2xl font-black leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">{item.title}</h3>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-zinc-300 sm:mt-3 sm:text-xs">
-                  <span className="rounded-full border border-white/15 bg-black/50 px-2 py-0.5 uppercase tracking-wider backdrop-blur">{item.type === 'series' ? 'Series' : 'Movie'}</span>
+                  <span className={`rounded-full border px-2 py-0.5 uppercase tracking-wider backdrop-blur ${heroChip.cls || 'border-white/15 bg-black/50'}`}>{heroChip.label || 'Movie'}</span>
                   {year ? <span className="rounded-full border border-white/15 bg-black/50 px-2 py-0.5 backdrop-blur">{year}</span> : null}
                   {Number(item.rating) > 0 ? <span className="rounded-full border border-amber-300/30 bg-black/50 px-2 py-0.5 text-amber-300 backdrop-blur">★ {Number(item.rating).toFixed(1)}</span> : null}
                 </div>

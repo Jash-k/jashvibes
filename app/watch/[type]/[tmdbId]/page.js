@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
+import { chipClassForTier, labelForTier } from '@/lib/quality';
 import Icon from '@/components/Icons';
 import {
   getHistoryEntry,
@@ -173,6 +174,7 @@ export default function WatchByTMDBPage() {
 
   const initialSeason = Math.max(1, Number(searchParams?.get('season') || searchParams?.get('s') || 1));
   const initialEpisode = Math.max(1, Number(searchParams?.get('episode') || searchParams?.get('e') || 1));
+  const qualityParam = (searchParams?.get('quality') || '').toLowerCase();
   // Legacy direct-TamilOTT links (/watch/*/ott?...) no longer play: titles must
   // be matched to a TMDB id from the homepage Match button first.
   const isLegacyOttUrl = String(tmdbId || '').toLowerCase() === 'ott';
@@ -275,6 +277,8 @@ export default function WatchByTMDBPage() {
       tmdbId,
     });
 
+    if (qualityParam) params.set('quality', qualityParam);
+
     if (isSeries) {
       params.set('season', String(season || 1));
       params.set('episode', String(episode || 1));
@@ -285,7 +289,7 @@ export default function WatchByTMDBPage() {
     }
 
     return `/api/resolve?${params.toString()}`;
-  }, [type, tmdbId, provider, isSeries, season, episode, isLegacyOttUrl, selectedStremioStreamId]);
+  }, [type, tmdbId, provider, isSeries, season, episode, isLegacyOttUrl, selectedStremioStreamId, qualityParam]);
 
   useEffect(() => {
     if (!isSeries || !tmdbId || isLegacyOttUrl) return;
@@ -606,6 +610,9 @@ export default function WatchByTMDBPage() {
               {titleMeta?.year ? <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5">{titleMeta.year}</span> : null}
               {Number(titleMeta?.rating) > 0 ? <span className="rounded-full border border-amber-300/25 bg-white/[0.04] px-2 py-0.5 text-amber-300">★ {Number(titleMeta.rating).toFixed(1)}</span> : null}
               <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5">{isSeries ? `Series · S${season} E${episode}` : 'Movie'}</span>
+              {qualityParam && labelForTier(qualityParam) ? (
+                <span className={`rounded-full border px-2 py-0.5 font-black uppercase tracking-wider ${chipClassForTier(qualityParam)}`}>{labelForTier(qualityParam)}</span>
+              ) : null}
             </div>
           </div>
         </div>

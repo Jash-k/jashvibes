@@ -10,6 +10,7 @@ import {
   createStremioAttempt,
   resolveStremioProvider,
 } from '@/lib/providers/stremioProvider';
+import { STREMIO_FIRST_TIERS } from '@/lib/quality';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -154,6 +155,7 @@ export async function GET(request) {
     const language = searchParams.get('lan') || searchParams.get('language') || 'tam';
     const provider = searchParams.get('provider') || 'auto';
     const stremioStreamId = searchParams.get('stremioStreamId') || '';
+    const quality = (searchParams.get('quality') || '').toLowerCase();
     const rawRequestedProvider = String(provider || 'auto').toLowerCase();
     // TamilOTT was removed; stale client/bookmarked requests fold into auto.
     const requestedProvider = rawRequestedProvider === 'tamilott' ? 'auto' : rawRequestedProvider;
@@ -199,14 +201,18 @@ export async function GET(request) {
 
     // Auto chain: Global Mirchi first, then Stremio direct-file streams, then
     // the remaining embed providers. Stremio is also a manual server.
-    let runStremio = requestedProvider === 'stremio';
+    // Quality-aware routing (from scraped release title): theatrical releases
+    // (CAMRip/PreDVD/HDTC) live only on Mirchi → Mirchi first. Clean digital
+    // releases (UHD/BluRay/WEB-DL/HD) are best on Stremio → Stremio first.
+    const stremioFirst = requestedProvider === 'auto' && STREMIO_FIRST_TIERS.includes(quality);
+    let runStremio = requestedProvider === 'stremio' || stremioFirst;
     let mirchiProbeFailed = false;
 
     // Auto Priority cascade: Global Mirchi first (live embed probe; a 403 is
     // treated as WAF noise because the embed iframe loads in the user's
     // browser — only hard failures like DNS/timeout, 404, 5xx or non-HTML skip
     // Mirchi), then the remaining embed providers in priority order.
-    if (requestedProvider === 'auto' && hasValidTmdbId) {
+    if (requestedProvider === 'auto' && hasValidTmdbId && !stremioFirst) {
       const mirchiAttemptIndex = attempts.findIndex((attempt) => attempt.providerId === 'mirchi');
       if (mirchiAttemptIndex !== -1) {
         const probe = await checkEmbedUrl(attempts[mirchiAttemptIndex].streamUrl, 4200);
@@ -252,7 +258,9 @@ export async function GET(request) {
           stremioResult,
           'available',
           requestedProvider === 'auto'
-            ? `Global Mirchi was unreachable, so Auto Priority selected Stremio next. ${stremioResult.count} addon stream(s) found; picked ${stremioResult.label}.`
+            ? (stremioFirst
+              ? `Release quality (${quality.toUpperCase()}) prefers Stremio — Auto Priority selected it first. ${stremioResult.count} addon stream(s) found; picked ${stremioResult.label}.`
+              : `Global Mirchi was unreachable, so Auto Priority selected Stremio next. ${stremioResult.count} addon stream(s) found; picked ${stremioResult.label}.`)
             : `Selected Stremio manually — picked ${stremioResult.label} from ${stremioResult.count} addon stream(s). Use the Stremio Quality dropdown to switch.`,
         );
         if (requestedProvider === 'stremio') {
@@ -281,6 +289,33 @@ export async function GET(request) {
             { error: error.message || 'No Stremio stream for this title', attempts },
             { status: 404 },
           );
+        }
+      }
+    }
+
+    // Stremio-first (HD/UHD/BluRay/WEB-DL) had no stream: fall back to the
+    // Global Mirchi probe, exactly like the default auto order.
+    if (requestedProvider === 'auto' && stremioFirst && selected?.id !== 'stremio' && hasValidTmdbId) {
+      const mirchiAttemptIndex = attempts.findIndex((attempt) => attempt.providerId === 'mirchi');
+      if (mirchiAttemptIndex !== -1) {
+        const probe = await checkEmbedUrl(attempts[mirchiAttemptIndex].streamUrl, 4200);
+        const softBlocked = !probe.ok && probe.status === 403;
+        const mirchiUsable = probe.ok || softBlocked;
+        attempts[mirchiAttemptIndex] = {
+          ...attempts[mirchiAttemptIndex],
+          health: { ok: mirchiUsable, status: probe.status, finalUrl: probe.finalUrl, softBlocked },
+          status: mirchiUsable ? 'available' : 'failed',
+          reason: probe.ok
+            ? 'Stremio had no stream for this title, so Auto Priority fell back to Global Mirchi (embed probe passed).'
+            : softBlocked
+              ? 'Stremio had no stream; Global Mirchi blocks server checks (403) but usually loads in the browser.'
+              : `Global Mirchi also did not respond (probe ${probe.status || probe.error || 'failed'}). Trying remaining embeds next.`,
+        };
+        if (mirchiUsable) {
+          selected = resolved.providers.find((provider) => provider.id === 'mirchi') || selected;
+          sourcesToSave = resolved.providers;
+        } else {
+          mirchiProbeFailed = true;
         }
       }
     }
