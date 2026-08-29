@@ -148,6 +148,19 @@ function pageInfo(items = [], paging, cacheLimit = 0, maxCacheLimit = DEFAULT_MA
 
 // Manual poster matches (title_matches collection) must survive rescrapes, so
 // they are merged at read time instead of being baked into the cached scrape.
+function tagItemQuality(item) {
+  if (!item) return item;
+  if (item.qualityTier) return item;
+  const text = item.rawTitle || item.parsedSource || item.synopsis || item.title || '';
+  const parsed = parseReleaseQuality(text);
+  if (!parsed.tier) return item;
+  return { ...item, qualityTier: parsed.tier, qualityLabel: parsed.label };
+}
+
+function tagListQuality(items = []) {
+  return items.map(tagItemQuality);
+}
+
 async function withTitleMatches(payload) {
   const tagged = {
     ...payload,
