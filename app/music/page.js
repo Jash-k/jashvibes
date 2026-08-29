@@ -1445,7 +1445,7 @@ export default function MusicPage() {
             <div className="relative mx-auto mt-3 w-full max-w-xl flex-1 overflow-hidden">
               {showLyrics ? (
                 <div
-                  className="jv-lyrics-pane h-full overflow-y-auto rounded-[1.6rem] border border-fuchsia-300/20 bg-black/45 px-4 py-4 text-center shadow-[0_24px_70px_rgba(2,6,23,.8),0_0_50px_-18px_rgba(217,70,239,.35)] backdrop-blur-2xl"
+                  className="jv-lyrics-pane h-full overflow-y-auto rounded-[1.6rem] border border-fuchsia-300/25 bg-[#170b21]/85 px-4 py-4 text-center shadow-[0_24px_70px_rgba(2,6,23,.85),0_0_60px_-14px_rgba(217,70,239,.5)] backdrop-blur-2xl"
                   style={{ WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 12%, black 88%, transparent)', maskImage: 'linear-gradient(to bottom, transparent, black 12%, black 88%, transparent)' }}
                 >
                   <p className="jv-lyrics-kicker mb-3 text-[10px] font-black uppercase tracking-[0.26em] text-fuchsia-300/80">Karaoke Lyrics</p>
