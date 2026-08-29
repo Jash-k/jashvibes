@@ -765,6 +765,8 @@ export default function LandingPage() {
   }, [activeTab, loadMore, scrapeStatus]);
 
   const currentItems = activeTab === 'movies' ? movies : series;
+  const debugQuality = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).has('debugq');
   const currentPaging = paging[activeTab];
   const currentStatus = scrapeStatus;
   const currentError = scrapeError;
@@ -902,6 +904,7 @@ export default function LandingPage() {
               <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs font-bold text-zinc-400 sm:px-3 sm:text-sm">
                 {currentItems.length}{currentPaging.total ? ` / ${currentPaging.total}` : ''} loaded
               </span>
+              {debugQuality ? <QualityDebugLine items={currentItems} /> : null}
             </div>
 
             <MediaGrid items={currentItems} onItemMatched={handleItemMatched} />
