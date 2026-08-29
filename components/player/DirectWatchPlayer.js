@@ -66,6 +66,7 @@ export default function DirectWatchPlayer({
   onPickSource,
   onAutoFallback,
   nextEpisode,
+  onError: onErrorProp,
 }) {
   const wrapRef = useRef(null);
   const [playing, setPlaying] = useState(false);
@@ -173,6 +174,7 @@ export default function DirectWatchPlayer({
     };
     const onError = () => {
       if (!v.error) return;
+      onErrorProp?.(v.error?.message || (v.error?.code ? `Media error ${v.error.code}` : 'Playback error'));
       fireFallback('error');
     };
     const onEnterPip = () => setPipActive(true);
@@ -227,7 +229,7 @@ export default function DirectWatchPlayer({
       v.removeEventListener('leavepictureinpicture', onLeavePip);
       window.clearTimeout(stallTimerRef.current);
     };
-  }, [videoEl, onAutoFallback, pictInPictSupported, scrubbing]);
+  }, [videoEl, onAutoFallback, onErrorProp, pictInPictSupported, scrubbing]);
 
   // resume toast (after playback actually starts)
   useEffect(() => {

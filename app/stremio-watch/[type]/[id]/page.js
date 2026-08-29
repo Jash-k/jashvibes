@@ -2,8 +2,7 @@
 
 import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
-import VideoPlayer from '@/components/VideoPlayer';
-import DirectWatchPlayer from '@/components/player/DirectWatchPlayer';
+import UniversalVideoPlayer from '@/components/player/UniversalVideoPlayer';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 
@@ -18,10 +17,6 @@ async function readJsonResponse(response, fallbackMessage = 'Request failed') {
   }
   return response.json();
 }
-function isDash(url = '') {
-  return String(url).toLowerCase().includes('.mpd');
-}
-
 function compactQualityLabel(stream = {}, index = 0) {
   const text = `${stream.label || ''} ${stream.title || ''} ${stream.name || ''} ${stream.size || ''}`;
   const resolution = text.match(/\b(2160p|1440p|1080p|720p|576p|540p|480p|360p|240p|4k)\b/i)?.[1]?.replace(/^4k$/i, '4K') || '';
@@ -44,35 +39,13 @@ function preferredSmoothStreamIndex(streams = []) {
   return ranked[0]?.index || 0;
 }
 
-function SymbolButton({ children, onClick, disabled = false, title = '' }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      aria-label={title || String(children)}
-      className="grid h-11 min-w-11 place-items-center rounded-2xl border border-white/10 bg-white/[0.04] px-2 text-xs font-black text-white transition hover:border-fuchsia-300/50 hover:bg-fuchsia-500/10 disabled:cursor-not-allowed disabled:opacity-40 sm:h-12 sm:min-w-12 sm:text-sm"
-    >
-      {children}
-    </button>
-  );
-}
-
 export default function StremioPlayerPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const type = params?.type === 'series' ? 'series' : 'movie';
   const id = decodeURIComponent(String(params?.id || ''));
   const stremioSource = searchParams?.get('source') || 'catalog';
-  const videoRef = useRef(null);
   const shellRef = useRef(null);
-  const playerRef = useRef(null);
-  const [videoEl, setVideoEl] = useState(null);
-  const videoCallbackRef = useCallback((el) => {
-    videoRef.current = el;
-    setVideoEl(el);
-  }, []);
   const [item, setItem] = useState(null);
   const [metaStatus, setMetaStatus] = useState('loading');
   const [streamStatus, setStreamStatus] = useState('idle');
@@ -83,12 +56,7 @@ export default function StremioPlayerPage() {
   const [streams, setStreams] = useState([]);
   const [streamIndex, setStreamIndex] = useState(0);
 
-  function seekBy(seconds) {
-    const video = videoRef.current;
-    if (!video) return;
-    const max = Number.isFinite(video.duration) ? video.duration : Number.MAX_SAFE_INTEGER;
-    video.currentTime = Math.max(0, Math.min(max, (video.currentTime || 0) + seconds));
-  }
+
 
   useEffect(() => {
     async function loadMeta() {
@@ -194,54 +162,22 @@ export default function StremioPlayerPage() {
     value: index,
   })), [streams]);
 
-  useEffect(() => {
-    const video = videoRef.current;
-    const url = activeStream?.url;
-    let cancelled = false;
-
-    async function destroyPlayer() {
-      if (playerRef.current) {
-        try { await playerRef.current.destroy(); } catch {}
-        playerRef.current = null;
-      }
-    }
-
-    if (!url || !isDash(url)) {
-      destroyPlayer();
-      return () => { cancelled = true; };
-    }
-
-    if (!video) return;
-
-    async function loadDash() {
-      try {
-        await destroyPlayer();
-        if (cancelled) return;
-        video.pause();
-        video.removeAttribute('src');
-        video.load();
-
-        const shakaModule = await import('shaka-player/dist/shaka-player.compiled.js');
-        const shaka = shakaModule.default || window.shaka || shakaModule;
-        shaka.polyfill?.installAll?.();
-        const player = new shaka.Player();
-        playerRef.current = player;
-        await player.attach(video);
-        await player.load(url);
-        if (!cancelled) video.play().catch(() => {});
-      } catch (err) {
-        if (!cancelled) setError(err.message || 'DASH playback failed. Try another stream quality.');
-      }
-    }
-
-    loadDash();
-    return () => { cancelled = true; destroyPlayer(); };
-  }, [activeStream?.url]);
-
   const activePlayerTitle = currentEpisodeInfo
     ? `${item?.title || 'Stremio'} S${currentEpisodeInfo.season}E${currentEpisodeInfo.episode}`
     : item?.title || activeStream?.title || 'Stremio';
-  const directStremioActive = Boolean(activeStream?.url && !isDash(activeStream.url));
+
+  // Unified stream-source list for the player menu (labels from catalog meta).
+  const watchSources = useMemo(
+    () => streamQualityOptions.map((option) => ({ label: option.label })),
+    [streamQualityOptions],
+  );
+  const handlePickSource = useCallback((index) => setStreamIndex(index), []);
+  const handleAutoFallback = useCallback(() => {
+    setStreamIndex((prev) => (streams.length > 1 ? (prev + 1) % streams.length : prev));
+  }, [streams.length]);
+  const handlePlaybackError = useCallback((message) => {
+    setError(message || 'Stremio playback failed. Try another stream quality.');
+  }, []);
 
   // "Single screen": turn the player shell into a full-tab theatre view —
   // same tab, same player UI, nothing else on screen.
@@ -278,49 +214,24 @@ export default function StremioPlayerPage() {
         <div className="space-y-3 sm:space-y-4">
           <div ref={shellRef} className="classics-player-shell overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0 sm:rounded-3xl">
             <div className="jv-native-cursor relative aspect-video h-full w-full bg-black fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:aspect-auto">
-              {directStremioActive ? (
-                <VideoPlayer
-                  src={activeStream.url}
+              {activeStream?.url ? (
+                <UniversalVideoPlayer
+                  url={activeStream.url}
                   title={activePlayerTitle}
                   poster={currentEpisodeInfo?.thumbnail || item?.backdropUrl || item?.posterUrl || ''}
-                  qualityOptions={streamQualityOptions}
-                  qualityIndex={streamIndex}
-                  onQualityChange={(index) => setStreamIndex(index)}
-                  inline
-                  onBackClick={() => window.history.back()}
-                  onError={(message) => setError(message || 'Stremio playback failed. Try another stream quality.')}
-                />
-              ) : (
-                <DirectWatchPlayer
-                  videoEl={videoEl}
                   watchKey={`stremio:${type}:${id}:${selectedSeason}:${selectedEpisodeNumber}`}
-                  title={activePlayerTitle}
-                  sources={streamQualityOptions.map((o) => ({ label: o.label }))}
+                  sources={watchSources}
                   activeSource={streamIndex}
-                  onPickSource={(i) => setStreamIndex(i)}
-                  onAutoFallback={() => { if (streams.length > 1) setStreamIndex((prev) => (prev + 1) % streams.length); }}
+                  onPickSource={handlePickSource}
+                  onAutoFallback={handleAutoFallback}
                   nextEpisode={null}
-                >
-                  <video ref={videoCallbackRef} className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-fill" playsInline preload="metadata" poster={currentEpisodeInfo?.thumbnail || item?.backdropUrl || item?.posterUrl || undefined} />
-                </DirectWatchPlayer>
-              )}
+                  onError={handlePlaybackError}
+                />
+              ) : null}
               {streamStatus === 'loading' ? <div className="absolute inset-0 grid place-items-center bg-black/50"><span className="rounded-full bg-black/80 px-5 py-3 text-sm font-bold">Loading Stremio stream...</span></div> : null}
               {streamStatus === 'error' ? <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-red-500/30 bg-red-950/80 p-3 text-sm text-red-100">{error}</div> : null}
             </div>
           </div>
-
-          {!directStremioActive ? (
-            <div className="rounded-3xl border border-fuchsia-400/15 bg-zinc-950/85 p-3 shadow-xl shadow-black/25">
-              <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center">
-                <SymbolButton onClick={() => seekBy(-60)} title="Back 1 minute">↶1m</SymbolButton>
-                <SymbolButton onClick={() => seekBy(-30)} title="Back 30 seconds">↶30</SymbolButton>
-                <SymbolButton onClick={() => seekBy(-10)} title="Back 10 seconds">↶10</SymbolButton>
-                <SymbolButton onClick={() => seekBy(10)} title="Forward 10 seconds">10↷</SymbolButton>
-                <SymbolButton onClick={() => seekBy(30)} title="Forward 30 seconds">30↷</SymbolButton>
-                <SymbolButton onClick={() => seekBy(60)} title="Forward 1 minute">1m↷</SymbolButton>
-              </div>
-            </div>
-          ) : null}
 
           <div className="rounded-2xl border border-white/10 bg-zinc-950/80 p-3 sm:rounded-3xl sm:p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
