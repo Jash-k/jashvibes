@@ -625,7 +625,7 @@ export default function LiveTVPage() {
 
   return (
     <main className="palette-cybergrape live-page min-h-dvh overflow-x-hidden bg-[#09041a] text-zinc-100">
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-zinc-950/90 backdrop-blur">
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-zinc-950 shadow-[0_14px_30px_-18px_rgba(0,0,0,.9)]">
         <div className="mx-auto grid max-w-7xl gap-3 px-3 py-4 sm:px-6 sm:py-5 lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:px-8">
           <div className="flex items-center justify-start gap-3">
             <Link href="/" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-red-500 hover:text-white">
@@ -739,7 +739,7 @@ export default function LiveTVPage() {
         </div>
 
         <aside className="min-w-0 space-y-3 lg:w-full">
-          <div className="sticky top-[7.7rem] z-30 rounded-2xl border border-white/10 bg-zinc-950/95 p-3 backdrop-blur sm:rounded-3xl sm:p-4 lg:static">
+          <div className="sticky top-[7.7rem] z-30 rounded-2xl border border-white/10 bg-zinc-950 p-3 shadow-[0_18px_40px_-16px_rgba(0,0,0,.85)] sm:rounded-3xl sm:p-4 lg:static lg:shadow-none">
             <div className="flex items-center justify-between gap-2">
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-200">My catalogs</p>
               <span className="rounded-full bg-white/[0.06] px-2 py-1 text-[10px] font-bold text-zinc-400">{filteredChannels.length}</span>
