@@ -268,6 +268,21 @@ function MatchDialog({ item, onClose, onMatched }) {
   );
 }
 
+function QualityDebugLine({ items = [] }) {
+  try {
+    const first = items.find((entry) => entry?.type !== 'series') || items[0];
+    if (!first) return null;
+    const composed = [
+      `tier=${first.qualityTier || 'none'}`,
+      `rawTitle=${first.rawTitle ? 'yes' : 'no'}`,
+      `chip=${itemQualityChip(first).label || 'none'}`,
+    ].join(' · ');
+    return <span className="ml-2 rounded border border-amber-400/40 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[9px] text-amber-300">{composed}</span>;
+  } catch {
+    return <span className="ml-2 rounded border border-red-400/40 bg-red-500/10 px-1.5 py-0.5 font-mono text-[9px] text-red-300">debug-error</span>;
+  }
+}
+
 function MediaCard({ item, onItemMatched, delay = 0 }) {
   const [matchOpen, setMatchOpen] = useState(false);
   const hasTMDB = Boolean(item.tmdbId);
@@ -765,8 +780,12 @@ export default function LandingPage() {
   }, [activeTab, loadMore, scrapeStatus]);
 
   const currentItems = activeTab === 'movies' ? movies : series;
-  const debugQuality = typeof window !== 'undefined'
-    && new URLSearchParams(window.location.search).has('debugq');
+  const [debugQuality, setDebugQuality] = useState(false);
+  useEffect(() => {
+    try {
+      setDebugQuality(new URLSearchParams(window.location.search).has('debugq'));
+    } catch { /* SSR / odd environments */ }
+  }, []);
   const currentPaging = paging[activeTab];
   const currentStatus = scrapeStatus;
   const currentError = scrapeError;
