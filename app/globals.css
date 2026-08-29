@@ -1015,6 +1015,10 @@ html.day-mode .jv-cgal-card { border-color: rgba(168, 85, 247, 0.35); }
 
 /* --- Target cursor (reticle) + glow trail --- */
 html.jv-cursor-fx, html.jv-cursor-fx * { cursor: none !important; }
+/* ...but never inside players or fullscreen: the drawn reticle can't follow
+   there (iframe boundaries / fullscreen stacking), so restore the native cursor. */
+html.jv-cursor-fx .jv-native-cursor, html.jv-cursor-fx .jv-native-cursor *,
+html.jv-cursor-fx :fullscreen, html.jv-cursor-fx :fullscreen * { cursor: auto !important; }
 .jv-reticle {
   position: fixed;
   inset: 0;

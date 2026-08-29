@@ -134,3 +134,9 @@ For personal/educational use only. Host only sources you are authorized to acces
 
 ## v7.7.2
 - FIX: isDirectPlayerType now accepts streamType "direct" and matches .mkv/.mp4 mid-path (Telegram bot URLs carry trailing " ⁍ Quality..." text after the extension). Those files were being opened in a plain <iframe> (Chrome native media viewer) — hence native controls despite the custom player. sw v49.
+
+## v8.0.0
+- Seekable-window seeking in BOTH players (VideoPlayer + DirectWatchPlayer): all seek math clamps against video.seekable, fixing "seek restarts from first" on Stremio providers with live-style (Infinity-duration) manifests; plain-file reconnect reload now restores position.
+- Center-pulse flash for ±10s seeks (same style as play/pause).
+- Cursor resurrection: native cursor restored inside all player surfaces + fullscreen; CursorFX reticle/glow pauses over players (fixes invisible cursor in fullscreen and over embed provider players).
+- jv-native-cursor class wired onto watch + stremio-watch player shells. sw v50.

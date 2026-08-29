@@ -79,6 +79,20 @@ export default function CursorFX() {
       px = event.clientX;
       py = event.clientY;
       lastMove = performance.now();
+      // Inside player surfaces the native cursor is restored (CSS) — pause the
+      // drawn reticle/glow there so users don't get a frozen double cursor (and
+      // over iframes the top document gets no events at all).
+      const inPlayer = Boolean(event.target && event.target.closest && event.target.closest('.jv-native-cursor'));
+      if (inPlayer !== reticle.classList.contains('is-in-player')) {
+        reticle.classList.toggle('is-in-player', inPlayer);
+        canvas.style.display = inPlayer ? 'none' : '';
+      }
+      if (inPlayer) {
+        if (target) { target = null; reticle.classList.remove('is-target'); }
+        reticle.style.opacity = '0';
+        return;
+      }
+      reticle.style.opacity = '';
       const el = event.target && event.target.closest ? event.target.closest(TARGET_SEL) : null;
       if (el !== target) {
         target = el;

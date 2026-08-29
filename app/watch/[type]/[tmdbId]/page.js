@@ -787,7 +787,7 @@ export default function WatchByTMDBPage() {
           ref={playerShellRef}
           className="relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-screen fullscreen:w-screen fullscreen:rounded-none fullscreen:border-0 sm:rounded-3xl"
         >
-          <div className="relative aspect-video w-full bg-zinc-950 fullscreen:h-screen fullscreen:aspect-auto">
+          <div className="jv-native-cursor relative aspect-video w-full bg-zinc-950 fullscreen:h-screen fullscreen:aspect-auto">
             {status === 'loading' ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
                 <div className="h-12 w-12 animate-spin rounded-full border-4 border-zinc-700 border-t-red-600" />

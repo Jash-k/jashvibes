@@ -89,6 +89,24 @@ export default function DirectWatchPlayer({
   const [ccTracks, setCcTracks] = useState([]);
   const [scrubbing, setScrubbing] = useState(null); // number | null
 
+  // Seekable-window: Stremio providers can serve live-style manifests where
+  // video.duration is Infinity — seeking via pct*duration mis-targets and the
+  // stream restarts from 0. All seek math goes through video.seekable instead.
+  const seekWindow = useCallback(() => {
+    const v = videoEl;
+    if (!v) return null;
+    try {
+      const sk = v.seekable;
+      if (sk && sk.length) {
+        const start = sk.start(0);
+        const end = sk.end(sk.length - 1);
+        if (end > start) return { start, end };
+      }
+    } catch {}
+    const d = Number.isFinite(v.duration) ? v.duration : 0;
+    return d > 0 ? { start: 0, end: d } : null;
+  }, [videoEl]);
+
   const hideTimerRef = useRef(0);
   const tapRef = useRef({ lastUp: 0, lastZone: '', pendingTimer: 0 });
   const holdRef = useRef({ timer: 0, active: false, prevRate: 1 });
@@ -284,9 +302,10 @@ export default function DirectWatchPlayer({
 
   const seekBy = useCallback((delta) => {
     const v = videoEl;
-    if (!v || !Number.isFinite(v.duration)) return;
-    v.currentTime = Math.min(Math.max(0, v.currentTime + delta), v.duration);
-  }, [videoEl]);
+    const win = seekWindow();
+    if (!v || !win) return;
+    v.currentTime = Math.min(Math.max(win.start, v.currentTime + delta), Math.max(win.start, win.end - 0.25));
+  }, [videoEl, seekWindow]);
 
   const tapSeek = useCallback((side) => {
     // accumulate repeated double-taps for the on-screen counter
@@ -363,26 +382,30 @@ export default function DirectWatchPlayer({
     return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
   };
   const onTrackDown = (event) => {
-    if (!duration) return;
+    const win = seekWindow();
+    if (!win) return;
     const ratio = ratioFromEvent(event.clientX);
-    setScrubbing(ratio * duration);
+    setScrubbing(win.start + ratio * (win.end - win.start));
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
   const onTrackMove = (event) => {
     if (scrubbing !== null) {
+      const win = seekWindow();
+      if (!win) return;
       const ratio = ratioFromEvent(event.clientX);
-      setScrubbing(ratio * duration);
+      setScrubbing(win.start + ratio * (win.end - win.start));
     }
   };
   const onTrackHover = (event) => {
-    if (!duration) return;
+    const win = seekWindow();
+    if (!win) return;
     const el = trackRef.current;
     const rect = el.getBoundingClientRect();
-    setTooltip({ x: Math.min(rect.width, Math.max(0, event.clientX - rect.left)), seconds: ratioFromEvent(event.clientX) * duration });
+    setTooltip({ x: Math.min(rect.width, Math.max(0, event.clientX - rect.left)), seconds: ratioFromEvent(event.clientX) * (win.end - win.start) });
   };
   const onTrackUp = () => {
     if (scrubbing === null) return;
-    if (videoEl && duration) videoEl.currentTime = scrubbing;
+    if (videoEl) videoEl.currentTime = scrubbing;
     setScrubbing(null);
   };
 
@@ -446,9 +469,11 @@ export default function DirectWatchPlayer({
   };
 
   const shownTime = scrubbing !== null ? scrubbing : time;
-  const playedRatio = duration ? shownTime / duration : 0;
-  const bufferedRatio = duration ? Math.min(1, bufferedEnd / duration) : 0;
-  const remainingForNext = duration > 0 && nextEpisode && playing && duration - time <= 60;
+  const win = seekWindow();
+  const winLength = win ? win.end - win.start : 0;
+  const playedRatio = win && winLength > 0 ? Math.min(1, Math.max(0, (shownTime - win.start) / winLength)) : 0;
+  const bufferedRatio = win && winLength > 0 ? Math.min(1, Math.max(0, (bufferedEnd - win.start) / winLength)) : 0;
+  const remainingForNext = winLength > 0 && nextEpisode && playing && win.end - time <= 60;
 
   const ambientActive = ambient && playing && !isFullscreen;
 
@@ -458,7 +483,7 @@ export default function DirectWatchPlayer({
       data-dvp="root"
       tabIndex={0}
       onKeyDown={onKeyDown}
-      className={`group/player absolute inset-0 h-full w-full outline-none ${ambientActive ? 'z-[60]' : ''} fullscreen:fixed fullscreen:z-[9999]`}
+      className={`group/player absolute inset-0 h-full w-full outline-none jv-native-cursor ${ambientActive ? 'z-[60]' : ''} fullscreen:fixed fullscreen:z-[9999]`}
       onMouseMove={wake}
     >
       {children}
@@ -489,11 +514,11 @@ export default function DirectWatchPlayer({
         </div>
       ) : null}
 
-      {/* seek flashes */}
+      {/* seek flashes — center pulse, same style as play/pause */}
       {flash && (flash.kind === 'fwd' || flash.kind === 'back') ? (
-        <div key={`s-${flash.kind}`} className={`pointer-events-none absolute inset-y-0 z-20 flex w-1/3 items-center ${flash.kind === 'fwd' ? 'right-0 justify-end pr-10' : 'left-0 justify-start pl-10'}`}>
-          <div className="flex flex-col items-center gap-1 rounded-2xl bg-black/55 px-4 py-3 backdrop-blur-sm animate-pulse">
-            <Icon d={flash.kind === 'fwd' ? PATHS.fwd10 : PATHS.back10} className="h-7 w-7 text-fuchsia-300" />
+        <div key={`s-${flash.kind}-${flash.id}`} className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-1 rounded-full bg-black/60 px-7 py-5 backdrop-blur-sm animate-[dvpflash_0.6s_ease-out_forwards]">
+            <Icon d={flash.kind === 'fwd' ? PATHS.fwd10 : PATHS.back10} className="h-9 w-9 text-fuchsia-300" />
             <span className="text-sm font-black text-white">{flash.kind === 'fwd' ? '+' : '-'}{flash.amount || 10}s</span>
           </div>
         </div>
@@ -593,7 +618,8 @@ export default function DirectWatchPlayer({
           </div>
 
           <span className="ml-1 text-[11px] font-semibold tabular-nums text-zinc-300 sm:text-xs">
-            {fmtTime(shownTime)} <span className="text-zinc-500">/ {fmtTime(duration)}</span>
+            {fmtTime(shownTime - (win?.start || 0))}{' '}
+            <span className="text-zinc-500">/ {winLength > 0 ? fmtTime(winLength) : 'LIVE'}</span>
           </span>
 
           <div className="flex-1" />

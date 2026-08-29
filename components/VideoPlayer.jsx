@@ -250,10 +250,11 @@ export default function VideoPlayer({
 
   const seekBy = useCallback((seconds) => {
     const video = videoRef.current;
-    if (!video || !Number.isFinite(video.duration)) return;
-    video.currentTime = clampNumber(video.currentTime + seconds, 0, video.duration - 0.25);
+    const win = mediaWindow();
+    if (!video || !win) return;
+    video.currentTime = clampNumber(video.currentTime + seconds, win.start, win.end - 0.25);
     bumpControls(true);
-  }, [bumpControls]);
+  }, [bumpControls, mediaWindow]);
 
   const applyVolume = useCallback((value, { hudFeedback = true } = {}) => {
     const next = clampNumber(value, 0, 1);
@@ -511,6 +512,12 @@ export default function VideoPlayer({
       setReconnecting(true);
       video.src = hlsSource ? withStartFragment(src, at) : src;
       video.load();
+      // Preserve position across the reload (plain files used to restart at 0).
+      const restore = () => {
+        video.removeEventListener('loadedmetadata', restore);
+        try { if (at > 1) video.currentTime = at; } catch {}
+      };
+      video.addEventListener('loadedmetadata', restore);
       video.play().catch(() => {});
     };
     const onWake = () => {
@@ -559,15 +566,34 @@ export default function VideoPlayer({
     }
   }, []);
 
+  // Seekable-window: Stremio providers can send live-style manifests where
+  // `video.duration` is Infinity — seeking by pct*duration then mis-targets and
+  // the stream restarts from 0. Always clamp against video.seekable instead.
+  const mediaWindow = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return null;
+    try {
+      const sk = video.seekable;
+      if (sk && sk.length) {
+        const start = sk.start(0);
+        const end = sk.end(sk.length - 1);
+        if (end > start) return { start, end };
+      }
+    } catch {}
+    const d = Number.isFinite(video.duration) ? video.duration : 0;
+    return d > 0 ? { start: 0, end: d } : null;
+  }, []);
+
   const seekToClientX = useCallback((clientX) => {
     const video = videoRef.current;
     const bar = containerRef.current?.querySelector('[data-progress-bar="true"]');
-    if (!video || !bar || !duration) return;
+    const win = mediaWindow();
+    if (!video || !bar || !win) return;
     const rect = bar.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    video.currentTime = pct * duration;
+    video.currentTime = win.start + pct * (win.end - win.start);
     bumpControls(true);
-  }, [duration, bumpControls]);
+  }, [mediaWindow, bumpControls]);
 
   const toggleFullscreen = useCallback(async () => {
     const element = containerRef.current;
@@ -849,7 +875,7 @@ export default function VideoPlayer({
   return (
     <div
       ref={containerRef}
-      className={`${inline ? 'relative h-full w-full' : 'fixed inset-0 z-[9999] h-dvh w-screen'} overflow-hidden bg-black text-white select-none`}
+      className={`${inline ? 'relative h-full w-full' : 'fixed inset-0 z-[9999] h-dvh w-screen'} overflow-hidden bg-black text-white select-none jv-native-cursor`}
       onMouseMove={() => bumpControls(true)}
       style={{ touchAction: 'manipulation' }}
     >
