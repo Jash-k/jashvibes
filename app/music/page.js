@@ -341,6 +341,30 @@ export default function MusicPage() {
   const [muted, setMuted] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
   const [dockVolumeOpen, setDockVolumeOpen] = useState(false);
+  const [pocketMode, setPocketMode] = useState(false);
+  const [pocketHold, setPocketHold] = useState(0);
+  const pocketHoldRef = useRef(null);
+  useEffect(() => {
+    if (!pocketMode) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
+  }, [pocketMode]);
+  function enterPocketMode() { if (playingTrack) setPocketMode(true); }
+  function startPocketUnlock() {
+    if (pocketHoldRef.current) clearInterval(pocketHoldRef.current);
+    const startedAt = Date.now();
+    setPocketHold(0.01);
+    pocketHoldRef.current = setInterval(() => {
+      const progress = (Date.now() - startedAt) / 1300;
+      if (progress >= 1) { clearInterval(pocketHoldRef.current); pocketHoldRef.current = null; setPocketHold(0); setPocketMode(false); }
+      else setPocketHold(Math.min(0.99, progress));
+    }, 50);
+  }
+  function cancelPocketUnlock() {
+    if (pocketHoldRef.current) { clearInterval(pocketHoldRef.current); pocketHoldRef.current = null; }
+    setPocketHold(0);
+  }
   const [lyrics, setLyrics] = useState('');
   const [lyricsData, setLyricsData] = useState({});
   const [lyricsStatus, setLyricsStatus] = useState('idle');
@@ -1406,13 +1430,16 @@ export default function MusicPage() {
             style={{ transform: dragDy ? `translateY(${dragDy}px)` : undefined, transition: dragDy ? 'none' : 'transform 320ms cubic-bezier(0.16,1,0.3,1)' }}
           >
             <div className="mx-auto flex w-full max-w-xl items-center justify-between">
-              <button type="button" onClick={closeMiniPlayer} aria-label="Close player" className="jv-btn-icon !h-10 !w-10">
-                <Icon name="chevD" className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={closeMiniPlayer} aria-label="Close player" className="jv-btn-icon !h-10 !w-10">
+                  <Icon name="chevD" className="h-5 w-5" />
+                </button>
+                <button type="button" onClick={() => (showLyrics ? setShowLyrics(false) : openLyrics())} className="rounded-full border border-white/10 bg-white/[0.05] px-3.5 py-2 text-[11px] font-black text-zinc-200 transition hover:border-fuchsia-300/40 hover:text-white">
+                  {showLyrics ? 'Art' : 'Lyrics'}
+                </button>
+              </div>
               <p className="text-[10px] font-black uppercase tracking-[0.34em] text-fuchsia-200/90">Now Playing</p>
-              <button type="button" onClick={() => (showLyrics ? setShowLyrics(false) : openLyrics())} className="rounded-full border border-white/10 bg-white/[0.05] px-3.5 py-2 text-[11px] font-black text-zinc-200 transition hover:border-fuchsia-300/40 hover:text-white">
-                {showLyrics ? 'Art' : 'Lyrics'}
-              </button>
+              <span className="hidden sm:block sm:w-[9.5rem]" aria-hidden="true" />
             </div>
 
             <div className="relative mx-auto mt-3 w-full max-w-xl flex-1 overflow-hidden">
@@ -1421,7 +1448,7 @@ export default function MusicPage() {
                   className="jv-lyrics-pane h-full overflow-y-auto rounded-[1.6rem] border border-fuchsia-300/20 bg-black/45 px-4 py-4 text-center shadow-[0_24px_70px_rgba(2,6,23,.8),0_0_50px_-18px_rgba(217,70,239,.35)] backdrop-blur-2xl"
                   style={{ WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 12%, black 88%, transparent)', maskImage: 'linear-gradient(to bottom, transparent, black 12%, black 88%, transparent)' }}
                 >
-                  <p className="mb-3 text-[10px] font-black uppercase tracking-[0.26em] text-fuchsia-300/80">Karaoke Lyrics</p>
+                  <p className="jv-lyrics-kicker mb-3 text-[10px] font-black uppercase tracking-[0.26em] text-fuchsia-300/80">Karaoke Lyrics</p>
                   {lyricsStatus === 'loading' ? <p className="text-sm leading-7 text-zinc-200">Loading lyrics...</p> : null}
                   {lyricsStatus !== 'loading' && syncedLyricLines.length ? (
                     <div className="space-y-1.5 pb-6">
@@ -1431,7 +1458,7 @@ export default function MusicPage() {
                           ref={index === activeLyricLineIndex ? activeLyricRef : null}
                           className={`rounded-2xl px-3 py-1.5 transition-all duration-300 ${
                             index === activeLyricLineIndex
-                              ? 'bg-gradient-to-r from-amber-300 via-fuchsia-300 to-purple-300 bg-clip-text text-xl font-black text-transparent sm:text-2xl'
+                              ? 'jv-lyric-active bg-gradient-to-r from-amber-300 via-fuchsia-300 to-purple-300 bg-clip-text text-xl font-black text-transparent sm:text-2xl'
                               : index < activeLyricLineIndex
                                 ? 'jv-lyric-past text-sm'
                                 : 'jv-lyric text-base'
@@ -1501,7 +1528,10 @@ export default function MusicPage() {
                 <button type="button" onClick={() => playNext(false)} aria-label="Next" title="Next" className="text-zinc-200 transition active:scale-95 hover:text-white">
                   <Icon name="skipFwd" className="h-7 w-7" />
                 </button>
-                <button type="button" onClick={cycleRepeat} aria-label={`Repeat: ${repeatMode}`} title={`Repeat: ${repeatMode}`} className={`transition active:scale-95 ${repeatMode !== 'off' ? 'text-amber-300' : 'text-zinc-400 hover:text-white'}`}>
+                <button type="button" onClick={enterPocketMode} disabled={!playingTrack} aria-label="Pocket mode: dim screen, lock touches" title="Pocket mode" className="shrink-0 text-zinc-400 transition active:scale-95 hover:text-white disabled:opacity-40 sm:hidden">
+              <Icon name="lock" className="h-5 w-5" />
+            </button>
+            <button type="button" onClick={cycleRepeat} aria-label={`Repeat: ${repeatMode}`} title={`Repeat: ${repeatMode}`} className={`transition active:scale-95 ${repeatMode !== 'off' ? 'text-amber-300' : 'text-zinc-400 hover:text-white'}`}>
                   <Icon name={repeatMode === 'one' ? 'repeatOne' : 'repeat'} className="h-5 w-5" />
                 </button>
               </div>
@@ -1633,6 +1663,31 @@ export default function MusicPage() {
         </div>
       </div>
       {dockVolumeOpen ? <button type="button" aria-label="Close volume" className="fixed inset-0 z-40" onClick={() => setDockVolumeOpen(false)} /> : null}
+
+      {pocketMode ? (
+        <div
+          className="jv-pocket fixed inset-0 z-[100] flex select-none flex-col items-center justify-center bg-black/95"
+          style={{ touchAction: 'none' }}
+          onPointerDown={startPocketUnlock}
+          onPointerUp={cancelPocketUnlock}
+          onPointerLeave={cancelPocketUnlock}
+          onContextMenu={(event) => event.preventDefault()}
+          role="dialog" aria-modal="true" aria-label="Pocket mode — hold to unlock"
+        >
+          {playingImage ? <img src={playingImage} alt="" aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-[0.12] blur-3xl saturate-150" /> : null}
+          <div className="relative">
+            <div aria-hidden="true" className="pointer-events-none absolute -inset-10 rounded-full bg-[linear-gradient(135deg,rgba(245,158,11,.25),rgba(217,70,239,.3))] blur-3xl" />
+            <VinylArt src={playingImage} playing={isPlaying} />
+          </div>
+          <p className="relative mt-6 max-w-[17rem] truncate text-sm font-black text-zinc-300">{activeDetail?.title || active?.title || ''}</p>
+          <div className="relative mt-5 flex flex-col items-center gap-2">
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-600">Pocket mode · hold to unlock</p>
+            <div className="h-1 w-40 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-fuchsia-500" style={{ width: `${Math.round(pocketHold * 100)}%` }} />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
     </main>
   );

@@ -24,6 +24,7 @@ const SHAPES = {
   film:    [{ rect: { x: 3, y: 4, width: 18, height: 16, rx: 2 } }, { d: 'M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4' }],
   fullscreen: [{ d: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5' }],
   target:  [{ circle: { cx: 12, cy: 12, r: 8 } }, { circle: { cx: 12, cy: 12, r: 3 } }],
+  lock:    [{ d: 'M7 11V8a5 5 0 0 1 10 0v3' }, { rect: { x: 5, y: 11, width: 14, height: 10, rx: 2 } }, { d: 'M12 15.5v2' }],
   arrow:   [{ d: 'M5 12h14M13 6l6 6-6 6' }],
   shuffle: [{ d: 'M16 3h5v5' }, { d: 'M4 20L21 3' }, { d: 'M21 16v5h-5' }, { d: 'M13.5 13.5L21 21' }, { d: 'M4 4l5.5 5.5' }],
   skipBack: [{ d: 'M19 20L9 12l10-8v16z' }, { d: 'M5 19V5' }],

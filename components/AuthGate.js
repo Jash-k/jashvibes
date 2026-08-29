@@ -76,7 +76,7 @@ function DayNightToggle() {
     <button
       type="button"
       onClick={toggleMode}
-      className={`fixed z-[80] grid place-items-center rounded-full border border-white/10 bg-black/70 text-zinc-200 shadow-xl shadow-black/30 backdrop-blur transition hover:border-yellow-400/50 day-night-toggle ${compactMobile ? 'right-2 top-[calc(0.45rem+env(safe-area-inset-top))] h-8 w-8 text-sm sm:right-4 sm:top-[calc(0.75rem+env(safe-area-inset-top))] sm:h-9 sm:w-9' : 'right-4 top-[calc(0.75rem+env(safe-area-inset-top))] h-9 w-9 text-base'}`}
+      className={`fixed z-[90] grid place-items-center rounded-full border border-white/10 bg-black/70 text-zinc-200 shadow-xl shadow-black/30 backdrop-blur transition hover:border-yellow-400/50 day-night-toggle ${compactMobile ? 'right-2 top-[calc(0.45rem+env(safe-area-inset-top))] h-8 w-8 text-sm sm:right-4 sm:top-[calc(0.75rem+env(safe-area-inset-top))] sm:h-9 sm:w-9' : 'right-4 top-[calc(0.75rem+env(safe-area-inset-top))] h-9 w-9 text-base'}`}
       title="Switch day/night mode"
       aria-label="Switch day/night mode"
     >
