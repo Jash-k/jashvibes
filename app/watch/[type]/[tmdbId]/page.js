@@ -27,7 +27,16 @@ function isDashUrl(url = '') {
 }
 
 function isDirectPlayerType(type = '', url = '') {
-  return ['hls', 'dash', 'video'].includes(String(type || '').toLowerCase()) || isHlsUrl(url) || isDashUrl(url) || /\.(mp4|webm|mkv)(\?|#|$)/i.test(String(url || ''));
+  // 'direct' = resolved direct file streams (Stremio/Telegram/mirchi). Their
+  // URLs often carry trailing descriptive text after the extension
+  // ("....mkv ⁍ Quality : 1080p ⁍ Audio : Tamil", spaces percent-encoded),
+  // so the extension test must match mid-path, not only at ?#/$ boundaries.
+  return (
+    ['direct', 'hls', 'dash', 'video'].includes(String(type || '').toLowerCase()) ||
+    isHlsUrl(url) ||
+    isDashUrl(url) ||
+    /\.(mp4|webm|mkv|m4v|mov)(\?|#|%| |\/|$)/i.test(String(url || ''))
+  );
 }
 
 function formatDirectPlaybackError(error, resolvedProviderId = '') {
