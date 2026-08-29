@@ -352,11 +352,6 @@ function MediaCard({ item, onItemMatched, delay = 0 }) {
             </div>
           ) : null}
 
-          <div className="absolute left-2 top-2 sm:left-3 sm:top-3">
-            <span className="rounded-full bg-black/75 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.16em] text-white backdrop-blur sm:px-2.5 sm:py-1 sm:text-[10px]">
-              {item.type === 'series' ? 'Series' : 'Movie'}
-            </span>
-          </div>
 
           {hasTMDB ? null : (
             <>
