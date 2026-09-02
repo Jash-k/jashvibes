@@ -9,11 +9,15 @@
 import { usePathname } from 'next/navigation';
 import BrandLogo from '@/components/BrandLogo';
 
-const PAGES_WITH_OWN_BRAND = ['/live', '/stremio', '/music', '/sports', '/classics'];
-
 const TITLE_MAP = [
   { match: /^\/?$/, title: 'Home' },
   { match: /^\/watch\//, title: 'Now Playing' },
+  { match: /^\/live/, title: 'Tamil Live TV' },
+  { match: /^\/stremio-watch\//, title: 'Stremio Player' },
+  { match: /^\/stremio/, title: 'Stremio' },
+  { match: /^\/music/, title: 'Music' },
+  { match: /^\/sports/, title: 'Live Sports' },
+  { match: /^\/classics/, title: 'Tamil Classics' },
   { match: /^\/movies/, title: 'Movies' },
   { match: /^\/my-list/, title: 'My Library' },
   { match: /^\/match/, title: 'Match' },
@@ -23,8 +27,6 @@ const TITLE_MAP = [
 
 export default function SlimTopStrip() {
   const pathname = usePathname() || '/';
-  if (PAGES_WITH_OWN_BRAND.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return null;
-
   const title = TITLE_MAP.find((entry) => entry.match.test(pathname))?.title || 'JaSH ViBeS';
 
   return (

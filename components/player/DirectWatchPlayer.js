@@ -456,7 +456,12 @@ export default function DirectWatchPlayer({
       else if (zone === 'right') tapSeek('right');
       else togglePlay();
     } else {
-      tapRef.current.pendingTimer = window.setTimeout(() => setVisible((prev) => !prev), 280);
+      // Touch: single taps only SHOW/refresh the controls — they never hide
+      // them (toggle-off felt like the UI vanishing under the user's finger).
+      // Hiding happens via the idle timer; desktop keeps click-toggle.
+      tapRef.current.pendingTimer = window.setTimeout(() => {
+        wake();
+      }, 280);
     }
   };
   const onLayerClick = () => { /* desktop: click shows/hides */ if (matchMedia('(pointer:fine)').matches) setVisible((p) => !p); };
