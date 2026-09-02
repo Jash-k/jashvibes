@@ -10,7 +10,8 @@ function normalizeType(type) {
 
 export async function GET(request, { params }) {
   try {
-    const tmdbId = Number(params.tmdbId);
+    const resolvedParams = await params;
+    const tmdbId = Number(resolvedParams?.tmdbId);
     const { searchParams } = new URL(request.url);
     const type = normalizeType(searchParams.get('type'));
     const season = Number(searchParams.get('season') || searchParams.get('s') || 1);

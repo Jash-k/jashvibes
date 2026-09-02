@@ -115,7 +115,7 @@ export default function SportsPage() {
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#070709] text-white">
       <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(ellipse_60%_35%_at_50%_0%,rgba(245,158,11,0.15),transparent_65%)]" />
-      <header className="relative z-10 border-b border-white/5 bg-[#070709]/85 px-4 py-3 backdrop-blur-xl">
+      <header className="hidden sm:block relative z-10 border-b border-white/5 bg-[#070709]/85 px-4 py-3 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <Link href="/" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300">← Home</Link>
           <div className="flex flex-col items-center gap-1"><BrandLogo size="mini" /><p className="text-[10px] font-black uppercase tracking-[0.28em] text-amber-400">Live Sports</p></div>

@@ -11,7 +11,8 @@ function fallbackFor(path) {
 }
 
 export async function GET(request, { params }) {
-  const path = (params?.path || []).join('/');
+  const resolvedParams = await params;
+  const path = (resolvedParams?.path || []).join('/');
   const { searchParams } = new URL(request.url);
   try {
     const data = await fetchSportsBackend(`/api/ipl/${path}`, searchParams, { timeoutMs: /all-matches$/.test(path) ? 45000 : 30000 });

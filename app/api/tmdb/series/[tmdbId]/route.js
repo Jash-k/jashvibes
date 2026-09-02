@@ -14,7 +14,8 @@ function isAired(date) {
 
 export async function GET(_request, { params }) {
   try {
-    const tmdbId = Number(params.tmdbId);
+    const resolvedParams = await params;
+    const tmdbId = Number(resolvedParams?.tmdbId);
     if (!tmdbId || Number.isNaN(tmdbId)) {
       return NextResponse.json({ ok: false, error: 'Valid TMDB series id is required' }, { status: 400 });
     }

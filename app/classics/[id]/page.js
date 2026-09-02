@@ -262,7 +262,7 @@ export default function ClassicPlayerPage() {
 
   return (
     <main className="palette-nordic min-h-dvh bg-[#06110d] text-zinc-100">
-      <header className="border-b border-white/10 bg-zinc-950/85 backdrop-blur">
+      <header className="hidden sm:block border-b border-white/10 bg-zinc-950/85 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
           <Link href="/classics" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-red-500 hover:text-white">← Classics</Link>
           <span className="hidden text-xs font-black uppercase tracking-[0.25em] text-red-500 sm:inline">Tamil Classics Player</span>

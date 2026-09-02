@@ -34,7 +34,7 @@ export default function SlimTopStrip() {
   const title = TITLE_MAP.find((entry) => entry.match.test(pathname))?.title || 'JaSH ViBeS';
 
   return (
-    <div className="flex items-center justify-between border-b border-white/[0.06] bg-black/25 px-3 py-1 sm:px-5">
+    <div className="hidden sm:flex items-center justify-between border-b border-white/[0.06] bg-black/25 px-3 py-1 sm:px-5">
       <BrandLogo size="mini" className="scale-90" />
       <p className="text-[10px] font-black uppercase tracking-[0.28em] text-zinc-500">{title}</p>
     </div>

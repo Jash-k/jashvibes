@@ -521,50 +521,50 @@ video:-webkit-full-screen {
 }
 
 /* ---------------------------------------------------------------------------
- * Live TV page: day-mode visibility fixes.
- * The global day-mode blankets do not cover light accent text/borders, so the
- * Live header gear, Return button, Sync/Load/Delete actions and similar accent
- * controls became invisible on whitewashed panels. These scoped rules only
- * apply inside the /live page and keep every button readable in day mode while
- * night mode stays exactly as designed.
+ * Live TV page: Force BRIGHT WHITE texts & buttons for ALL themes.
  * ------------------------------------------------------------------------- */
-html.day-mode .live-page [class*="text-purple-100"],
-html.day-mode .live-page [class*="text-purple-200"] { color: #7e22ce !important; }
+.live-page,
+.live-page button,
+.live-page p,
+.live-page span,
+.live-page h1,
+.live-page h2,
+.live-page h3,
+.live-page input,
+.live-page select,
+.live-page a,
+html.day-mode .live-page,
+html.day-mode .live-page button,
+html.day-mode .live-page p,
+html.day-mode .live-page span,
+html.day-mode .live-page h1,
+html.day-mode .live-page h2,
+html.day-mode .live-page h3,
+html.day-mode .live-page input,
+html.day-mode .live-page select,
+html.day-mode .live-page a {
+  color: #ffffff !important;
+}
 
-html.day-mode .live-page [class*="text-red-100"],
-html.day-mode .live-page [class*="text-red-200"],
-html.day-mode .live-page [class*="text-red-300"] { color: #b91c1c !important; }
+html.day-mode .live-page {
+  background-color: #09041a !important;
+}
 
-html.day-mode .live-page [class*="text-yellow-100"] { color: #a16207 !important; }
+html.day-mode .live-page .bg-zinc-950,
+html.day-mode .live-page [class*="bg-zinc-950"] {
+  background-color: rgba(9, 4, 26, 0.95) !important;
+}
 
-html.day-mode .live-page [class*="text-orange-100"],
-html.day-mode .live-page [class*="text-orange-200"] { color: #c2410c !important; }
+html.day-mode .live-page [class*="text-"] {
+  color: #ffffff !important;
+}
 
-html.day-mode .live-page [class*="text-green-100"],
-html.day-mode .live-page [class*="text-green-200"] { color: #15803d !important; }
+html.day-mode .live-page [class*="border-"] {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
 
-html.day-mode .live-page [class*="text-blue-100"] { color: #1d4ed8 !important; }
-
-html.day-mode .live-page [class*="border-purple-300/"],
-html.day-mode .live-page [class*="border-purple-400/"] { border-color: rgba(168, 85, 247, 0.55) !important; }
-
-html.day-mode .live-page [class*="border-red-400/"],
-html.day-mode .live-page [class*="border-red-500/"] { border-color: rgba(239, 68, 68, 0.5) !important; }
-
-html.day-mode .live-page [class*="border-yellow-300/"],
-html.day-mode .live-page [class*="border-yellow-400/"] { border-color: rgba(202, 138, 4, 0.6) !important; }
-
-html.day-mode .live-page [class*="border-orange-300/"],
-html.day-mode .live-page [class*="border-orange-400/"] { border-color: rgba(234, 88, 12, 0.6) !important; }
-
-html.day-mode .live-page [class*="border-green-400/"] { border-color: rgba(21, 128, 61, 0.55) !important; }
-
-html.day-mode .live-page [class*="border-cyan-300/"] { border-color: rgba(8, 145, 178, 0.55) !important; }
-
-/* Ultra-light white tints (Pre/Nxt/Fullscreen buttons, chips) disappear on
-   whitewashed day panels — give them a real slate tint instead. */
 html.day-mode .live-page [class*="bg-white/"] {
-  background-color: rgba(15, 23, 42, 0.08) !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
 }
 
 

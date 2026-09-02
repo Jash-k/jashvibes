@@ -76,7 +76,7 @@ export default function MyListPage() {
 
   return (
     <main className="min-h-dvh overflow-x-hidden bg-[#050505] text-zinc-100">
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-zinc-950/80 backdrop-blur">
+      <header className="hidden sm:block sticky top-0 z-40 border-b border-white/10 bg-zinc-950/80 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
           <Link
             href="/"

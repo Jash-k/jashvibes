@@ -185,41 +185,38 @@ export default function DirectWatchPlayer({
     const onEnterPip = () => setPipActive(true);
     const onLeavePip = () => setPipActive(false);
 
-    // ---------- autoplay-safe boot ----------
-    // Browsers block UNMUTED autoplay (mobile especially): the first live
-    // channel would start then freeze until the user touches the screen.
-    // Start muted for autoplay elements, retry once if still paused after
-    // 4s, then restore sound on first 'playing' (desktop) or first tap
-    // (mobile) — only when WE forced the mute.
+    // ---------- autoplay boot with unmuted preference ----------
     autoplayMutedRef.current = false;
+    const initialVol = Number(loadPref('jb-watch-vol', '1'));
+    if (Number.isFinite(initialVol) && initialVol > 0) {
+      v.volume = Math.min(1, initialVol);
+    }
+    v.muted = false;
+
     if (v.autoplay) {
-      if (!v.muted) {
-        v.muted = true;
-        autoplayMutedRef.current = true;
+      const playPromise = v.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          // If browser policy strictly blocked unmuted autoplay (NotAllowedError),
+          // fallback to muted playback and unmute on first user tap/interaction.
+          if (err && (err.name === 'NotAllowedError' || err.name === 'AbortError')) {
+            autoplayMutedRef.current = true;
+            v.muted = true;
+            v.play().catch(() => {});
+          }
+        });
       }
-      v.play().catch(() => {});
-      const bootTimer = window.setTimeout(() => {
-        if (v.paused) {
-          autoplayMutedRef.current = true;
-          v.muted = true;
-          v.play().catch(() => {});
-        }
-      }, 4000);
+
       const onFirstPlaying = () => {
-        window.clearTimeout(bootTimer);
         v.removeEventListener('playing', onFirstPlaying);
         if (!autoplayMutedRef.current) return;
-        const coarse = window.matchMedia?.('(pointer: coarse)')?.matches;
-        if (!coarse) {
-          // desktop: safe to restore sound without a gesture
-          try {
-            const pv = Number(window.localStorage.getItem('jash-live-volume'));
-            if (Number.isFinite(pv) && pv > 0) v.volume = Math.min(1, pv);
-          } catch {}
-          v.muted = false;
-          autoplayMutedRef.current = false;
-        }
-        // touch: unmute happens on the first user pointer (see wrapper tap)
+        try {
+          const pv = Number(window.localStorage.getItem('jb-watch-vol') || window.localStorage.getItem('jash-live-volume') || '1');
+          if (Number.isFinite(pv) && pv > 0) v.volume = Math.min(1, pv);
+        } catch {}
+        v.muted = false;
+        autoplayMutedRef.current = false;
+        setMuted(false);
       };
       v.addEventListener('playing', onFirstPlaying);
     }

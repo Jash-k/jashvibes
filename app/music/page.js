@@ -1185,23 +1185,23 @@ export default function MusicPage() {
   return (
     <main className="palette-music-magenta min-h-dvh overflow-x-hidden bg-[#050012] pb-28 text-zinc-100">
       <div className="mx-auto grid w-full min-w-0 max-w-[92rem] lg:grid-cols-[15rem_minmax(0,1fr)]">
-        <aside className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/90 px-3 py-3 backdrop-blur-xl lg:fixed lg:bottom-0 lg:left-0 lg:w-60 lg:border-b-0 lg:border-r lg:px-4 lg:py-5">
-          <div className="flex items-center justify-between gap-3 lg:block">
+        <aside className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/90 px-3 py-2 sm:py-3 backdrop-blur-xl lg:fixed lg:bottom-0 lg:left-0 lg:w-60 lg:border-b-0 lg:border-r lg:px-4 lg:py-5">
+          <div className="hidden sm:flex items-center justify-between gap-3 lg:block">
             <Link href="/" className="inline-flex rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">← Home</Link>
             <div className="text-right lg:mt-6 lg:text-left">
               <p className="text-[10px] font-black uppercase tracking-[0.32em] text-fuchsia-300/80">ராக வானம்</p>
               <h1 className="hidden text-3xl font-black text-white lg:block">Music</h1>
             </div>
           </div>
-          <nav className="mt-3 flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:mt-8 lg:grid lg:gap-2 lg:overflow-visible">
+          <nav className="mt-1 sm:mt-3 flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:mt-8 lg:grid lg:gap-2 lg:overflow-visible">
             {navItems.map(([id, icon, label]) => (
               <SidebarButton key={id} icon={icon} label={label} active={view === id} onClick={() => { setView(id); if (id !== 'search') setQuery(''); }} />
             ))}
           </nav>
         </aside>
 
-        <section className="min-w-0 px-4 py-5 sm:px-6 lg:col-start-2 lg:px-8">
-          <header className="relative overflow-hidden rounded-2xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_15%_18%,rgba(217,70,239,0.34),transparent_30%),radial-gradient(circle_at_85%_15%,rgba(236,72,153,0.20),transparent_28%),linear-gradient(135deg,#160014,#050505_58%,#120012)] p-4 text-center shadow-2xl shadow-fuchsia-950/30 sm:p-5">
+        <section className="min-w-0 px-3 py-3 sm:px-6 sm:py-5 lg:col-start-2 lg:px-8">
+          <header className="hidden sm:block relative overflow-hidden rounded-2xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_15%_18%,rgba(217,70,239,0.34),transparent_30%),radial-gradient(circle_at_85%_15%,rgba(236,72,153,0.20),transparent_28%),linear-gradient(135deg,#160014,#050505_58%,#120012)] p-4 text-center shadow-2xl shadow-fuchsia-950/30 sm:p-5">
             <div className="flex items-center justify-center gap-3">
               <BrandLogo size="mini" />
               <div className="min-w-0 text-left">
@@ -1211,6 +1211,9 @@ export default function MusicPage() {
             </div>
             <input value={query} onChange={(event) => { setQuery(event.target.value); setView('search'); }} placeholder="Search songs, albums, artists, playlists..." className="mx-auto mt-3 w-full max-w-xl rounded-full border border-fuchsia-400/20 bg-black/50 px-5 py-2.5 text-sm font-semibold text-white outline-none placeholder:text-zinc-600 focus:border-fuchsia-300" />
           </header>
+          <div className="sm:hidden mb-3">
+            <input value={query} onChange={(event) => { setQuery(event.target.value); setView('search'); }} placeholder="Search songs, albums, artists..." className="w-full rounded-2xl border border-fuchsia-400/20 bg-black/60 px-4 py-2.5 text-sm font-semibold text-white outline-none placeholder:text-zinc-500 focus:border-fuchsia-400" />
+          </div>
 
           <div className="mt-8 space-y-9">
             {view === 'search' ? (

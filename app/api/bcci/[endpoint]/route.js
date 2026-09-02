@@ -12,7 +12,8 @@ const EMPTY = {
 };
 
 export async function GET(request, { params }) {
-  const endpoint = params?.endpoint || 'live';
+  const resolvedParams = await params;
+  const endpoint = resolvedParams?.endpoint || 'live';
   const { searchParams } = new URL(request.url);
   try {
     const data = await fetchSportsBackend(`/api/bcci/${endpoint}`, searchParams, {

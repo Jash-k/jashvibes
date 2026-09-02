@@ -52,9 +52,18 @@ function hitRateLimit(key, limit, windowMs) {
   }
   bucket.count += 1;
   // Opportunistic cleanup so the map can't grow unbounded.
-  if (buckets.size > 5000) {
+  if (buckets.size > 3000) {
     for (const [bucketKey, value] of buckets) {
       if (now > value.resetAt) buckets.delete(bucketKey);
+    }
+    if (buckets.size > 5000) {
+      const excess = buckets.size - 5000;
+      let count = 0;
+      for (const bucketKey of buckets.keys()) {
+        buckets.delete(bucketKey);
+        count += 1;
+        if (count >= excess) break;
+      }
     }
   }
   return {
@@ -81,6 +90,10 @@ function safeEqual(a, b) {
 }
 
 function getClientIp(request) {
+  const cf = request.headers.get('cf-connecting-ip');
+  if (cf) return cf.trim();
+  const real = request.headers.get('x-real-ip');
+  if (real) return real.trim();
   const forwarded = request.headers.get('x-forwarded-for') || '';
   return forwarded.split(',')[0].trim() || 'unknown';
 }

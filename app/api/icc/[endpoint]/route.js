@@ -9,7 +9,8 @@ const EMPTY = {
 };
 
 export async function GET(request, { params }) {
-  const endpoint = params?.endpoint || 'highlights';
+  const resolvedParams = await params;
+  const endpoint = resolvedParams?.endpoint || 'highlights';
   const { searchParams } = new URL(request.url);
   try {
     // Keep ICC play manifests on the sports backend. The signed ICC Akamai URL is

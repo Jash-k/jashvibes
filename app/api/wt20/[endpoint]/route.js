@@ -10,7 +10,8 @@ const EMPTY = {
 };
 
 export async function GET(request, { params }) {
-  const endpoint = params?.endpoint || 'schedule';
+  const resolvedParams = await params;
+  const endpoint = resolvedParams?.endpoint || 'schedule';
   const { searchParams } = new URL(request.url);
   try {
     const data = await fetchSportsBackend(`/api/wt20/${endpoint}`, searchParams, { timeoutMs: 30000 });

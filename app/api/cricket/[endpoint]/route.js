@@ -10,7 +10,8 @@ const EMPTY = {
 };
 
 export async function GET(request, { params }) {
-  const endpoint = params?.endpoint || 'innings';
+  const resolvedParams = await params;
+  const endpoint = resolvedParams?.endpoint || 'innings';
   const { searchParams } = new URL(request.url);
   try {
     const data = await fetchSportsBackend(`/api/cricket/${endpoint}`, searchParams, { timeoutMs: 30000 });
