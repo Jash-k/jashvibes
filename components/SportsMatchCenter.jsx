@@ -164,8 +164,8 @@ function bowlingRows(inn = {}) {
 }
 
 function StatusPill({ status }) {
-  const isLive = status === 'live';
-  const isCompleted = status === 'completed';
+  const isLive = String(status).toLowerCase() === 'live';
+  const isCompleted = String(status).toLowerCase() === 'completed';
   const style = isLive
     ? 'border-red-400/40 bg-red-500/20 text-red-200 shadow-lg shadow-red-500/20'
     : isCompleted
@@ -520,6 +520,7 @@ function SharedBcciIplCenter({ payload, providerType }) {
     async function load() {
       try {
         setError('');
+        setActiveIndex(0);
         const summaryUrl = providerType === 'ipl'
           ? `/api/match/${encodeURIComponent(matchId)}/summary`
           : `/api/bcci/match?${encodeQuery({ competitionID: matchData.CompetitionID || matchData.CompetitionId, matchID: matchId, matchOrder: matchData.MatchOrder, seriesName: matchData.CompetitionName || matchData.SeriesName })}`;
@@ -544,8 +545,8 @@ function SharedBcciIplCenter({ payload, providerType }) {
   const statusValue = matchStatusFrom(rawSummary, matchData);
   const innings = inningsArray(inningsPayload);
   const activeInn = innings[activeIndex] || innings[0] || {};
-  const home = pick(matchData, ['HomeTeamName', 'Team1Name', 'team1', 'home'], pick(rawSummary, ['HomeTeamName', 'Team1Name'], 'Team A'));
-  const away = pick(matchData, ['AwayTeamName', 'Team2Name', 'team2', 'away'], pick(rawSummary, ['AwayTeamName', 'Team2Name'], 'Team B'));
+  const home = pick(payload, ['homeName', 'teamA'], pick(matchData, ['HomeTeamName', 'Team1Name', 'team1', 'home'], pick(rawSummary, ['HomeTeamName', 'Team1Name'], 'Team A')));
+  const away = pick(payload, ['awayName', 'teamB'], pick(matchData, ['AwayTeamName', 'Team2Name', 'team2', 'away'], pick(rawSummary, ['AwayTeamName', 'Team2Name'], 'Team B')));
 
   const tabs = ['Scorecard', 'Bowling', 'Overview'];
   const overview = [
@@ -582,8 +583,7 @@ function SharedBcciIplCenter({ payload, providerType }) {
 }
 
 function Wt20MatchCenter({ payload }) {
-  const matchData = payload.matchData || {};
-  const matchId = String(payload.matchId || matchData.match_id || matchData.MatchID || '').trim();
+  const matchId = String(payload.matchId || '').trim();
   const [data, setData] = useState(null);
   const [tab, setTab] = useState('Scorecard');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -597,6 +597,7 @@ function Wt20MatchCenter({ payload }) {
       try {
         setLoading(true);
         setError('');
+        setActiveIndex(0);
         const res = await fetch(`/api/wt20/scorecard?game_id=${encodeURIComponent(matchId)}`, { cache: 'no-store' });
         const json = await res.json();
         if (!res.ok) throw new Error(json?.error || 'ICC scorecard failed');
@@ -622,27 +623,25 @@ function Wt20MatchCenter({ payload }) {
   const activeInn = innings[activeIndex] || innings[0] || {};
   const homeTeam = teams?.[md?.Team_Home] || {};
   const awayTeam = teams?.[md?.Team_Away] || {};
-  const home = pick(matchData, ['teama', 'home', 'homeCode'], pick(homeTeam, ['Name_Full', 'Name', 'Team_Name'], payload.homeCode || 'Team A'));
-  const away = pick(matchData, ['teamb', 'away', 'awayCode'], pick(awayTeam, ['Name_Full', 'Name', 'Team_Name'], payload.awayCode || 'Team B'));
+  const home = pick(homeTeam, ['Name_Full', 'Name', 'Team_Name'], payload.homeName || payload.homeCode || 'Team A');
+  const away = pick(awayTeam, ['Name_Full', 'Name', 'Team_Name'], payload.awayName || payload.awayCode || 'Team B');
 
-  const resultText = String(md?.Result?.Text || md?.Equation || matchData.match_result || '').trim();
-  const isLive = md?.Match?.Live === true || md?.Match?.live === true || matchData.live === true || matchData.Live === true;
+  const resultText = String(md?.Result?.Text || md?.Equation || payload.result || '').trim();
+  const isLive = md?.Match?.Live === true || md?.Match?.live === true || payload.status === 'LIVE';
   const status = isLive
     ? 'live'
     : (resultText || innings.some((inn) => pick(inn, ['Total', 'Runs'], ''))) ? 'completed' : 'upcoming';
 
-  const homeScore = inningsScoreLine(innings, md?.Team_Home)
-    || matchData.teama_score || matchData.score1 || '';
-  const awayScore = inningsScoreLine(innings, md?.Team_Away)
-    || matchData.teamb_score || matchData.score2 || '';
+  const homeScore = inningsScoreLine(innings, md?.Team_Home) || payload.scoreA || '';
+  const awayScore = inningsScoreLine(innings, md?.Team_Away) || payload.scoreB || '';
 
   const potmName = resolvePlayerName(md?.Player_Match, teams) || md?.Player_Match_Name || md?.Player_Match;
 
   const overview = [
-    { label: 'Series', value: md?.Series?.Name || matchData.series_name || payload.leagueLabel },
-    { label: 'Venue', value: md?.Venue?.Name || matchData.venue_name || matchData.venue },
-    { label: 'Match', value: md?.Match?.Number || matchData.match_number },
-    { label: 'Date', value: md?.Match?.Date || matchData.match_date_ist },
+    { label: 'Series', value: md?.Series?.Name || payload.leagueLabel },
+    { label: 'Venue', value: md?.Venue?.Name || payload.venue },
+    { label: 'Match', value: md?.Match?.Number || `Match ${payload.matchId}` },
+    { label: 'Date', value: md?.Match?.Date || payload.startTime },
     { label: 'Toss', value: md?.Tosswonby ? `${teams?.[md.Tosswonby]?.Name_Full || md.Tosswonby} won the toss` : md?.Toss?.Text || md?.Toss },
     { label: 'Player of the Match', value: potmName },
     { label: 'Result', value: resultText },
@@ -740,30 +739,28 @@ function Wt20MatchCenter({ payload }) {
 
 function FanCodeMatchCenter({ payload }) {
   const match = payload.matchData || payload;
-  const teamA = match.team?.[0]?.name || match.team_1 || match.title?.split(' Vs ')?.[0] || 'Team 1';
-  const teamB = match.team?.[1]?.name || match.team_2 || match.title?.split(' Vs ')?.[1] || 'Team 2';
-  const isLive = String(match.status || '').toUpperCase() === 'LIVE';
-  const stream = (match.auto_streams?.[0]?.auto && (typeof bestFancodeVariant !== 'undefined' ? bestFancodeVariant(match.auto_streams[0].auto) : '')) || match.STREAMING_CDN?.Primary_Playback_URL || '';
-  const playerUrl = stream ? (typeof playerUrlFromHls !== 'undefined' ? playerUrlFromHls(stream, match.title || 'FanCode') : `https://m3u8-player-ashen.vercel.app/?src=${encodeURIComponent(stream)}&title=${encodeURIComponent(match.title || 'FanCode')}`) : '';
+  const teamA = payload.teamA || match.team?.[0]?.name || match.team_1 || match.title?.split(' Vs ')?.[0] || 'Team 1';
+  const teamB = payload.teamB || match.team?.[1]?.name || match.team_2 || match.title?.split(' Vs ')?.[1] || 'Team 2';
+  const isLive = String(payload.status || match.status || '').toUpperCase() === 'LIVE';
+  const rawStream = payload.stream || (match.auto_streams?.[0]?.auto && bestFancodeVariant(match.auto_streams[0].auto)) || match.STREAMING_CDN?.Primary_Playback_URL || '';
+  const playerUrl = rawStream ? playerUrlFromHls(rawStream, payload.title || match.title || 'FanCode') : '';
 
   const meta = [
-    { label: 'Tournament', value: match.tournament },
-    { label: 'Category', value: match.category || 'Sports' },
-    { label: 'Start Time', value: match.startTime || match.start_time || match.date },
-    { label: 'Language', value: match.language || 'English' },
-    { label: 'Match ID', value: String(match.match_id || '') },
-    { label: 'Status', value: match.status || (isLive ? 'LIVE' : 'UPCOMING') },
+    { label: 'Tournament', value: payload.tournament || match.tournament },
+    { label: 'Category', value: payload.category || match.category || 'Sports' },
+    { label: 'Start Time', value: payload.startTime || match.startTime || match.startDate },
+    { label: 'Status', value: isLive ? 'LIVE' : (payload.status || match.status || 'UPCOMING') },
   ].filter((item) => item.value);
 
   return (
     <div className="space-y-6">
       <Hero
         provider="FanCode"
-        title={match.title || `${teamA} vs ${teamB}`}
-        subtitle={match.tournament || 'FanCode Live Stream'}
-        status={isLive ? 'live' : String(match.status || '').toLowerCase() === 'completed' ? 'completed' : 'upcoming'}
-        scoreA={{ team: teamA, score: match.team?.[0]?.shortName || '' }}
-        scoreB={{ team: teamB, score: match.team?.[1]?.shortName || '' }}
+        title={payload.title || match.title || `${teamA} vs ${teamB}`}
+        subtitle={payload.tournament || match.tournament || 'FanCode Live Stream'}
+        status={isLive ? 'live' : String(payload.status || match.status || '').toLowerCase() === 'completed' ? 'completed' : 'upcoming'}
+        scoreA={{ team: teamA, score: payload.codeA || match.team?.[0]?.shortName || '' }}
+        scoreB={{ team: teamB, score: payload.codeB || match.team?.[1]?.shortName || '' }}
         meta={meta.slice(0, 4)}
       />
 
@@ -805,56 +802,104 @@ export default function SportsMatchCenter({ hash = '', initialPayload = null, sl
     if (hash) return decodeMatchHash(hash);
     return null;
   });
+  const [loading, setLoading] = useState(!resolvedPayload);
   const [error, setError] = useState('');
 
+  // 1. Direct Hash decoding
   useEffect(() => {
     if (hash) {
+      setLoading(true);
+      setError('');
       const decoded = decodeMatchHash(hash);
-      if (decoded) {
+      if (decoded && (decoded.matchId || decoded.type)) {
         setResolvedPayload(decoded);
-        setError('');
+        setLoading(false);
       } else {
         setError('Invalid match payload hash');
+        setLoading(false);
       }
     }
   }, [hash]);
 
+  // 2. Slug / Live resolver (runs ONLY when hash is empty and slug is set)
   useEffect(() => {
     if (hash || !slug) return;
     let cancelled = false;
     async function resolveSlug() {
       try {
+        setLoading(true);
         setError('');
         if (slug === 'live') {
+          // Priority 1: Check FanCode for live broadcasts
           try {
-            const wtRes = await fetch('/api/wt20/schedule', { cache: 'no-store' });
-            const wtJson = await wtRes.json();
-            const matches = wtJson.data?.matches || (Array.isArray(wtJson) ? wtJson : []);
-            const featured = matches.find((m) => m.live) || matches[0];
-            if (featured && !cancelled) {
+            const fcRes = await fetch('https://raw.githubusercontent.com/doctor-8trange/zyphx8/refs/heads/main/data/fancode.json', { cache: 'no-store' });
+            const fcData = await fcRes.json();
+            const liveMatch = (fcData.matches || []).find((m) => String(m.status || '').toUpperCase() === 'LIVE');
+            if (liveMatch && !cancelled) {
               setResolvedPayload({
                 sport: 'cricket',
-                type: 'wt20',
-                matchId: featured.match_id,
-                homeCode: featured.teama_short,
-                awayCode: featured.teamb_short,
-                leagueLabel: featured.series_short_display_name || featured.series_name,
-                matchData: featured,
+                type: 'fancode',
+                matchId: String(liveMatch.match_id || ''),
+                title: liveMatch.title || '',
+                tournament: liveMatch.tournament || '',
+                category: liveMatch.category || 'Sports',
+                startTime: liveMatch.startTime || liveMatch.startDate || 'Live',
+                teamA: liveMatch.team?.[0]?.name || '',
+                teamB: liveMatch.team?.[1]?.name || '',
+                codeA: liveMatch.team?.[0]?.shortName || '',
+                codeB: liveMatch.team?.[1]?.shortName || '',
+                status: 'LIVE',
+                stream: liveMatch.STREAMING_CDN?.Primary_Playback_URL || '',
+                auto_streams: liveMatch.auto_streams,
               });
+              setLoading(false);
               return;
             }
           } catch {}
 
+          // Priority 2: Check WT20 schedule for live match
           try {
-            const fcRes = await fetch('https://raw.githubusercontent.com/doctor-8trange/zyphx8/refs/heads/main/data/fancode.json', { cache: 'no-store' });
-            const fcData = await fcRes.json();
-            const liveMatch = (fcData.matches || []).find((m) => String(m.status || '').toUpperCase() === 'LIVE') || fcData.matches?.[0];
-            if (liveMatch && !cancelled) {
-              setResolvedPayload({ type: 'fancode', matchId: liveMatch.match_id, matchData: liveMatch });
+            const wtRes = await fetch('/api/wt20/schedule', { cache: 'no-store' });
+            const wtJson = await wtRes.json();
+            const matches = wtJson.data?.matches || (Array.isArray(wtJson) ? wtJson : []);
+            const liveWt = matches.find((m) => m.live);
+            if (liveWt && !cancelled) {
+              setResolvedPayload({
+                sport: 'cricket',
+                type: 'wt20',
+                matchId: String(liveWt.match_id),
+                homeCode: liveWt.teama_short,
+                awayCode: liveWt.teamb_short,
+                homeName: liveWt.teama,
+                awayName: liveWt.teamb,
+                leagueLabel: liveWt.series_short_display_name || liveWt.series_name,
+              });
+              setLoading(false);
+              return;
+            }
+
+            // Priority 3: Fallback to latest tournament match
+            const latestMatch = matches[matches.length - 1] || matches[0];
+            if (latestMatch && !cancelled) {
+              setResolvedPayload({
+                sport: 'cricket',
+                type: 'wt20',
+                matchId: String(latestMatch.match_id),
+                homeCode: latestMatch.teama_short,
+                awayCode: latestMatch.teamb_short,
+                homeName: latestMatch.teama,
+                awayName: latestMatch.teamb,
+                leagueLabel: latestMatch.series_short_display_name || latestMatch.series_name,
+              });
+              setLoading(false);
               return;
             }
           } catch {}
-          if (!cancelled) setError('No live matches currently in progress');
+
+          if (!cancelled) {
+            setError('No live matches currently in progress');
+            setLoading(false);
+          }
           return;
         }
 
@@ -867,8 +912,12 @@ export default function SportsMatchCenter({ hash = '', initialPayload = null, sl
         } else {
           setError(data.error || 'Unable to resolve match');
         }
+        setLoading(false);
       } catch (err) {
-        if (!cancelled) setError(err.message || 'Unable to resolve match');
+        if (!cancelled) {
+          setError(err.message || 'Unable to resolve match');
+          setLoading(false);
+        }
       }
     }
     resolveSlug();
@@ -893,8 +942,8 @@ export default function SportsMatchCenter({ hash = '', initialPayload = null, sl
         </div>
       </header>
       <section className="relative z-10 mx-auto max-w-6xl px-4 py-6 pb-24">
+        {loading && !payload?.type ? <EmptyPanel text="Loading match center…" /> : null}
         {error ? <EmptyPanel text={error} /> : null}
-        {!payload?.type && !error ? <EmptyPanel text="Loading match center…" /> : null}
         {type === 'bcci' ? <SharedBcciIplCenter payload={payload} providerType="bcci" /> : null}
         {type === 'ipl' ? <SharedBcciIplCenter payload={payload} providerType="ipl" /> : null}
         {type === 'wt20' || type === 'icc' ? <Wt20MatchCenter payload={payload} /> : null}
