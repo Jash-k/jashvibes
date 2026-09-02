@@ -117,6 +117,7 @@ export default function DirectWatchPlayer({
   const holdRef = useRef({ timer: 0, active: false, prevRate: 1 });
   const stallTimerRef = useRef(0);
   const fallbackFiredRef = useRef(false);
+  const autoplayMutedRef = useRef(false);
   const resumeShownRef = useRef(false);
   const wakeLockRef = useRef(null);
   const flashTimerRef = useRef(0);
@@ -183,6 +184,45 @@ export default function DirectWatchPlayer({
     };
     const onEnterPip = () => setPipActive(true);
     const onLeavePip = () => setPipActive(false);
+
+    // ---------- autoplay-safe boot ----------
+    // Browsers block UNMUTED autoplay (mobile especially): the first live
+    // channel would start then freeze until the user touches the screen.
+    // Start muted for autoplay elements, retry once if still paused after
+    // 4s, then restore sound on first 'playing' (desktop) or first tap
+    // (mobile) — only when WE forced the mute.
+    autoplayMutedRef.current = false;
+    if (v.autoplay) {
+      if (!v.muted) {
+        v.muted = true;
+        autoplayMutedRef.current = true;
+      }
+      v.play().catch(() => {});
+      const bootTimer = window.setTimeout(() => {
+        if (v.paused) {
+          autoplayMutedRef.current = true;
+          v.muted = true;
+          v.play().catch(() => {});
+        }
+      }, 4000);
+      const onFirstPlaying = () => {
+        window.clearTimeout(bootTimer);
+        v.removeEventListener('playing', onFirstPlaying);
+        if (!autoplayMutedRef.current) return;
+        const coarse = window.matchMedia?.('(pointer: coarse)')?.matches;
+        if (!coarse) {
+          // desktop: safe to restore sound without a gesture
+          try {
+            const pv = Number(window.localStorage.getItem('jash-live-volume'));
+            if (Number.isFinite(pv) && pv > 0) v.volume = Math.min(1, pv);
+          } catch {}
+          v.muted = false;
+          autoplayMutedRef.current = false;
+        }
+        // touch: unmute happens on the first user pointer (see wrapper tap)
+      };
+      v.addEventListener('playing', onFirstPlaying);
+    }
 
     v.addEventListener('play', onPlay);
     v.addEventListener('pause', onPause);
@@ -424,6 +464,11 @@ export default function DirectWatchPlayer({
   // ---------- gestures on the touch layer ----------
   const onLayerPointerDown = (event) => {
     wake();
+    // touch: restore sound if we force-muted it for autoplay
+    if (autoplayMutedRef.current && videoEl && !videoEl.paused) {
+      try { videoEl.muted = false; } catch {}
+      autoplayMutedRef.current = false;
+    }
     if (event.pointerType === 'mouse') return; // desktop uses clicks
     const zone = (() => {
       const rect = event.currentTarget.getBoundingClientRect();

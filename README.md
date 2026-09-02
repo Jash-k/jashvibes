@@ -164,3 +164,6 @@ For personal/educational use only. Host only sources you are authorized to acces
 
 ## v8.4.1
 - SlimTopStrip now renders on EVERY page (titles for live/stremio/music/sports/classics added). Touch UX: single video taps only show/refresh controls; hide via idle timer only. sw v57.
+
+## v8.4.2
+- One header per page again (SlimTopStrip only on unbranded pages: home/watch/my-list/match/etc). Live first-play fix: autoplay-safe boot starts muted (browser policy blocks unmuted autoplay), retries if still paused after 4s, restores sound on first playing (desktop) or first tap (mobile). sw v58.

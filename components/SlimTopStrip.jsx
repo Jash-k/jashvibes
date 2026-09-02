@@ -9,6 +9,10 @@
 import { usePathname } from 'next/navigation';
 import BrandLogo from '@/components/BrandLogo';
 
+// Pages that already carry their own branded slim header (logo + title).
+// The strip is NOT added there — one header per page, no duplication.
+const PAGES_WITH_OWN_BRAND = ['/live', '/stremio', '/music', '/sports', '/classics'];
+
 const TITLE_MAP = [
   { match: /^\/?$/, title: 'Home' },
   { match: /^\/watch\//, title: 'Now Playing' },
