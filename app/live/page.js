@@ -670,12 +670,15 @@ export default function LiveTVPage() {
               )}
 
               {playerStatus === 'loading' ? (
-                <div className="absolute inset-0 grid place-items-center bg-black/45">
-                  <div className="rounded-full border border-white/10 bg-black/80 px-5 py-3 text-sm font-bold text-zinc-200">Loading channel...</div>
+                <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-black/45">
+                  <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/85 px-5 py-2.5 text-sm font-bold text-zinc-200 shadow-xl backdrop-blur">
+                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/20 border-t-fuchsia-400" />
+                    <span>Loading channel...</span>
+                  </div>
                 </div>
               ) : null}
               {playerStatus === 'error' ? (
-                <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-red-500/30 bg-red-950/80 p-3 text-sm leading-6 text-red-100 backdrop-blur">
+                <div className="absolute inset-x-4 bottom-16 z-40 rounded-2xl border border-red-500/30 bg-red-950/90 p-3 text-sm leading-6 text-red-100 shadow-xl backdrop-blur">
                   {playerError || 'Playback failed. Try another source.'}
                 </div>
               ) : null}

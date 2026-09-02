@@ -797,6 +797,89 @@ html.day-mode .jv-hero .jv-btn-ghost {
 }
 html.day-mode .jv-hero .jv-btn-ghost:hover { background: rgba(255, 255, 255, 0.18); border-color: rgba(255, 255, 255, 0.45); }
 
+/* ---------------------------------------------------------------------------
+ * Video Player UI (DirectWatchPlayer, Shaka, HLS, Fullscreen):
+ * ALWAYS cinematic dark overlay with bright white text, icons, and buttons in ALL themes.
+ * Prevents day-mode text blankets & background brightening from washing out player controls.
+ * ------------------------------------------------------------------------- */
+html.day-mode [data-dvp="root"],
+html.day-mode [data-dvp="root"] *,
+html.day-mode [data-dvp="controls"],
+html.day-mode [data-dvp="controls"] *,
+html.day-mode #live-player-shell,
+html.day-mode #live-player-shell *,
+html.day-mode .classics-player-shell,
+html.day-mode .classics-player-shell *,
+html.day-mode [data-shaka-player-container],
+html.day-mode [data-shaka-player-container] *,
+html.day-mode .shaka-controls-container,
+html.day-mode .shaka-controls-container *,
+html.day-mode .video-player-shell,
+html.day-mode .video-player-shell * {
+  color: #ffffff !important;
+  fill: currentColor !important;
+}
+
+/* Retain dark background inside video player containers in Day Mode */
+html.day-mode #live-player-shell,
+html.day-mode [data-dvp="root"],
+html.day-mode [data-shaka-player-container],
+html.day-mode .video-player-shell,
+html.day-mode .classics-player-shell,
+html.day-mode #live-player-shell video,
+html.day-mode [data-dvp="root"] video,
+html.day-mode [data-shaka-player-container] video {
+  background-color: #000000 !important;
+}
+
+html.day-mode [data-dvp="root"] [class*="bg-black"],
+html.day-mode [data-dvp="controls"] [class*="bg-black"],
+html.day-mode #live-player-shell [class*="bg-black"] {
+  background-color: #000000 !important;
+}
+
+html.day-mode [data-dvp="root"] [class*="bg-black/"],
+html.day-mode [data-dvp="controls"] [class*="bg-black/"],
+html.day-mode #live-player-shell [class*="bg-black/"] {
+  background-color: rgba(0, 0, 0, 0.75) !important;
+}
+
+html.day-mode [data-dvp="root"] [class*="bg-zinc-950"],
+html.day-mode [data-dvp="controls"] [class*="bg-zinc-950"],
+html.day-mode #live-player-shell [class*="bg-zinc-950"] {
+  background-color: #09090b !important;
+}
+
+html.day-mode [data-dvp="root"] [class*="from-black"],
+html.day-mode [data-dvp="controls"] [class*="from-black"] {
+  --tw-gradient-from: #000000 !important;
+  --tw-gradient-to: rgb(0 0 0 / 0) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
+html.day-mode [data-dvp="root"] [class*="text-fuchsia-"],
+html.day-mode [data-dvp="controls"] [class*="text-fuchsia-"] {
+  color: #f0abfc !important;
+}
+
+html.day-mode [data-dvp="root"] [class*="text-amber-"],
+html.day-mode [data-dvp="controls"] [class*="text-amber-"] {
+  color: #fcd34d !important;
+}
+
+html.day-mode [data-dvp="root"] [class*="text-red-"],
+html.day-mode [data-dvp="controls"] [class*="text-red-"] {
+  color: #fca5a5 !important;
+}
+
+html.day-mode [data-dvp="controls"] button:hover {
+  background-color: rgba(255, 255, 255, 0.22) !important;
+}
+
+html.day-mode [data-dvp="controls"] [class*="border-white/"] {
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
 /* ===========================================================================
  * JV MUSIC PLAYER (v7.1) — aurora takeover, spinning vinyl, equalizer,
  * glow-pulse play button, gradient seek ribbon.

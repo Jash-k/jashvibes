@@ -130,7 +130,7 @@ export default function DirectWatchPlayer({
     window.clearTimeout(hideTimerRef.current);
     hideTimerRef.current = window.setTimeout(() => {
       setVisible(false);
-    }, 3000);
+    }, 4000);
   }, []);
 
   useEffect(() => {
@@ -506,8 +506,18 @@ export default function DirectWatchPlayer({
       }, 280);
     }
   };
-  const onLayerClick = () => { /* desktop: click shows/hides */ if (matchMedia('(pointer:fine)').matches) setVisible((p) => !p); };
-  const onLayerDoubleClick = () => { if (matchMedia('(pointer:fine)').matches) toggleFullscreen(); };
+  const onLayerClick = () => {
+    wake();
+    if (matchMedia('(pointer:fine)').matches) {
+      togglePlay();
+    }
+  };
+  const onLayerDoubleClick = () => {
+    wake();
+    if (matchMedia('(pointer:fine)').matches) {
+      toggleFullscreen();
+    }
+  };
 
   // ---------- keyboard ----------
   const onKeyDown = (event) => {
@@ -607,7 +617,7 @@ export default function DirectWatchPlayer({
       ) : null}
 
       {/* top gradient + title */}
-      <div className={`pointer-events-none absolute inset-x-0 top-0 z-20 bg-gradient-to-b from-black/75 via-black/30 to-transparent px-4 pt-3 pb-10 transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0'}`}>
+      <div className={`pointer-events-none absolute inset-x-0 top-0 z-20 bg-gradient-to-b from-black/80 via-black/40 to-transparent px-4 pt-3 pb-10 transition-opacity duration-300 group-hover/player:opacity-100 ${visible ? 'opacity-100' : 'opacity-0'}`}>
         <p className="max-w-full truncate text-[13px] font-bold text-white drop-shadow sm:text-sm">
           <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-gradient-to-r from-fuchsia-400 to-amber-300 shadow-[0_0_10px_rgba(217,70,239,0.9)]" />
           {title || 'Now Playing'}
@@ -629,7 +639,7 @@ export default function DirectWatchPlayer({
       <div
         data-dvp="controls"
         onPointerDown={wake}
-        className={`absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/92 via-black/55 to-transparent px-3 pb-2.5 pt-12 transition-opacity duration-300 ${visible ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+        className={`absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/95 via-black/60 to-transparent px-3 pb-2.5 pt-12 transition-opacity duration-300 group-hover/player:opacity-100 group-hover/player:pointer-events-auto ${visible ? 'opacity-100 pointer-events-auto' : 'pointer-events-none opacity-0'}`}
       >
         {/* scrubber (VOD / DVR live) or plain LIVE badge (live without window) */}
         {canSeek ? (
