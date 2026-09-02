@@ -53,6 +53,22 @@ function formatDirectPlaybackError(error, resolvedProviderId = '') {
   return message || 'Direct player failed. Try another source.';
 }
 
+// Pull a clean "1080p 2.9GB"-style label out of a direct-file URL. Telegram
+// bot links embed the filename in the path ("...1080p WEBRip x264 ... 2.9GB
+// ESub.mkv ⁍ Quality : 1080p ..."), so resolution + size live in the URL text.
+function parseUrlSourceLabel(url = '') {
+  try {
+    const text = decodeURIComponent(String(url || '')).replace(/[_-]+/g, ' ');
+    const res = text.match(/\b(?:2160p|1440p|1080p|720p|576p|540p|480p|360p)\b/i)?.[0]
+      || (/\b4k\b/i.test(text) ? '4K' : '');
+    const size = text.match(/[\d.]+\s?(?:TB|GB|MB)\b/i)?.[0]?.replace(/\s+/g, '').toUpperCase() || '';
+    const resNorm = res ? (/^4k$/i.test(res) ? '4K' : res.replace(/p$/i, 'p')) : '';
+    return [resNorm, size].filter(Boolean).join(' ');
+  } catch {
+    return '';
+  }
+}
+
 function shouldUseObjectPlayer(provider, streamUrl) {
   // VidSrc works best as a normal unsandboxed iframe with autoplay/fullscreen
   // permissions. Keep <object> only for providers that complain about iframe
@@ -506,17 +522,18 @@ export default function WatchByTMDBPage() {
   const directStreamActive = playerMode === 'stream' && isDirectPlayerType(streamType, activePlayerUrl);
 
   // ---------- DirectWatchPlayer wiring (v7.7.0) ----------
-  // Labelled source list for the player's stream picker menu.
+  // Labelled source list for the player's stream picker menu. Labels resolve
+  // in order: stream meta → parsed from the URL filename ("1080p 2.9GB") → Source N.
   const watchSources = useMemo(() => {
     return streamChoices.map((url, index) => {
       const matched = (stremioStreams || []).find((s) => s && (s.url === url || s.streamUrl === url));
-      const label = matched
+      const metaLabel = matched
         ? [matched.title, matched.name, matched.behaviorHints?.bingeGroup, matched.quality]
             .filter(Boolean)
             .join(' • ')
             .replace(/\s+/g, ' ')
-        : `Source ${index + 1}`;
-      return { url, label: label || `Source ${index + 1}` };
+        : '';
+      return { url, label: metaLabel || parseUrlSourceLabel(url) || `Source ${index + 1}` };
     });
   }, [streamChoices, stremioStreams]);
 

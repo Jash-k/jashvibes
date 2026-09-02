@@ -67,6 +67,10 @@ export default function DirectWatchPlayer({
   onAutoFallback,
   nextEpisode,
   onError: onErrorProp,
+  live = false,
+  liveLabel = 'LIVE',
+  onPrev,
+  onNext,
 }) {
   const wrapRef = useRef(null);
   const [playing, setPlaying] = useState(false);
@@ -302,14 +306,20 @@ export default function DirectWatchPlayer({
     flashTimerRef.current = window.setTimeout(() => setFlash(null), 600);
   }, [videoEl]);
 
+  const seekAllowedNow = useCallback(() => {
+    const w = seekWindow();
+    return Boolean(w && Number.isFinite(w.end) && w.end - w.start > 0 && (!live || w.end - w.start > 120));
+  }, [seekWindow, live]);
+
   const seekBy = useCallback((delta) => {
     const v = videoEl;
     const win = seekWindow();
-    if (!v || !win) return;
+    if (!v || !win || (live && win.end - win.start <= 120)) return;
     v.currentTime = Math.min(Math.max(win.start, v.currentTime + delta), Math.max(win.start, win.end - 0.25));
-  }, [videoEl, seekWindow]);
+  }, [videoEl, seekWindow, live]);
 
   const tapSeek = useCallback((side) => {
+    if (!seekAllowedNow()) return;
     // accumulate repeated double-taps for the on-screen counter
     setFlash((prev) => {
       const same = prev && prev.kind === (side === 'right' ? 'fwd' : 'back') && Date.now() - prev.id < 1200;
@@ -320,7 +330,7 @@ export default function DirectWatchPlayer({
       return { id, kind: side === 'right' ? 'fwd' : 'back', amount: amt };
     });
     seekBy(side === 'right' ? 10 : -10);
-  }, [seekBy]);
+  }, [seekBy, seekAllowedNow]);
 
   const toggleFullscreen = useCallback(() => {
     const el = wrapRef.current;
@@ -473,9 +483,13 @@ export default function DirectWatchPlayer({
   const shownTime = scrubbing !== null ? scrubbing : time;
   const win = seekWindow();
   const winLength = win ? win.end - win.start : 0;
-  const playedRatio = win && winLength > 0 ? Math.min(1, Math.max(0, (shownTime - win.start) / winLength)) : 0;
-  const bufferedRatio = win && winLength > 0 ? Math.min(1, Math.max(0, (bufferedEnd - win.start) / winLength)) : 0;
-  const remainingForNext = winLength > 0 && nextEpisode && playing && win.end - time <= 60;
+  const winFinite = Number.isFinite(winLength) && winLength > 0;
+  // Seeking is available for VOD (finite window) and for LIVE streams only
+  // when a usable DVR/timeshift window exists (> 120s of seekable range).
+  const canSeek = Boolean(win && winFinite && Number.isFinite(win.end) && (!live || winLength > 120));
+  const playedRatio = canSeek && winLength > 0 ? Math.min(1, Math.max(0, (shownTime - win.start) / winLength)) : 0;
+  const bufferedRatio = canSeek && winLength > 0 ? Math.min(1, Math.max(0, (bufferedEnd - win.start) / winLength)) : 0;
+  const remainingForNext = !live && winFinite && nextEpisode && playing && win.end - time <= 60;
 
   const ambientActive = ambient && playing && !isFullscreen;
 
@@ -569,43 +583,67 @@ export default function DirectWatchPlayer({
         data-dvp="controls"
         className={`absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-3 pb-2.5 pt-12 transition-opacity duration-300 ${visible ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
       >
-        {/* scrubber */}
-        <div
-          ref={trackRef}
-          className="group/track relative -my-2 cursor-pointer py-2"
-          onPointerDown={onTrackDown}
-          onPointerMove={onTrackMove}
-          onPointerUp={onTrackUp}
-          onPointerCancel={onTrackUp}
-          onMouseMove={onTrackHover}
-          onMouseLeave={() => setTooltip(null)}
-        >
-          <div className="relative h-1 w-full overflow-hidden rounded-full bg-white/20 transition-all group-hover/track:h-1.5">
-            <div className="absolute inset-y-0 left-0 rounded-full bg-white/25" style={{ width: `${bufferedRatio * 100}%` }} />
-            <div className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-fuchsia-500 via-fuchsia-400 to-amber-300" style={{ width: `${playedRatio * 100}%` }} />
-          </div>
+        {/* scrubber (VOD / DVR live) or plain LIVE badge (live without window) */}
+        {canSeek ? (
           <div
-            className="pointer-events-none absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 -translate-x-1/2 rounded-full bg-white opacity-0 shadow-[0_0_14px_rgba(217,70,239,0.9)] transition-opacity group-hover/track:opacity-100"
-            style={{ left: `${playedRatio * 100}%` }}
-          />
-          {tooltip ? (
-            <div className="pointer-events-none absolute -top-8 -translate-x-1/2 rounded-md bg-black/85 px-2 py-1 text-[11px] font-bold text-white" style={{ left: tooltip.x }}>
-              {fmtTime(tooltip.seconds)}
+            ref={trackRef}
+            className="group/track relative -my-2 cursor-pointer py-2"
+            onPointerDown={onTrackDown}
+            onPointerMove={onTrackMove}
+            onPointerUp={onTrackUp}
+            onPointerCancel={onTrackUp}
+            onMouseMove={onTrackHover}
+            onMouseLeave={() => setTooltip(null)}
+          >
+            <div className="relative h-1 w-full overflow-hidden rounded-full bg-white/20 transition-all group-hover/track:h-1.5">
+              <div className="absolute inset-y-0 left-0 rounded-full bg-white/25" style={{ width: `${bufferedRatio * 100}%` }} />
+              <div className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-fuchsia-500 via-fuchsia-400 to-amber-300" style={{ width: `${playedRatio * 100}%` }} />
             </div>
-          ) : null}
-        </div>
+            <div
+              className="pointer-events-none absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 -translate-x-1/2 rounded-full bg-white opacity-0 shadow-[0_0_14px_rgba(217,70,239,0.9)] transition-opacity group-hover/track:opacity-100"
+              style={{ left: `${playedRatio * 100}%` }}
+            />
+            {tooltip ? (
+              <div className="pointer-events-none absolute -top-8 -translate-x-1/2 rounded-md bg-black/85 px-2 py-1 text-[11px] font-bold text-white" style={{ left: tooltip.x }}>
+                {fmtTime(tooltip.seconds)}
+              </div>
+            ) : null}
+          </div>
+        ) : live ? (
+          <div className="flex items-center gap-2 py-1">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+            </span>
+            <span className="text-[11px] font-black uppercase tracking-[0.22em] text-red-300">{liveLabel}</span>
+          </div>
+        ) : null}
 
         {/* buttons row */}
         <div className="mt-1.5 flex items-center gap-1 sm:gap-2">
+          {onPrev ? (
+            <button onClick={onPrev} aria-label="Previous channel" className="rounded-full p-2 text-white transition hover:bg-white/10 active:scale-95">
+              <Icon d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z" className="h-5 w-5" />
+            </button>
+          ) : null}
           <button onClick={togglePlay} aria-label={playing ? 'Pause' : 'Play'} className="rounded-full p-2 text-white transition hover:bg-white/10 active:scale-95">
             <Icon d={playing ? PATHS.pause : PATHS.play} className="h-6 w-6" />
           </button>
-          <button onClick={() => tapSeek('left')} aria-label="Back 10 seconds" className="rounded-full p-2 text-white transition hover:bg-white/10 active:scale-95">
-            <Icon d={PATHS.back10} className="h-5 w-5" />
-          </button>
-          <button onClick={() => tapSeek('right')} aria-label="Forward 10 seconds" className="rounded-full p-2 text-white transition hover:bg-white/10 active:scale-95">
-            <Icon d={PATHS.fwd10} className="h-5 w-5" />
-          </button>
+          {canSeek ? (
+            <>
+              <button onClick={() => tapSeek('left')} aria-label="Back 10 seconds" className="rounded-full p-2 text-white transition hover:bg-white/10 active:scale-95">
+                <Icon d={PATHS.back10} className="h-5 w-5" />
+              </button>
+              <button onClick={() => tapSeek('right')} aria-label="Forward 10 seconds" className="rounded-full p-2 text-white transition hover:bg-white/10 active:scale-95">
+                <Icon d={PATHS.fwd10} className="h-5 w-5" />
+              </button>
+            </>
+          ) : null}
+          {onNext ? (
+            <button onClick={onNext} aria-label="Next channel" className="rounded-full p-2 text-white transition hover:bg-white/10 active:scale-95">
+              <Icon d="M8.59 16.59 10 18l6-6-6-6-1.41 1.41L13.17 12z" className="h-5 w-5" />
+            </button>
+          ) : null}
 
           <div className="group/vol hidden items-center sm:flex">
             <button onClick={() => { if (videoEl) videoEl.muted = !videoEl.muted; }} aria-label="Mute" className="rounded-full p-2 text-white transition hover:bg-white/10">
@@ -619,26 +657,30 @@ export default function DirectWatchPlayer({
             />
           </div>
 
-          <span className="ml-1 text-[11px] font-semibold tabular-nums text-zinc-300 sm:text-xs">
-            {fmtTime(shownTime - (win?.start || 0))}{' '}
-            <span className="text-zinc-500">/ {winLength > 0 ? fmtTime(winLength) : 'LIVE'}</span>
-          </span>
+          {!live ? (
+            <span className="ml-1 text-[11px] font-semibold tabular-nums text-zinc-300 sm:text-xs">
+              {fmtTime(shownTime - (win?.start || 0))}
+              {winFinite ? <span className="text-zinc-500"> / {fmtTime(winLength)}</span> : null}
+            </span>
+          ) : null}
 
           <div className="flex-1" />
 
-          {/* speed */}
-          <div className="relative">
-            <button onClick={() => setMenu(menu === 'speed' ? null : 'speed')} className="rounded-full border border-white/15 px-2.5 py-1 text-[11px] font-black text-white transition hover:border-fuchsia-400/50 hover:text-fuchsia-200">
-              {rate}×
-            </button>
-            {menu === 'speed' ? (
-              <Menu title="Speed" onClose={() => setMenu(null)}>
-                {SPEED_OPTIONS.map((r) => (
-                  <MenuItem key={r} active={r === rate} onClick={() => changeRate(r)}>{r === 1 ? 'Normal' : `${r}×`}</MenuItem>
-                ))}
-              </Menu>
-            ) : null}
-          </div>
+          {/* speed (VOD only — meaningless on live edge) */}
+          {!live ? (
+            <div className="relative">
+              <button onClick={() => setMenu(menu === 'speed' ? null : 'speed')} className="rounded-full border border-white/15 px-2.5 py-1 text-[11px] font-black text-white transition hover:border-fuchsia-400/50 hover:text-fuchsia-200">
+                {rate}×
+              </button>
+              {menu === 'speed' ? (
+                <Menu title="Speed" onClose={() => setMenu(null)}>
+                  {SPEED_OPTIONS.map((r) => (
+                    <MenuItem key={r} active={r === rate} onClick={() => changeRate(r)}>{r === 1 ? 'Normal' : `${r}×`}</MenuItem>
+                  ))}
+                </Menu>
+              ) : null}
+            </div>
+          ) : null}
 
           {/* source picker */}
           {sources.length > 1 ? (

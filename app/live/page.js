@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import DirectWatchPlayer from '@/components/player/DirectWatchPlayer';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 import {
   LIVE_CATALOGS,
@@ -147,7 +148,11 @@ export default function LiveTVPage() {
   const videoRef = useRef(null);
   const playerContainerRef = useRef(null);
   const shakaRef = useRef(null);
-  const shakaUiRef = useRef(null);
+  const [liveVideoEl, setLiveVideoEl] = useState(null);
+  const liveVideoCallbackRef = useCallback((el) => {
+    videoRef.current = el;
+    setLiveVideoEl(el);
+  }, []);
   const playbackIdRef = useRef(0);
   const sourceLoadIdRef = useRef(0);
   const [channels, setChannels] = useState([]);
@@ -261,26 +266,16 @@ export default function LiveTVPage() {
     let cancelled = false;
     let loadTimeout = null;
     let localPlayer = null;
-    let localOverlay = null;
     const loadId = playbackIdRef.current + 1;
     playbackIdRef.current = loadId;
     const isCurrentLoad = () => !cancelled && playbackIdRef.current === loadId;
     const video = videoRef.current;
-    const container = playerContainerRef.current;
-    const pocketChannel = isPocketChannel(active);
+        const pocketChannel = isPocketChannel(active);
     const pocketProxyEnabled = pocketChannel && (/^http:\/\//i.test(active.url || '') || pocketProxyIds.includes(active.id));
     const activeUsesJio = isJioChannel(active);
 
-    async function destroyPlayerInstances(player, overlay) {
-      const targetOverlay = overlay || null;
+    async function destroyPlayerInstances(player) {
       const targetPlayer = player || null;
-
-      if (targetOverlay) {
-        try {
-          await targetOverlay.destroy();
-        } catch {}
-        if (shakaUiRef.current === targetOverlay) shakaUiRef.current = null;
-      }
 
       if (targetPlayer) {
         try {
@@ -291,13 +286,12 @@ export default function LiveTVPage() {
     }
 
     async function destroyCurrentPlayer() {
-      // Capture the current instances before awaiting. This prevents the cleanup
+      // Capture the current instance before awaiting. This prevents the cleanup
       // from a previous channel switch from accidentally destroying the next
       // channel's newly-created player, which caused every alternate switch to
       // freeze/play.
-      const overlay = shakaUiRef.current;
       const player = shakaRef.current;
-      await destroyPlayerInstances(player, overlay);
+      await destroyPlayerInstances(player);
     }
 
     async function loadChannel() {
@@ -307,7 +301,7 @@ export default function LiveTVPage() {
         if (!isCurrentLoad()) return;
         setPlayerStatus('error');
         setPlayerError('Channel switch timed out. Try the channel again or choose another source.');
-        destroyPlayerInstances(localPlayer, localOverlay);
+        destroyPlayerInstances(localPlayer);
       }, activeUsesJio ? 40000 : 25000);
 
       await destroyCurrentPlayer();
@@ -327,7 +321,7 @@ export default function LiveTVPage() {
 
       try {
         const [shakaModule, muxModule] = await Promise.all([
-          import('shaka-player/dist/shaka-player.ui.js'),
+          import('shaka-player/dist/shaka-player.compiled.js'),
           import('mux.js'),
         ]);
         if (!isCurrentLoad()) return;
@@ -349,32 +343,10 @@ export default function LiveTVPage() {
         shakaRef.current = player;
         await player.attach(video);
         if (!isCurrentLoad()) {
-          await destroyPlayerInstances(player, null);
+          await destroyPlayerInstances(player);
           return;
         }
 
-        const overlay = new shaka.ui.Overlay(player, container, video);
-        localOverlay = overlay;
-        shakaUiRef.current = overlay;
-        overlay.configure({
-          controlPanelElements: [
-            'play_pause',
-            'volume',
-            'time_and_duration',
-            'spacer',
-            'quality',
-            'fullscreen',
-          ],
-          seekBarColors: {
-            base: 'rgba(255,255,255,0.3)',
-            buffered: 'rgba(255,255,255,0.6)',
-            played: '#ff2222',
-          },
-          volumeBarColors: {
-            base: 'rgba(255,255,255,0.3)',
-            level: '#ff2222',
-          },
-        });
 
         let jioAccess = activeUsesJio
           ? await resolveJioAccess(active)
@@ -553,7 +525,7 @@ export default function LiveTVPage() {
     return () => {
       cancelled = true;
       if (loadTimeout) window.clearTimeout(loadTimeout);
-      destroyPlayerInstances(localPlayer, localOverlay);
+      destroyPlayerInstances(localPlayer);
     };
   }, [active, pocketProxyIds]);
 
@@ -673,16 +645,30 @@ export default function LiveTVPage() {
               data-shaka-player-container
             >
               {active?.playable ? (
-                <video
+                <DirectWatchPlayer
                   key={active.id}
-                  ref={videoRef}
-                  className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-fill"
-                  data-shaka-player
-                  playsInline
-                  autoPlay
-                  muted={false}
-                  poster={active.logo || undefined}
-                />
+                  videoEl={liveVideoEl}
+                  watchKey={`live:${active.id}`}
+                  title={active.name || 'Tamil Live TV'}
+                  live
+                  liveLabel="LIVE"
+                  onPrev={() => navigateChannel(-1)}
+                  onNext={() => navigateChannel(1)}
+                  onError={(message) => {
+                    setPlayerStatus('error');
+                    setPlayerError(message || 'Playback failed. Try another source.');
+                  }}
+                >
+                  <video
+                    key={active.id}
+                    ref={liveVideoCallbackRef}
+                    className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-fill"
+                    playsInline
+                    autoPlay
+                    muted={false}
+                    poster={active.logo || undefined}
+                  />
+                </DirectWatchPlayer>
               ) : (
                 <div className="flex h-full items-center justify-center p-8 text-center">
                   <div>
