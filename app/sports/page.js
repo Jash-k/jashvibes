@@ -22,6 +22,23 @@ const BASE_CHANNELS = [
 
 function PulsingDot({ color = '#ef4444' }) { return <span className="inline-block h-2 w-2 animate-pulse rounded-full" style={{ background: color }} />; }
 
+function encodeMatchPayload(payload) {
+  try {
+    const json = JSON.stringify(payload);
+    if (typeof Buffer !== 'undefined') {
+      return Buffer.from(json, 'utf-8').toString('base64url');
+    }
+    const utf8Bytes = new TextEncoder().encode(json);
+    let binary = '';
+    for (let i = 0; i < utf8Bytes.length; i++) {
+      binary += String.fromCharCode(utf8Bytes[i]);
+    }
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  } catch {
+    return '';
+  }
+}
+
 function ChannelCard({ ch, active, onClick }) {
   return (
     <button type="button" onClick={() => onClick(ch)} className="relative w-full overflow-hidden rounded-2xl border text-left transition-all duration-300 active:scale-[0.98]" style={{ background: active ? ch.bg : 'rgba(255,255,255,0.025)', borderColor: active ? ch.border : 'rgba(255,255,255,0.07)', boxShadow: active ? `0 0 30px ${ch.glow}` : 'none' }}>
@@ -41,7 +58,7 @@ function StreamPlayer({ channel, switching, playerRef }) {
         <div className="flex min-w-0 items-center gap-2"><PulsingDot color={channel.color} />{channel.logo ? <img src={channel.logo} alt="" className="h-4 w-auto object-contain" /> : null}<span className="truncate text-xs font-black uppercase tracking-widest" style={{ color: channel.color }}>{channel.name}</span></div>
         <button type="button" onClick={() => playerRef.current && (window.jashRequestFullscreen ? window.jashRequestFullscreen(playerRef.current) : playerRef.current.requestFullscreen?.())} className="rounded-lg border border-white/10 px-3 py-1.5 text-[10px] font-black text-zinc-300">⛶</button>
       </div>
-      <div className="relative aspect-video w-full bg-black">{switching ? <div className="absolute inset-0 z-20 grid place-items-center bg-black/90 text-xs font-black uppercase tracking-widest" style={{ color: channel.color }}>Switching…</div> : null}<iframe key={channel.id + channel.url} src={channel.url} className="h-full w-full border-0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen scrolling="no" /></div>
+      <div className="relative aspect-video w-full bg-black">{switching ? <div className="absolute inset-0 z-20 grid place-items-center bg-black/90 text-xs font-black uppercase tracking-widest" style={{ color: channel.color }}>Switching…</div> : null}<iframe key={channel.id + channel.url} src={channel.url} className="h-full w-full border-0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" scrolling="no" /></div>
     </div>
   );
 }
@@ -211,7 +228,7 @@ export default function SportsPage() {
                   const isLive = String(m.status || '').toUpperCase() === 'LIVE';
                   const isCompleted = String(m.status || '').toUpperCase() === 'COMPLETED';
                   const stream = bestFancodeVariant(m.auto_streams?.[0]?.auto || '') || m.STREAMING_CDN?.Primary_Playback_URL || '';
-                  const matchHash = typeof btoa !== 'undefined' ? btoa(JSON.stringify({ type: 'fancode', matchId: m.match_id, matchData: m })) : '';
+                  const matchHash = encodeMatchPayload({ type: 'fancode', matchId: m.match_id, matchData: m });
 
                   return (
                     <div

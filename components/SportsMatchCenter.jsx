@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { bestFancodeVariant, playerUrlFromHls } from '@/lib/sportsFeed';
 
 function pick(obj, keys, fallback = '') {
   for (const key of keys) {
@@ -18,11 +19,25 @@ function asArray(value) {
 }
 
 function decodeMatchHash(hash = '') {
+  if (!hash) return null;
   try {
     const padded = String(hash).replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(hash.length / 4) * 4, '=');
-    return JSON.parse(decodeURIComponent(escape(atob(padded))));
+    if (typeof Buffer !== 'undefined') {
+      return JSON.parse(Buffer.from(padded, 'base64').toString('utf-8'));
+    }
+    const binary = atob(padded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return JSON.parse(new TextDecoder().decode(bytes));
   } catch {
-    try { return JSON.parse(atob(hash)); } catch { return null; }
+    try {
+      const padded = String(hash).replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(hash.length / 4) * 4, '=');
+      return JSON.parse(decodeURIComponent(escape(atob(padded))));
+    } catch {
+      try { return JSON.parse(atob(hash)); } catch { return null; }
+    }
   }
 }
 
@@ -480,10 +495,61 @@ function Wt20MatchCenter({ payload }) {
 
 function FanCodeMatchCenter({ payload }) {
   const match = payload.matchData || payload;
+  const teamA = match.team?.[0]?.name || match.team_1 || match.title?.split(' Vs ')?.[0] || 'Team 1';
+  const teamB = match.team?.[1]?.name || match.team_2 || match.title?.split(' Vs ')?.[1] || 'Team 2';
+  const isLive = String(match.status || '').toUpperCase() === 'LIVE';
+  const stream = (match.auto_streams?.[0]?.auto && (typeof bestFancodeVariant !== 'undefined' ? bestFancodeVariant(match.auto_streams[0].auto) : '')) || match.STREAMING_CDN?.Primary_Playback_URL || '';
+  const playerUrl = stream ? (typeof playerUrlFromHls !== 'undefined' ? playerUrlFromHls(stream, match.title || 'FanCode') : `https://m3u8-player-ashen.vercel.app/?src=${encodeURIComponent(stream)}&title=${encodeURIComponent(match.title || 'FanCode')}`) : '';
+
+  const meta = [
+    { label: 'Tournament', value: match.tournament },
+    { label: 'Category', value: match.category || 'Sports' },
+    { label: 'Start Time', value: match.startTime || match.start_time || match.date },
+    { label: 'Language', value: match.language || 'English' },
+    { label: 'Match ID', value: String(match.match_id || '') },
+    { label: 'Status', value: match.status || (isLive ? 'LIVE' : 'UPCOMING') },
+  ].filter((item) => item.value);
+
   return (
-    <div className="space-y-5">
-      <Hero provider="FanCode" title={match.title || 'FanCode Match'} subtitle={match.tournament || 'Live FanCode event'} status={String(match.status || '').toLowerCase() === 'live' ? 'live' : 'upcoming'} scoreA={{ team: match.team_1 || 'Team A' }} scoreB={{ team: match.team_2 || 'Team B' }} meta={[{ label: 'Category', value: match.category }, { label: 'Tournament', value: match.tournament }, { label: 'Status', value: match.status }]} />
-      <EmptyPanel text="FanCode scorecard support is wired as a Match Center type. Detailed score fields depend on the FanCode feed payload for that event." />
+    <div className="space-y-6">
+      <Hero
+        provider="FanCode"
+        title={match.title || `${teamA} vs ${teamB}`}
+        subtitle={match.tournament || 'FanCode Live Stream'}
+        status={isLive ? 'live' : String(match.status || '').toLowerCase() === 'completed' ? 'completed' : 'upcoming'}
+        scoreA={{ team: teamA, score: match.team?.[0]?.shortName || '' }}
+        scoreB={{ team: teamB, score: match.team?.[1]?.shortName || '' }}
+        meta={meta.slice(0, 4)}
+      />
+
+      {playerUrl ? (
+        <div className="overflow-hidden rounded-3xl border border-white/10 bg-black shadow-2xl">
+          <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.03] px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
+              <span className="text-xs font-black uppercase tracking-wider text-red-400">Live Stream Broadcast</span>
+            </div>
+            <a
+              href={playerUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[11px] font-bold text-zinc-300 transition hover:bg-white/10 hover:text-white"
+            >
+              Open in Popout ↗
+            </a>
+          </div>
+          <div className="relative aspect-video w-full bg-black">
+            <iframe
+              src={playerUrl}
+              className="h-full w-full border-0"
+              allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+              scrolling="no"
+            />
+          </div>
+        </div>
+      ) : null}
+
+      <OverviewGrid items={meta} />
     </div>
   );
 }
@@ -491,6 +557,16 @@ function FanCodeMatchCenter({ payload }) {
 export default function SportsMatchCenter({ hash = '', initialPayload = null, slug = '' }) {
   const [resolvedPayload, setResolvedPayload] = useState(initialPayload || (hash ? decodeMatchHash(hash) : null));
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (hash) {
+      const decoded = decodeMatchHash(hash);
+      if (decoded) {
+        setResolvedPayload(decoded);
+        return;
+      }
+    }
+  }, [hash]);
 
   useEffect(() => {
     if (!slug || resolvedPayload) return;
