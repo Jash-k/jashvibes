@@ -78,17 +78,11 @@ export async function GET(request) {
           }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
         }
       } catch (dbError) {
-        // Never guess that the service is unconfigured when storage is unavailable:
-        // doing so could leak the raw Jio list after an administrator has mapped it.
-        console.error('[api/live-tv] Manual catalog lookup failed:', dbError.message);
-        return NextResponse.json({
-          error: 'Live TV catalog storage is temporarily unavailable',
-          channels: [],
-          count: 0,
-          catalogs: LIVE_CATALOGS,
-          catalogConfigured: null,
-          initialFallback: false,
-        }, { status: 503, headers: { 'Cache-Control': 'no-store, max-age=0' } });
+        console.warn('[api/live-tv] DB unavailable, falling back to initial Jio channels:', dbError.message);
+        const fallback = await getLiveTVChannels({ source: 'jio-tamil', playableOnly, workingOnly: false });
+        return NextResponse.json(decorateInitialJioFallback(fallback), {
+          headers: { 'Cache-Control': 'no-store, max-age=0' },
+        });
       }
 
       // First-use bootstrap only: load Jio so the TV page remains useful before

@@ -197,7 +197,18 @@ export default function LiveTVPage() {
       setPocketProxyIds([]);
       setChannels(loadedChannels);
       setLastUpdated(data.updatedAt || null);
-      setActive((current) => loadedChannels.find((channel) => channel.id === current?.id) || pickInitialChannel(loadedChannels));
+      setActive((current) => {
+        if (current?.id) {
+          const match = loadedChannels.find((channel) => channel.id === current.id);
+          if (match) {
+            if (match.url === current.url && match.keyId === current.keyId && match.key === current.key && match.cookie === current.cookie) {
+              return current;
+            }
+            return match;
+          }
+        }
+        return pickInitialChannel(loadedChannels);
+      });
       setStatus('ready');
     } catch (err) {
       if (sourceLoadIdRef.current !== loadId) return;
@@ -261,38 +272,28 @@ export default function LiveTVPage() {
   }, []);
 
   useEffect(() => {
+    return () => {
+      if (shakaRef.current) {
+        try {
+          shakaRef.current.destroy();
+        } catch {}
+        shakaRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!active || !videoRef.current || !playerContainerRef.current) return;
 
     let cancelled = false;
     let loadTimeout = null;
-    let localPlayer = null;
     const loadId = playbackIdRef.current + 1;
     playbackIdRef.current = loadId;
     const isCurrentLoad = () => !cancelled && playbackIdRef.current === loadId;
     const video = videoRef.current;
-        const pocketChannel = isPocketChannel(active);
+    const pocketChannel = isPocketChannel(active);
     const pocketProxyEnabled = pocketChannel && (/^http:\/\//i.test(active.url || '') || pocketProxyIds.includes(active.id));
     const activeUsesJio = isJioChannel(active);
-
-    async function destroyPlayerInstances(player) {
-      const targetPlayer = player || null;
-
-      if (targetPlayer) {
-        try {
-          await targetPlayer.destroy();
-        } catch {}
-        if (shakaRef.current === targetPlayer) shakaRef.current = null;
-      }
-    }
-
-    async function destroyCurrentPlayer() {
-      // Capture the current instance before awaiting. This prevents the cleanup
-      // from a previous channel switch from accidentally destroying the next
-      // channel's newly-created player, which caused every alternate switch to
-      // freeze/play.
-      const player = shakaRef.current;
-      await destroyPlayerInstances(player);
-    }
 
     async function loadChannel() {
       setPlayerStatus('loading');
@@ -301,16 +302,7 @@ export default function LiveTVPage() {
         if (!isCurrentLoad()) return;
         setPlayerStatus('error');
         setPlayerError('Channel switch timed out. Try the channel again or choose another source.');
-        destroyPlayerInstances(localPlayer);
-      }, activeUsesJio ? 40000 : 25000);
-
-      await destroyCurrentPlayer();
-      if (!isCurrentLoad()) return;
-
-      video.pause();
-      video.controls = false;
-      video.removeAttribute('src');
-      video.load();
+      }, activeUsesJio ? 30000 : 20000);
 
       if (!active.playable) {
         if (loadTimeout) window.clearTimeout(loadTimeout);
@@ -338,15 +330,21 @@ export default function LiveTVPage() {
           return;
         }
 
-        const player = new shaka.Player();
-        localPlayer = player;
-        shakaRef.current = player;
-        await player.attach(video);
-        if (!isCurrentLoad()) {
-          await destroyPlayerInstances(player);
-          return;
+        let player = shakaRef.current;
+        if (!player) {
+          player = new shaka.Player();
+          shakaRef.current = player;
+          await player.attach(video);
+          if (!isCurrentLoad()) {
+            try { await player.destroy(); } catch {}
+            shakaRef.current = null;
+            return;
+          }
         }
 
+        // Clear all previous stacked request & response filters from prior channels
+        player.getNetworkingEngine()?.clearAllRequestFilters();
+        player.getNetworkingEngine()?.clearAllResponseFilters();
 
         let jioAccess = activeUsesJio
           ? await resolveJioAccess(active)
@@ -361,7 +359,7 @@ export default function LiveTVPage() {
         const clearKeys = buildClearKeys(active);
         let drmKeysEnabled = Object.keys(clearKeys).length > 0;
         player.configure({
-          drm: Object.keys(clearKeys).length ? { clearKeys } : {},
+          drm: Object.keys(clearKeys).length ? { clearKeys } : { clearKeys: {} },
           manifest: { defaultPresentationDelay: 5 },
           streaming: {
             safeSeekOffset: 5,
@@ -433,11 +431,6 @@ export default function LiveTVPage() {
           if (!isCurrentLoad()) return;
           const detail = event.detail;
           console.error('[live-tv] Shaka error:', detail);
-          if (activeUsesJio && !jioProxyEnabled) {
-            setPlayerStatus('loading');
-            setPlayerError(`Direct Jio request failed (${detail?.code || 'network'}). Refreshing token and trying the secure Jio route…`);
-            return;
-          }
           if (loadTimeout) window.clearTimeout(loadTimeout);
           if (pocketChannel && !pocketProxyEnabled && /^https?:\/\//i.test(active.url || '')) {
             setPlayerStatus('loading');
@@ -446,7 +439,7 @@ export default function LiveTVPage() {
             return;
           }
           setPlayerStatus('error');
-          setPlayerError(`Shaka Error ${detail?.code || ''}. Stream failed to load. Try another channel or source.`);
+          setPlayerError(`Playback error (${detail?.code || 'unknown'}). Try another channel or source.`);
         });
 
         player.addEventListener('buffering', (event) => {
@@ -506,7 +499,7 @@ export default function LiveTVPage() {
         console.error('[live-tv] Player load failed:', err);
         if (activeUsesJio) {
           setPlayerStatus('error');
-          setPlayerError(`Jio playback failed${err?.code ? ` (Shaka ${err.code})` : ''}. The token may be expired or Jio may be blocking this network. Refresh the token in Live Service → Tools.`);
+          setPlayerError(`Jio playback failed${err?.code ? ` (Shaka ${err.code})` : ''}. The token may be expired or Jio may be blocking this network.`);
           return;
         }
         if (pocketChannel && !pocketProxyEnabled && /^https?:\/\//i.test(active.url || '')) {
@@ -525,13 +518,6 @@ export default function LiveTVPage() {
     return () => {
       cancelled = true;
       if (loadTimeout) window.clearTimeout(loadTimeout);
-      if (localPlayer) {
-        try { localPlayer.destroy(); } catch {}
-      }
-      if (shakaRef.current) {
-        try { shakaRef.current.destroy(); } catch {}
-        shakaRef.current = null;
-      }
     };
   }, [active, pocketProxyIds]);
 
@@ -910,6 +896,9 @@ function ServicePreviewPlayer({ channel }) {
             streaming: { bufferingGoal: 8, rebufferingGoal: 2, lowLatencyMode: true },
             abr: { enabled: true, defaultBandwidthEstimate: 1_000_000 },
           });
+
+          player.getNetworkingEngine()?.clearAllRequestFilters();
+          player.getNetworkingEngine()?.clearAllResponseFilters();
 
           player.getNetworkingEngine()?.registerRequestFilter((requestType, request) => {
             const uri = request.uris?.[0] || '';
