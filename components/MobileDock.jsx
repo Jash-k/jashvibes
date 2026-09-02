@@ -9,6 +9,7 @@ const DOCK_ITEMS = [
   { href: '/live', label: 'Live TV', icon: 'live' },
   { href: '/music', label: 'Music', icon: 'music' },
   { href: '/sports', label: 'Sports', icon: 'trophy' },
+  { href: '/classics', label: 'ReTro', icon: 'sparkle' },
   { href: '/my-list', label: 'My List', icon: 'heart' },
 ];
 
@@ -20,7 +21,7 @@ export default function MobileDock() {
       aria-label="Main navigation"
       className="mobile-dock fixed inset-x-0 bottom-0 z-[60] border-t border-white/10 bg-[#06040b]/92 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_35px_rgba(0,0,0,0.8)] backdrop-blur-2xl lg:hidden"
     >
-      <div className="mx-auto grid max-w-md grid-cols-5">
+      <div className="mx-auto grid max-w-lg grid-cols-6">
         {DOCK_ITEMS.map((item) => {
           const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
           return (

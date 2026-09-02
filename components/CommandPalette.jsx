@@ -158,11 +158,11 @@ export default function CommandPalette({ open, onClose }) {
                 <Link
                   href="/classics"
                   onClick={() => onClose(false)}
-                  className="flex items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition hover:border-purple-500/50 hover:bg-purple-500/10"
+                  className="flex items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition hover:border-amber-500/50 hover:bg-amber-500/10"
                 >
-                  <span className="grid h-8 w-8 place-items-center rounded-xl bg-purple-500/20 text-purple-400">🎞️</span>
+                  <span className="grid h-8 w-8 place-items-center rounded-xl bg-amber-500/20 text-amber-300">🎞️</span>
                   <div className="min-w-0">
-                    <p className="text-xs font-black text-white">Classics</p>
+                    <p className="text-xs font-black text-white">ReTro</p>
                     <p className="truncate text-[10px] text-zinc-500">Retro Cinema</p>
                   </div>
                 </Link>

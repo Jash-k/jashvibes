@@ -508,20 +508,20 @@ export default function DirectWatchPlayer({
   };
   const onLayerClick = () => {
     wake();
-    if (matchMedia('(pointer:fine)').matches) {
+    if (typeof window !== 'undefined' && window.matchMedia?.('(pointer:fine)')?.matches) {
       togglePlay();
     }
   };
   const onLayerDoubleClick = () => {
     wake();
-    if (matchMedia('(pointer:fine)').matches) {
+    if (typeof window !== 'undefined' && window.matchMedia?.('(pointer:fine)')?.matches) {
       toggleFullscreen();
     }
   };
 
   // ---------- keyboard ----------
   const onKeyDown = (event) => {
-    const k = event.key.toLowerCase();
+    const k = (event?.key || '').toLowerCase();
     const v = videoEl;
     if (!v) return;
     const handled = [' ', 'k', 'j', 'l', 'f', 'm', 'arrowleft', 'arrowright', 'arrowup', 'arrowdown'].includes(k);

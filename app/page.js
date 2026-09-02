@@ -935,6 +935,9 @@ export default function LandingPage() {
                 <Link href="/live" className="jv-btn-ghost">
                   <span className="text-red-400"><Icon name="live" className="h-4 w-4" /></span> Live TV
                 </Link>
+                <Link href="/classics" title="ReTro — Vintage Tamil Cinema" className="jv-btn-ghost">
+                  <span className="text-amber-400">🎞️</span> ReTro
+                </Link>
                 <a href="/stremio?home=1" onClick={(event) => { event.preventDefault(); window.location.assign('/stremio?home=1'); }} className="jv-btn-ghost">
                   <span className="text-fuchsia-300"><Icon name="sparkle" className="h-4 w-4" /></span> Stremio
                 </a>

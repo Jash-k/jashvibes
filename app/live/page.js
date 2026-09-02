@@ -273,8 +273,9 @@ export default function LiveTVPage() {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
-      const key = e.key.toLowerCase();
+      if (!e || !e.key) return;
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+      const key = String(e.key || '').toLowerCase();
       if (key === 'n' || key === 'arrowright') {
         e.preventDefault();
         navigateChannel(1);
@@ -709,7 +710,7 @@ export default function LiveTVPage() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2.5"><h1 className="truncate text-xl font-black text-white sm:text-2xl">{active?.name || 'Tamil Live TV'}</h1><span className="jv-badge-live shrink-0"><span className="jv-livepulse" />Live</span></div>
                 <p className="mt-1 text-xs font-semibold text-zinc-400 sm:text-sm">
-                  {active ? `${getChannelCatalogIds(active).map(catalogLabel).join(' + ') || 'Initial Jio'} • ${active.source} • ${active.format.toUpperCase()}${active.keyId && active.key ? ' • ClearKey DRM' : ''}` : `Loaded ${channels.length} manually mapped channels`}
+                  {active ? `${getChannelCatalogIds(active).map(catalogLabel).join(' + ') || 'Initial Jio'} • ${active.source || 'Jio'} • ${(active.format || 'HLS').toUpperCase()}${active.keyId && active.key ? ' • ClearKey DRM' : ''}` : `Loaded ${channels.length} manually mapped channels`}
                 </p>
               </div>
             </div>
@@ -809,7 +810,7 @@ export default function LiveTVPage() {
           {favorites.length > 0 ? (
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
               <span className="text-[10px] font-black uppercase tracking-wider text-yellow-400 shrink-0">★ Favs:</span>
-              {channels.filter((c) => favoriteSet.has(c.id)).slice(0, 8).map((favCh) => (
+              {channels.filter((c) => c?.id && favoriteSet.has(c.id)).slice(0, 8).map((favCh) => (
                 <button
                   key={`fav-${favCh.id}`}
                   type="button"
@@ -820,7 +821,7 @@ export default function LiveTVPage() {
                       : 'border-white/10 bg-zinc-900/80 text-zinc-300 hover:border-yellow-400/50 hover:text-white'
                   }`}
                 >
-                  <span className="truncate max-w-[100px]">{favCh.name}</span>
+                  <span className="truncate max-w-[100px]">{favCh.name || 'Channel'}</span>
                 </button>
               ))}
             </div>
@@ -832,7 +833,8 @@ export default function LiveTVPage() {
             {status === 'ready' && filteredChannels.length === 0 ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">No manually mapped channels in this catalog.</div> : null}
 
             {filteredChannels.map((channel) => {
-              const isFav = favoriteSet.has(channel.id);
+              if (!channel) return null;
+              const isFav = channel.id && favoriteSet.has(channel.id);
               const isActive = active?.id === channel.id;
               return (
                 <div
@@ -853,12 +855,12 @@ export default function LiveTVPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <p className={`truncate text-sm font-black ${isActive ? 'text-white' : 'text-zinc-100'}`}>{channel.name}</p>
+                        <p className={`truncate text-sm font-black ${isActive ? 'text-white' : 'text-zinc-100'}`}>{channel.name || 'Channel'}</p>
                         {isActive ? <span className="h-2 w-2 rounded-full bg-red-500 animate-ping" /> : null}
                       </div>
-                      <p className="mt-1 truncate text-xs text-zinc-400">{getChannelCatalogIds(channel).map(catalogLabel).join(' + ') || 'Initial Jio'} • {channel.source}</p>
+                      <p className="mt-1 truncate text-xs text-zinc-400">{getChannelCatalogIds(channel).map(catalogLabel).join(' + ') || 'Initial Jio'} • {channel.source || 'Jio'}</p>
                       <div className="mt-1 flex items-center gap-1.5">
-                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${channel.playable ? 'bg-green-500/15 text-green-300 border border-green-500/20' : 'bg-orange-500/15 text-orange-300 border border-orange-500/20'}`}>{channel.format.toUpperCase()}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${channel.playable ? 'bg-green-500/15 text-green-300 border border-green-500/20' : 'bg-orange-500/15 text-orange-300 border border-orange-500/20'}`}>{(channel.format || 'HLS').toUpperCase()}</span>
                         {channel.keyId && channel.key ? <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[9px] font-black text-blue-200 border border-blue-500/20">DRM</span> : null}
                         <span className="text-[10px] font-bold text-zinc-500">LIVE HD</span>
                       </div>

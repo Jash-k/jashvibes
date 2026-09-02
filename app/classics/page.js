@@ -193,16 +193,16 @@ export default function TamilClassicsPage() {
 
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-center gap-1 px-4 pt-3 text-center sm:px-6 sm:pt-4 lg:px-8">
         <BrandLogo size="mini" />
-        <p className="text-[9px] font-black uppercase tracking-[0.26em] text-red-500 sm:text-[10px] sm:tracking-[0.32em]">Tamil Classics</p>
+        <p className="text-[9px] font-black uppercase tracking-[0.26em] text-amber-400 sm:text-[10px] sm:tracking-[0.32em]">Tamil ReTro</p>
       </div>
 
       <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="mb-6 rounded-3xl border border-white/10 bg-zinc-950/80 p-4 shadow-2xl shadow-black/20">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h1 className="text-3xl font-black text-white sm:text-5xl">Classics Catalog</h1>
+              <h1 className="text-3xl font-black text-white sm:text-5xl">ReTro <span className="text-amber-400">Classics</span></h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-                ErosNow + Aha playlists combined, matched with TMDB, stored in MongoDB, and sorted by TMDB rating high to low.
+                ErosNow + Aha vintage playlists combined, matched with TMDB, stored in MongoDB, and sorted by TMDB rating high to low.
               </p>
               {syncSummary ? (
                 <p className="mt-2 text-xs text-green-300">
@@ -216,7 +216,7 @@ export default function TamilClassicsPage() {
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-            <input value={filters.q} onChange={(e) => updateFilter('q', e.target.value)} placeholder="Search classics..." className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none focus:border-red-500 lg:col-span-2" />
+            <input value={filters.q} onChange={(e) => updateFilter('q', e.target.value)} placeholder="Search ReTro titles..." className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none focus:border-amber-400 lg:col-span-2" />
             <select value={filters.sort} onChange={(e) => updateFilter('sort', e.target.value)} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-red-500">
               <option value="rating.desc">Rating high → low</option>
               <option value="rating.asc">Rating low → high</option>
