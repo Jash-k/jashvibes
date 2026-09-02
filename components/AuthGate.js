@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import MobileDock from '@/components/MobileDock';
 import CursorFX from '@/components/CursorFX';
+import SlimTopStrip from '@/components/SlimTopStrip';
 
 const STORAGE_KEY = 'jash_theatre_access_token';
 
@@ -169,6 +170,7 @@ export default function AuthGate({ children }) {
   if (status === 'unlocked') {
     return (
       <>
+        <SlimTopStrip />
         {children}
         <DayNightToggle />
         <MobileDock />

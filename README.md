@@ -158,3 +158,6 @@ For personal/educational use only. Host only sources you are authorized to acces
 
 ## v8.3.1
 - Live TV Jio token sources refreshed: sportlive18 jio-tv-auto-update-playlist (GitHub-Actions-fresh cookie.json + star2.json per-channel scoped cookies) added ahead of the dead/expired allinonereborn endpoints (jtv-fetch/jstr4web/2 now 404; jstrweb2 token expired). getJioStarAccessRecords learned the array shape [{name, stream_url, cookie}]. sw v55.
+
+## v8.4.0
+- Player UI visibility pass: brighter control bar (black/92 base), ALL buttons/icons + time numbers pure white (menus/ambient included); red LIVE pill + gradient scrub/title accents kept. Mobile auto-hide now 5s idle (desktop 3s), never hides while paused/scrubbing/holding/menu-open, and any tap on the control bar resets the timer. New SlimTopStrip brand band (mini logo to Home + small page title) on pages without a branded header. sw v56.

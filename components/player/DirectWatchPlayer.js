@@ -133,15 +133,15 @@ export default function DirectWatchPlayer({
   }, []);
 
   useEffect(() => {
-    // never auto-hide while paused or while a menu is open
-    if (!playing || menu) {
+    // never auto-hide while paused, mid-scrub/hold, or while a menu is open
+    if (!playing || menu || scrubbing !== null || hold2x) {
       setVisible(true);
       window.clearTimeout(hideTimerRef.current);
       return;
     }
     wake();
     return () => window.clearTimeout(hideTimerRef.current);
-  }, [playing, menu, wake]);
+  }, [playing, menu, scrubbing, hold2x, wake]);
 
   // ---------- bind to the video element ----------
   useEffect(() => {
@@ -581,7 +581,8 @@ export default function DirectWatchPlayer({
       {/* control bar */}
       <div
         data-dvp="controls"
-        className={`absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-3 pb-2.5 pt-12 transition-opacity duration-300 ${visible ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+        onPointerDown={wake}
+        className={`absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/92 via-black/55 to-transparent px-3 pb-2.5 pt-12 transition-opacity duration-300 ${visible ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
       >
         {/* scrubber (VOD / DVR live) or plain LIVE badge (live without window) */}
         {canSeek ? (
@@ -658,9 +659,9 @@ export default function DirectWatchPlayer({
           </div>
 
           {!live ? (
-            <span className="ml-1 text-[11px] font-semibold tabular-nums text-zinc-300 sm:text-xs">
+            <span className="ml-1 text-[11px] font-bold tabular-nums text-white sm:text-xs">
               {fmtTime(shownTime - (win?.start || 0))}
-              {winFinite ? <span className="text-zinc-500"> / {fmtTime(winLength)}</span> : null}
+              {winFinite ? <span className="text-white/70"> / {fmtTime(winLength)}</span> : null}
             </span>
           ) : null}
 
@@ -718,7 +719,7 @@ export default function DirectWatchPlayer({
           ) : null}
 
           {/* ambient dim toggle */}
-          <button onClick={toggleAmbient} aria-label="Ambient dim" className={`rounded-full p-2 transition hover:bg-white/10 ${ambient ? 'text-amber-300' : 'text-white/50'}`}>
+          <button onClick={toggleAmbient} aria-label="Ambient dim" className={`rounded-full p-2 transition hover:bg-white/10 ${ambient ? 'text-amber-300' : 'text-white/70'}`}>
             <Icon d={PATHS.bulb} className="h-5 w-5" />
           </button>
 
@@ -771,7 +772,7 @@ function MenuItem({ active, onClick, children }) {
     <button
       onClick={onClick}
       className={`flex w-full items-center gap-2 px-3.5 py-2 text-left text-xs font-semibold transition ${
-        active ? 'bg-fuchsia-500/15 text-fuchsia-200' : 'text-zinc-300 hover:bg-white/5 hover:text-white'
+        active ? 'bg-fuchsia-500/15 text-fuchsia-200' : 'text-white/85 hover:bg-white/5 hover:text-white'
       }`}
     >
       <span className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-gradient-to-r from-fuchsia-400 to-amber-300 shadow-[0_0_8px_rgba(217,70,239,0.9)]' : 'bg-zinc-700'}`} />
