@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import LibraryRows from '@/components/LibraryRows';
+import CommandPalette from '@/components/CommandPalette';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 import Icon from '@/components/Icons';
 import MasonryGrid from '@/components/MasonryGrid';
@@ -21,7 +22,7 @@ function formatDateTime(value) {
   }
 }
 
-function SearchBox() {
+function SearchBox({ onOpenPalette }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [status, setStatus] = useState('idle');
@@ -77,11 +78,19 @@ function SearchBox() {
           id="tmdb-search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search TMDB titles..."
+          placeholder="Search TMDB titles... (Press ⌘K)"
           enterKeyHint="search"
           autoComplete="off"
-          className="w-full rounded-2xl border border-white/10 bg-black/70 py-3.5 pl-10 pr-4 text-base font-semibold text-white outline-none backdrop-blur placeholder:text-zinc-500 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 sm:text-sm"
+          className="w-full rounded-2xl border border-white/10 bg-black/70 py-3.5 pl-10 pr-14 text-base font-semibold text-white outline-none backdrop-blur placeholder:text-zinc-500 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 sm:text-sm"
         />
+        <button
+          type="button"
+          onClick={() => onOpenPalette?.(true)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg border border-white/15 bg-white/5 px-2 py-1 text-[10px] font-bold text-zinc-400 hover:border-amber-400/50 hover:text-white"
+          title="Open Universal Search (⌘K)"
+        >
+          ⌘K
+        </button>
       </div>
 
       {trimmed ? (
@@ -293,12 +302,14 @@ function MediaCard({ item, onItemMatched, delay = 0 }) {
   const qualityChip = item?.type === 'series'
     ? { label: 'Series', cls: 'border-white/15 bg-black/60 text-zinc-200' }
     : { ...itemQualityChip(item), fallback: true };
+  const favKey = hasTMDB ? makeWatchKey({ type: item.type, tmdbId: item.tmdbId }) : '';
+  const favorite = hasTMDB ? isFavoriteItem(favKey) : false;
 
   return (
     <>
       <Wrapper
         href={href}
-        className={`jv-card group relative block overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 shadow-lg shadow-black/25 transition duration-300 active:scale-[0.99] hover:border-red-400/50 hover:bg-zinc-900 hover:shadow-2xl hover:shadow-red-950/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 sm:rounded-3xl sm:shadow-xl ${hasTMDB ? '' : 'cursor-pointer'}`}
+        className={`jv-card group relative block overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 shadow-lg shadow-black/25 transition duration-300 active:scale-[0.99] hover:border-amber-400/50 hover:bg-zinc-900 hover:shadow-2xl hover:shadow-red-950/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 sm:rounded-3xl sm:shadow-xl ${hasTMDB ? '' : 'cursor-pointer'}`}
         onPointerMove={(event) => {
           if (event.pointerType !== 'mouse') return;
           const rect = event.currentTarget.getBoundingClientRect();
@@ -330,28 +341,54 @@ function MediaCard({ item, onItemMatched, delay = 0 }) {
             </div>
           )}
 
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/15 to-transparent opacity-95" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-95" />
 
-          <div className="absolute left-2 top-2 sm:left-3 sm:top-3">
-            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider backdrop-blur ${qualityChip.cls || 'border-white/15 bg-black/60 text-zinc-200'}`}>
+          <div className="absolute left-2 top-2 flex flex-col gap-1 sm:left-3 sm:top-3">
+            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider backdrop-blur sm:text-[10px] ${qualityChip.cls || 'border-white/15 bg-black/60 text-zinc-200'}`}>
               {qualityChip.label || (item?.type === 'series' ? 'Series' : 'Movie')}
             </span>
           </div>
 
-          {hasTMDB && Number(item.rating) > 0 ? (
-            <div className="absolute right-2 top-2 sm:right-3 sm:top-3">
+          <div className="absolute right-2 top-2 flex items-center gap-1 sm:right-3 sm:top-3">
+            {hasTMDB && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  toggleFavoriteItem({
+                    key: favKey,
+                    type: item.type,
+                    tmdbId: item.tmdbId,
+                    title: item.title,
+                    posterUrl: item.posterUrl,
+                    rating: item.rating,
+                    year: item.year,
+                  });
+                }}
+                className={`grid h-7 w-7 place-items-center rounded-full border backdrop-blur transition hover:scale-110 ${
+                  favorite
+                    ? 'border-emerald-400 bg-emerald-500/30 text-emerald-300'
+                    : 'border-white/15 bg-black/60 text-zinc-300 opacity-0 group-hover:opacity-100 hover:text-white'
+                }`}
+                title={favorite ? 'Remove from My List' : 'Add to My List'}
+              >
+                <Icon name={favorite ? 'check' : 'plus'} className="h-3.5 w-3.5" />
+              </button>
+            )}
+
+            {hasTMDB && Number(item.rating) > 0 ? (
               <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/30 bg-black/70 px-2 py-0.5 text-[10px] font-bold text-amber-300 backdrop-blur">
                 ★ {Number(item.rating).toFixed(1)}
               </span>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
 
           {hasTMDB ? (
-            <div className="absolute bottom-3 right-3 grid h-9 w-9 place-items-center rounded-full bg-[linear-gradient(115deg,#f59e0b,#dc2626_50%,#a855f7)] text-white opacity-0 shadow-xl shadow-red-950/40 transition duration-300 group-hover:scale-110 group-hover:opacity-100">
+            <div className="absolute bottom-3 right-3 grid h-10 w-10 place-items-center rounded-full bg-gradient-to-tr from-amber-400 via-rose-500 to-purple-600 text-white opacity-0 shadow-xl shadow-red-950/50 transition duration-300 group-hover:scale-110 group-hover:opacity-100">
               <Icon name="play" className="h-4 w-4" />
             </div>
           ) : null}
-
 
           {hasTMDB ? null : (
             <>
@@ -382,6 +419,10 @@ function MediaCard({ item, onItemMatched, delay = 0 }) {
           <h3 className="line-clamp-2 min-h-9 text-[13px] font-black leading-4 text-white sm:min-h-10 sm:text-sm sm:leading-5">
             {item.title}
           </h3>
+          <div className="mt-1 flex items-center justify-between text-[11px] text-zinc-500">
+            <span>{item.year || (item.releaseDate ? String(item.releaseDate).slice(0, 4) : '')}</span>
+            <span className="text-[10px] uppercase text-zinc-600">{item.type === 'series' ? 'Series' : 'Movie'}</span>
+          </div>
         </div>
         </div>
         <div className="jv-card-glare" aria-hidden="true" />
@@ -471,29 +512,49 @@ function HeroCarousel({ items }) {
     [items],
   );
   const [idx, setIdx] = useState(0);
-  const pausedRef = useRef(false);
+  const [progress, setProgress] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
   const touchRef = useRef(null);
-  useLibraryVersion(); // heart state stays in sync with My List
+  useLibraryVersion();
 
   useEffect(() => {
-    if (slides.length < 2) return undefined;
+    if (slides.length < 2 || isPaused) return undefined;
+    const interval = 50; // update every 50ms
+    const totalDuration = 7000; // 7 seconds
+    const step = (interval / totalDuration) * 100;
+
     const timer = setInterval(() => {
-      if (!pausedRef.current) setIdx((value) => (value + 1) % slides.length);
-    }, 7000);
+      setProgress((prev) => {
+        if (prev >= 100) {
+          setIdx((curr) => (curr + 1) % slides.length);
+          return 0;
+        }
+        return prev + step;
+      });
+    }, interval);
+
     return () => clearInterval(timer);
-  }, [slides.length]);
+  }, [slides.length, isPaused, idx]);
 
   if (!slides.length) return null;
 
   const current = Math.min(idx, slides.length - 1);
-  const go = (dir) => setIdx((value) => (value + dir + slides.length) % slides.length);
+  const go = (dir) => {
+    setProgress(0);
+    setIdx((value) => (value + dir + slides.length) % slides.length);
+  };
+
+  const jumpTo = (slideIdx) => {
+    setProgress(0);
+    setIdx(slideIdx);
+  };
 
   return (
     <section aria-label="Featured releases" className="mx-auto mt-6 max-w-7xl px-4 sm:mt-8 sm:px-6 lg:px-8">
       <div
-        className="jv-hero jv-reveal relative h-[54svh] min-h-[300px] max-h-[560px] overflow-hidden rounded-3xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/50"
-        onMouseEnter={() => { pausedRef.current = true; }}
-        onMouseLeave={() => { pausedRef.current = false; }}
+        className="jv-hero jv-reveal relative h-[56svh] min-h-[320px] max-h-[580px] overflow-hidden rounded-3xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/60"
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => setIsPaused(false)}
         onPointerMove={(event) => {
           if (event.pointerType !== 'mouse') return;
           const rect = event.currentTarget.getBoundingClientRect();
@@ -511,16 +572,14 @@ function HeroCarousel({ items }) {
           if (start == null) return;
           const delta = event.changedTouches[0].clientX - start;
           if (Math.abs(delta) > 48) {
-            pausedRef.current = true;
             go(delta < 0 ? 1 : -1);
-            setTimeout(() => { pausedRef.current = false; }, 9000);
           }
         }}
       >
         {slides.map((item, slideIdx) => {
           const active = slideIdx === current;
           const href = `/watch/${item.type}/${item.tmdbId}${item.type === 'series' ? `?season=${item.season || 1}&episode=${item.episode || 1}` : ''}${watchQualityParam(item, item.type === 'series')}`;
-          const heroChip = item.type === 'series' ? { label: 'Series', cls: 'border-white/15 bg-black/50' } : itemQualityChip(item);
+          const heroChip = item.type === 'series' ? { label: 'Series', cls: 'border-white/15 bg-black/50 text-white' } : itemQualityChip(item);
           const art = item.backdropUrl || item.posterUrl;
           const favKey = makeWatchKey({ type: item.type, tmdbId: item.tmdbId });
           const favorite = isFavoriteItem(favKey);
@@ -532,20 +591,24 @@ function HeroCarousel({ items }) {
               aria-hidden={!active}
             >
               <img src={art} alt={item.title} loading={slideIdx === 0 ? "eager" : "lazy"} decoding="async" className="jv-hero-art h-full w-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/40 to-transparent" />
-              <div className="absolute inset-0 bg-gradient-to-r from-[#050505]/90 via-[#050505]/40 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/45 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-r from-[#050505]/95 via-[#050505]/50 to-transparent" />
               <div className="absolute inset-x-0 bottom-0 max-w-2xl p-4 sm:p-8 lg:p-10">
                 <p className="mb-1.5 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.26em] text-amber-300 sm:mb-2.5 sm:text-xs">
-                  <Icon name="sparkle" className="h-3.5 w-3.5" /> New Release
+                  <Icon name="sparkle" className="h-3.5 w-3.5" /> Featured Premiere
                 </p>
                 <h3 className="jv-hero-title line-clamp-2 text-2xl font-black leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">{item.title}</h3>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-zinc-300 sm:mt-3 sm:text-xs">
-                  <span className={`rounded-full border px-2 py-0.5 uppercase tracking-wider backdrop-blur ${heroChip.cls || 'border-white/15 bg-black/50'}`}>{heroChip.label || 'Movie'}</span>
-                  {year ? <span className="rounded-full border border-white/15 bg-black/50 px-2 py-0.5 backdrop-blur">{year}</span> : null}
-                  {Number(item.rating) > 0 ? <span className="rounded-full border border-amber-300/30 bg-black/50 px-2 py-0.5 text-amber-300 backdrop-blur">★ {Number(item.rating).toFixed(1)}</span> : null}
+                  <span className={`rounded-full border px-2.5 py-0.5 uppercase tracking-wider backdrop-blur font-bold ${heroChip.cls || 'border-white/15 bg-black/50 text-white'}`}>{heroChip.label || 'Movie'}</span>
+                  {year ? <span className="rounded-full border border-white/15 bg-black/50 px-2.5 py-0.5 backdrop-blur font-bold">{year}</span> : null}
+                  {Number(item.rating) > 0 ? <span className="rounded-full border border-amber-300/30 bg-black/50 px-2.5 py-0.5 font-black text-amber-300 backdrop-blur">★ {Number(item.rating).toFixed(1)}</span> : null}
+                  <span className="rounded-full border border-purple-400/30 bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-200 backdrop-blur">Tamil Audio</span>
                 </div>
-                <div className="mt-4 flex flex-wrap items-center gap-2.5 sm:mt-5 sm:gap-3">
-                  <Link href={href} className="jv-btn-solid !px-5 !py-2.5 text-sm sm:!px-7 sm:!py-3 sm:text-base">
+                {item.synopsis ? (
+                  <p className="mt-2.5 line-clamp-2 text-xs leading-5 text-zinc-300 sm:text-sm sm:leading-6">{item.synopsis}</p>
+                ) : null}
+                <div className="mt-4 flex flex-wrap items-center gap-2.5 sm:mt-6 sm:gap-3">
+                  <Link href={href} className="jv-btn-solid !px-6 !py-3 text-sm sm:!px-8 sm:!py-3.5 sm:text-base font-black shadow-xl shadow-red-950/50">
                     <Icon name="play" className="h-4 w-4 sm:h-5 sm:w-5" /> Play Now
                   </Link>
                   <button
@@ -560,10 +623,10 @@ function HeroCarousel({ items }) {
                       rating: item.rating,
                       releaseDate: item.releaseDate,
                     })}
-                    className="jv-btn-ghost !px-4 !py-2.5 text-sm sm:!py-3"
+                    className="jv-btn-ghost !px-5 !py-3 text-sm font-bold sm:!py-3.5"
                   >
                     <span className={favorite ? "text-emerald-300" : ""}><Icon name={favorite ? "check" : "plus"} className="h-4 w-4" /></span>
-                    {favorite ? 'In My List' : 'My List'}
+                    {favorite ? 'In My List' : 'Add to List'}
                   </button>
                 </div>
               </div>
@@ -579,16 +642,29 @@ function HeroCarousel({ items }) {
             <button type="button" aria-label="Next featured title" onClick={() => go(1)} className="absolute right-3 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur transition hover:bg-black/70 sm:grid">
               <Icon name="chevR" className="h-5 w-5" />
             </button>
-            <div className="absolute bottom-4 right-4 z-20 flex items-center gap-1.5 sm:bottom-6 sm:right-8">
-              {slides.map((item, dotIdx) => (
-                <button
-                  key={`dot-${item.type}-${item.tmdbId}`}
-                  type="button"
-                  aria-label={`Featured slide ${dotIdx + 1}`}
-                  onClick={() => setIdx(dotIdx)}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${dotIdx === current ? 'w-7 bg-gradient-to-r from-amber-400 via-red-500 to-purple-500' : 'w-1.5 bg-white/40 hover:bg-white/70'}`}
-                />
-              ))}
+
+              {/* Apple TV+ style Segmented Progress Indicator */}
+            <div className="absolute bottom-4 right-4 z-20 flex items-center gap-2 sm:bottom-6 sm:right-8">
+              {slides.map((item, dotIdx) => {
+                const isCurrent = dotIdx === current;
+                const isPast = dotIdx < current;
+                return (
+                  <button
+                    key={`seg-${item.type}-${item.tmdbId}`}
+                    type="button"
+                    aria-label={`Featured slide ${dotIdx + 1}`}
+                    onClick={() => jumpTo(dotIdx)}
+                    className="group/seg relative h-1.5 w-8 overflow-hidden rounded-full bg-white/20 transition-all hover:h-2 hover:w-10 sm:w-12"
+                  >
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-amber-400 via-rose-500 to-purple-500 shadow-[0_0_8px_rgba(244,63,94,0.8)] transition-[width] duration-75 ease-linear"
+                      style={{
+                        width: isCurrent ? `${progress}%` : isPast ? '100%' : '0%',
+                      }}
+                    />
+                  </button>
+                );
+              })}
             </div>
           </>
         ) : null}
@@ -601,6 +677,8 @@ export default function LandingPage() {
   const [movies, setMovies] = useState([]);
   const [series, setSeries] = useState([]);
   const [activeTab, setActiveTab] = useState('movies');
+  const [filterMode, setFilterMode] = useState('all'); // 'all' | 'tamil' | '4k' | 'top'
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [updatedAt, setUpdatedAt] = useState(null);
   const [scrapeStatus, setScrapeStatus] = useState('loading');
   const [scrapeError, setScrapeError] = useState('');
@@ -774,7 +852,24 @@ export default function LandingPage() {
     return () => observer.disconnect();
   }, [activeTab, loadMore, scrapeStatus]);
 
-  const currentItems = activeTab === 'movies' ? movies : series;
+  const rawItems = activeTab === 'movies' ? movies : series;
+  const currentItems = useMemo(() => {
+    if (filterMode === 'all') return rawItems;
+    if (filterMode === '4k') {
+      return rawItems.filter((item) => {
+        const tier = item?.qualityTier || '';
+        const label = item?.qualityLabel || item?.title || '';
+        return tier === '4k' || tier === '1080p' || /4k|2160p|1080p|fhd/i.test(label);
+      });
+    }
+    if (filterMode === 'tamil') {
+      return rawItems.filter((item) => /tamil|tam/i.test(`${item.title} ${item.rawTitle || ''} ${item.synopsis || ''}`));
+    }
+    if (filterMode === 'top') {
+      return rawItems.filter((item) => Number(item.rating) >= 7.0);
+    }
+    return rawItems;
+  }, [rawItems, filterMode]);
   const [debugQuality, setDebugQuality] = useState(false);
   useEffect(() => {
     try {
@@ -851,7 +946,7 @@ export default function LandingPage() {
             </div>
 
             <div className="sticky top-2 z-40 w-full lg:top-6 lg:max-w-md">
-              <SearchBox />
+              <SearchBox onOpenPalette={setPaletteOpen} />
             </div>
           </div>
 
@@ -890,6 +985,30 @@ export default function LandingPage() {
                 Series
               </TabButton>
             </div>
+          </div>
+
+          {/* Quick Filter Rail */}
+          <div className="mt-4 flex flex-wrap items-center gap-1.5 border-t border-white/10 pt-3 sm:gap-2">
+            <span className="mr-1 text-[11px] font-black uppercase tracking-wider text-zinc-500">Filter:</span>
+            {[
+              { id: 'all', label: 'All Titles' },
+              { id: '4k', label: '✨ 4K / 1080p FHD' },
+              { id: 'tamil', label: '🎬 Tamil Audio' },
+              { id: 'top', label: '★ High Rated (7.0+)' },
+            ].map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFilterMode(f.id)}
+                className={`rounded-full border px-3 py-1 text-xs font-bold transition ${
+                  filterMode === f.id
+                    ? 'border-amber-400/60 bg-amber-500/20 text-amber-200'
+                    : 'border-white/10 bg-white/[0.03] text-zinc-400 hover:border-white/25 hover:text-white'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
           </div>
 
           {currentStatus === 'loading' ? (
@@ -944,6 +1063,8 @@ export default function LandingPage() {
           </section>
         ) : null}
       </section>
+
+      <CommandPalette open={paletteOpen} onClose={setPaletteOpen} />
     </main>
   );
 }

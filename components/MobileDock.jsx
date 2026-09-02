@@ -6,21 +6,19 @@ import Icon from '@/components/Icons';
 
 const DOCK_ITEMS = [
   { href: '/', label: 'Home', icon: 'home' },
-  { href: '/live', label: 'Live', icon: 'tv' },
+  { href: '/live', label: 'Live TV', icon: 'live' },
   { href: '/music', label: 'Music', icon: 'music' },
   { href: '/sports', label: 'Sports', icon: 'trophy' },
   { href: '/my-list', label: 'My List', icon: 'heart' },
 ];
 
-// Bottom navigation dock for phones — hidden on lg+ where the top brand strip
-// and in-page navigation already provide reachability.
 export default function MobileDock() {
   const pathname = usePathname() || '/';
 
   return (
     <nav
       aria-label="Main navigation"
-      className="mobile-dock fixed inset-x-0 bottom-0 z-[60] border-t border-white/10 bg-[#05050a]/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden"
+      className="mobile-dock fixed inset-x-0 bottom-0 z-[60] border-t border-white/10 bg-[#06040b]/92 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_35px_rgba(0,0,0,0.8)] backdrop-blur-2xl lg:hidden"
     >
       <div className="mx-auto grid max-w-md grid-cols-5">
         {DOCK_ITEMS.map((item) => {
@@ -30,13 +28,17 @@ export default function MobileDock() {
               key={item.href}
               href={item.href}
               aria-current={active ? 'page' : undefined}
-              className={`relative flex flex-col items-center gap-1 py-2.5 text-[10px] font-bold transition active:scale-95 ${
-                active ? 'text-amber-400' : 'text-zinc-500 hover:text-zinc-300'
+              className={`relative flex flex-col items-center gap-1 py-2.5 text-[10px] font-bold transition duration-200 active:scale-90 ${
+                active
+                  ? 'text-amber-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.6)]'
+                  : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              {active ? <span className="absolute top-0 h-0.5 w-9 rounded-full bg-gradient-to-r from-amber-400 via-red-500 to-purple-500" /> : null}
-              <Icon name={item.icon} className="h-5 w-5" />
-              <span>{item.label}</span>
+              {active ? (
+                <span className="absolute top-0 h-0.5 w-8 rounded-full bg-gradient-to-r from-amber-400 via-rose-500 to-purple-500 shadow-[0_0_10px_rgba(244,63,94,0.8)]" />
+              ) : null}
+              <Icon name={item.icon} className={`h-5 w-5 transition-transform duration-200 ${active ? 'scale-110' : ''}`} />
+              <span className="tracking-tight">{item.label}</span>
             </Link>
           );
         })}

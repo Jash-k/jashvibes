@@ -233,6 +233,37 @@ export default function TamilClassicsPage() {
             <input value={filters.yearFrom} onChange={(e) => updateFilter('yearFrom', e.target.value)} placeholder="Year from" inputMode="numeric" className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-red-500" />
             <input value={filters.minRating} onChange={(e) => updateFilter('minRating', e.target.value)} placeholder="Min rating" inputMode="decimal" className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-red-500" />
           </div>
+
+          {/* Decade Quick Filter Chips */}
+          <div className="mt-4 flex flex-wrap items-center gap-1.5 border-t border-white/10 pt-3">
+            <span className="text-[11px] font-black uppercase tracking-wider text-amber-400 mr-1">Decade:</span>
+            {[
+              { label: 'All Decades', from: '', to: '' },
+              { label: '50s–70s Golden Era', from: '1950', to: '1979' },
+              { label: '80s Vintage', from: '1980', to: '1989' },
+              { label: '90s Classics', from: '1990', to: '1999' },
+              { label: '2000s Nostalgia', from: '2000', to: '2009' },
+            ].map((d) => {
+              const active = filters.yearFrom === d.from && filters.yearTo === d.to;
+              return (
+                <button
+                  key={d.label}
+                  type="button"
+                  onClick={() => {
+                    setFilters((cur) => ({ ...cur, yearFrom: d.from, yearTo: d.to }));
+                    setPage(1);
+                  }}
+                  className={`rounded-full border px-3 py-1 text-xs font-bold transition ${
+                    active
+                      ? 'border-amber-400 bg-amber-500/20 text-amber-200'
+                      : 'border-white/10 bg-white/[0.03] text-zinc-400 hover:border-white/30 hover:text-white'
+                  }`}
+                >
+                  {d.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {status === 'loading' || status === 'sync-needed' || syncStatus === 'syncing' ? (

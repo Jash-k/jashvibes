@@ -272,6 +272,25 @@ export default function LiveTVPage() {
   }, []);
 
   useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
+      const key = e.key.toLowerCase();
+      if (key === 'n' || key === 'arrowright') {
+        e.preventDefault();
+        navigateChannel(1);
+      } else if (key === 'p' || key === 'arrowleft') {
+        e.preventDefault();
+        navigateChannel(-1);
+      } else if (key === 'f') {
+        e.preventDefault();
+        enterFullscreen();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [channels, filteredChannels, active]);
+
+  useEffect(() => {
     return () => {
       if (shakaRef.current) {
         try {
@@ -786,31 +805,84 @@ export default function LiveTVPage() {
             </div>
           </div>
 
+          {/* Quick Favorites Strip */}
+          {favorites.length > 0 ? (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+              <span className="text-[10px] font-black uppercase tracking-wider text-yellow-400 shrink-0">★ Favs:</span>
+              {channels.filter((c) => favoriteSet.has(c.id)).slice(0, 8).map((favCh) => (
+                <button
+                  key={`fav-${favCh.id}`}
+                  type="button"
+                  onClick={() => selectChannel(favCh)}
+                  className={`flex items-center gap-1.5 shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
+                    active?.id === favCh.id
+                      ? 'border-red-500 bg-red-600/30 text-white shadow-sm shadow-red-950'
+                      : 'border-white/10 bg-zinc-900/80 text-zinc-300 hover:border-yellow-400/50 hover:text-white'
+                  }`}
+                >
+                  <span className="truncate max-w-[100px]">{favCh.name}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
           <div className="space-y-2 pr-1 lg:max-h-[70dvh] lg:overflow-y-auto">
             {status === 'loading' ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">Loading Tamil channels...</div> : null}
             {status === 'error' ? <div className="rounded-3xl border border-red-500/30 bg-red-950/20 p-6 text-center text-red-200">{error}</div> : null}
             {status === 'ready' && filteredChannels.length === 0 ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">No manually mapped channels in this catalog.</div> : null}
 
-            {filteredChannels.map((channel) => (
-              <button
-                key={channel.id}
-                type="button"
-                onClick={() => selectChannel(channel)}
-                className={`flex w-full items-center gap-3 rounded-2xl border p-2.5 text-left transition sm:rounded-3xl sm:p-3 ${active?.id === channel.id ? 'border-red-500/70 bg-red-600/15' : 'border-white/10 bg-zinc-950/80 hover:border-red-500/40'}`}
-              >
-                <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/5 sm:h-14 sm:w-14 sm:rounded-2xl">
-                  {channel.logo ? <img src={channel.logo} alt="" className="max-h-full max-w-full object-fill" loading="lazy" /> : <span className="text-xs font-black text-zinc-500">TV</span>}
+            {filteredChannels.map((channel) => {
+              const isFav = favoriteSet.has(channel.id);
+              const isActive = active?.id === channel.id;
+              return (
+                <div
+                  key={channel.id}
+                  className={`group/ch flex items-center gap-3 rounded-2xl border p-2.5 transition sm:rounded-3xl sm:p-3 ${
+                    isActive
+                      ? 'border-red-500/80 bg-gradient-to-r from-red-600/20 via-purple-600/10 to-zinc-950 shadow-lg shadow-red-950/30'
+                      : 'border-white/10 bg-zinc-950/80 hover:border-white/30 hover:bg-zinc-900/90'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => selectChannel(channel)}
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left outline-none"
+                  >
+                    <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/5 sm:h-14 sm:w-14 sm:rounded-2xl">
+                      {channel.logo ? <img src={channel.logo} alt="" className="max-h-full max-w-full object-fill" loading="lazy" /> : <span className="text-xs font-black text-zinc-500">TV</span>}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className={`truncate text-sm font-black ${isActive ? 'text-white' : 'text-zinc-100'}`}>{channel.name}</p>
+                        {isActive ? <span className="h-2 w-2 rounded-full bg-red-500 animate-ping" /> : null}
+                      </div>
+                      <p className="mt-1 truncate text-xs text-zinc-400">{getChannelCatalogIds(channel).map(catalogLabel).join(' + ') || 'Initial Jio'} • {channel.source}</p>
+                      <div className="mt-1 flex items-center gap-1.5">
+                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${channel.playable ? 'bg-green-500/15 text-green-300 border border-green-500/20' : 'bg-orange-500/15 text-orange-300 border border-orange-500/20'}`}>{channel.format.toUpperCase()}</span>
+                        {channel.keyId && channel.key ? <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[9px] font-black text-blue-200 border border-blue-500/20">DRM</span> : null}
+                        <span className="text-[10px] font-bold text-zinc-500">LIVE HD</span>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFavorite(channel);
+                    }}
+                    className={`grid h-8 w-8 place-items-center rounded-xl border transition ${
+                      isFav
+                        ? 'border-yellow-400/50 bg-yellow-500/20 text-yellow-300'
+                        : 'border-white/10 bg-white/5 text-zinc-500 hover:border-yellow-400/40 hover:text-yellow-200'
+                    }`}
+                    title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                  >
+                    ★
+                  </button>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-black text-zinc-100">{channel.name}</p>
-                  <p className="mt-1 truncate text-xs text-zinc-400">{getChannelCatalogIds(channel).map(catalogLabel).join(' + ') || 'Initial Jio'} • {channel.source}</p>
-                  <div className="mt-1 flex gap-1">
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${channel.playable ? 'bg-green-500/15 text-green-200' : 'bg-orange-500/15 text-orange-200'}`}>{channel.format.toUpperCase()}</span>
-                    {channel.keyId && channel.key ? <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-100">DRM</span> : null}
-                  </div>
-                </div>
-              </button>
-            ))}
+              );
+            })}
           </div>
         </aside>
       </section>

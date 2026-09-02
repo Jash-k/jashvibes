@@ -804,7 +804,10 @@ export default function WatchByTMDBPage() {
           ref={playerShellRef}
           className="relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-screen fullscreen:w-screen fullscreen:rounded-none fullscreen:border-0 sm:rounded-3xl"
         >
-          <div className="jv-native-cursor relative aspect-video w-full bg-zinc-950 fullscreen:h-screen fullscreen:aspect-auto">
+          {/* Ambient Theater Backlight */}
+          <div className="pointer-events-none absolute -inset-4 z-0 opacity-40 blur-3xl bg-gradient-to-tr from-amber-500/20 via-rose-600/20 to-purple-600/20" />
+
+          <div className="jv-native-cursor relative z-10 aspect-video w-full bg-zinc-950 fullscreen:h-screen fullscreen:aspect-auto">
             {status === 'loading' ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
                 <div className="h-12 w-12 animate-spin rounded-full border-4 border-zinc-700 border-t-red-600" />
@@ -918,6 +921,107 @@ export default function WatchByTMDBPage() {
             </>
           ) : null}
         </div>
+
+        {/* Interactive Episode Cards (for Series) */}
+        {isSeries && selectedSeasonMeta?.episodes?.length ? (
+          <div className="mt-8 space-y-3">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <h3 className="text-lg font-black text-white sm:text-xl">
+                  Season {season} Episodes
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  {selectedSeasonMeta.episodes.length} episodes available
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {selectedSeasonMeta.episodes.map((ep) => {
+                const isSelected = ep.episodeNumber === episode;
+                const epKey = makeWatchKey({ type: 'series', tmdbId });
+                const epHistory = getHistoryEntry(epKey);
+                const isWatched = epHistory?.season === season && epHistory?.episode === ep.episodeNumber;
+
+                return (
+                  <button
+                    key={ep.episodeNumber}
+                    type="button"
+                    onClick={() => setEpisode(ep.episodeNumber)}
+                    className={`group/ep relative flex flex-col overflow-hidden rounded-2xl border text-left transition duration-200 ${
+                      isSelected
+                        ? 'border-amber-400/60 bg-gradient-to-b from-amber-500/15 via-rose-500/10 to-zinc-950 shadow-lg shadow-amber-950/20'
+                        : 'border-white/10 bg-zinc-950/70 hover:border-white/30 hover:bg-zinc-900'
+                    }`}
+                  >
+                    <div className="relative aspect-video w-full overflow-hidden bg-zinc-900">
+                      {ep.stillUrl ? (
+                        <img
+                          src={ep.stillUrl}
+                          alt=""
+                          className="h-full w-full object-cover transition duration-300 group-hover/ep:scale-105"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="grid h-full place-items-center bg-zinc-900 text-xs font-bold text-zinc-600">
+                          Episode {ep.episodeNumber}
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/30" />
+                      <div className="absolute left-2.5 top-2.5 rounded-lg border border-white/20 bg-black/70 px-2 py-0.5 text-[10px] font-black text-white backdrop-blur">
+                        E{ep.episodeNumber}
+                      </div>
+                      {ep.runtime ? (
+                        <div className="absolute bottom-2 right-2.5 text-[10px] font-bold text-zinc-300">
+                          {ep.runtime}m
+                        </div>
+                      ) : null}
+                      {isSelected ? (
+                        <div className="absolute inset-0 grid place-items-center bg-black/40">
+                          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-400 text-black shadow-lg">
+                            <Icon name="play" className="h-5 w-5" />
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="p-3">
+                      <p className={`line-clamp-1 text-xs font-black ${isSelected ? 'text-amber-300' : 'text-white'}`}>
+                        {ep.episodeNumber}. {ep.name || `Episode ${ep.episodeNumber}`}
+                      </p>
+                      {ep.overview ? (
+                        <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-zinc-400">
+                          {ep.overview}
+                        </p>
+                      ) : null}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Synopsis & Details Section */}
+        {titleMeta?.synopsis || titleMeta?.overview ? (
+          <div className="mt-8 rounded-3xl border border-white/10 bg-zinc-950/60 p-5 backdrop-blur sm:p-6">
+            <h3 className="text-sm font-black uppercase tracking-wider text-amber-400">Storyline</h3>
+            <p className="mt-2 text-sm leading-6 text-zinc-300 sm:text-base sm:leading-7">
+              {titleMeta.synopsis || titleMeta.overview}
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-white/10 pt-3 text-xs text-zinc-400">
+              {titleMeta.genres?.length ? (
+                <span><b>Genres:</b> {titleMeta.genres.join(', ')}</span>
+              ) : null}
+              {titleMeta.releaseDate ? (
+                <span><b>Released:</b> {titleMeta.releaseDate}</span>
+              ) : null}
+              {titleMeta.status ? (
+                <span><b>Status:</b> {titleMeta.status}</span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
 
       </section>
     </main>

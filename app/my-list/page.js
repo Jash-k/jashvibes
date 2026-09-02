@@ -129,16 +129,46 @@ export default function MyListPage() {
             />
           )
         ) : (
-          <div className="grid grid-cols-2 gap-3 min-[480px]:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-            {items.map((item) => (
-              <div key={item.key} className="[&>div]:w-full [&>div]:sm:w-full">
-                <LibraryCard
-                  item={item}
-                  showProgress={!isFavoritesTab && getProgressPercent(item) > 0}
-                  onRemove={isFavoritesTab ? removeFavoriteItem : removeHistoryEntry}
-                />
+          <div className="space-y-6">
+            {/* Continue Watching Top Resume Banner */}
+            {!isFavoritesTab && history.length > 0 && history[0] ? (
+              <div className="relative overflow-hidden rounded-3xl border border-amber-400/30 bg-gradient-to-r from-amber-500/20 via-rose-600/15 to-zinc-950 p-5 shadow-2xl backdrop-blur sm:p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="h-20 w-14 shrink-0 overflow-hidden rounded-2xl bg-zinc-900 shadow-md">
+                      {history[0].posterUrl ? (
+                        <img src={history[0].posterUrl} alt="" className="h-full w-full object-cover" />
+                      ) : null}
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-amber-400">Jump Back In</span>
+                      <h2 className="text-lg font-black text-white sm:text-xl">{history[0].title}</h2>
+                      <p className="mt-0.5 text-xs text-zinc-400">
+                        {history[0].type === 'series' ? `Season ${history[0].season || 1} • Episode ${history[0].episode || 1}` : 'Movie'}
+                      </p>
+                    </div>
+                  </div>
+                  <Link
+                    href={history[0].href || `/watch/${history[0].type}/${history[0].tmdbId}`}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-amber-400 px-6 py-3 text-xs font-black uppercase tracking-wider text-black shadow-xl shadow-amber-950/40 transition hover:bg-amber-300"
+                  >
+                    <Icon name="play" className="h-4 w-4" /> Resume
+                  </Link>
+                </div>
               </div>
-            ))}
+            ) : null}
+
+            <div className="grid grid-cols-2 gap-3 min-[480px]:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+              {items.map((item) => (
+                <div key={item.key} className="[&>div]:w-full [&>div]:sm:w-full">
+                  <LibraryCard
+                    item={item}
+                    showProgress={!isFavoritesTab && getProgressPercent(item) > 0}
+                    onRemove={isFavoritesTab ? removeFavoriteItem : removeHistoryEntry}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
