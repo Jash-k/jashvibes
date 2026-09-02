@@ -20,8 +20,10 @@ function asArray(value) {
 
 function decodeMatchHash(hash = '') {
   if (!hash) return null;
+  const raw = Array.isArray(hash) ? hash.join('/') : String(hash);
   try {
-    const padded = String(hash).replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(hash.length / 4) * 4, '=');
+    let clean = decodeURIComponent(raw.trim());
+    const padded = clean.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(clean.length / 4) * 4, '=');
     if (typeof Buffer !== 'undefined') {
       return JSON.parse(Buffer.from(padded, 'base64').toString('utf-8'));
     }
@@ -33,10 +35,11 @@ function decodeMatchHash(hash = '') {
     return JSON.parse(new TextDecoder().decode(bytes));
   } catch {
     try {
-      const padded = String(hash).replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(hash.length / 4) * 4, '=');
+      let clean = decodeURIComponent(raw.trim());
+      const padded = clean.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(clean.length / 4) * 4, '=');
       return JSON.parse(decodeURIComponent(escape(atob(padded))));
     } catch {
-      try { return JSON.parse(atob(hash)); } catch { return null; }
+      try { return JSON.parse(atob(decodeURIComponent(raw))); } catch { return null; }
     }
   }
 }
