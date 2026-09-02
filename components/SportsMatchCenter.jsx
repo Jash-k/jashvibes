@@ -634,7 +634,11 @@ function FanCodeMatchCenter({ payload }) {
 }
 
 export default function SportsMatchCenter({ hash = '', initialPayload = null, slug = '' }) {
-  const [resolvedPayload, setResolvedPayload] = useState(initialPayload || (hash ? decodeMatchHash(hash) : null));
+  const [resolvedPayload, setResolvedPayload] = useState(() => {
+    if (initialPayload) return initialPayload;
+    if (hash) return decodeMatchHash(hash);
+    return null;
+  });
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -642,50 +646,70 @@ export default function SportsMatchCenter({ hash = '', initialPayload = null, sl
       const decoded = decodeMatchHash(hash);
       if (decoded) {
         setResolvedPayload(decoded);
-        return;
+        setError('');
+      } else {
+        setError('Invalid match payload hash');
       }
     }
   }, [hash]);
 
   useEffect(() => {
-    if (!slug || resolvedPayload) return;
+    if (hash || !slug) return;
     let cancelled = false;
-    fetch(`/api/match-resolve?slug=${encodeURIComponent(slug)}`, { cache: 'no-store' })
-      .then((r) => r.json())
-      .then(async (data) => {
+    async function resolveSlug() {
+      try {
+        setError('');
+        if (slug === 'live') {
+          // Check if there is an active or featured ICC match first
+          try {
+            const wtRes = await fetch('/api/wt20/schedule', { cache: 'no-store' });
+            const wtJson = await wtRes.json();
+            const matches = wtJson.data?.matches || (Array.isArray(wtJson) ? wtJson : []);
+            const featured = matches.find((m) => m.live) || matches[0];
+            if (featured && !cancelled) {
+              setResolvedPayload({
+                sport: 'cricket',
+                type: 'wt20',
+                matchId: featured.match_id,
+                homeCode: featured.teama_short,
+                awayCode: featured.teamb_short,
+                leagueLabel: featured.series_short_display_name || featured.series_name,
+                matchData: featured,
+              });
+              return;
+            }
+          } catch {}
+
+          // Fallback to FanCode live match
+          try {
+            const fcRes = await fetch('https://raw.githubusercontent.com/doctor-8trange/zyphx8/refs/heads/main/data/fancode.json', { cache: 'no-store' });
+            const fcData = await fcRes.json();
+            const liveMatch = (fcData.matches || []).find((m) => String(m.status || '').toUpperCase() === 'LIVE') || fcData.matches?.[0];
+            if (liveMatch && !cancelled) {
+              setResolvedPayload({ type: 'fancode', matchId: liveMatch.match_id, matchData: liveMatch });
+              return;
+            }
+          } catch {}
+          if (!cancelled) setError('No live matches currently in progress');
+          return;
+        }
+
+        const res = await fetch(`/api/match-resolve?slug=${encodeURIComponent(slug)}`, { cache: 'no-store' });
+        const data = await res.json();
         if (cancelled) return;
         const payload = normalizePayload(data.payload || data.match || data);
         if (payload?.type) {
           setResolvedPayload(payload);
         } else {
-          // Fallback: If slug is 'live' or unresolvable, try picking first live match from active feed
-          try {
-            const fcRes = await fetch('https://raw.githubusercontent.com/doctor-8trange/zyphx8/refs/heads/main/data/fancode.json', { cache: 'no-store' });
-            const fcData = await fcRes.json();
-            const liveMatch = (fcData.matches || []).find((m) => String(m.status || '').toUpperCase() === 'LIVE') || fcData.matches?.[0];
-            if (liveMatch) {
-              setResolvedPayload({ type: 'fancode', matchId: liveMatch.match_id, matchData: liveMatch });
-              return;
-            }
-          } catch {}
-          setError(data.error || 'Unable to resolve match URL');
+          setError(data.error || 'Unable to resolve match');
         }
-      })
-      .catch(async (err) => {
-        if (cancelled) return;
-        try {
-          const fcRes = await fetch('https://raw.githubusercontent.com/doctor-8trange/zyphx8/refs/heads/main/data/fancode.json', { cache: 'no-store' });
-          const fcData = await fcRes.json();
-          const liveMatch = (fcData.matches || []).find((m) => String(m.status || '').toUpperCase() === 'LIVE') || fcData.matches?.[0];
-          if (liveMatch) {
-            setResolvedPayload({ type: 'fancode', matchId: liveMatch.match_id, matchData: liveMatch });
-            return;
-          }
-        } catch {}
-        setError(err.message || 'Unable to resolve match URL');
-      });
+      } catch (err) {
+        if (!cancelled) setError(err.message || 'Unable to resolve match');
+      }
+    }
+    resolveSlug();
     return () => { cancelled = true; };
-  }, [slug, resolvedPayload]);
+  }, [hash, slug]);
 
   const payload = normalizePayload(resolvedPayload || {});
   const type = String(payload.type || '').toLowerCase();

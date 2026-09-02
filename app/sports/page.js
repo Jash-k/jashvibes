@@ -405,7 +405,7 @@ export default function SportsPage() {
                           href={`/match-center/${m.matchHash}`}
                           className="flex-1 rounded-2xl border border-amber-400/30 bg-amber-500/15 py-2.5 text-center text-xs font-black text-amber-200 transition hover:bg-amber-500 hover:text-black"
                         >
-                          📊 Match Center
+                          {m.type === 'wt20' ? '📊 Scorecard & Commentary →' : '⚡ Match Details'}
                         </Link>
                         {m.stream ? (
                           <a
