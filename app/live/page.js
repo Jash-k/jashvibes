@@ -272,26 +272,6 @@ export default function LiveTVPage() {
   }, []);
 
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (!e || !e.key) return;
-      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
-      const key = String(e.key || '').toLowerCase();
-      if (key === 'n' || key === 'arrowright') {
-        e.preventDefault();
-        navigateChannel(1);
-      } else if (key === 'p' || key === 'arrowleft') {
-        e.preventDefault();
-        navigateChannel(-1);
-      } else if (key === 'f') {
-        e.preventDefault();
-        enterFullscreen();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [channels, filteredChannels, active]);
-
-  useEffect(() => {
     return () => {
       if (shakaRef.current) {
         try {
@@ -604,6 +584,26 @@ export default function LiveTVPage() {
       else if (shell.webkitRequestFullscreen) shell.webkitRequestFullscreen();
     } catch {}
   }
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!e || !e.key) return;
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+      const key = String(e.key || '').toLowerCase();
+      if (key === 'n' || key === 'arrowright') {
+        e.preventDefault();
+        navigateChannel(1);
+      } else if (key === 'p' || key === 'arrowleft') {
+        e.preventDefault();
+        navigateChannel(-1);
+      } else if (key === 'f') {
+        e.preventDefault();
+        enterFullscreen();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [channels, filteredChannels, active]);
 
   async function pictureInPicture() {
     const video = videoRef.current;
