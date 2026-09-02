@@ -497,13 +497,38 @@ export default function SportsMatchCenter({ hash = '', initialPayload = null, sl
     let cancelled = false;
     fetch(`/api/match-resolve?slug=${encodeURIComponent(slug)}`, { cache: 'no-store' })
       .then((r) => r.json())
-      .then((data) => {
+      .then(async (data) => {
         if (cancelled) return;
         const payload = normalizePayload(data.payload || data.match || data);
-        if (payload?.type) setResolvedPayload(payload);
-        else setError(data.error || 'Unable to resolve match URL');
+        if (payload?.type) {
+          setResolvedPayload(payload);
+        } else {
+          // Fallback: If slug is 'live' or unresolvable, try picking first live match from active feed
+          try {
+            const fcRes = await fetch('https://raw.githubusercontent.com/doctor-8trange/zyphx8/refs/heads/main/data/fancode.json', { cache: 'no-store' });
+            const fcData = await fcRes.json();
+            const liveMatch = (fcData.matches || []).find((m) => String(m.status || '').toUpperCase() === 'LIVE') || fcData.matches?.[0];
+            if (liveMatch) {
+              setResolvedPayload({ type: 'fancode', matchId: liveMatch.match_id, matchData: liveMatch });
+              return;
+            }
+          } catch {}
+          setError(data.error || 'Unable to resolve match URL');
+        }
       })
-      .catch((err) => { if (!cancelled) setError(err.message || 'Unable to resolve match URL'); });
+      .catch(async (err) => {
+        if (cancelled) return;
+        try {
+          const fcRes = await fetch('https://raw.githubusercontent.com/doctor-8trange/zyphx8/refs/heads/main/data/fancode.json', { cache: 'no-store' });
+          const fcData = await fcRes.json();
+          const liveMatch = (fcData.matches || []).find((m) => String(m.status || '').toUpperCase() === 'LIVE') || fcData.matches?.[0];
+          if (liveMatch) {
+            setResolvedPayload({ type: 'fancode', matchId: liveMatch.match_id, matchData: liveMatch });
+            return;
+          }
+        } catch {}
+        setError(err.message || 'Unable to resolve match URL');
+      });
     return () => { cancelled = true; };
   }, [slug, resolvedPayload]);
 

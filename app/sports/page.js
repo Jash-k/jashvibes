@@ -56,6 +56,8 @@ export default function SportsPage() {
   const [switching, setSwitching] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('live'); // 'live' | 'matches'
+  const [matches, setMatches] = useState([]);
+  const [matchesLoading, setMatchesLoading] = useState(false);
   const playerRef = useRef(null);
 
   const selectChannel = useCallback((channel) => {
@@ -69,7 +71,9 @@ export default function SportsPage() {
     try {
       const response = await fetch(`${FANCODE_FEED}?_=${Date.now()}`, { cache: 'no-store' });
       const data = await response.json();
-      const live = (data.matches || [])
+      const rawMatches = data.matches || [];
+      setMatches(rawMatches);
+      const live = rawMatches
         .filter((m) => String(m.status || '').toUpperCase() === 'LIVE' && m.auto_streams?.[0]?.auto)
         .slice(0, 8)
         .map((m) => {
@@ -88,6 +92,19 @@ export default function SportsPage() {
   useEffect(() => {
     loadChannels();
   }, [loadChannels]);
+
+  useEffect(() => {
+    if (activeTab === 'matches' && !matches.length) {
+      setMatchesLoading(true);
+      fetch(FANCODE_FEED, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((data) => {
+          setMatches(data.matches || []);
+          setMatchesLoading(false);
+        })
+        .catch(() => setMatchesLoading(false));
+    }
+  }, [activeTab, matches.length]);
 
   return (
     <main className="min-h-screen bg-[#070709] text-white">
@@ -164,20 +181,89 @@ export default function SportsPage() {
             ) : null}
           </Section>
         ) : (
-          <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 text-center">
-            <div className="mx-auto max-w-md space-y-3">
-              <span className="text-4xl">🏏</span>
-              <h2 className="text-xl font-black text-white">Live Match Center</h2>
-              <p className="text-xs leading-5 text-zinc-400">
-                Detailed ball-by-ball commentary, live batting/bowling statistics, and real-time scorecards across ICC, BCCI, and IPL tournaments.
-              </p>
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+              <div>
+                <h2 className="text-xl font-black text-white">Live Matches & Tournaments</h2>
+                <p className="mt-1 text-xs text-zinc-400">
+                  Select any match below to open its live scorecard, batting/bowling statistics, and ball-by-ball overview.
+                </p>
+              </div>
               <Link
                 href="/match/live"
-                className="inline-flex items-center gap-2 rounded-2xl bg-amber-500 px-5 py-3 text-xs font-black uppercase tracking-wider text-black shadow-xl shadow-amber-950/40 hover:bg-amber-400 transition"
+                className="inline-flex items-center justify-center gap-2 shrink-0 rounded-2xl bg-amber-500 px-5 py-2.5 text-xs font-black uppercase tracking-wider text-black shadow-lg shadow-amber-950/40 hover:bg-amber-400 transition"
               >
-                Open Match Center →
+                Featured Live Match →
               </Link>
             </div>
+
+            {matchesLoading ? (
+              <div className="rounded-3xl border border-white/10 bg-white/[0.025] p-8 text-center text-sm text-zinc-400">
+                Loading live matches & fixtures...
+              </div>
+            ) : matches.length === 0 ? (
+              <div className="rounded-3xl border border-white/10 bg-white/[0.025] p-8 text-center text-sm text-zinc-400">
+                No active fixtures found right now.
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {matches.map((m) => {
+                  const isLive = String(m.status || '').toUpperCase() === 'LIVE';
+                  const isCompleted = String(m.status || '').toUpperCase() === 'COMPLETED';
+                  const stream = bestFancodeVariant(m.auto_streams?.[0]?.auto || '') || m.STREAMING_CDN?.Primary_Playback_URL || '';
+                  const matchHash = typeof btoa !== 'undefined' ? btoa(JSON.stringify({ type: 'fancode', matchId: m.match_id, matchData: m })) : '';
+
+                  return (
+                    <div
+                      key={m.match_id || m.title}
+                      className="flex flex-col justify-between rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-amber-400/40 hover:bg-white/[0.05]"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate text-[10px] font-black uppercase tracking-wider text-zinc-400">
+                            {m.tournament || m.category || 'Cricket'}
+                          </span>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${
+                              isLive
+                                ? 'border border-red-500/40 bg-red-500/20 text-red-300'
+                                : isCompleted
+                                  ? 'bg-zinc-800 text-zinc-400'
+                                  : 'border border-amber-400/30 bg-amber-500/15 text-amber-300'
+                            }`}
+                          >
+                            {m.status || 'UPCOMING'}
+                          </span>
+                        </div>
+                        <h3 className="mt-2 text-sm font-black text-white">{m.title}</h3>
+                        <p className="mt-1 text-xs text-zinc-400">{m.startTime || m.date || 'Today'}</p>
+                      </div>
+
+                      <div className="mt-4 flex items-center gap-2 pt-2 border-t border-white/5">
+                        {matchHash ? (
+                          <Link
+                            href={`/match-center/${matchHash}`}
+                            className="flex-1 rounded-xl border border-amber-400/30 bg-amber-500/15 py-2 text-center text-xs font-black text-amber-200 transition hover:bg-amber-500 hover:text-black"
+                          >
+                            Scorecard
+                          </Link>
+                        ) : null}
+                        {stream ? (
+                          <a
+                            href={playerUrlFromHls(stream, m.title)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-xl bg-red-600 px-3.5 py-2 text-center text-xs font-black text-white shadow-md transition hover:bg-red-500"
+                          >
+                            ▶ Watch
+                          </a>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </section>
