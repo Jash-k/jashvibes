@@ -75,6 +75,7 @@ export default function SportsPage() {
   const [activeTab, setActiveTab] = useState('live'); // 'live' | 'matches'
   const [matches, setMatches] = useState([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
+  const [matchFilter, setMatchFilter] = useState('all'); // 'all' | 'live' | 'icc' | 'fancode'
   const playerRef = useRef(null);
 
   const selectChannel = useCallback((channel) => {
@@ -83,13 +84,103 @@ export default function SportsPage() {
     setTimeout(() => { setActive(channel); setSwitching(false); }, 260);
   }, [active?.id]);
 
+  const loadAllMatches = useCallback(async () => {
+    setMatchesLoading(true);
+    try {
+      const [fcRes, wt20Res] = await Promise.allSettled([
+        fetch(`${FANCODE_FEED}?_=${Date.now()}`, { cache: 'no-store' }).then((r) => r.json()),
+        fetch('/api/wt20/schedule', { cache: 'no-store' }).then((r) => r.json()),
+      ]);
+
+      const normalized = [];
+
+      // 1. Process WT20 ICC fixtures
+      if (wt20Res.status === 'fulfilled' && wt20Res.value) {
+        const wtData = wt20Res.value.data?.matches || (Array.isArray(wt20Res.value) ? wt20Res.value : []);
+        wtData.forEach((m) => {
+          if (!m.match_id) return;
+          const isLive = Boolean(m.live);
+          const isCompleted = Boolean(m.match_result || m.match_status === 'Match Ended' || m.match_display_status === 'Result');
+          const status = isLive ? 'LIVE' : isCompleted ? 'COMPLETED' : 'UPCOMING';
+          const scoreA = m.scores?.[0] ? `${m.scores[0].team_short_name || m.teama_short || 'Team 1'} ${m.scores[0].team_runs}/${m.scores[0].team_wickets} (${m.scores[0].team_overs} ov)` : '';
+          const scoreB = m.scores?.[1] ? `${m.scores[1].team_short_name || m.teamb_short || 'Team 2'} ${m.scores[1].team_runs}/${m.scores[1].team_wickets} (${m.scores[1].team_overs} ov)` : '';
+
+          normalized.push({
+            id: `wt20-${m.match_id}`,
+            type: 'wt20',
+            source: 'ICC WT20',
+            matchId: m.match_id,
+            title: `${m.teama || m.teama_short || 'Team A'} vs ${m.teamb || m.teamb_short || 'Team B'}`,
+            tournament: m.series_short_display_name || m.series_name || "ICC Women's T20 World Cup, 2026",
+            category: 'Cricket',
+            status,
+            startTime: m.match_date_ist ? `${m.match_date_ist}${m.match_time_ist ? ` · ${m.match_time_ist} IST` : ''}` : 'Today',
+            venue: m.venue || '',
+            result: m.match_result || '',
+            scoreA,
+            scoreB,
+            stream: '',
+            matchHash: encodeMatchPayload({
+              sport: 'cricket',
+              type: 'wt20',
+              matchId: m.match_id,
+              homeCode: m.teama_short,
+              awayCode: m.teamb_short,
+              leagueLabel: m.series_short_display_name || m.series_name,
+              matchData: m,
+            }),
+          });
+        });
+      }
+
+      // 2. Process FanCode fixtures
+      if (fcRes.status === 'fulfilled' && fcRes.value) {
+        const rawFc = fcRes.value.matches || [];
+        rawFc.forEach((m) => {
+          const isLive = String(m.status || '').toUpperCase() === 'LIVE' || m.streamingStatus === 'STARTED';
+          const isCompleted = String(m.status || '').toUpperCase() === 'COMPLETED';
+          const status = isLive ? 'LIVE' : isCompleted ? 'COMPLETED' : 'UPCOMING';
+          const stream = bestFancodeVariant(m.auto_streams?.[0]?.auto || '') || m.STREAMING_CDN?.Primary_Playback_URL || '';
+
+          normalized.push({
+            id: `fc-${m.match_id || m.title}`,
+            type: 'fancode',
+            source: 'FanCode',
+            matchId: m.match_id,
+            title: m.title || 'Live Match',
+            tournament: m.tournament || m.category || 'FanCode Cricket',
+            category: m.category || 'Cricket',
+            status,
+            startTime: m.startTime || m.startDate || 'Today',
+            venue: '',
+            result: '',
+            scoreA: m.team?.[0]?.name ? `${m.team[0].name}${m.team[0].shortName ? ` (${m.team[0].shortName})` : ''}` : '',
+            scoreB: m.team?.[1]?.name ? `${m.team[1].name}${m.team[1].shortName ? ` (${m.team[1].shortName})` : ''}` : '',
+            stream,
+            matchHash: encodeMatchPayload({
+              sport: 'cricket',
+              type: 'fancode',
+              matchId: m.match_id,
+              title: m.title,
+              seriesText: m.tournament,
+              matchData: m,
+            }),
+          });
+        });
+      }
+
+      setMatches(normalized);
+    } catch {} finally {
+      setMatchesLoading(false);
+    }
+  }, []);
+
   const loadChannels = useCallback(async () => {
     setRefreshing(true);
     try {
       const response = await fetch(`${FANCODE_FEED}?_=${Date.now()}`, { cache: 'no-store' });
       const data = await response.json();
       const rawMatches = data.matches || [];
-      setMatches(rawMatches);
       const live = rawMatches
         .filter((m) => String(m.status || '').toUpperCase() === 'LIVE' && m.auto_streams?.[0]?.auto)
         .slice(0, 8)
@@ -112,16 +203,16 @@ export default function SportsPage() {
 
   useEffect(() => {
     if (activeTab === 'matches' && !matches.length) {
-      setMatchesLoading(true);
-      fetch(FANCODE_FEED, { cache: 'no-store' })
-        .then((r) => r.json())
-        .then((data) => {
-          setMatches(data.matches || []);
-          setMatchesLoading(false);
-        })
-        .catch(() => setMatchesLoading(false));
+      loadAllMatches();
     }
-  }, [activeTab, matches.length]);
+  }, [activeTab, matches.length, loadAllMatches]);
+
+  const filteredMatches = useMemo(() => {
+    if (matchFilter === 'live') return matches.filter((m) => m.status === 'LIVE');
+    if (matchFilter === 'icc') return matches.filter((m) => m.type === 'wt20');
+    if (matchFilter === 'fancode') return matches.filter((m) => m.type === 'fancode');
+    return matches;
+  }, [matches, matchFilter]);
 
   return (
     <main className="min-h-screen bg-[#070709] text-white">
@@ -214,34 +305,56 @@ export default function SportsPage() {
               </Link>
             </div>
 
+            {/* Category Filter Chips */}
+            <div className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-4">
+              {[
+                { key: 'all', label: `All Fixtures (${matches.length})` },
+                { key: 'live', label: `🔴 Live Now (${matches.filter((m) => m.status === 'LIVE').length})` },
+                { key: 'icc', label: `🏆 ICC WT20 (${matches.filter((m) => m.type === 'wt20').length})` },
+                { key: 'fancode', label: `⚡ FanCode (${matches.filter((m) => m.type === 'fancode').length})` },
+              ].map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => setMatchFilter(f.key)}
+                  className={`rounded-full border px-4 py-1.5 text-xs font-bold transition ${
+                    matchFilter === f.key
+                      ? 'border-amber-400 bg-amber-500/20 text-amber-200'
+                      : 'border-white/10 bg-white/[0.03] text-zinc-400 hover:border-white/30 hover:text-white'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
             {matchesLoading ? (
               <div className="rounded-3xl border border-white/10 bg-white/[0.025] p-8 text-center text-sm text-zinc-400">
                 Loading live matches & fixtures...
               </div>
-            ) : matches.length === 0 ? (
+            ) : filteredMatches.length === 0 ? (
               <div className="rounded-3xl border border-white/10 bg-white/[0.025] p-8 text-center text-sm text-zinc-400">
-                No active fixtures found right now.
+                No fixtures found matching this filter.
               </div>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {matches.map((m) => {
-                  const isLive = String(m.status || '').toUpperCase() === 'LIVE';
-                  const isCompleted = String(m.status || '').toUpperCase() === 'COMPLETED';
-                  const stream = bestFancodeVariant(m.auto_streams?.[0]?.auto || '') || m.STREAMING_CDN?.Primary_Playback_URL || '';
-                  const matchHash = encodeMatchPayload({ type: 'fancode', matchId: m.match_id, matchData: m });
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {filteredMatches.map((m) => {
+                  const isLive = m.status === 'LIVE';
+                  const isCompleted = m.status === 'COMPLETED';
 
                   return (
                     <div
-                      key={m.match_id || m.title}
-                      className="flex flex-col justify-between rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-amber-400/40 hover:bg-white/[0.05]"
+                      key={m.id || m.matchId}
+                      className="group flex flex-col justify-between rounded-3xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-amber-400/50 hover:bg-white/[0.05]"
                     >
                       <div>
+                        {/* Top info */}
                         <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-[10px] font-black uppercase tracking-wider text-zinc-400">
-                            {m.tournament || m.category || 'Cricket'}
+                          <span className="truncate text-[10px] font-black uppercase tracking-wider text-amber-400/90">
+                            {m.tournament}
                           </span>
                           <span
-                            className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${
+                            className={`rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${
                               isLive
                                 ? 'border border-red-500/40 bg-red-500/20 text-red-300'
                                 : isCompleted
@@ -249,28 +362,57 @@ export default function SportsPage() {
                                   : 'border border-amber-400/30 bg-amber-500/15 text-amber-300'
                             }`}
                           >
-                            {m.status || 'UPCOMING'}
+                            {m.status}
                           </span>
                         </div>
-                        <h3 className="mt-2 text-sm font-black text-white">{m.title}</h3>
-                        <p className="mt-1 text-xs text-zinc-400">{m.startTime || m.date || 'Today'}</p>
+
+                        {/* Title linking directly to Match Center */}
+                        <Link href={`/match-center/${m.matchHash}`} className="block mt-3 group-hover:text-amber-300 transition">
+                          <h3 className="text-base font-black text-white group-hover:text-amber-300 transition line-clamp-2 leading-snug">
+                            {m.title}
+                          </h3>
+                        </Link>
+
+                        {/* Live / Completed Scores if available */}
+                        {m.scoreA || m.scoreB ? (
+                          <div className="mt-3 space-y-1 rounded-2xl border border-white/5 bg-black/40 p-2.5 font-mono text-xs">
+                            {m.scoreA ? (
+                              <div className="flex justify-between text-zinc-200">
+                                <span>{m.scoreA}</span>
+                              </div>
+                            ) : null}
+                            {m.scoreB ? (
+                              <div className="flex justify-between text-zinc-200">
+                                <span>{m.scoreB}</span>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+
+                        {/* Result or Start Time */}
+                        <div className="mt-3 text-xs text-zinc-400">
+                          {m.result ? (
+                            <p className="text-emerald-400 font-bold text-[11px] line-clamp-1">{m.result}</p>
+                          ) : (
+                            <p className="text-zinc-500 text-[11px]">{m.startTime || m.venue || 'Today'}</p>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="mt-4 flex items-center gap-2 pt-2 border-t border-white/5">
-                        {matchHash ? (
-                          <Link
-                            href={`/match-center/${matchHash}`}
-                            className="flex-1 rounded-xl border border-amber-400/30 bg-amber-500/15 py-2 text-center text-xs font-black text-amber-200 transition hover:bg-amber-500 hover:text-black"
-                          >
-                            Scorecard
-                          </Link>
-                        ) : null}
-                        {stream ? (
+                      {/* Action buttons */}
+                      <div className="mt-5 flex items-center gap-2 pt-3 border-t border-white/5">
+                        <Link
+                          href={`/match-center/${m.matchHash}`}
+                          className="flex-1 rounded-2xl border border-amber-400/30 bg-amber-500/15 py-2.5 text-center text-xs font-black text-amber-200 transition hover:bg-amber-500 hover:text-black"
+                        >
+                          📊 Match Center
+                        </Link>
+                        {m.stream ? (
                           <a
-                            href={playerUrlFromHls(stream, m.title)}
+                            href={playerUrlFromHls(m.stream, m.title)}
                             target="_blank"
                             rel="noreferrer"
-                            className="rounded-xl bg-red-600 px-3.5 py-2 text-center text-xs font-black text-white shadow-md transition hover:bg-red-500"
+                            className="rounded-2xl bg-red-600 px-4 py-2.5 text-center text-xs font-black text-white shadow-md transition hover:bg-red-500"
                           >
                             ▶ Watch
                           </a>

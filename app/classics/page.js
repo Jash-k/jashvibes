@@ -73,23 +73,25 @@ export default function TamilClassicsPage() {
   const [filters, setFilters] = useState({ q: '', sort: 'rating.desc', source: 'Aha', genre: 'all', minRating: '', yearFrom: '', yearTo: '' });
   const sentinelRef = useRef(null);
   const autoSyncStartedRef = useRef(false);
+  const mountedRef = useRef(false);
 
-  const buildQuery = useCallback((pageNumber) => {
-    const params = new URLSearchParams({ page: String(pageNumber), limit: String(PAGE_SIZE), sort: filters.sort });
-    if (filters.q.trim()) params.set('q', filters.q.trim());
-    if (filters.source !== 'all') params.set('source', filters.source);
-    if (filters.genre !== 'all') params.set('genre', filters.genre);
-    if (filters.minRating) params.set('minRating', filters.minRating);
-    if (filters.yearFrom) params.set('yearFrom', filters.yearFrom);
-    if (filters.yearTo) params.set('yearTo', filters.yearTo);
+  const buildQuery = useCallback((pageNumber, activeFilters = filters) => {
+    const params = new URLSearchParams({ page: String(pageNumber), limit: String(PAGE_SIZE), sort: activeFilters.sort });
+    if (activeFilters.q?.trim()) params.set('q', activeFilters.q.trim());
+    if (activeFilters.source !== 'all') params.set('source', activeFilters.source);
+    if (activeFilters.genre !== 'all') params.set('genre', activeFilters.genre);
+    if (activeFilters.minRating) params.set('minRating', activeFilters.minRating);
+    if (activeFilters.yearFrom) params.set('yearFrom', activeFilters.yearFrom);
+    if (activeFilters.yearTo) params.set('yearTo', activeFilters.yearTo);
     return params.toString();
   }, [filters]);
 
-  const loadPage = useCallback(async (pageNumber = 1, append = false) => {
+  const loadPage = useCallback(async (pageNumber = 1, append = false, overrideFilters = null) => {
     try {
       setStatus(append ? 'ready' : 'loading');
       setError('');
-      const response = await fetch(`/api/vod?${buildQuery(pageNumber)}`, { cache: 'no-store' });
+      const queryStr = buildQuery(pageNumber, overrideFilters || filters);
+      const response = await fetch(`/api/vod?${queryStr}`, { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || 'Unable to load Tamil Classics');
 
@@ -109,7 +111,7 @@ export default function TamilClassicsPage() {
       setError(err.message || 'Unable to load Tamil Classics');
       setStatus('error');
     }
-  }, [buildQuery]);
+  }, [buildQuery, filters]);
 
   const syncNow = useCallback(async () => {
     try {
@@ -127,6 +129,7 @@ export default function TamilClassicsPage() {
     }
   }, [loadPage]);
 
+  // Initial mount: check session cache or fetch first page
   useEffect(() => {
     const cached = readSessionCache(CLASSICS_CACHE_KEY);
     if (cached?.items?.length) {
@@ -141,10 +144,20 @@ export default function TamilClassicsPage() {
       setFacets(cached.facets || { sources: [], genres: [], minYear: null, maxYear: null });
       setFilters(cached.filters || { q: '', sort: 'rating.desc', source: 'Aha', genre: 'all', minRating: '', yearFrom: '', yearTo: '' });
       restoreScroll(CLASSICS_CACHE_KEY);
+      mountedRef.current = true;
       return;
     }
     loadPage(1, false);
-  }, [loadPage]);
+    mountedRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // When filters change after mount, fetch page 1
+  useEffect(() => {
+    if (!mountedRef.current) return;
+    loadPage(1, false, filters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
 
   useEffect(() => {
     writeSessionCache(CLASSICS_CACHE_KEY, { items, status, error, syncStatus, syncSummary, page, hasMore, total, facets, filters });

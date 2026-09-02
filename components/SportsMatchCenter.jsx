@@ -419,6 +419,81 @@ function BcciExtra({ endpoint, matchId }) {
   return <pre className="max-h-[520px] overflow-auto rounded-2xl border border-white/10 bg-black/40 p-4 text-xs leading-6 text-zinc-300">{JSON.stringify(state.data, null, 2)}</pre>;
 }
 
+function Wt20BallByBall({ matchId }) {
+  const [state, setState] = useState({ status: 'loading', balls: [], error: '' });
+
+  useEffect(() => {
+    if (!matchId) return;
+    let cancelled = false;
+    async function load() {
+      try {
+        setState({ status: 'loading', balls: [], error: '' });
+        const res = await fetch(`/api/wt20/commentary?game_id=${encodeURIComponent(matchId)}`, { cache: 'no-store' });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error || 'ICC commentary failed');
+        if (!cancelled) {
+          const raw = json.data?.Commentary || json.Commentary || json.data || json || [];
+          const list = Array.isArray(raw) ? raw : [];
+          setState({ status: 'ready', balls: list, error: '' });
+        }
+      } catch (err) {
+        if (!cancelled) setState({ status: 'error', balls: [], error: err.message || 'ICC commentary failed' });
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [matchId]);
+
+  if (state.status === 'loading') return <EmptyPanel text="Loading ball-by-ball commentary…" />;
+  if (state.error) return <EmptyPanel text={state.error} />;
+  if (!state.balls.length) return <EmptyPanel text="No ball-by-ball commentary available for this match." />;
+
+  return (
+    <div className="space-y-3">
+      {state.balls.map((ball, idx) => {
+        const isWicket = ball.Isboundary === false && /out|wicket|bowled|caught|lbw|run out|stumped/i.test(ball.Commentary || '');
+        const isSix = ball.Runs === '6' || /six/i.test(ball.Commentary || '');
+        const isFour = ball.Runs === '4' || ball.Isboundary;
+        const badgeCls = isWicket
+          ? 'bg-red-500 text-white'
+          : isSix
+            ? 'bg-purple-600 text-white'
+            : isFour
+              ? 'bg-emerald-500 text-black font-black'
+              : ball.Runs === '0'
+                ? 'bg-zinc-800 text-zinc-400'
+                : 'bg-blue-600 text-white';
+
+        return (
+          <div key={ball.Id || idx} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:bg-white/[0.05]">
+            <div className="flex items-center justify-between gap-3 border-b border-white/5 pb-2.5">
+              <div className="flex items-center gap-2.5">
+                <span className={`grid h-7 w-7 place-items-center rounded-full text-xs font-black ${badgeCls}`}>
+                  {isWicket ? 'W' : ball.Runs || '0'}
+                </span>
+                <span className="text-xs font-black uppercase tracking-wider text-amber-400">
+                  Over {ball.Over || ball.Over_No || idx + 1}
+                </span>
+                {ball.Score ? (
+                  <span className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] font-bold text-zinc-300">
+                    {ball.Score}
+                  </span>
+                ) : null}
+              </div>
+              <div className="text-[11px] font-bold text-zinc-400">
+                {ball.Bowler_Name ? `${ball.Bowler_Name} to ` : ''}{ball.Batsman_Name || ''}
+              </div>
+            </div>
+            <p className="mt-2.5 text-xs leading-relaxed text-zinc-200">
+              {ball.Commentary}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function Wt20MatchCenter({ payload }) {
   const matchData = payload.matchData || {};
   const matchId = String(payload.matchId || matchData.match_id || matchData.MatchID || '').trim();
@@ -455,8 +530,8 @@ function Wt20MatchCenter({ payload }) {
   const activeInn = innings.find((inn, index) => Number(inn.Number || inn.number || index + 1) === activeInning) || innings[0] || {};
   const homeTeam = teams?.[md?.Team_Home] || {};
   const awayTeam = teams?.[md?.Team_Away] || {};
-  const home = pick(matchData, ['teama', 'home'], pick(homeTeam, ['Name_Full', 'Name', 'Team_Name'], 'Team A'));
-  const away = pick(matchData, ['teamb', 'away'], pick(awayTeam, ['Name_Full', 'Name', 'Team_Name'], 'Team B'));
+  const home = pick(matchData, ['teama', 'home', 'homeCode'], pick(homeTeam, ['Name_Full', 'Name', 'Team_Name'], payload.homeCode || 'Team A'));
+  const away = pick(matchData, ['teamb', 'away', 'awayCode'], pick(awayTeam, ['Name_Full', 'Name', 'Team_Name'], payload.awayCode || 'Team B'));
   // Canonical state from the scorecard itself, not from the listing payload:
   // live only when the feed marks it live, completed when it carries a result.
   const resultText = String(md?.Result?.Text || md?.Equation || matchData.match_result || '').trim();
@@ -471,7 +546,7 @@ function Wt20MatchCenter({ payload }) {
   const awayScore = inningsScoreLine(innings, md?.Team_Away)
     || matchData.teamb_score || matchData.score2 || '';
   const overview = [
-    { label: 'Series', value: md?.Series?.Name || matchData.series_name },
+    { label: 'Series', value: md?.Series?.Name || matchData.series_name || payload.leagueLabel },
     { label: 'Venue', value: md?.Venue?.Name || matchData.venue_name },
     { label: 'Match', value: md?.Match?.Number || matchData.match_number },
     { label: 'Date', value: md?.Match?.Date || matchData.match_date_ist },
@@ -482,13 +557,14 @@ function Wt20MatchCenter({ payload }) {
   return (
     <div className="space-y-5">
       <Hero provider="ICC WT20" title={`${teamShort(home)} vs ${teamShort(away)}`} subtitle={resultText || `${home} vs ${away}`} status={status} scoreA={{ team: home, score: homeScore }} scoreB={{ team: away, score: awayScore }} meta={overview.slice(0, 4)} />
-      <TabBar tabs={['Overview', 'Scorecard', 'Bowling']} active={tab} onChange={setTab} />
+      <TabBar tabs={['Overview', 'Scorecard', 'Bowling', 'Ball by Ball']} active={tab} onChange={setTab} />
       {error ? <EmptyPanel text={error} /> : null}
       {!data && !error ? <EmptyPanel text="Loading ICC scorecard…" /> : null}
       {tab === 'Overview' ? <OverviewGrid items={overview} /> : null}
       {['Scorecard', 'Bowling'].includes(tab) ? <InningsPicker innings={innings} active={activeInning} setActive={setActiveInning} teams={teams} /> : null}
       {tab === 'Scorecard' ? <ScorecardTable innings={activeInn} teams={teams} /> : null}
       {tab === 'Bowling' ? <BowlingTable innings={activeInn} teams={teams} /> : null}
+      {tab === 'Ball by Ball' ? <Wt20BallByBall matchId={matchId} /> : null}
     </div>
   );
 }
