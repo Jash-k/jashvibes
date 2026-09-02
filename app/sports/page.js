@@ -118,7 +118,7 @@ export default function SportsPage() {
       <header className="relative z-10 border-b border-white/5 bg-[#070709]/85 px-4 py-3 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <Link href="/" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300">← Home</Link>
-          <div className="flex flex-col items-center gap-1"><BrandLogo size="compact" /><p className="text-[10px] font-black uppercase tracking-[0.28em] text-amber-400">Live Sports</p></div>
+          <div className="flex flex-col items-center gap-1"><BrandLogo size="mini" /><p className="text-[10px] font-black uppercase tracking-[0.28em] text-amber-400">Live Sports</p></div>
           <button type="button" onClick={loadChannels} className="rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-amber-300">{refreshing ? 'Sync…' : 'Refresh'}</button>
         </div>
       </header>

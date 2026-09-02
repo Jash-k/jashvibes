@@ -615,20 +615,20 @@ export default function LiveTVPage() {
   return (
     <main className="palette-cybergrape live-page min-h-dvh overflow-x-clip bg-[#09041a] text-zinc-100">
       <header id="live-header" className="sticky top-0 z-50 border-b border-white/10 bg-zinc-950 shadow-[0_14px_30px_-18px_rgba(0,0,0,.9)]">
-        <div className="mx-auto grid max-w-7xl gap-3 px-3 py-4 sm:px-6 sm:py-5 lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:px-8">
+        <div className="mx-auto grid max-w-7xl gap-2 px-3 py-1.5 sm:px-6 sm:py-2 lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:px-8">
           <div className="flex items-center justify-start gap-3">
-            <Link href="/" className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-red-500 hover:text-white">
+            <Link href="/" className="rounded-full border border-white/10 px-2.5 py-1.5 text-[11px] font-bold text-zinc-300 transition hover:border-red-500 hover:text-white">
               ← Home
             </Link>
           </div>
-          <div className="flex flex-col items-center justify-center gap-1 text-center">
-            <BrandLogo />
-            <p className="text-[10px] font-black uppercase tracking-[0.26em] text-red-500 sm:text-xs sm:tracking-[0.32em]">Tamil Live TV</p>
+          <div className="flex items-center justify-center gap-2 text-center">
+            <BrandLogo size="mini" />
+            <p className="text-[9px] font-black uppercase tracking-[0.26em] text-red-500 sm:text-[10px] sm:tracking-[0.32em]">Tamil Live TV</p>
           </div>
           <button
             type="button"
             onClick={() => setServiceOpen(true)}
-            className="mr-14 justify-self-end rounded-full border border-purple-300/25 bg-purple-500/10 px-3 py-2 text-xs font-black text-purple-100 transition hover:border-purple-300/70 sm:mr-[4.75rem]"
+            className="mr-14 justify-self-end rounded-full border border-purple-300/25 bg-purple-500/10 px-2 py-1.5 text-[11px] font-black text-purple-100 transition hover:border-purple-300/70 sm:mr-[4.75rem]"
             title="Live TV Service Panel"
           >
             ⚙

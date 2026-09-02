@@ -4,6 +4,7 @@ export default function BrandLogo({ href = '/', size = 'hero', className = '' })
   const sizes = {
     hero: 'h-12 w-12 sm:h-[7.25rem] sm:w-[7.25rem] lg:h-[7.25rem] lg:w-[7.25rem]',
     compact: 'h-10 w-10 sm:h-16 sm:w-16 lg:h-20 lg:w-20',
+    mini: 'h-8 w-8 sm:h-9 sm:w-9',
   };
 
   return (

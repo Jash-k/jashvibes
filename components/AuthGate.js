@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import MobileDock from '@/components/MobileDock';
-import QuickNav from '@/components/QuickNav';
 import CursorFX from '@/components/CursorFX';
 
 const STORAGE_KEY = 'jash_theatre_access_token';
@@ -173,7 +172,6 @@ export default function AuthGate({ children }) {
         {children}
         <DayNightToggle />
         <MobileDock />
-        <QuickNav />
         <CursorFX />
       </>
     );

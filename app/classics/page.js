@@ -191,9 +191,9 @@ export default function TamilClassicsPage() {
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-7xl flex-col items-center justify-center gap-1 px-4 pt-6 text-center sm:px-6 sm:pt-8 lg:px-8">
-        <BrandLogo />
-        <p className="text-[10px] font-black uppercase tracking-[0.26em] text-red-500 sm:text-xs sm:tracking-[0.32em]">Tamil Classics</p>
+      <div className="mx-auto flex max-w-7xl flex-col items-center justify-center gap-1 px-4 pt-3 text-center sm:px-6 sm:pt-4 lg:px-8">
+        <BrandLogo size="mini" />
+        <p className="text-[9px] font-black uppercase tracking-[0.26em] text-red-500 sm:text-[10px] sm:tracking-[0.32em]">Tamil Classics</p>
       </div>
 
       <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">

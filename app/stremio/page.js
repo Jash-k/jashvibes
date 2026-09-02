@@ -267,12 +267,12 @@ export default function StremioPage() {
 
   return (
     <main className="min-h-dvh overflow-x-hidden bg-[radial-gradient(circle_at_12%_0%,rgba(217,70,239,0.20),transparent_30%),linear-gradient(180deg,#080014,#050505_55%,#090014)] pb-10 text-zinc-100">
-      <header className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/92 px-4 py-4 backdrop-blur-xl sm:py-5">
-        <div className="mx-auto grid max-w-7xl grid-cols-[1fr_auto_1fr] items-center gap-3">
-          <Link href="/" className="justify-self-start rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">← Home</Link>
-          <div className="flex flex-col items-center justify-center gap-1 text-center">
-            <BrandLogo />
-            <p className="text-[10px] font-black uppercase tracking-[0.26em] text-fuchsia-300 sm:text-xs sm:tracking-[0.32em]">Stremio</p>
+      <header className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/92 px-4 py-1.5 backdrop-blur-xl sm:py-2">
+        <div className="mx-auto grid max-w-7xl grid-cols-[1fr_auto_1fr] items-center gap-2">
+          <Link href="/" className="justify-self-start rounded-full border border-white/10 px-2.5 py-1.5 text-[11px] font-bold text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">← Home</Link>
+          <div className="flex items-center justify-center gap-2 text-center">
+            <BrandLogo size="mini" />
+            <p className="text-[9px] font-black uppercase tracking-[0.26em] text-fuchsia-300 sm:text-[10px] sm:tracking-[0.32em]">Stremio</p>
           </div>
           <span className="justify-self-end" />
         </div>

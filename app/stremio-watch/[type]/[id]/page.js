@@ -193,7 +193,7 @@ export default function StremioPlayerPage() {
 
   return (
     <main className="min-h-dvh bg-[#050012] text-zinc-100">
-      <header className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/92 px-3 py-2 backdrop-blur-xl sm:px-4 sm:py-5">
+      <header className="sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/92 px-3 py-1.5 backdrop-blur-xl sm:px-4 sm:py-2">
         <div className="mx-auto grid max-w-7xl gap-3 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
           <div className="flex items-center justify-between gap-2 lg:justify-start">
             <div className="flex items-center gap-2">
@@ -202,9 +202,9 @@ export default function StremioPlayerPage() {
             </div>
             <p className="text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-300 lg:hidden">{stremioSource === 'watch' ? 'Provider' : 'Catalog'}</p>
           </div>
-          <div className="flex flex-col items-center justify-center gap-1 text-center">
-            <BrandLogo />
-            <p className="text-[9px] font-black uppercase tracking-[0.20em] text-fuchsia-300 sm:text-xs sm:tracking-[0.32em]">{stremioSource === 'watch' ? 'Provider Player' : 'Catalog Player'}</p>
+          <div className="flex items-center justify-center gap-2 text-center">
+            <BrandLogo size="mini" />
+            <p className="text-[9px] font-black uppercase tracking-[0.20em] text-fuchsia-300 sm:text-[10px] sm:tracking-[0.32em]">{stremioSource === 'watch' ? 'Provider Player' : 'Catalog Player'}</p>
           </div>
           <span className="hidden justify-self-end text-[10px] font-black uppercase tracking-[0.30em] text-fuchsia-300 lg:block">Stremio</span>
         </div>
