@@ -146,8 +146,8 @@ export default function DirectWatchPlayer({
 
   // ---------- bind to the video element ----------
   useEffect(() => {
-    if (!videoEl) return undefined;
-    const v = videoEl;
+    const v = videoEl || wrapRef.current?.querySelector('video');
+    if (!v) return undefined;
     fallbackFiredRef.current = false;
     resumeShownRef.current = false;
 

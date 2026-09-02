@@ -532,15 +532,8 @@ export default function LiveTVPage() {
         try { shakaRef.current.destroy(); } catch {}
         shakaRef.current = null;
       }
-      if (video) {
-        try {
-          video.pause();
-          video.removeAttribute('src');
-          video.load();
-        } catch {}
-      }
     };
-  }, [active, pocketProxyIds, liveVideoEl]);
+  }, [active, pocketProxyIds]);
 
   const catalogOptions = useMemo(() => LIVE_CATALOGS.map((catalog) => ({
     ...catalog,
@@ -626,11 +619,11 @@ export default function LiveTVPage() {
   }
 
   return (
-    <main className="palette-cybergrape live-page min-h-dvh overflow-x-clip bg-[#09041a] text-white">
+    <main className="palette-cybergrape live-page min-h-dvh overflow-x-clip bg-[#09041a] text-zinc-100">
       <header id="live-header" className="hidden sm:block sticky top-0 z-50 border-b border-white/10 bg-zinc-950 shadow-[0_14px_30px_-18px_rgba(0,0,0,.9)]">
         <div className="mx-auto grid max-w-7xl gap-2 px-3 py-1.5 sm:px-6 sm:py-2 lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:px-8">
           <div className="flex items-center justify-start gap-3">
-            <Link href="/" className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1.5 text-[11px] font-black text-white transition hover:border-red-500 hover:text-white">
+            <Link href="/" className="rounded-full border border-white/10 px-2.5 py-1.5 text-[11px] font-bold text-zinc-300 transition hover:border-red-500 hover:text-white">
               ← Home
             </Link>
           </div>
@@ -641,7 +634,7 @@ export default function LiveTVPage() {
           <button
             type="button"
             onClick={() => setServiceOpen(true)}
-            className="mr-14 justify-self-end rounded-full border border-purple-300/40 bg-purple-500/20 px-2.5 py-1.5 text-[11px] font-black text-white transition hover:border-purple-300 sm:mr-[4.75rem]"
+            className="mr-14 justify-self-end rounded-full border border-purple-300/25 bg-purple-500/10 px-2.5 py-1.5 text-[11px] font-black text-purple-200 transition hover:border-purple-300/70 sm:mr-[4.75rem]"
             title="Live TV Service Panel"
           >
             ⚙
@@ -659,8 +652,7 @@ export default function LiveTVPage() {
             >
               {active?.playable ? (
                 <DirectWatchPlayer
-                  key={active.id}
-                  videoEl={liveVideoEl}
+                  videoEl={liveVideoEl || videoRef.current}
                   watchKey={`live:${active.id}`}
                   title={active.name || 'Tamil Live TV'}
                   live
@@ -673,7 +665,6 @@ export default function LiveTVPage() {
                   }}
                 >
                   <video
-                    key={active.id}
                     ref={liveVideoCallbackRef}
                     className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-fill"
                     playsInline
@@ -685,7 +676,7 @@ export default function LiveTVPage() {
                 <div className="flex h-full items-center justify-center p-8 text-center">
                   <div>
                     <p className="text-xl font-black text-white">{active ? 'Channel unavailable' : 'Choose a channel'}</p>
-                    <p className="mt-2 text-sm font-semibold leading-6 text-white/90">
+                    <p className="mt-2 text-sm leading-6 text-zinc-400">
                       {active ? (playerError || 'This channel could not be loaded by Shaka Player. Try another source or switch catalog.') : 'Tamil preferred channels will appear on the right.'}
                     </p>
                   </div>
@@ -694,22 +685,22 @@ export default function LiveTVPage() {
 
               {playerStatus === 'loading' ? (
                 <div className="absolute inset-0 grid place-items-center bg-black/45">
-                  <div className="rounded-full border border-white/20 bg-black/90 px-5 py-3 text-sm font-black text-white shadow-2xl">Loading channel...</div>
+                  <div className="rounded-full border border-white/10 bg-black/80 px-5 py-3 text-sm font-bold text-zinc-200">Loading channel...</div>
                 </div>
               ) : null}
               {playerStatus === 'error' ? (
-                <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-red-500/50 bg-red-950/90 p-3 text-sm font-black leading-6 text-white backdrop-blur">
+                <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-red-500/30 bg-red-950/80 p-3 text-sm leading-6 text-red-100 backdrop-blur">
                   {playerError || 'Playback failed. Try another source.'}
                 </div>
               ) : null}
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/15 bg-zinc-950/95 p-3 sm:rounded-3xl sm:p-4">
+          <div className="rounded-2xl border border-white/10 bg-zinc-950/80 p-3 sm:rounded-3xl sm:p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <div className="flex items-center gap-2.5"><h1 className="truncate text-xl font-black text-white sm:text-2xl">{active?.name || 'Tamil Live TV'}</h1><span className="jv-badge-live shrink-0"><span className="jv-livepulse" />Live</span></div>
-                <p className="mt-1 text-xs font-bold text-white/90 sm:text-sm">
+                <p className="mt-1 text-xs font-semibold text-zinc-400 sm:text-sm">
                   {active ? `${getChannelCatalogIds(active).map(catalogLabel).join(' + ') || 'Initial Jio'} • ${active.source} • ${active.format.toUpperCase()}${active.keyId && active.key ? ' • ClearKey DRM' : ''}` : `Loaded ${channels.length} manually mapped channels`}
                 </p>
               </div>
@@ -721,7 +712,7 @@ export default function LiveTVPage() {
                   type="button"
                   onClick={() => navigateChannel(-1)}
                   disabled={!filteredChannels.length && !channels.length}
-                  className="rounded-xl border border-white/20 bg-white/10 px-2 py-2.5 text-xs font-black text-white transition hover:border-red-500 hover:bg-white/20 disabled:opacity-40 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm"
+                  className="rounded-xl border border-white/10 bg-white/[0.04] px-2 py-2.5 text-xs font-black text-white transition hover:border-red-500/50 disabled:opacity-40 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm"
                   title="Previous channel"
                 >
                   ‹ Pre
@@ -730,7 +721,7 @@ export default function LiveTVPage() {
                   type="button"
                   onClick={returnToLastChannel}
                   disabled={!lastViewed?.id}
-                  className="rounded-xl border border-orange-400/40 bg-orange-500/20 px-2 py-2.5 text-xs font-black text-white transition hover:border-orange-300 disabled:opacity-40 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm"
+                  className="rounded-xl border border-orange-400/25 bg-orange-500/10 px-2 py-2.5 text-xs font-black text-orange-100 transition hover:border-orange-300/60 disabled:opacity-40 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm"
                   title={lastViewed?.name ? `Return to ${lastViewed.name}` : 'Return to last viewed channel'}
                 >
                   ↩ Return
@@ -739,41 +730,41 @@ export default function LiveTVPage() {
                   type="button"
                   onClick={() => navigateChannel(1)}
                   disabled={!filteredChannels.length && !channels.length}
-                  className="rounded-xl border border-white/20 bg-white/10 px-2 py-2.5 text-xs font-black text-white transition hover:border-red-500 hover:bg-white/20 disabled:opacity-40 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm"
+                  className="rounded-xl border border-white/10 bg-white/[0.04] px-2 py-2.5 text-xs font-black text-white transition hover:border-red-500/50 disabled:opacity-40 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm"
                   title="Next channel"
                 >
                   Nxt ›
                 </button>
               </div>
-              {lastViewed?.name ? <p className="truncate px-1 text-[10px] font-bold text-white/90 sm:text-xs">Last viewed: {lastViewed.name}</p> : null}
+              {lastViewed?.name ? <p className="truncate px-1 text-[10px] font-semibold text-zinc-400 sm:text-xs">Last viewed: {lastViewed.name}</p> : null}
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-                <button onClick={enterFullscreen} className="rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-black text-white transition hover:border-red-500 hover:bg-white/20">Fullscreen</button>
+                <button onClick={enterFullscreen} className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-bold text-white transition hover:border-red-500/50">Fullscreen</button>
               </div>
             </div>
           </div>
         </div>
 
         <aside className="min-w-0 space-y-3 lg:w-full">
-          <div className="sticky top-[7.7rem] z-30 rounded-2xl border border-white/15 bg-zinc-950 p-3 shadow-[0_18px_40px_-16px_rgba(0,0,0,.85)] sm:rounded-3xl sm:p-4 lg:static lg:shadow-none">
+          <div className="sticky top-[7.7rem] z-30 rounded-2xl border border-white/10 bg-zinc-950 p-3 shadow-[0_18px_40px_-16px_rgba(0,0,0,.85)] sm:rounded-3xl sm:p-4 lg:static lg:shadow-none">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white">My catalogs</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-200">My catalogs</p>
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => setServiceOpen(true)}
-                  className="rounded-full border border-purple-300/40 bg-purple-500/20 px-2 py-0.5 text-[10px] font-black text-white sm:hidden"
+                  className="rounded-full border border-purple-300/25 bg-purple-500/10 px-2 py-0.5 text-[10px] font-black text-purple-100 sm:hidden"
                   title="Live TV Service Panel"
                 >
                   ⚙
                 </button>
-                <span className="rounded-full bg-white/15 px-2 py-1 text-[10px] font-black text-white">{filteredChannels.length}</span>
+                <span className="rounded-full bg-white/[0.06] px-2 py-1 text-[10px] font-bold text-zinc-400">{filteredChannels.length}</span>
               </div>
             </div>
             <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2">
               <button
                 type="button"
                 onClick={() => setCategory('all')}
-                className={`rounded-xl border px-2 py-2 text-xs font-black transition ${category === 'all' ? 'border-purple-400 bg-purple-500/30 text-white shadow-lg' : 'border-white/15 bg-white/10 text-white hover:border-purple-400/50'}`}
+                className={`rounded-xl border px-2 py-2 text-xs font-black transition ${category === 'all' ? 'border-purple-400 bg-purple-500/20 text-purple-100' : 'border-white/10 bg-white/[0.04] text-zinc-300'}`}
               >
                 All · {channels.length}
               </button>
@@ -782,7 +773,7 @@ export default function LiveTVPage() {
                   key={catalog.id}
                   type="button"
                   onClick={() => setCategory(catalog.id)}
-                  className={`rounded-xl border px-2 py-2 text-xs font-black transition ${category === catalog.id ? 'border-purple-400 bg-purple-500/30 text-white shadow-lg' : 'border-white/15 bg-white/10 text-white hover:border-purple-400/50'}`}
+                  className={`rounded-xl border px-2 py-2 text-xs font-black transition ${category === catalog.id ? 'border-purple-400 bg-purple-500/20 text-purple-100' : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-purple-400/40'}`}
                 >
                   {catalog.icon} {catalog.name} · {catalog.count}
                 </button>
@@ -793,12 +784,12 @@ export default function LiveTVPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search mapped channels"
-                className="min-w-0 rounded-xl border border-white/20 bg-black px-3 py-2 text-sm font-bold text-white placeholder:text-white/60 outline-none focus:border-purple-400"
+                className="min-w-0 rounded-xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-purple-400"
               />
               <button
                 type="button"
                 onClick={() => setShowFavoritesOnly((value) => !value)}
-                className={`rounded-xl border px-3 py-2 text-sm font-black ${showFavoritesOnly ? 'border-yellow-400 bg-yellow-500/30 text-white' : 'border-white/20 bg-white/10 text-white'}`}
+                className={`rounded-xl border px-3 py-2 text-sm ${showFavoritesOnly ? 'border-yellow-400 bg-yellow-500/15 text-yellow-100' : 'border-white/10 text-zinc-400'}`}
                 title="Favorites only"
               >
                 ★
@@ -807,26 +798,26 @@ export default function LiveTVPage() {
           </div>
 
           <div className="space-y-2 pr-1 lg:max-h-[70dvh] lg:overflow-y-auto">
-            {status === 'loading' ? <div className="rounded-3xl border border-white/15 bg-zinc-950 p-6 text-center text-sm font-black text-white">Loading Tamil channels...</div> : null}
-            {status === 'error' ? <div className="rounded-3xl border border-red-500/40 bg-red-950/40 p-6 text-center text-sm font-black text-white">{error}</div> : null}
-            {status === 'ready' && filteredChannels.length === 0 ? <div className="rounded-3xl border border-white/15 bg-zinc-950 p-6 text-center text-sm font-black text-white">No manually mapped channels in this catalog.</div> : null}
+            {status === 'loading' ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">Loading Tamil channels...</div> : null}
+            {status === 'error' ? <div className="rounded-3xl border border-red-500/30 bg-red-950/20 p-6 text-center text-red-200">{error}</div> : null}
+            {status === 'ready' && filteredChannels.length === 0 ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">No manually mapped channels in this catalog.</div> : null}
 
             {filteredChannels.map((channel) => (
               <button
                 key={channel.id}
                 type="button"
                 onClick={() => selectChannel(channel)}
-                className={`flex w-full items-center gap-3 rounded-2xl border p-2.5 text-left transition sm:rounded-3xl sm:p-3 ${active?.id === channel.id ? 'border-red-500/80 bg-red-600/25 shadow-xl' : 'border-white/15 bg-zinc-950/90 hover:border-red-500/50'}`}
+                className={`flex w-full items-center gap-3 rounded-2xl border p-2.5 text-left transition sm:rounded-3xl sm:p-3 ${active?.id === channel.id ? 'border-red-500/70 bg-red-600/15' : 'border-white/10 bg-zinc-950/80 hover:border-red-500/40'}`}
               >
-                <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/10 sm:h-14 sm:w-14 sm:rounded-2xl">
-                  {channel.logo ? <img src={channel.logo} alt="" className="max-h-full max-w-full object-fill" loading="lazy" /> : <span className="text-xs font-black text-white">TV</span>}
+                <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/5 sm:h-14 sm:w-14 sm:rounded-2xl">
+                  {channel.logo ? <img src={channel.logo} alt="" className="max-h-full max-w-full object-fill" loading="lazy" /> : <span className="text-xs font-black text-zinc-500">TV</span>}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-black text-white">{channel.name}</p>
-                  <p className="mt-1 truncate text-xs font-bold text-white/90">{getChannelCatalogIds(channel).map(catalogLabel).join(' + ') || 'Initial Jio'} • {channel.source}</p>
+                  <p className="truncate text-sm font-black text-zinc-100">{channel.name}</p>
+                  <p className="mt-1 truncate text-xs text-zinc-400">{getChannelCatalogIds(channel).map(catalogLabel).join(' + ') || 'Initial Jio'} • {channel.source}</p>
                   <div className="mt-1 flex gap-1">
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${channel.playable ? 'bg-green-500/25 text-white border border-green-400/40' : 'bg-orange-500/25 text-white border border-orange-400/40'}`}>{channel.format.toUpperCase()}</span>
-                    {channel.keyId && channel.key ? <span className="rounded-full bg-blue-500/25 px-2 py-0.5 text-[10px] font-black text-white border border-blue-400/40">DRM</span> : null}
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${channel.playable ? 'bg-green-500/15 text-green-200' : 'bg-orange-500/15 text-orange-200'}`}>{channel.format.toUpperCase()}</span>
+                    {channel.keyId && channel.key ? <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-100">DRM</span> : null}
                   </div>
                 </div>
               </button>
