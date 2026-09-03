@@ -843,6 +843,8 @@ export default function WatchByTMDBPage() {
                   className="h-full w-full bg-black object-fill"
                   playsInline
                   autoPlay
+                  preload="auto"
+                  crossOrigin="anonymous"
                 />
               </DirectWatchPlayer>
             ) : null}

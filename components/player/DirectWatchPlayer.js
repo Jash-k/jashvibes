@@ -113,6 +113,7 @@ export default function DirectWatchPlayer({
   }, [videoEl]);
 
   const hideTimerRef = useRef(0);
+  const userWantsPlayRef = useRef(true);
   const tapRef = useRef({ lastUp: 0, lastZone: '', pendingTimer: 0 });
   const holdRef = useRef({ timer: 0, active: false, prevRate: 1 });
   const stallTimerRef = useRef(0);
@@ -150,27 +151,63 @@ export default function DirectWatchPlayer({
     if (!v) return undefined;
     fallbackFiredRef.current = false;
     resumeShownRef.current = false;
+    userWantsPlayRef.current = true;
 
-    const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
+    const onPlay = () => {
+      userWantsPlayRef.current = true;
+      setPlaying(true);
+      setBuffering(false);
+    };
+    const onPause = () => {
+      if (userWantsPlayRef.current && v.readyState < 3 && !v.ended) {
+        // Stream dipped on buffer underrun: show buffering rather than hard pause
+        setBuffering(true);
+      } else {
+        setPlaying(false);
+      }
+    };
     const onTimeUpdate = () => { if (!scrubbing) setTime(v.currentTime || 0); };
     const onDur = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
     const onProgress = () => {
       try {
         const b = v.buffered;
         if (b.length) setBufferedEnd(b.end(b.length - 1));
+        // Auto-resume if buffer recovered while user wanted playback
+        if (userWantsPlayRef.current && v.paused && (v.readyState >= 2 || b.length > 0)) {
+          v.play().then(() => {
+            setBuffering(false);
+            setPlaying(true);
+          }).catch(() => {});
+        }
       } catch {}
     };
     const onVolume = () => { setVolume(v.volume); setMuted(v.muted); };
     const onRate = () => setRate(v.playbackRate);
     const onWaiting = () => setBuffering(true);
-    const onCanPlay = () => { setBuffering(false); window.clearTimeout(stallTimerRef.current); };
+    const onPlaying = () => {
+      setBuffering(false);
+      setPlaying(true);
+      window.clearTimeout(stallTimerRef.current);
+    };
+    const onCanPlay = () => {
+      window.clearTimeout(stallTimerRef.current);
+      if (userWantsPlayRef.current) {
+        if (v.paused) {
+          v.play().catch(() => {});
+        }
+        setBuffering(false);
+        setPlaying(true);
+      }
+    };
     const onStalled = () => {
-      if (v.paused) return;
+      if (v.ended || !userWantsPlayRef.current) return;
+      setBuffering(true);
       window.clearTimeout(stallTimerRef.current);
       stallTimerRef.current = window.setTimeout(() => {
-        fireFallback('stall');
-      }, FALLBACK_STALL_MS / 2);
+        if (userWantsPlayRef.current && v.readyState < 2) {
+          fireFallback('stall');
+        }
+      }, 30000);
     };
     const fireFallback = (why) => {
       if (fallbackFiredRef.current) return;
@@ -184,6 +221,24 @@ export default function DirectWatchPlayer({
     };
     const onEnterPip = () => setPipActive(true);
     const onLeavePip = () => setPipActive(false);
+
+    // Watchdog interval to seamlessly auto-resume whenever video buffer recovers
+    const bufferWatchdog = setInterval(() => {
+      if (userWantsPlayRef.current && !v.ended) {
+        if (v.paused || v.readyState < 3) {
+          if (v.readyState >= 2) {
+            v.play().then(() => {
+              setBuffering(false);
+              setPlaying(true);
+            }).catch(() => {});
+          } else {
+            setBuffering(true);
+          }
+        } else {
+          setBuffering(false);
+        }
+      }
+    }, 600);
 
     // ---------- autoplay boot with unmuted preference ----------
     autoplayMutedRef.current = false;
@@ -232,7 +287,8 @@ export default function DirectWatchPlayer({
     v.addEventListener('seeking', onWaiting);
     v.addEventListener('seeked', onCanPlay);
     v.addEventListener('canplay', onCanPlay);
-    v.addEventListener('playing', onCanPlay);
+    v.addEventListener('canplaythrough', onCanPlay);
+    v.addEventListener('playing', onPlaying);
     v.addEventListener('stalled', onStalled);
     v.addEventListener('error', onError);
     v.addEventListener('enterpictureinpicture', onEnterPip);
@@ -252,6 +308,7 @@ export default function DirectWatchPlayer({
     setTime(v.currentTime || 0);
 
     return () => {
+      clearInterval(bufferWatchdog);
       v.removeEventListener('play', onPlay);
       v.removeEventListener('pause', onPause);
       v.removeEventListener('timeupdate', onTimeUpdate);
@@ -263,7 +320,8 @@ export default function DirectWatchPlayer({
       v.removeEventListener('seeking', onWaiting);
       v.removeEventListener('seeked', onCanPlay);
       v.removeEventListener('canplay', onCanPlay);
-      v.removeEventListener('playing', onCanPlay);
+      v.removeEventListener('canplaythrough', onCanPlay);
+      v.removeEventListener('playing', onPlaying);
       v.removeEventListener('stalled', onStalled);
       v.removeEventListener('error', onError);
       v.removeEventListener('enterpictureinpicture', onEnterPip);
@@ -336,9 +394,18 @@ export default function DirectWatchPlayer({
   const togglePlay = useCallback(() => {
     const v = videoEl;
     if (!v) return;
-    if (v.paused) { v.play().catch(() => {}); }
-    else v.pause();
-    setFlash({ id: Date.now(), kind: v.paused ? 'play' : 'pause' });
+    if (v.paused) {
+      userWantsPlayRef.current = true;
+      v.play().catch(() => {});
+      setPlaying(true);
+      setFlash({ id: Date.now(), kind: 'play' });
+    } else {
+      userWantsPlayRef.current = false;
+      v.pause();
+      setPlaying(false);
+      setBuffering(false);
+      setFlash({ id: Date.now(), kind: 'pause' });
+    }
     window.clearTimeout(flashTimerRef.current);
     flashTimerRef.current = window.setTimeout(() => setFlash(null), 600);
   }, [videoEl]);
@@ -573,8 +640,9 @@ export default function DirectWatchPlayer({
 
       {/* buffering spinner */}
       {buffering ? (
-        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
-          <div className="h-12 w-12 animate-spin rounded-full border-[3px] border-white/15 border-t-fuchsia-400 drop-shadow-[0_0_18px_rgba(217,70,239,0.55)]" />
+        <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/40 backdrop-blur-[1px] transition-all">
+          <div className="h-12 w-12 animate-spin rounded-full border-[3.5px] border-white/20 border-t-fuchsia-400 drop-shadow-[0_0_20px_rgba(217,70,239,0.7)]" />
+          <span className="rounded-full bg-black/60 px-3 py-1 text-[11px] font-semibold text-white/90 backdrop-blur">Buffering stream...</span>
         </div>
       ) : null}
 
