@@ -7,6 +7,7 @@ import Icon from '@/components/Icons';
 import {
   FANCODE_FEED,
   bestFancodeVariant,
+  encodeMatchHash,
   playerUrlFromHls,
 } from '@/lib/sportsFeed';
 
@@ -21,23 +22,6 @@ const BASE_CHANNELS = [
 ];
 
 function PulsingDot({ color = '#ef4444' }) { return <span className="inline-block h-2 w-2 animate-pulse rounded-full" style={{ background: color }} />; }
-
-function encodeMatchPayload(payload) {
-  try {
-    const json = JSON.stringify(payload);
-    if (typeof Buffer !== 'undefined') {
-      return Buffer.from(json, 'utf-8').toString('base64url');
-    }
-    const utf8Bytes = new TextEncoder().encode(json);
-    let binary = '';
-    for (let i = 0; i < utf8Bytes.length; i++) {
-      binary += String.fromCharCode(utf8Bytes[i]);
-    }
-    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  } catch {
-    return '';
-  }
-}
 
 function ChannelCard({ ch, active, onClick }) {
   return (
@@ -120,7 +104,7 @@ export default function SportsPage() {
             scoreA,
             scoreB,
             stream: '',
-            matchHash: encodeMatchPayload({
+            matchHash: encodeMatchHash({
               sport: 'cricket',
               type: 'wt20',
               matchId: String(m.match_id),
@@ -164,7 +148,7 @@ export default function SportsPage() {
             scoreA: m.team?.[0]?.name ? `${m.team[0].name}${m.team[0].shortName ? ` (${m.team[0].shortName})` : ''}` : '',
             scoreB: m.team?.[1]?.name ? `${m.team[1].name}${m.team[1].shortName ? ` (${m.team[1].shortName})` : ''}` : '',
             stream,
-            matchHash: encodeMatchPayload({
+            matchHash: encodeMatchHash({
               sport: 'cricket',
               type: 'fancode',
               matchId: String(m.match_id || ''),

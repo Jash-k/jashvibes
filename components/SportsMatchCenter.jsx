@@ -1,8 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
-import { bestFancodeVariant, playerUrlFromHls } from '@/lib/sportsFeed';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  bestFancodeVariant,
+  decodeMatchHash,
+  encodeMatchHash,
+  playerUrlFromHls,
+} from '@/lib/sportsFeed';
 
 function pick(obj, keys, fallback = '') {
   for (const key of keys) {
@@ -16,32 +21,6 @@ function asArray(value) {
   if (Array.isArray(value)) return value;
   if (value && typeof value === 'object') return Object.values(value);
   return [];
-}
-
-function decodeMatchHash(hash = '') {
-  if (!hash) return null;
-  const raw = Array.isArray(hash) ? hash.join('/') : String(hash);
-  try {
-    let clean = decodeURIComponent(raw.trim());
-    const padded = clean.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(clean.length / 4) * 4, '=');
-    if (typeof Buffer !== 'undefined') {
-      return JSON.parse(Buffer.from(padded, 'base64').toString('utf-8'));
-    }
-    const binary = atob(padded);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return JSON.parse(new TextDecoder().decode(bytes));
-  } catch {
-    try {
-      let clean = decodeURIComponent(raw.trim());
-      const padded = clean.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(clean.length / 4) * 4, '=');
-      return JSON.parse(decodeURIComponent(escape(atob(padded))));
-    } catch {
-      try { return JSON.parse(atob(decodeURIComponent(raw))); } catch { return null; }
-    }
-  }
 }
 
 function normalizePayload(payload = {}) {
@@ -104,13 +83,13 @@ function resolvePlayer(id, teams = {}, preferredTeamId = '') {
   return null;
 }
 
-function resolvePlayerName(id, teams = {}, preferredTeamId = '') {
+function resolvePlayerName(id, teams = {}, preferredTeamId = '', short = false) {
   if (!id) return '';
   const player = resolvePlayer(id, teams, preferredTeamId);
   if (player) {
     const fullName = player.Name_Full || player.Name || player.FullName || player.Player_Name;
     const shortName = player.Name_Short || player.Display_Name;
-    const name = fullName || shortName;
+    const name = short ? (shortName || fullName) : (fullName || shortName);
     if (name) {
       const suffix = player.Is_Captain && player.Is_Keeper ? ' (c & wk)' : player.Is_Captain ? ' (c)' : player.Is_Keeper ? ' (wk)' : '';
       return `${name}${suffix}`;
@@ -123,7 +102,7 @@ function resolveBatterName(row = {}, teams = {}, inn = {}) {
   const direct = pick(row, ['BatterName', 'BatsManName', 'BatsmanName', 'PlayerName', 'Name', 'StrikerName'], '');
   if (direct && isNaN(Number(direct))) return direct;
   const id = row.Batsman || row.Player_Id || row.PlayerID || row.PlayerId;
-  const name = resolvePlayerName(id, teams, inn.Battingteam || inn.BattingTeam);
+  const name = resolvePlayerName(id, teams, inn.Battingteam || inn.BattingTeam, false);
   if (name && isNaN(Number(name))) return name;
   return direct || (id ? `#${id}` : 'Batter');
 }
@@ -132,7 +111,7 @@ function resolveBowlerName(row = {}, teams = {}, inn = {}) {
   const direct = pick(row, ['BowlerName', 'PlayerName', 'Name'], '');
   if (direct && isNaN(Number(direct))) return direct;
   const id = row.Bowler || row.Player_Id || row.PlayerID || row.PlayerId;
-  const name = resolvePlayerName(id, teams, inn.Bowlingteam || inn.BowlingTeam);
+  const name = resolvePlayerName(id, teams, inn.Bowlingteam || inn.BowlingTeam, false);
   if (name && isNaN(Number(name))) return name;
   return direct || (id ? `#${id}` : 'Bowler');
 }
@@ -268,24 +247,25 @@ function OverviewGrid({ items }) {
 
 function ScorecardTable({ innings, teams }) {
   const allBatters = battingRows(innings);
-  const battedRows = allBatters.filter((row) => row.Balls !== '' || row.Runs !== '' || row.Howout !== '' || row.Dismissal !== '');
-  const didNotBatRows = allBatters.filter((row) => row.Balls === '' && row.Runs === '' && !row.Howout && !row.Dismissal);
+  const battedRows = allBatters.filter((row) => row.Balls !== '' && row.Balls !== undefined || row.Runs !== '' && row.Runs !== undefined || row.Howout || row.dismissal || row.out);
+  const didNotBatRows = allBatters.filter((row) => (row.Balls === '' || row.Balls === undefined) && (row.Runs === '' || row.Runs === undefined) && !row.Howout && !row.dismissal && !row.out);
 
   if (!battedRows.length) return <EmptyPanel text="Batting scorecard not available yet." />;
 
-  const extrasSum = (Number(innings.Byes || 0) + Number(innings.Legbyes || 0) + Number(innings.Wides || 0) + Number(innings.Noballs || 0) + Number(innings.Penalty || 0)) || Number(innings.ExtrasTotal || 0);
+  const extrasSum = (Number(innings.Byes || 0) + Number(innings.Legbyes || 0) + Number(innings.Wides || 0) + Number(innings.Noballs || 0) + Number(innings.Penalty || 0))
+    || Number(innings.ExtrasTotal || innings.extras?.total || innings.extras || 0);
 
   const extrasBreakdown = [
-    innings.Byes ? `b ${innings.Byes}` : null,
-    innings.Legbyes ? `lb ${innings.Legbyes}` : null,
-    innings.Wides ? `w ${innings.Wides}` : null,
-    innings.Noballs ? `nb ${innings.Noballs}` : null,
-    innings.Penalty ? `p ${innings.Penalty}` : null,
+    innings.Byes || innings.extras?.byes ? `b ${innings.Byes || innings.extras?.byes}` : null,
+    innings.Legbyes || innings.extras?.legByes ? `lb ${innings.Legbyes || innings.extras?.legByes}` : null,
+    innings.Wides || innings.extras?.wides ? `w ${innings.Wides || innings.extras?.wides}` : null,
+    innings.Noballs || innings.extras?.noBalls ? `nb ${innings.Noballs || innings.extras?.noBalls}` : null,
+    innings.Penalty || innings.extras?.penalty ? `p ${innings.Penalty || innings.extras?.penalty}` : null,
   ].filter(Boolean).join(', ');
 
-  const totalRuns = pick(innings, ['Total', 'Runs', 'TotalRuns'], '0');
-  const totalWkts = pick(innings, ['Wickets', 'Wkts'], '0');
-  const totalOvers = pick(innings, ['Overs', 'Ov'], '0');
+  const totalRuns = pick(innings, ['Total', 'Runs', 'TotalRuns', 'runs'], '0');
+  const totalWkts = pick(innings, ['Wickets', 'Wkts', 'wickets'], '0');
+  const totalOvers = pick(innings, ['Overs', 'Ov', 'overs'], '0');
   const runRate = pick(innings, ['Runrate', 'RunRate', 'runRate'], (Number(totalRuns) / Math.max(Number(totalOvers) || 1, 1)).toFixed(2));
 
   return (
@@ -305,14 +285,14 @@ function ScorecardTable({ innings, teams }) {
           </thead>
           <tbody className="divide-y divide-white/5">
             {battedRows.map((row, index) => {
-              const name = resolveBatterName(row, teams, innings);
-              const howout = pick(row, ['Howout', 'Dismissal', 'HowOut', 'OutDesc', 'WicketText', 'Howout_short'], 'not out');
-              const isNotOut = /not out/i.test(howout);
-              const runs = pick(row, ['Runs', 'R'], '0');
-              const balls = pick(row, ['Balls', 'B'], '0');
-              const fours = pick(row, ['Fours', '4s', 'F'], '0');
-              const sixes = pick(row, ['Sixes', '6s', 'S'], '0');
-              const sr = pick(row, ['StrikeRate', 'Strikerate', 'SR'], '-');
+              const name = row.name || resolveBatterName(row, teams, innings);
+              const rawHowout = pick(row, ['Howout', 'Dismissal', 'dismissal', 'HowOut', 'OutDesc', 'WicketText', 'Howout_short'], 'not out');
+              const isNotOut = /not out/i.test(rawHowout) || row.isNotOut;
+              const runs = pick(row, ['Runs', 'runs', 'R'], '0');
+              const balls = pick(row, ['Balls', 'balls', 'B'], '0');
+              const fours = pick(row, ['Fours', 'fours', '4s', 'F'], '0');
+              const sixes = pick(row, ['Sixes', 'sixes', '6s', 'S'], '0');
+              const sr = pick(row, ['StrikeRate', 'Strikerate', 'strikeRate', 'sr', 'SR'], '-');
 
               return (
                 <tr key={index} className="transition hover:bg-white/[0.02]">
@@ -320,7 +300,7 @@ function ScorecardTable({ innings, teams }) {
                     {name}
                   </td>
                   <td className={`px-3 py-3 text-xs leading-relaxed max-w-[280px] ${isNotOut ? 'font-bold text-emerald-400' : 'text-zinc-400'}`}>
-                    {howout}
+                    {rawHowout}
                   </td>
                   <td className="px-3 py-3 text-right font-mono font-black text-amber-300">
                     {runs}
@@ -363,7 +343,7 @@ function ScorecardTable({ innings, teams }) {
           <div className="flex flex-wrap gap-2">
             {didNotBatRows.map((row, idx) => (
               <span key={idx} className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-xs font-semibold text-zinc-300">
-                {resolveBatterName(row, teams, innings)}
+                {row.name || resolveBatterName(row, teams, innings)}
               </span>
             ))}
           </div>
@@ -376,11 +356,11 @@ function ScorecardTable({ innings, teams }) {
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 mb-2.5">Fall of Wickets</p>
           <div className="flex flex-wrap gap-2">
             {innings.FallofWickets.map((fow, idx) => {
-              const batterName = resolvePlayerName(fow.Batsman, teams, innings.Battingteam);
+              const batterName = resolvePlayerName(fow.Batsman || fow.batsmanId, teams, innings.Battingteam, false);
               return (
                 <div key={idx} className="rounded-xl border border-white/5 bg-black/40 px-3 py-1.5 text-xs">
-                  <span className="font-mono font-bold text-amber-400">{fow.Wicket_No}-{fow.Score}</span>
-                  <span className="text-zinc-300 ml-1.5">({batterName}, {fow.Overs} ov)</span>
+                  <span className="font-mono font-bold text-amber-400">{fow.Wicket_No || fow.wicket}-{fow.Score || fow.runs}</span>
+                  <span className="text-zinc-300 ml-1.5">({batterName || fow.batsmanName}, {fow.Overs || fow.over} ov)</span>
                 </div>
               );
             })}
@@ -393,7 +373,7 @@ function ScorecardTable({ innings, teams }) {
 
 function BowlingTable({ innings, teams }) {
   const allBowlers = bowlingRows(innings);
-  const activeBowlers = allBowlers.filter((row) => Number(row.Balls_Bowled || row.Overs || 0) > 0 || Number(row.Runs || row.RunsConceded || 0) > 0);
+  const activeBowlers = allBowlers.filter((row) => Number(row.Balls_Bowled || row.Overs || row.overs || 0) > 0 || Number(row.Runs || row.runs || row.RunsConceded || 0) > 0);
 
   if (!activeBowlers.length) return <EmptyPanel text="Bowling scorecard not available yet." />;
 
@@ -414,15 +394,15 @@ function BowlingTable({ innings, teams }) {
         </thead>
         <tbody className="divide-y divide-white/5">
           {activeBowlers.map((row, index) => {
-            const name = resolveBowlerName(row, teams, innings);
-            const overs = pick(row, ['Overs', 'OversBowled', 'O'], '0');
-            const maidens = pick(row, ['Maidens', 'M'], '0');
-            const runs = pick(row, ['Runs', 'RunsConceded', 'R'], '0');
-            const wickets = pick(row, ['Wickets', 'W'], '0');
-            const econ = pick(row, ['Economyrate', 'Economy', 'Econ'], (Number(runs) / Math.max(Number(overs) || 1, 1)).toFixed(2));
+            const name = row.name || resolveBowlerName(row, teams, innings);
+            const overs = pick(row, ['Overs', 'overs', 'OversBowled', 'O'], '0');
+            const maidens = pick(row, ['Maidens', 'maidens', 'M'], '0');
+            const runs = pick(row, ['Runs', 'runs', 'RunsConceded', 'R'], '0');
+            const wickets = pick(row, ['Wickets', 'wickets', 'W'], '0');
+            const econ = pick(row, ['Economyrate', 'Economy', 'economy', 'econ', 'Econ'], (Number(runs) / Math.max(Number(overs) || 1, 1)).toFixed(2));
             const dots = pick(row, ['Dots', 'DotBalls'], '-');
-            const wides = pick(row, ['Wides', 'W'], '0');
-            const noballs = pick(row, ['Noballs', 'NB'], '0');
+            const wides = pick(row, ['Wides', 'wides', 'W'], '0');
+            const noballs = pick(row, ['Noballs', 'noBalls', 'NB'], '0');
 
             return (
               <tr key={index} className="transition hover:bg-white/[0.02]">
@@ -465,12 +445,12 @@ function InningsPicker({ innings = [], activeIndex = 0, setActiveIndex, teams = 
   return (
     <div className="flex flex-wrap gap-2.5 rounded-2xl border border-white/10 bg-black/40 p-1.5">
       {innings.map((inn, idx) => {
-        const teamId = inn.Battingteam || inn.BattingTeam;
+        const teamId = inn.Battingteam || inn.BattingTeam || inn.team;
         const teamObj = teams[teamId];
-        const teamName = teamObj?.Name_Full || teamObj?.Name || inn.BattingTeamName || `Innings ${idx + 1}`;
-        const total = pick(inn, ['Total', 'Runs'], '');
-        const wkts = pick(inn, ['Wickets', 'Wkts'], '');
-        const overs = pick(inn, ['Overs', 'Ov'], '');
+        const teamName = teamObj?.Name_Full || teamObj?.Name || inn.BattingTeamName || inn.desc || inn.team || `Innings ${idx + 1}`;
+        const total = pick(inn, ['Total', 'Runs', 'runs'], '');
+        const wkts = pick(inn, ['Wickets', 'Wkts', 'wickets'], '');
+        const overs = pick(inn, ['Overs', 'Ov', 'overs'], '');
         const scoreText = total !== '' ? `${total}/${wkts !== '' ? wkts : '0'} (${overs} ov)` : '';
         const isSelected = activeIndex === idx;
 
@@ -590,32 +570,26 @@ function Wt20MatchCenter({ payload }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
+  const loadScorecard = useCallback(async () => {
     if (!matchId) return;
-    let cancelled = false;
-    async function load() {
-      try {
-        setLoading(true);
-        setError('');
-        setActiveIndex(0);
-        const res = await fetch(`/api/wt20/scorecard?game_id=${encodeURIComponent(matchId)}`, { cache: 'no-store' });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json?.error || 'ICC scorecard failed');
-        if (!cancelled) {
-          const inner = json.data || json;
-          setData(inner);
-          setLoading(false);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err.message || 'ICC scorecard failed');
-          setLoading(false);
-        }
-      }
+    try {
+      setLoading(true);
+      setError('');
+      const res = await fetch(`/api/wt20/scorecard?game_id=${encodeURIComponent(matchId)}`, { cache: 'no-store' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || 'ICC scorecard failed');
+      const inner = json.data || json;
+      setData(inner);
+      setLoading(false);
+    } catch (err) {
+      setError(err.message || 'ICC scorecard failed');
+      setLoading(false);
     }
-    load();
-    return () => { cancelled = true; };
   }, [matchId]);
+
+  useEffect(() => {
+    loadScorecard();
+  }, [loadScorecard]);
 
   const md = data?.Matchdetail || {};
   const teams = data?.Teams || {};
@@ -635,7 +609,7 @@ function Wt20MatchCenter({ payload }) {
   const homeScore = inningsScoreLine(innings, md?.Team_Home) || payload.scoreA || '';
   const awayScore = inningsScoreLine(innings, md?.Team_Away) || payload.scoreB || '';
 
-  const potmName = resolvePlayerName(md?.Player_Match, teams) || md?.Player_Match_Name || md?.Player_Match;
+  const potmName = resolvePlayerName(md?.Player_Match, teams, '', false) || md?.Player_Match_Name || md?.Player_Match;
 
   const overview = [
     { label: 'Series', value: md?.Series?.Name || payload.leagueLabel },
@@ -739,11 +713,40 @@ function Wt20MatchCenter({ payload }) {
 
 function FanCodeMatchCenter({ payload }) {
   const match = payload.matchData || payload;
+  const matchId = String(payload.matchId || match.match_id || '').trim();
   const teamA = payload.teamA || match.team?.[0]?.name || match.team_1 || match.title?.split(' Vs ')?.[0] || 'Team 1';
   const teamB = payload.teamB || match.team?.[1]?.name || match.team_2 || match.title?.split(' Vs ')?.[1] || 'Team 2';
   const isLive = String(payload.status || match.status || '').toUpperCase() === 'LIVE';
   const rawStream = payload.stream || (match.auto_streams?.[0]?.auto && bestFancodeVariant(match.auto_streams[0].auto)) || match.STREAMING_CDN?.Primary_Playback_URL || '';
   const playerUrl = rawStream ? playerUrlFromHls(rawStream, payload.title || match.title || 'FanCode') : '';
+
+  const [fcData, setFcData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState(playerUrl ? 'Watch' : 'Scorecard');
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    if (!matchId) return;
+    let cancelled = false;
+    async function load() {
+      try {
+        setLoading(true);
+        const res = await fetch(`/api/fancode/scorecard?matchId=${encodeURIComponent(matchId)}`, { cache: 'no-store' });
+        const json = await res.json();
+        if (!cancelled && json?.ok && json.available) {
+          setFcData(json);
+        }
+      } catch {}
+      finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [matchId]);
+
+  const innings = fcData?.innings || [];
+  const activeInn = innings[activeIndex] || innings[0] || {};
 
   const meta = [
     { label: 'Tournament', value: payload.tournament || match.tournament },
@@ -751,6 +754,13 @@ function FanCodeMatchCenter({ payload }) {
     { label: 'Start Time', value: payload.startTime || match.startTime || match.startDate },
     { label: 'Status', value: isLive ? 'LIVE' : (payload.status || match.status || 'UPCOMING') },
   ].filter((item) => item.value);
+
+  const availableTabs = [
+    playerUrl ? 'Watch' : null,
+    innings.length ? 'Scorecard' : null,
+    innings.length ? 'Bowling' : null,
+    'Overview',
+  ].filter(Boolean);
 
   return (
     <div className="space-y-6">
@@ -764,7 +774,9 @@ function FanCodeMatchCenter({ payload }) {
         meta={meta.slice(0, 4)}
       />
 
-      {playerUrl ? (
+      <TabBar tabs={availableTabs} active={tab} onChange={setTab} />
+
+      {tab === 'Watch' && playerUrl ? (
         <div className="overflow-hidden rounded-3xl border border-white/10 bg-black shadow-2xl">
           <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.03] px-4 py-3">
             <div className="flex items-center gap-2">
@@ -791,7 +803,19 @@ function FanCodeMatchCenter({ payload }) {
         </div>
       ) : null}
 
-      <OverviewGrid items={meta} />
+      {innings.length > 1 && ['Scorecard', 'Bowling'].includes(tab) ? (
+        <InningsPicker innings={innings} activeIndex={activeIndex} setActiveIndex={setActiveIndex} teams={{}} />
+      ) : null}
+
+      {tab === 'Scorecard' && (
+        innings.length ? <ScorecardTable innings={activeInn} teams={{}} /> : <EmptyPanel text={loading ? 'Loading scorecard…' : 'FanCode scorecard not available for this fixture.'} />
+      )}
+
+      {tab === 'Bowling' && (
+        innings.length ? <BowlingTable innings={activeInn} teams={{}} /> : <EmptyPanel text={loading ? 'Loading bowling stats…' : 'Bowling data not available.'} />
+      )}
+
+      {tab === 'Overview' && <OverviewGrid items={meta} />}
     </div>
   );
 }
@@ -954,4 +978,4 @@ export default function SportsMatchCenter({ hash = '', initialPayload = null, sl
   );
 }
 
-export { decodeMatchHash };
+export { decodeMatchHash, encodeMatchHash };
