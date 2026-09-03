@@ -122,9 +122,9 @@ function getStatusStyle(status) {
 }
 
 const WATCH_SERVER_OPTIONS = [
-  { id: 'auto', name: 'Auto', label: 'Mirchi → Stremio' },
-  { id: 'mirchi', name: 'Global Mirchi', label: 'Embed' },
+  { id: 'auto', name: 'Auto', label: 'Stremio → Mirchi' },
   { id: 'stremio', name: 'Stremio', label: 'Direct files' },
+  { id: 'mirchi', name: 'Global Mirchi', label: 'Embed' },
   { id: 'vidlink', name: 'VidLink', label: 'Embed' },
   { id: 'videasy', name: 'VidEasy', label: 'Embed' },
   { id: 'vidzee', name: 'VidZee', label: 'Backup' },
@@ -812,8 +812,8 @@ export default function WatchByTMDBPage() {
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
                 <div className="h-12 w-12 animate-spin rounded-full border-4 border-zinc-700 border-t-red-600" />
                 <div>
-                  <p className="font-semibold text-white">Resolving embed provider...</p>
-                  <p className="mt-2 text-sm text-zinc-400">{provider === 'auto' ? 'Checking Global Mirchi first, then Stremio, then the next server if needed.' : 'Generating direct embed URL from TMDB ID.'}</p>
+                  <p className="font-semibold text-white">Resolving stream provider...</p>
+                  <p className="mt-2 text-sm text-zinc-400">{provider === 'auto' ? 'Checking Stremio first, then Global Mirchi, then fallback servers if needed.' : 'Generating stream URL from TMDB ID.'}</p>
                 </div>
               </div>
             ) : null}
