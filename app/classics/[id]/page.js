@@ -1,125 +1,22 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
-import DirectWatchPlayer from '@/components/player/DirectWatchPlayer';
-import { getHistoryEntry, saveWatchProgress } from '@/lib/watchStore';
-
-function detectFormat(url = '') {
-  const lower = String(url).toLowerCase();
-  if (lower.includes('.m3u8')) return 'hls';
-  if (lower.includes('.mpd')) return 'dash';
-  if (/\.(mp4|webm|ogg)(\?|$)/i.test(lower)) return 'video';
-  if (lower.includes('m3u8') || lower.includes('/hls/')) return 'hls';
-  return 'unknown';
-}
-
-function cleanHex(value = '') {
-  return String(value || '').trim().replace(/[^0-9a-fA-F]/g, '').toLowerCase();
-}
-
-function base64UrlToHex(value = '') {
-  try {
-    const normalized = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
-    const binary = atob(padded);
-    return Array.from(binary).map((char) => char.charCodeAt(0).toString(16).padStart(2, '0')).join('').toLowerCase();
-  } catch {
-    return '';
-  }
-}
-
-async function getDashDefaultKeyIds(url = '') {
-  if (!url || !String(url).toLowerCase().includes('.mpd')) return [];
-
-  try {
-    const response = await fetch(url, {
-      cache: 'no-store',
-      headers: { Accept: 'application/dash+xml,text/xml,*/*' },
-    });
-    if (!response.ok) return [];
-    const text = await response.text();
-    const ids = [...text.matchAll(/(?:cenc:)?default_KID="([^"]+)"/gi)]
-      .map((match) => cleanHex(match[1]))
-      .filter(Boolean);
-    return [...new Set(ids)];
-  } catch {
-    return [];
-  }
-}
-
-async function buildDrmConfig(stream) {
-  const license = String(stream?.licenseKey || '').trim();
-  const clearKeys = {};
-  let clearKeyValue = '';
-
-  if (license.startsWith('{')) {
-    try {
-      const parsed = JSON.parse(license);
-      for (const item of parsed?.keys || []) {
-        const kid = cleanHex(item?.kid) || base64UrlToHex(item?.kid);
-        const key = cleanHex(item?.k) || base64UrlToHex(item?.k);
-        if (kid && key) {
-          clearKeys[kid] = key;
-          clearKeyValue ||= key;
-        }
-      }
-    } catch {}
-  }
-
-  if (license && license.includes(':') && !/^https?:\/\//i.test(license)) {
-    const [keyId, key] = license.split(':');
-    const kid = cleanHex(keyId);
-    const parsedKey = cleanHex(key);
-    if (kid && parsedKey) {
-      clearKeys[kid] = parsedKey;
-      clearKeyValue ||= parsedKey;
-    }
-  }
-
-  const kid = cleanHex(stream?.keyId || '');
-  const key = cleanHex(stream?.key || '');
-  if (kid && key && kid !== 'null' && key !== 'null') {
-    clearKeys[kid] = key;
-    clearKeyValue ||= key;
-  }
-
-  if (clearKeyValue) {
-    const manifestKeyIds = await getDashDefaultKeyIds(stream?.url || '');
-    for (const manifestKid of manifestKeyIds) {
-      if (!clearKeys[manifestKid]) clearKeys[manifestKid] = clearKeyValue;
-    }
-  }
-
-  if (Object.keys(clearKeys).length) return { clearKeys };
-
-  if (/^https?:\/\//i.test(license)) {
-    return { servers: { 'com.widevine.alpha': license } };
-  }
-
-  return {};
-}
+import JashPlayer from '@/components/player/JashPlayer';
+import { createStreamPolicy } from '@/lib/player/policy/stream';
 
 export default function ClassicPlayerPage() {
   const params = useParams();
   const id = params?.id;
-  const videoRef = useRef(null);
   const shellRef = useRef(null);
-  const playerRef = useRef(null);
-  const [videoEl, setVideoEl] = useState(null);
-  const videoCallbackRef = useCallback((el) => {
-    videoRef.current = el;
-    setVideoEl(el);
-  }, []);
 
   const [item, setItem] = useState(null);
   const [streamIndex, setStreamIndex] = useState(0);
   const [status, setStatus] = useState('loading');
-  const [playerStatus, setPlayerStatus] = useState('idle');
   const [error, setError] = useState('');
 
-  const streams = item?.streams || [];
+  const streams = useMemo(() => item?.streams || [], [item]);
   const activeStream = streams[streamIndex] || streams[0] || null;
   const watchKey = `retro:${id}`;
 
@@ -143,143 +40,35 @@ export default function ClassicPlayerPage() {
     if (id) loadItem();
   }, [id]);
 
-  // Load and play with Shaka Player
-  useEffect(() => {
-    if (!activeStream?.url || !videoRef.current) return;
-    let cancelled = false;
-    const video = videoRef.current;
+  // ClearKeys, Widevine, per-stream headers and the MPD default_KID expansion
+  // all live in the policy now — the page just says which stream to play.
+  const playbackPolicy = useMemo(
+    () => (activeStream?.url ? createStreamPolicy(activeStream) : null),
+    [activeStream],
+  );
 
-    async function destroyPlayer() {
-      if (playerRef.current) {
-        try { await playerRef.current.destroy(); } catch {}
-        playerRef.current = null;
-      }
-    }
+  const sourcesForPlayer = useMemo(
+    () => streams.map((stream, index) => ({
+      url: stream.url,
+      label: stream.label || stream.source || `Stream ${index + 1}`,
+      format: stream.format || 'HLS',
+    })),
+    [streams],
+  );
 
-    async function loadStream() {
-      try {
-        setPlayerStatus('loading');
-        setError('');
-        await destroyPlayer();
-        if (cancelled) return;
-        video.pause();
-        video.removeAttribute('src');
-        video.load();
-
-        const format = detectFormat(activeStream.url);
-        const shakaModule = await import('shaka-player/dist/shaka-player.compiled.js');
-        const shaka = shakaModule.default || window.shaka || shakaModule;
-        shaka.polyfill?.installAll?.();
-
-        if (!shaka.Player?.isBrowserSupported?.()) throw new Error('Browser does not support Shaka playback');
-
-        const player = new shaka.Player();
-        playerRef.current = player;
-        await player.attach(video);
-        if (cancelled) return;
-
-        const drmConfig = await buildDrmConfig(activeStream);
-        player.configure({
-          drm: drmConfig,
-          streaming: { bufferingGoal: 20, rebufferingGoal: 3, lowLatencyMode: format === 'hls' },
-          abr: { enabled: true, defaultBandwidthEstimate: 1_000_000 },
-        });
-
-        player.getNetworkingEngine()?.registerRequestFilter((requestType, request) => {
-          const headers = activeStream.headers || {};
-          Object.entries(headers).forEach(([key, value]) => {
-            if (value) request.headers[key] = String(value);
-          });
-          if (activeStream.referer) request.headers.Referer = activeStream.referer;
-          if (activeStream.userAgent) request.headers['User-Agent'] = activeStream.userAgent;
-        });
-
-        player.addEventListener('error', (event) => {
-          if (cancelled) return;
-          const code = event.detail?.code;
-          console.error('[retro] Shaka error:', event.detail);
-          setPlayerStatus('error');
-
-          if ((code === 3015 || code === 3016) && ((activeStream.keyId && activeStream.key) || activeStream.licenseKey)) {
-            setError(`Playback error ${code}. DRM key was found, but the browser could not decode/decrypt this stream.`);
-            return;
-          }
-          if (code === 4012) {
-            setError('Playback error 4012. Shaka could not find a usable key for the encrypted tracks.');
-            return;
-          }
-          if (code === 6012) {
-            setError('Playback error 6012. This encrypted stream has no usable ClearKey/license server.');
-            return;
-          }
-          setError(`Playback error${code ? ` ${code}` : ''}`);
-        });
-
-        await player.load(activeStream.url, undefined, format === 'hls' ? 'application/x-mpegurl' : undefined);
-        if (cancelled) return;
-        setPlayerStatus('ready');
-        video.play().catch(() => {});
-      } catch (err) {
-        if (cancelled) return;
-        setPlayerStatus('error');
-        setError(err.message || 'Stream failed to load');
-      }
-    }
-
-    loadStream();
-    return () => {
-      cancelled = true;
-      destroyPlayer();
+  const libraryEntry = useMemo(() => {
+    if (typeof window === 'undefined' || !item) return null;
+    return {
+      key: watchKey,
+      type: 'movie',
+      title: item.title || 'ReTro Movie',
+      posterUrl: item.posterUrl || '',
+      backdropUrl: item.backdropUrl || '',
+      year: item.year || '',
+      provider: 'retro',
+      href: `${window.location.pathname}${window.location.search}`,
     };
-  }, [activeStream?.url]);
-
-  // Persist progress and auto-resume
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !item) return;
-
-    const applyResume = () => {
-      const saved = getHistoryEntry(watchKey);
-      if (saved?.progress && saved.progress > 20) {
-        try { video.currentTime = saved.progress; } catch {}
-      }
-    };
-
-    if (video.readyState >= 1) applyResume();
-    else video.addEventListener('loadedmetadata', applyResume, { once: true });
-
-    let lastSave = 0;
-    const persist = () => {
-      saveWatchProgress(
-        watchKey,
-        video.currentTime || 0,
-        Number.isFinite(video.duration) ? video.duration : 0,
-      );
-    };
-
-    const onTimeUpdate = () => {
-      const now = Date.now();
-      if (now - lastSave < 5000) return;
-      lastSave = now;
-      persist();
-    };
-
-    video.addEventListener('timeupdate', onTimeUpdate);
-    video.addEventListener('pause', persist);
-    return () => {
-      video.removeEventListener('timeupdate', onTimeUpdate);
-      video.removeEventListener('pause', persist);
-      persist();
-    };
-  }, [watchKey, item]);
-
-  const sourcesForPlayer = useMemo(() => {
-    return streams.map((s, idx) => ({
-      id: idx,
-      label: s.label || s.source || `Stream ${idx + 1}`,
-      format: s.format || 'HLS',
-    }));
-  }, [streams]);
+  }, [item, watchKey]);
 
   return (
     <main className="palette-nordic min-h-dvh bg-[#06110d] text-zinc-100">
@@ -302,40 +91,26 @@ export default function ClassicPlayerPage() {
                 <div className="pointer-events-none absolute -inset-4 z-0 opacity-30 blur-3xl bg-gradient-to-tr from-amber-500/20 via-emerald-600/20 to-cyan-600/20" />
 
                 <div className="relative z-10 aspect-video h-full w-full bg-black fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:aspect-auto">
-                  <DirectWatchPlayer
-                    videoEl={videoEl || videoRef.current}
-                    watchKey={watchKey}
-                    title={item.title || 'ReTro Movie'}
-                    sources={sourcesForPlayer}
-                    activeSource={streamIndex}
-                    onPickSource={(idx) => setStreamIndex(idx)}
-                    onError={(msg) => {
-                      setPlayerStatus('error');
-                      setError(msg || 'Playback error');
+                  <JashPlayer
+                    playbackPolicy={playbackPolicy}
+                    source={{ url: activeStream?.url || '', label: activeStream?.label || activeStream?.source || '' }}
+                    display={{
+                      title: item.title || 'ReTro Movie',
+                      subtitle: activeStream?.source ? `Source: ${activeStream.source}` : '',
+                      poster: item.backdropUrl || item.posterUrl || '',
+                      aspect: 'fill',
                     }}
-                  >
-                    <video
-                      ref={videoCallbackRef}
-                      className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-fill"
-                      playsInline
-                      poster={item.backdropUrl || item.posterUrl || undefined}
-                    />
-                  </DirectWatchPlayer>
-
-                  {playerStatus === 'loading' ? (
-                    <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center bg-black/50">
-                      <div className="flex items-center gap-2 rounded-full bg-black/80 px-5 py-2.5 text-sm font-bold text-white shadow-xl backdrop-blur">
-                        <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/20 border-t-amber-400" />
-                        <span>Loading ReTro stream...</span>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {playerStatus === 'error' ? (
-                    <div className="absolute inset-x-4 bottom-16 z-40 rounded-2xl border border-red-500/30 bg-red-950/90 p-3 text-sm text-red-100 shadow-xl backdrop-blur">
-                      {error}
-                    </div>
-                  ) : null}
+                    library={{ watchKey, entry: libraryEntry }}
+                    lineup={{
+                      sources: sourcesForPlayer,
+                      activeIndex: streamIndex,
+                      onPickSource: (index) => setStreamIndex(index),
+                    }}
+                    on={{
+                      onError: (info) => setError(info?.message || 'Playback error'),
+                    }}
+                    className="h-full w-full"
+                  />
                 </div>
               </div>
 

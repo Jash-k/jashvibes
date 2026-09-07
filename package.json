@@ -1,15 +1,17 @@
 {
   "name": "jashvibes",
-  "version": "8.4.3",
+  "version": "8.5.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start -H 0.0.0.0 -p ${PORT:-7860}"
+    "start": "next start -H 0.0.0.0 -p ${PORT:-7860}",
+    "lint:player": "eslint --no-eslintrc -c eslint.player.config.cjs --ext .js,.jsx lib/player lib/watchStore.js components/player app/live app/classics app/watch app/stremio-watch app/sports app/player-lab tests",
+    "test": "node --experimental-detect-module --no-warnings --experimental-loader=./tests/alias-loader.mjs --test tests/",
+    "test:watch": "node --experimental-detect-module --no-warnings --experimental-loader=./tests/alias-loader.mjs --test --watch tests/"
   },
   "dependencies": {
     "cheerio": "^1.2.0",
-    "hls.js": "^1.5.20",
     "mongoose": "^8.8.4",
     "mux.js": "^7.1.0",
     "next": "^15.1.0",
@@ -19,6 +21,9 @@
   },
   "devDependencies": {
     "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.1",
+    "eslint-plugin-react": "^7.37.2",
+    "eslint-plugin-react-hooks": "^4.6.2",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17"
   }

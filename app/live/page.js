@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import DirectWatchPlayer from '@/components/player/DirectWatchPlayer';
+import JashPlayer from '@/components/player/JashPlayer';
+import { createLiveTvPolicy, isPocketChannel } from '@/lib/player/policy/liveTv';
+import PlayerIncidents from '@/components/player/PlayerIncidents';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 import {
   LIVE_CATALOGS,
@@ -14,13 +16,9 @@ import {
 } from '@/lib/liveCatalogs';
 import {
   JIO_COOKIE_OVERRIDE_KEY,
-  appendJioCookieToUrl,
-  buildJioProxyUrl,
   getJioCookieExpiry,
-  isJioChannel,
   isJioCookieValid,
   normalizeJioCookie,
-  restoreJioProxyUrl,
 } from '@/lib/jioPlayback';
 
 const FAVORITES_KEY = 'jash_live_tv_favorites';
@@ -54,119 +52,21 @@ function pickInitialChannel(channels = []) {
   );
 }
 
-function cleanHex(value = '') {
-  return String(value || '').trim().replace(/[^0-9a-fA-F]/g, '').toLowerCase();
-}
-
-function buildClearKeys(channel) {
-  const license = String(channel?.licenseKey || '').trim();
-  if (license && license.includes(':')) {
-    const [keyId, key] = license.split(':');
-    const kid = cleanHex(keyId);
-    const clearKey = cleanHex(key);
-    if (kid && clearKey) return { [kid]: clearKey };
-  }
-
-  const kid = cleanHex(channel?.keyId || '');
-  const clearKey = cleanHex(channel?.key || '');
-  if (kid && clearKey && kid !== 'null' && clearKey !== 'null') return { [kid]: clearKey };
-  return {};
-}
-
-function isShakaDrmLoadError(err) {
-  if (!err) return false;
-  // 6001 = REQUESTED_KEY_SYSTEM_CONFIG_UNAVAILABLE; 6 = Shaka's DRM error bucket.
-  return err.code === 6001 || err.category === 6;
-}
-
-function getLocalJioCookie() {
-  if (typeof window === 'undefined') return '';
-  try {
-    const cookie = normalizeJioCookie(window.localStorage.getItem(JIO_COOKIE_OVERRIDE_KEY) || '');
-    return isJioCookieValid(cookie) ? cookie : '';
-  } catch {
-    return '';
-  }
-}
-
-async function resolveJioAccess(channel = {}, { force = false } = {}) {
-  const fallbackUrl = String(channel.url || '');
-  const localCookie = getLocalJioCookie();
-  if (localCookie) return { cookie: localCookie, playbackUrl: fallbackUrl, scoped: false };
-
-  const channelCookie = normalizeJioCookie(channel.cookie || '');
-  const channelCookieIsScoped = channelCookie.includes('/bpk-tv/') || (channelCookie.includes('acl=') && !channelCookie.includes('acl=/*'));
-  if (!force && channelCookieIsScoped && isJioCookieValid(channelCookie)) {
-    return { cookie: channelCookie, playbackUrl: fallbackUrl, scoped: true };
-  }
-
-  try {
-    const params = new URLSearchParams();
-    if (force) params.set('force', '1');
-    if (channel.tvgId) params.set('channelId', channel.tvgId);
-    if (channel.name) params.set('name', channel.name);
-    if (fallbackUrl) params.set('channelUrl', fallbackUrl);
-    const response = await fetch(`/api/live-jio?${params.toString()}`, { cache: 'no-store' });
-    const data = await response.json().catch(() => ({}));
-    const cookie = normalizeJioCookie(data.cookie || '');
-    const playbackUrl = String(data.playbackUrl || fallbackUrl);
-    if (response.ok && isJioCookieValid(cookie) && isJioChannel({ url: playbackUrl })) {
-      return { cookie, playbackUrl, scoped: Boolean(data.scoped) };
-    }
-  } catch {}
-
-  return {
-    cookie: isJioCookieValid(channelCookie) ? channelCookie : '',
-    playbackUrl: fallbackUrl,
-    scoped: channelCookieIsScoped,
-  };
-}
-
-function isPocketChannel(channel) {
-  return channel?.sourceId === 'pocket-tamil' || channel?.source === 'Pocket Tamil';
-}
-
-function buildPocketProxyUrl(uri = '', channel = {}, fallbackReferer = '') {
-  const params = new URLSearchParams({ u: uri });
-  if (channel.userAgent) params.set('ua', channel.userAgent);
-  if (channel.referer || fallbackReferer) params.set('ref', channel.referer || fallbackReferer);
-  if (channel.cookie) params.set('ck', channel.cookie);
-  return `/api/live-pocket/proxy?${params.toString()}`;
-}
-
-function restorePocketProxyUri(uri = '') {
-  try {
-    const parsed = new URL(uri, window.location.origin);
-    if (parsed.origin === window.location.origin && parsed.pathname === '/api/live-pocket/proxy') {
-      return parsed.searchParams.get('u') || uri;
-    }
-  } catch {}
-  return uri;
-}
-
 export default function LiveTVPage() {
-  const videoRef = useRef(null);
-  const playerContainerRef = useRef(null);
-  const shakaRef = useRef(null);
-  const [liveVideoEl, setLiveVideoEl] = useState(null);
-  const liveVideoCallbackRef = useCallback((el) => {
-    videoRef.current = el;
-    setLiveVideoEl(el);
-  }, []);
-  const playbackIdRef = useRef(0);
   const sourceLoadIdRef = useRef(0);
+  // Channels whose direct URL is known to need the Pocket proxy. Deliberately
+  // a ref, not state: the player reads it while building the policy and must
+  // not be rebuilt (and reloaded) by the write that sets it.
+  const pocketProxyRef = useRef(new Set());
   const [channels, setChannels] = useState([]);
   const [active, setActive] = useState(null);
   const [lastViewed, setLastViewed] = useState(null);
   const [status, setStatus] = useState('loading');
-  const [playerStatus, setPlayerStatus] = useState('idle');
-  const [playerError, setPlayerError] = useState('');
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [favorites, setFavorites] = useState([]);
-  const [pocketProxyIds, setPocketProxyIds] = useState([]);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [serviceOpen, setServiceOpen] = useState(false);
 
@@ -194,7 +94,6 @@ export default function LiveTVPage() {
       // the first mapping exists, the Jio bootstrap fallback. Never merge raw
       // Pocket/default source catalogs into this main list.
       const loadedChannels = (data.channels || []).filter((channel) => channel.playable);
-      setPocketProxyIds([]);
       setChannels(loadedChannels);
       setLastUpdated(data.updatedAt || null);
       setActive((current) => {
@@ -271,255 +170,25 @@ export default function LiveTVPage() {
     };
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (shakaRef.current) {
-        try {
-          shakaRef.current.destroy();
-        } catch {}
-        shakaRef.current = null;
-      }
+  // Every live-source quirk — Jio token resolution, ClearKey, header rewriting,
+  // the Pocket proxy, DVR/streaming config and the retry order — lives in the
+  // policy, so the main panel and the service-panel preview cannot drift.
+  const livePolicy = useMemo(() => {
+    if (!active) return null;
+    const base = createLiveTvPolicy(active, {
+      pocketProxyEnabled: pocketProxyRef.current.has(active.id),
+    });
+    return {
+      ...base,
+      recover: async (arg) => {
+        const next = await base.recover(arg);
+        if (next && isPocketChannel(active) && /^http:\/\//i.test(String(active.url || ''))) {
+          pocketProxyRef.current.add(active.id);
+        }
+        return next;
+      },
     };
-  }, []);
-
-  useEffect(() => {
-    if (!active || !videoRef.current || !playerContainerRef.current) return;
-
-    let cancelled = false;
-    let loadTimeout = null;
-    const loadId = playbackIdRef.current + 1;
-    playbackIdRef.current = loadId;
-    const isCurrentLoad = () => !cancelled && playbackIdRef.current === loadId;
-    const video = videoRef.current;
-    const pocketChannel = isPocketChannel(active);
-    const pocketProxyEnabled = pocketChannel && (/^http:\/\//i.test(active.url || '') || pocketProxyIds.includes(active.id));
-    const activeUsesJio = isJioChannel(active);
-
-    async function loadChannel() {
-      setPlayerStatus('loading');
-      setPlayerError('');
-      loadTimeout = window.setTimeout(() => {
-        if (!isCurrentLoad()) return;
-        setPlayerStatus('error');
-        setPlayerError('Channel switch timed out. Try the channel again or choose another source.');
-      }, activeUsesJio ? 30000 : 20000);
-
-      if (!active.playable) {
-        if (loadTimeout) window.clearTimeout(loadTimeout);
-        setPlayerStatus('unsupported');
-        setPlayerError('This channel format is not marked playable.');
-        return;
-      }
-
-      try {
-        const [shakaModule, muxModule] = await Promise.all([
-          import('shaka-player/dist/shaka-player.compiled.js'),
-          import('mux.js'),
-        ]);
-        if (!isCurrentLoad()) return;
-
-        const shaka = shakaModule.default || window.shaka || shakaModule;
-        const muxjs = muxModule.default || muxModule;
-        window.muxjs = muxjs;
-
-        shaka.polyfill?.installAll?.();
-        if (!shaka.Player?.isBrowserSupported?.()) {
-          if (loadTimeout) window.clearTimeout(loadTimeout);
-          setPlayerStatus('unsupported');
-          setPlayerError('This browser does not support Shaka playback.');
-          return;
-        }
-
-        let player = shakaRef.current;
-        if (!player) {
-          player = new shaka.Player();
-          shakaRef.current = player;
-          await player.attach(video);
-          if (!isCurrentLoad()) {
-            try { await player.destroy(); } catch {}
-            shakaRef.current = null;
-            return;
-          }
-        }
-
-        // Clear all previous stacked request & response filters from prior channels
-        player.getNetworkingEngine()?.clearAllRequestFilters();
-        player.getNetworkingEngine()?.clearAllResponseFilters();
-
-        let jioAccess = activeUsesJio
-          ? await resolveJioAccess(active)
-          : { cookie: '', playbackUrl: active.url, scoped: false };
-        let jioCookie = jioAccess.cookie;
-        let jioPlaybackUrl = jioAccess.playbackUrl || active.url;
-        let jioProxyEnabled = false;
-        if (activeUsesJio && !jioCookie) {
-          throw new Error('No valid Jio token is available. Add a fresh __hdnea__ token in Live Service → Tools.');
-        }
-
-        const clearKeys = buildClearKeys(active);
-        let drmKeysEnabled = Object.keys(clearKeys).length > 0;
-        player.configure({
-          drm: Object.keys(clearKeys).length ? { clearKeys } : { clearKeys: {} },
-          manifest: { defaultPresentationDelay: 5 },
-          streaming: {
-            safeSeekOffset: 5,
-            bufferingGoal: 10,
-            rebufferingGoal: 2,
-            lowLatencyMode: true,
-          },
-          abr: {
-            enabled: true,
-            defaultBandwidthEstimate: 1_000_000,
-            restrictToElementSize: false,
-            switchInterval: 1,
-          },
-        });
-
-        player.getNetworkingEngine()?.registerRequestFilter((requestType, request) => {
-          const uri = request.uris?.[0] || '';
-          const originalUri = restoreJioProxyUrl(uri, window.location.origin);
-          const jioLike = isJioChannel(active, originalUri);
-          const hotstarLike = originalUri.includes('hotstar.com');
-          const fancodeLike = originalUri.includes('fancode.com') || originalUri.includes('fblive.fancode.com') || normalize(active.category) === 'fancode' || normalize(active.name).includes('fancode');
-
-          if (active.headers && typeof active.headers === 'object') {
-            Object.entries(active.headers).forEach(([key, val]) => {
-              if (!key || val == null || /^cookie$/i.test(key)) return;
-              // Browsers cannot set these forbidden headers. The Jio proxy sets
-              // them server-side during fallback instead.
-              if (jioLike && /^(?:user-agent|referer|referrer)$/i.test(key)) return;
-              request.headers[key] = String(val);
-            });
-          }
-
-          if (!jioLike) {
-            if (active.referer) request.headers.Referer = active.referer;
-            else if (hotstarLike) request.headers.Referer = 'https://www.hotstar.com/';
-            else if (fancodeLike) request.headers.Referer = 'https://www.fancode.com/';
-
-            const userAgent = active.userAgent ||
-              (fancodeLike ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' : '');
-            if (userAgent) request.headers['User-Agent'] = userAgent;
-          }
-
-          let nextUri = originalUri;
-          if (jioLike && jioCookie &&
-            (requestType === shaka.net.NetworkingEngine.RequestType.MANIFEST || requestType === shaka.net.NetworkingEngine.RequestType.SEGMENT)) {
-            // This is Stream4Liv's core technique: append the current Akamai
-            // token to the MPD and every segment request without URL-encoding acl=/*.
-            nextUri = appendJioCookieToUrl(originalUri, jioCookie);
-            request.uris[0] = jioProxyEnabled ? buildJioProxyUrl(nextUri, jioCookie) : nextUri;
-          }
-
-          if (pocketProxyEnabled && /^https?:\/\//i.test(nextUri)) {
-            const fallbackReferer = active.referer ||
-              (hotstarLike ? 'https://www.hotstar.com/' : '') ||
-              (fancodeLike ? 'https://www.fancode.com/' : '');
-            request.uris[0] = buildPocketProxyUrl(nextUri, active, fallbackReferer);
-            delete request.headers['User-Agent'];
-            delete request.headers.Referer;
-            delete request.headers.Cookie;
-          }
-        });
-
-        player.getNetworkingEngine()?.registerResponseFilter((requestType, response) => {
-          if (jioProxyEnabled && response?.uri) response.uri = restoreJioProxyUrl(response.uri, window.location.origin);
-          if (pocketProxyEnabled && response?.uri) response.uri = restorePocketProxyUri(response.uri);
-        });
-
-        player.addEventListener('error', (event) => {
-          if (!isCurrentLoad()) return;
-          const detail = event.detail;
-          console.error('[live-tv] Shaka error:', detail);
-          if (loadTimeout) window.clearTimeout(loadTimeout);
-          if (pocketChannel && !pocketProxyEnabled && /^https?:\/\//i.test(active.url || '')) {
-            setPlayerStatus('loading');
-            setPlayerError('Direct Pocket playback failed. Retrying Pocket route...');
-            setPocketProxyIds((current) => current.includes(active.id) ? current : [...current, active.id]);
-            return;
-          }
-          setPlayerStatus('error');
-          setPlayerError(`Playback error (${detail?.code || 'unknown'}). Try another channel or source.`);
-        });
-
-        player.addEventListener('buffering', (event) => {
-          if (isCurrentLoad()) setPlayerStatus(event.buffering ? 'loading' : 'ready');
-        });
-
-        setPlayerStatus('loading');
-        const mimeType = active.format === 'hls' ? 'application/x-mpegurl' : undefined;
-        const directUrl = activeUsesJio ? appendJioCookieToUrl(jioPlaybackUrl, jioCookie) : active.url;
-        // Stream4Liv parity: feeds occasionally ship stale or mislabeled
-        // ClearKey pairs, and a DRM config failure must not kill an otherwise
-        // working stream — retry once with the keys dropped before giving up.
-        const loadWithDrmRetry = async (uri) => {
-          try {
-            await player.load(uri, undefined, mimeType);
-            return null;
-          } catch (firstError) {
-            if (drmKeysEnabled && isShakaDrmLoadError(firstError)) {
-              drmKeysEnabled = false;
-              player.configure({ drm: { clearKeys: {} } });
-              console.warn('[live-tv] DRM load failed; retrying without ClearKey', firstError);
-              try {
-                await player.load(uri, undefined, mimeType);
-                return null;
-              } catch (retryError) {
-                return retryError;
-              }
-            }
-            return firstError;
-          }
-        };
-        let loadFailure = await loadWithDrmRetry(directUrl);
-        if (!isCurrentLoad()) return;
-        if (loadFailure) {
-          if (!activeUsesJio) throw loadFailure;
-          setPlayerStatus('loading');
-          setPlayerError('Direct Jio playback failed. Refreshing the token and trying the secure server route…');
-          jioAccess = await resolveJioAccess(active, { force: true });
-          jioCookie = jioAccess.cookie;
-          jioPlaybackUrl = jioAccess.playbackUrl || active.url;
-          if (!jioCookie) throw new Error('Jio token refresh failed. Paste a current __hdnea__ token in Live Service → Tools.');
-          jioProxyEnabled = true;
-          await player.unload().catch(() => {});
-          const proxiedUrl = buildJioProxyUrl(appendJioCookieToUrl(jioPlaybackUrl, jioCookie), jioCookie);
-          loadFailure = await loadWithDrmRetry(proxiedUrl);
-          if (!isCurrentLoad()) return;
-          if (loadFailure) throw loadFailure;
-        }
-
-        if (loadTimeout) window.clearTimeout(loadTimeout);
-        setPlayerError('');
-        setPlayerStatus('ready');
-        video.play().catch(() => {});
-      } catch (err) {
-        if (loadTimeout) window.clearTimeout(loadTimeout);
-        if (!isCurrentLoad()) return;
-        console.error('[live-tv] Player load failed:', err);
-        if (activeUsesJio) {
-          setPlayerStatus('error');
-          setPlayerError(`Jio playback failed${err?.code ? ` (Shaka ${err.code})` : ''}. The token may be expired or Jio may be blocking this network.`);
-          return;
-        }
-        if (pocketChannel && !pocketProxyEnabled && /^https?:\/\//i.test(active.url || '')) {
-          setPlayerStatus('loading');
-          setPlayerError('Direct Pocket playback failed. Retrying Pocket route...');
-          setPocketProxyIds((current) => current.includes(active.id) ? current : [...current, active.id]);
-          return;
-        }
-        setPlayerStatus('error');
-        setPlayerError(err.message || 'Stream failed to load. Try another channel or source.');
-      }
-    }
-
-    loadChannel();
-
-    return () => {
-      cancelled = true;
-      if (loadTimeout) window.clearTimeout(loadTimeout);
-    };
-  }, [active, pocketProxyIds]);
+  }, [active]);
 
   const catalogOptions = useMemo(() => LIVE_CATALOGS.map((catalog) => ({
     ...catalog,
@@ -544,22 +213,24 @@ export default function LiveTVPage() {
     return filteredChannels.findIndex((channel) => channel.id === active.id);
   }, [filteredChannels, active?.id]);
 
-  function selectChannel(channel, { remember = true } = {}) {
+  const selectChannel = useCallback((channel, { remember = true } = {}) => {
     if (!channel) return;
     setActive((current) => {
       if (remember && current?.id && current.id !== channel.id) setLastViewed(current);
       return channel;
     });
-  }
+  }, []);
 
-  function navigateChannel(direction) {
+  const navigateChannel = useCallback((direction) => {
     const list = filteredChannels.length ? filteredChannels : channels;
     if (!list.length) return;
-    const currentIndex = list.findIndex((channel) => channel.id === active?.id);
+    const currentIndex = filteredChannels.length
+      ? activeFilteredIndex
+      : list.findIndex((channel) => channel.id === active?.id);
     const baseIndex = currentIndex >= 0 ? currentIndex : direction > 0 ? -1 : 0;
     const nextIndex = (baseIndex + direction + list.length) % list.length;
     selectChannel(list[nextIndex]);
-  }
+  }, [filteredChannels, channels, activeFilteredIndex, active?.id, selectChannel]);
 
   function returnToLastChannel() {
     if (!lastViewed?.id) return;
@@ -575,7 +246,7 @@ export default function LiveTVPage() {
     window.localStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
   }
 
-  async function enterFullscreen() {
+  const enterFullscreen = useCallback(async () => {
     const shell = document.getElementById('live-player-shell');
     if (!shell) return;
     try {
@@ -583,12 +254,15 @@ export default function LiveTVPage() {
       else if (shell.requestFullscreen) await shell.requestFullscreen();
       else if (shell.webkitRequestFullscreen) shell.webkitRequestFullscreen();
     } catch {}
-  }
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (!e || !e.key) return;
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+      // JashPlayer binds the same keys (and more) while it holds focus, so the
+      // page must not answer twice for one press.
+      if (e.target?.closest?.('[data-jash-ui]') || document.activeElement?.closest?.('[data-jash-ui]')) return;
       const key = String(e.key || '').toLowerCase();
       if (key === 'n' || key === 'arrowright') {
         e.preventDefault();
@@ -603,16 +277,7 @@ export default function LiveTVPage() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [channels, filteredChannels, active]);
-
-  async function pictureInPicture() {
-    const video = videoRef.current;
-    if (!video || !document.pictureInPictureEnabled) return;
-    try {
-      if (document.pictureInPictureElement) await document.exitPictureInPicture();
-      else await video.requestPictureInPicture();
-    } catch {}
-  }
+  }, [navigateChannel, enterFullscreen]);
 
   async function copyUrl() {
     if (!active?.url) return;
@@ -651,57 +316,34 @@ export default function LiveTVPage() {
       <section className="mx-auto flex max-w-7xl flex-col items-stretch gap-3 px-3 py-3 sm:gap-4 sm:px-6 sm:py-5 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(300px,22rem)] lg:items-start xl:grid-cols-[minmax(0,1fr)_minmax(320px,24rem)] lg:px-8">
         <div className="contents min-w-0 space-y-3 sm:space-y-4 lg:block lg:sticky lg:top-24 lg:self-start lg:space-y-3">
           <div id="live-player-shell" className="sticky top-0 sm:top-[var(--live-header-h,84px)] z-40 overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black/50 fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0 sm:rounded-3xl lg:static">
-            <div
-              ref={playerContainerRef}
-              className="relative aspect-video h-full w-full bg-black fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:aspect-auto"
-              data-shaka-player-container
-            >
-              {active?.playable ? (
-                <DirectWatchPlayer
-                  videoEl={liveVideoEl || videoRef.current}
-                  watchKey={`live:${active.id}`}
-                  title={active.name || 'Tamil Live TV'}
+            <div className="relative aspect-video h-full w-full bg-black fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:aspect-auto">
+              {active?.playable && livePolicy ? (
+                <JashPlayer
+                  source={{ url: active.url, kind: 'auto', label: active.name }}
+                  playbackPolicy={livePolicy}
+                  poster={active.logo || ''}
                   live
                   liveLabel="LIVE"
+                  display={{
+                    title: active.name || 'Tamil Live TV',
+                    subtitle: `${active.source || 'Jio'} • ${(active.format || 'HLS').toUpperCase()}${active.keyId && active.key ? ' • ClearKey' : ''}`,
+                    aspect: 'fill',
+                  }}
+                  library={{ watchKey: `live:${active.id}` }}
                   onPrev={() => navigateChannel(-1)}
                   onNext={() => navigateChannel(1)}
-                  onError={(message) => {
-                    setPlayerStatus('error');
-                    setPlayerError(message || 'Playback failed. Try another source.');
-                  }}
-                >
-                  <video
-                    ref={liveVideoCallbackRef}
-                    className="h-full w-full max-h-[100dvh] max-w-[100dvw] bg-black object-fill"
-                    playsInline
-                    autoPlay
-                    poster={active.logo || undefined}
-                  />
-                </DirectWatchPlayer>
+                />
               ) : (
                 <div className="flex h-full items-center justify-center p-8 text-center">
                   <div>
                     <p className="text-xl font-black text-white">{active ? 'Channel unavailable' : 'Choose a channel'}</p>
                     <p className="mt-2 text-sm leading-6 text-zinc-400">
-                      {active ? (playerError || 'This channel could not be loaded by Shaka Player. Try another source or switch catalog.') : 'Tamil preferred channels will appear on the right.'}
+                      {active ? 'This feed is not marked playable. Try another channel or switch catalog.' : 'Tamil preferred channels will appear on the right.'}
                     </p>
                   </div>
                 </div>
               )}
 
-              {playerStatus === 'loading' ? (
-                <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-black/45">
-                  <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/85 px-5 py-2.5 text-sm font-bold text-zinc-200 shadow-xl backdrop-blur">
-                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/20 border-t-fuchsia-400" />
-                    <span>Loading channel...</span>
-                  </div>
-                </div>
-              ) : null}
-              {playerStatus === 'error' ? (
-                <div className="absolute inset-x-4 bottom-16 z-40 rounded-2xl border border-red-500/30 bg-red-950/90 p-3 text-sm leading-6 text-red-100 shadow-xl backdrop-blur">
-                  {playerError || 'Playback failed. Try another source.'}
-                </div>
-              ) : null}
             </div>
           </div>
 
@@ -748,6 +390,7 @@ export default function LiveTVPage() {
               {lastViewed?.name ? <p className="truncate px-1 text-[10px] font-semibold text-zinc-400 sm:text-xs">Last viewed: {lastViewed.name}</p> : null}
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                 <button onClick={enterFullscreen} className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-bold text-white transition hover:border-red-500/50">Fullscreen</button>
+                <button onClick={copyUrl} disabled={!active?.url} className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-bold text-white transition hover:border-red-500/50 disabled:opacity-40">Copy stream URL</button>
               </div>
             </div>
           </div>
@@ -901,207 +544,31 @@ export default function LiveTVPage() {
 const SERVICE_TOKEN_KEY = 'jash_live_service_token';
 
 function ServicePreviewPlayer({ channel }) {
-  const videoRef = useRef(null);
-  const playerRef = useRef(null);
-  const loadSeqRef = useRef(0);
-  const [status, setStatus] = useState('idle');
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!channel?.url || !video) return;
-    const seq = loadSeqRef.current + 1;
-    loadSeqRef.current = seq;
-    let cancelled = false;
-    let timeout = null;
-    let debounce = null;
-
-    async function destroy() {
-      const player = playerRef.current;
-      playerRef.current = null;
-      if (player) {
-        try { await player.destroy(); } catch {}
-      }
-    }
-
-    async function load() {
-      await destroy();
-      if (cancelled || loadSeqRef.current !== seq) return;
-      setStatus('loading');
-      setError('');
-      timeout = window.setTimeout(() => {
-        if (cancelled || loadSeqRef.current !== seq) return;
-        setStatus('error');
-        setError('Preview timed out. Try channel in main panel or another source.');
-        destroy();
-      }, isJioChannel(channel) ? 40000 : 18000);
-
-      try {
-        video.pause();
-        video.removeAttribute('src');
-        video.load();
-        video.controls = true;
-
-        if (['hls', 'dash'].includes(channel.format)) {
-          const [shakaModule, muxModule] = await Promise.all([
-            import('shaka-player/dist/shaka-player.compiled.js'),
-            import('mux.js'),
-          ]);
-          if (cancelled || loadSeqRef.current !== seq) return;
-          const shaka = shakaModule.default || window.shaka || shakaModule;
-          const muxjs = muxModule.default || muxModule;
-          window.muxjs = muxjs;
-          shaka.polyfill?.installAll?.();
-          const player = new shaka.Player();
-          playerRef.current = player;
-          await player.attach(video);
-          if (cancelled || loadSeqRef.current !== seq) return;
-
-          const jioPlayback = isJioChannel(channel);
-          let jioAccess = jioPlayback
-            ? await resolveJioAccess(channel)
-            : { cookie: '', playbackUrl: channel.url, scoped: false };
-          let jioCookie = jioAccess.cookie;
-          let jioPlaybackUrl = jioAccess.playbackUrl || channel.url;
-          let jioProxyEnabled = false;
-          if (jioPlayback && !jioCookie) throw new Error('No valid Jio token is available. Add one in Tools.');
-
-          const clearKeys = buildClearKeys(channel);
-          let drmKeysEnabled = Object.keys(clearKeys).length > 0;
-          player.configure({
-            drm: Object.keys(clearKeys).length ? { clearKeys } : {},
-            streaming: { bufferingGoal: 8, rebufferingGoal: 2, lowLatencyMode: true },
-            abr: { enabled: true, defaultBandwidthEstimate: 1_000_000 },
-          });
-
-          player.getNetworkingEngine()?.clearAllRequestFilters();
-          player.getNetworkingEngine()?.clearAllResponseFilters();
-
-          player.getNetworkingEngine()?.registerRequestFilter((requestType, request) => {
-            const uri = request.uris?.[0] || '';
-            const originalUri = restoreJioProxyUrl(uri, window.location.origin);
-            const jioLike = isJioChannel(channel, originalUri);
-            const hotstarLike = originalUri.includes('hotstar.com');
-            const fancodeLike = originalUri.includes('fancode.com') || originalUri.includes('fblive.fancode.com') || normalize(channel.category) === 'fancode' || normalize(channel.name).includes('fancode');
-
-            if (channel.headers && typeof channel.headers === 'object') {
-              Object.entries(channel.headers).forEach(([key, val]) => {
-                if (!key || val == null || /^cookie$/i.test(key)) return;
-                if (jioLike && /^(?:user-agent|referer|referrer)$/i.test(key)) return;
-                request.headers[key] = String(val);
-              });
-            }
-
-            if (!jioLike) {
-              if (channel.referer) request.headers.Referer = channel.referer;
-              else if (hotstarLike) request.headers.Referer = 'https://www.hotstar.com/';
-              else if (fancodeLike) request.headers.Referer = 'https://www.fancode.com/';
-              const userAgent = channel.userAgent ||
-                (fancodeLike ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36' : '');
-              if (userAgent) request.headers['User-Agent'] = userAgent;
-            }
-
-            let nextUri = originalUri;
-            if (jioLike && jioCookie &&
-              (requestType === shaka.net.NetworkingEngine.RequestType.MANIFEST || requestType === shaka.net.NetworkingEngine.RequestType.SEGMENT)) {
-              nextUri = appendJioCookieToUrl(originalUri, jioCookie);
-              request.uris[0] = jioProxyEnabled ? buildJioProxyUrl(nextUri, jioCookie) : nextUri;
-            }
-
-            if (isPocketChannel(channel) && /^https?:\/\//i.test(nextUri)) {
-              const fallbackReferer = channel.referer || (hotstarLike ? 'https://www.hotstar.com/' : '') || (fancodeLike ? 'https://www.fancode.com/' : '');
-              request.uris[0] = buildPocketProxyUrl(nextUri, channel, fallbackReferer);
-              delete request.headers['User-Agent'];
-              delete request.headers.Referer;
-              delete request.headers.Cookie;
-            }
-          });
-
-          player.getNetworkingEngine()?.registerResponseFilter((requestType, response) => {
-            if (jioProxyEnabled && response?.uri) response.uri = restoreJioProxyUrl(response.uri, window.location.origin);
-            if (isPocketChannel(channel) && response?.uri) response.uri = restorePocketProxyUri(response.uri);
-          });
-
-          player.addEventListener('error', (event) => {
-            if (cancelled || loadSeqRef.current !== seq) return;
-            const detail = event.detail;
-            if (jioPlayback && !jioProxyEnabled) {
-              setStatus('loading');
-              setError('Refreshing Jio token and trying the secure route…');
-              return;
-            }
-            setStatus('error');
-            setError(`Preview error ${detail?.code || ''}`);
-          });
-
-          const mimeType = channel.format === 'hls' ? 'application/x-mpegurl' : undefined;
-          const directUrl = jioPlayback ? appendJioCookieToUrl(jioPlaybackUrl, jioCookie) : channel.url;
-          const loadWithDrmRetry = async (uri) => {
-            try {
-              await player.load(uri, undefined, mimeType);
-              return null;
-            } catch (firstError) {
-              // Streams can ship stale ClearKey pairs; drop the keys once and
-              // retry before giving up on the route (Stream4Liv parity).
-              if (drmKeysEnabled && isShakaDrmLoadError(firstError)) {
-                drmKeysEnabled = false;
-                player.configure({ drm: { clearKeys: {} } });
-                try {
-                  await player.load(uri, undefined, mimeType);
-                  return null;
-                } catch (retryError) {
-                  return retryError;
-                }
-              }
-              return firstError;
-            }
-          };
-          let loadFailure = await loadWithDrmRetry(directUrl);
-          if (!cancelled && loadSeqRef.current === seq && loadFailure) {
-            if (!jioPlayback) throw loadFailure;
-            jioAccess = await resolveJioAccess(channel, { force: true });
-            jioCookie = jioAccess.cookie;
-            jioPlaybackUrl = jioAccess.playbackUrl || channel.url;
-            if (!jioCookie) throw new Error('Jio token refresh failed. Add a fresh token in Tools.');
-            jioProxyEnabled = true;
-            await player.unload().catch(() => {});
-            loadFailure = await loadWithDrmRetry(buildJioProxyUrl(appendJioCookieToUrl(jioPlaybackUrl, jioCookie), jioCookie));
-            if (loadFailure) throw loadFailure;
-          }
-        } else {
-          video.src = channel.url;
-          video.load();
-        }
-
-        if (cancelled || loadSeqRef.current !== seq) return;
-        if (timeout) window.clearTimeout(timeout);
-        setError('');
-        setStatus('ready');
-        video.play().catch(() => {});
-      } catch (err) {
-        if (cancelled || loadSeqRef.current !== seq) return;
-        if (timeout) window.clearTimeout(timeout);
-        setStatus('error');
-        setError(err.message || 'Preview failed');
-      }
-    }
-
-    debounce = window.setTimeout(load, 180);
-    return () => {
-      cancelled = true;
-      if (debounce) window.clearTimeout(debounce);
-      if (timeout) window.clearTimeout(timeout);
-      destroy();
-    };
-  }, [channel?.channelId, channel?.url]);
+  // Same policy as the main panel, so a preview that works is a channel that
+  // will play (and a preview that fails says why in the same words).
+  const policy = useMemo(() => (channel?.url ? createLiveTvPolicy(channel) : null), [channel]);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-white/10 bg-black">
       <div className="aspect-video bg-black">
-        {channel?.url ? <video ref={videoRef} className="h-full w-full object-fill" controls playsInline /> : <div className="grid h-full place-items-center text-xs text-zinc-500">Select a channel to preview</div>}
+        {channel?.url && policy ? (
+          <JashPlayer
+            source={{ url: channel.url, kind: 'auto', label: channel.name }}
+            playbackPolicy={policy}
+            poster={channel.logo || ''}
+            live
+            liveLabel="PREVIEW"
+            compact
+            gesturesEnabled={false}
+            display={{ title: channel.name || 'Preview', aspect: 'fill', bufferAheadSeconds: 6 }}
+          />
+        ) : (
+          <div className="grid h-full place-items-center text-xs text-zinc-500">Select a channel to preview</div>
+        )}
       </div>
       <div className="border-t border-white/10 px-3 py-2 text-[11px] text-zinc-400">
-        {channel?.name || 'No preview'} {status === 'loading' ? '• Loading…' : ''} {status === 'ready' ? '• Ready' : ''} {error ? `• ${error}` : ''}
+        {channel?.name || 'No preview'}
+        {channel?.format ? ` • ${(channel.format || '').toUpperCase()}` : ''}
       </div>
     </div>
   );
@@ -1271,6 +738,9 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
     }
   }
 
+  // Runs when the panel opens or the token changes, not when the loaders below
+  // are re-created — that is the point, so keep the dependency list short.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (open && token) refreshAll(); }, [open, token]);
   useEffect(() => {
     // Selecting a source must not automatically load its full catalog. The
@@ -1283,6 +753,8 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
     setChannelQuery('');
     setMappingFilter('all');
   }, [sourceFilter]);
+  // Same reason as above: a profile switch reloads the table once.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (open && token) { loadChannels({ mapped: true }); loadMainPanelPreview(); } }, [activeProfile]);
 
   async function syncSource(sourceId = '') {
@@ -1632,6 +1104,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
               </div> : null}
 
               {tab === 'tools' ? <div className="space-y-4">
+                <PlayerIncidents />
                 <div className="rounded-3xl border border-yellow-300/20 bg-yellow-500/[0.07] p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div><p className="text-sm font-black text-yellow-100">Jio playback token</p><p className="mt-1 max-w-2xl text-xs leading-5 text-zinc-400">Playback automatically refreshes the public Stream4Liv-compatible token. If that feed is down, paste a current <code>__hdnea__</code> token here. The override stays only in this browser.</p></div>

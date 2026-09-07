@@ -4,69 +4,30 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { chipClassForTier, labelForTier } from '@/lib/quality';
-import DirectWatchPlayer from '@/components/player/DirectWatchPlayer';
+import JashPlayer from '@/components/player/JashPlayer';
 import Icon from '@/components/Icons';
 import {
   getHistoryEntry,
   getLastProvider,
   isFavoriteItem,
   makeWatchKey,
-  saveWatchProgress,
   setLastProvider,
   toggleFavoriteItem,
   upsertHistoryEntry,
   useLibraryVersion,
 } from '@/lib/watchStore';
-
-function isHlsUrl(url = '') {
-  return String(url || '').toLowerCase().includes('.m3u8') || String(url || '').toLowerCase().includes('m3u8');
-}
-
-function isDashUrl(url = '') {
-  return String(url || '').toLowerCase().includes('.mpd');
-}
+import { buildSourceList, fmtTime, parseUrlSourceLabel } from '@/lib/player/labels';
+import { detectKind, isDirectFileUrl } from '@/lib/player/kind';
 
 function isDirectPlayerType(type = '', url = '') {
   // 'direct' = resolved direct file streams (Stremio/Telegram/mirchi). Their
   // URLs often carry trailing descriptive text after the extension
-  // ("....mkv ⁍ Quality : 1080p ⁍ Audio : Tamil", spaces percent-encoded),
-  // so the extension test must match mid-path, not only at ?#/$ boundaries.
-  return (
-    ['direct', 'hls', 'dash', 'video'].includes(String(type || '').toLowerCase()) ||
-    isHlsUrl(url) ||
-    isDashUrl(url) ||
-    /\.(mp4|webm|mkv|m4v|mov)(\?|#|%| |\/|$)/i.test(String(url || ''))
-  );
-}
-
-function formatDirectPlaybackError(error, resolvedProviderId = '') {
-  const message = typeof error === 'string' ? error : (error?.message || '');
-  const code = typeof error === 'object' ? error?.code : undefined;
-  const data = Array.isArray(error?.data) ? error.data : [];
-  const dataText = data.filter((item) => typeof item === 'string' || typeof item === 'number').join(' • ');
-
-  if (code === 1001 || /1001|BAD_HTTP_STATUS|HTTP\s+(4\d\d|5\d\d)/i.test(message)) {
-    const statusText = (message.match(/HTTP\s+(4\d\d|5\d\d)/i) || dataText.match(/\b(4\d\d|5\d\d)\b/))?.[1];
-    return message || `Direct HLS server returned a bad HTTP status${statusText ? ` (${statusText})` : ''}.`;
-  }
-
-  return message || 'Direct player failed. Try another source.';
-}
-
-// Pull a clean "1080p 2.9GB"-style label out of a direct-file URL. Telegram
-// bot links embed the filename in the path ("...1080p WEBRip x264 ... 2.9GB
-// ESub.mkv ⁍ Quality : 1080p ..."), so resolution + size live in the URL text.
-function parseUrlSourceLabel(url = '') {
-  try {
-    const text = decodeURIComponent(String(url || '')).replace(/[_-]+/g, ' ');
-    const res = text.match(/\b(?:2160p|1440p|1080p|720p|576p|540p|480p|360p)\b/i)?.[0]
-      || (/\b4k\b/i.test(text) ? '4K' : '');
-    const size = text.match(/[\d.]+\s?(?:TB|GB|MB)\b/i)?.[0]?.replace(/\s+/g, '').toUpperCase() || '';
-    const resNorm = res ? (/^4k$/i.test(res) ? '4K' : res.replace(/p$/i, 'p')) : '';
-    return [resNorm, size].filter(Boolean).join(' ');
-  } catch {
-    return '';
-  }
+  // ("....mkv ⁍ Quality : 1080p ⁍ Audio : Tamil", spaces percent-encoded), so
+  // lib/player/kind matches the extension mid-path instead of only at ?#/$.
+  if (['direct', 'hls', 'dash', 'video'].includes(String(type || '').toLowerCase())) return true;
+  const kind = detectKind(url, { streamType: type });
+  if (kind === 'embed') return false;
+  return kind === 'hls' || kind === 'dash' || isDirectFileUrl(url);
 }
 
 function shouldUseObjectPlayer(provider, streamUrl) {
@@ -95,32 +56,6 @@ function shouldUseObjectPlayer(provider, streamUrl) {
   );
 }
 
-function getStatusStyle(status) {
-  switch (status) {
-    case 'available':
-      return {
-        card: 'border-green-500/50 bg-green-950/20',
-        dot: 'bg-green-400',
-        text: 'text-green-300',
-        label: 'Available',
-      };
-    case 'failed':
-      return {
-        card: 'border-red-500/50 bg-red-950/20',
-        dot: 'bg-red-400',
-        text: 'text-red-300',
-        label: 'Failed',
-      };
-    default:
-      return {
-        card: 'border-zinc-700 bg-zinc-950/80',
-        dot: 'bg-zinc-500',
-        text: 'text-zinc-400',
-        label: status || 'Status',
-      };
-  }
-}
-
 const WATCH_SERVER_OPTIONS = [
   { id: 'auto', name: 'Auto', label: 'Stremio → Mirchi' },
   { id: 'stremio', name: 'Stremio', label: 'Direct files' },
@@ -131,63 +66,6 @@ const WATCH_SERVER_OPTIONS = [
   { id: 'vidrock', name: 'VidRock', label: 'Tamil first' },
 ];
 
-function SourceStatusGrid({ attempts, onSelectProvider, selectedProvider }) {
-  if (!attempts?.length) {
-    return (
-      <div className="rounded-2xl border border-white/10 bg-black/30 p-5 text-zinc-400">
-        Preparing embed player...
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid gap-2 sm:gap-3 md:grid-cols-2 lg:grid-cols-3">
-      {attempts.map((attempt, index) => {
-        const style = getStatusStyle(attempt.status);
-
-        return (
-          <div
-            key={`${attempt.providerId || attempt.provider}-${index}`}
-            className={`rounded-2xl border p-3 sm:p-4 ${style.card}`}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className={`h-2.5 w-2.5 rounded-full ${style.dot}`} />
-                  <h3 className="font-bold text-white">{attempt.provider}</h3>
-                </div>
-                <p className="mt-1 text-xs text-zinc-500">{attempt.label}</p>
-              </div>
-              <span className={`rounded-full bg-black/40 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${style.text}`}>
-                {style.label}
-              </span>
-            </div>
-
-            {attempt.reason ? (
-              <p className="mt-3 text-xs leading-5 text-zinc-400">{attempt.reason}</p>
-            ) : null}
-            {attempt.health?.ok ? (
-              <p className="mt-2 break-all text-[11px] leading-5 text-green-300">
-                API checked: HTTP {attempt.health.status} • {attempt.health.finalUrl}
-              </p>
-            ) : null}
-            {attempt.providerId ? (
-              <button
-                type="button"
-                onClick={() => onSelectProvider?.(attempt.providerId)}
-                disabled={selectedProvider === attempt.providerId || (selectedProvider === 'auto' && attempt.status === 'available')}
-                className="mt-4 rounded-full border border-white/10 px-3 py-1.5 text-xs font-bold text-white transition hover:border-red-500 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {selectedProvider === attempt.providerId ? 'Selected' : 'Use this source'}
-              </button>
-            ) : null}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 export default function WatchByTMDBPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -195,13 +73,6 @@ export default function WatchByTMDBPage() {
   const tmdbId = params?.tmdbId;
   const isSeries = type === 'series' || type === 'tv';
   const playerShellRef = useRef(null);
-  const directVideoRef = useRef(null);
-  const directPlayerRef = useRef(null);
-  const [directVideoEl, setDirectVideoEl] = useState(null);
-  const directVideoCallbackRef = useCallback((el) => {
-    directVideoRef.current = el;
-    setDirectVideoEl(el);
-  }, []);
 
   const initialSeason = Math.max(1, Number(searchParams?.get('season') || searchParams?.get('s') || 1));
   const initialEpisode = Math.max(1, Number(searchParams?.get('episode') || searchParams?.get('e') || 1));
@@ -212,6 +83,10 @@ export default function WatchByTMDBPage() {
 
   const [season, setSeason] = useState(initialSeason);
   const [episode, setEpisode] = useState(initialEpisode);
+  const seasonRef = useRef(season);
+  useEffect(() => {
+    seasonRef.current = season;
+  }, [season]);
   const [seriesMeta, setSeriesMeta] = useState(null);
   const [seriesMetaStatus, setSeriesMetaStatus] = useState('idle');
   const language = 'tam';
@@ -235,8 +110,6 @@ export default function WatchByTMDBPage() {
   const currentStreamUrl = streamChoices[streamChoiceIndex] || streamUrl;
   const activePlayerUrl = playerMode === 'trailer' ? trailerUrl : currentStreamUrl;
   const [error, setError] = useState('');
-  const [attempts, setAttempts] = useState([]);
-  const [savedToMongoDB, setSavedToMongoDB] = useState(false);
   const [resolvedProviderId, setResolvedProviderId] = useState('');
   const [stremioStreams, setStremioStreams] = useState([]);
   const [selectedStremioStreamId, setSelectedStremioStreamId] = useState('');
@@ -340,7 +213,7 @@ export default function WatchByTMDBPage() {
         setSeriesMetaStatus('ready');
 
         if (data.seasons?.length) {
-          const hasSeason = data.seasons.some((item) => item.seasonNumber === season);
+          const hasSeason = data.seasons.some((item) => item.seasonNumber === seasonRef.current);
           if (!hasSeason) {
             setSeason(data.seasons[0].seasonNumber);
             setEpisode(data.seasons[0].episodes?.[0]?.episodeNumber || 1);
@@ -386,8 +259,6 @@ export default function WatchByTMDBPage() {
       try {
         setStatus('loading');
         setError('');
-        setAttempts([]);
-        setSavedToMongoDB(false);
         setResolvedProviderId('');
         setStremioStreams([]);
         setResolvedStremioStreamId('');
@@ -404,8 +275,6 @@ export default function WatchByTMDBPage() {
         });
 
         const data = await response.json();
-        setAttempts(data.attempts || []);
-        setSavedToMongoDB(Boolean(data.savedToMongoDB));
         setResolvedProviderId(data.providerId || '');
         setStremioStreams(data.availableStreams || []);
         setResolvedStremioStreamId(data.selectedStreamId || '');
@@ -449,55 +318,6 @@ export default function WatchByTMDBPage() {
     });
   }, [status, playerMode, activePlayerUrl, watchKey, isSeries, tmdbId, season, episode, activeProvider, titleMeta]);
 
-  useEffect(() => {
-    const video = directVideoRef.current;
-    if (!video || status !== 'ready' || playerMode !== 'stream' || !activePlayerUrl || !isDirectPlayerType(streamType, activePlayerUrl)) return;
-    let cancelled = false;
-
-    async function destroyDirectPlayer() {
-      if (directPlayerRef.current) {
-        try { await directPlayerRef.current.destroy(); } catch {}
-        directPlayerRef.current = null;
-      }
-    }
-
-    async function loadDirect() {
-      try {
-        await destroyDirectPlayer();
-        if (cancelled) return;
-        video.pause();
-        video.removeAttribute('src');
-        video.load();
-
-        if (isHlsUrl(activePlayerUrl) || isDashUrl(activePlayerUrl)) {
-          const shakaModule = await import('shaka-player/dist/shaka-player.compiled.js');
-          const shaka = shakaModule.default || window.shaka || shakaModule;
-          shaka.polyfill?.installAll?.();
-          const player = new shaka.Player();
-          directPlayerRef.current = player;
-          await player.attach(video);
-          player.configure({
-            streaming: { bufferingGoal: 20, rebufferingGoal: 2 },
-            abr: { enabled: true, defaultBandwidthEstimate: 1_500_000 },
-          });
-          await player.load(activePlayerUrl, undefined, isHlsUrl(activePlayerUrl) ? 'application/x-mpegurl' : undefined);
-        } else {
-          video.src = activePlayerUrl;
-          video.load();
-        }
-        if (!cancelled) video.play().catch(() => {});
-      } catch (playbackError) {
-        if (!cancelled) {
-          setError(formatDirectPlaybackError(playbackError, resolvedProviderId));
-          setStatus('error');
-        }
-      }
-    }
-
-    loadDirect();
-    return () => { cancelled = true; destroyDirectPlayer(); };
-  }, [status, playerMode, activePlayerUrl, streamType, resolvedProviderId]);
-
   const playTrailer = async () => {
     if (!tmdbId || !type) return;
 
@@ -522,20 +342,13 @@ export default function WatchByTMDBPage() {
   const directStreamActive = playerMode === 'stream' && isDirectPlayerType(streamType, activePlayerUrl);
 
   // ---------- DirectWatchPlayer wiring (v7.7.0) ----------
-  // Labelled source list for the player's stream picker menu. Labels resolve
-  // in order: stream meta → parsed from the URL filename ("1080p 2.9GB") → Source N.
-  const watchSources = useMemo(() => {
-    return streamChoices.map((url, index) => {
-      const matched = (stremioStreams || []).find((s) => s && (s.url === url || s.streamUrl === url));
-      const metaLabel = matched
-        ? [matched.title, matched.name, matched.behaviorHints?.bingeGroup, matched.quality]
-            .filter(Boolean)
-            .join(' • ')
-            .replace(/\s+/g, ' ')
-        : '';
-      return { url, label: metaLabel || parseUrlSourceLabel(url) || `Source ${index + 1}` };
-    });
-  }, [streamChoices, stremioStreams]);
+  // Labelled source list for the player's stream picker menu — labels resolve
+  // in order: stream meta → parsed from the URL filename ("1080p 2.9GB") →
+  // "Source N". Same helper the player uses internally, so labels agree.
+  const watchSources = useMemo(
+    () => buildSourceList({ urls: streamChoices, streams: stremioStreams, labelFor: (url) => parseUrlSourceLabel(url) }),
+    [streamChoices, stremioStreams],
+  );
 
   // Next-episode pill data (same-season next ep, else first ep of next season).
   const nextEpisodeInfo = useMemo(() => {
@@ -578,48 +391,9 @@ export default function WatchByTMDBPage() {
     return isSeries ? `${base} · S${season} E${episode}` : base;
   }, [titleMeta, isSeries, season, episode]);
 
-  // Resume the saved playback position and persist progress for direct
-  // (non-iframe) streams. Embed iframes cannot report progress.
-  useEffect(() => {
-    if (!directStreamActive || playerMode !== 'stream' || !activePlayerUrl) return;
-    const video = directVideoRef.current;
-    if (!video) return;
-
-    const FINISHED_RATIO = 0.95;
-    const applyResume = () => {
-      const saved = getHistoryEntry(watchKey);
-      if (!saved?.progress) return;
-      const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : saved.duration;
-      // Only resume if meaningfully into the title and it wasn't finished.
-      if (saved.progress > 20 && (!duration || saved.progress < duration * FINISHED_RATIO)) {
-        try { video.currentTime = saved.progress; } catch {}
-      }
-    };
-
-    if (video.readyState >= 1) applyResume();
-    else video.addEventListener('loadedmetadata', applyResume, { once: true });
-
-    const persistNow = () => saveWatchProgress(
-      watchKey,
-      video.currentTime || 0,
-      Number.isFinite(video.duration) ? video.duration : 0,
-    );
-    let lastSave = 0;
-    const onTimeUpdate = () => {
-      const now = Date.now();
-      if (now - lastSave < 5000) return; // throttle writes to every 5s
-      lastSave = now;
-      persistNow();
-    };
-
-    video.addEventListener('timeupdate', onTimeUpdate);
-    video.addEventListener('pause', persistNow);
-    return () => {
-      video.removeEventListener('timeupdate', onTimeUpdate);
-      video.removeEventListener('pause', persistNow);
-      persistNow();
-    };
-  }, [directStreamActive, playerMode, activePlayerUrl, watchKey]);
+  // Resume + progress persistence moved into usePlaybackEngine, so /watch,
+  // /classics and /stremio-watch all apply the same finished-title guard and
+  // write on the same cadence (5 s · pause · ended · fullscreen · pagehide).
 
   const nextEpisodeTarget = useMemo(() => {
     if (!isSeries) return null;
@@ -828,25 +602,35 @@ export default function WatchByTMDBPage() {
             ) : null}
 
             {status === 'ready' && activePlayerUrl && directStreamActive ? (
-              <DirectWatchPlayer
-                videoEl={directVideoEl}
-                watchKey={watchKey}
-                title={directPlayerTitle}
-                sources={watchSources}
-                activeSource={streamChoiceIndex}
-                onPickSource={(i) => { fallbackCountRef.current = 0; setStreamChoiceIndex(i); }}
-                onAutoFallback={handleAutoFallback}
-                nextEpisode={nextEpisodeInfo}
-              >
-                <video
-                  ref={directVideoCallbackRef}
-                  className="h-full w-full bg-black object-fill"
-                  playsInline
-                  autoPlay
-                  preload="auto"
-                  crossOrigin="anonymous"
-                />
-              </DirectWatchPlayer>
+              <JashPlayer
+                source={{
+                  url: activePlayerUrl,
+                  kind: detectKind(activePlayerUrl, { streamType: streamType }),
+                  label: watchSources[streamChoiceIndex]?.label || '',
+                  // Kept from the old element: the snapshot button needs a
+                  // CORS-readable buffer, and these CDNs do send the header.
+                  crossOrigin: 'anonymous',
+                }}
+                display={{
+                  title: directPlayerTitle,
+                  poster: titleMeta?.backdropUrl || titleMeta?.posterUrl || '',
+                  aspect: 'fill',
+                }}
+                library={{ watchKey }}
+                lineup={{
+                  sources: watchSources,
+                  activeIndex: streamChoiceIndex,
+                  onPickSource: (index) => {
+                    fallbackCountRef.current = 0;
+                    setStreamChoiceIndex(index);
+                  },
+                  nextEpisode: nextEpisodeInfo,
+                }}
+                on={{
+                  onError: (info) => setError(info?.message || 'Direct player failed. Try another source.'),
+                  onFatal: () => handleAutoFallback(),
+                }}
+              />
             ) : null}
 
             {status === 'ready' && activePlayerUrl && !directStreamActive && !popupBlocker && shouldUseObjectPlayer(activeProvider, activePlayerUrl) ? (
@@ -943,7 +727,7 @@ export default function WatchByTMDBPage() {
                 const isSelected = ep.episodeNumber === episode;
                 const epKey = makeWatchKey({ type: 'series', tmdbId });
                 const epHistory = getHistoryEntry(epKey);
-                const isWatched = epHistory?.season === season && epHistory?.episode === ep.episodeNumber;
+                const resumingHere = epHistory?.season === season && epHistory?.episode === ep.episodeNumber && epHistory?.progress > 20;
 
                 return (
                   <button
@@ -973,6 +757,11 @@ export default function WatchByTMDBPage() {
                       <div className="absolute left-2.5 top-2.5 rounded-lg border border-white/20 bg-black/70 px-2 py-0.5 text-[10px] font-black text-white backdrop-blur">
                         E{ep.episodeNumber}
                       </div>
+                      {resumingHere ? (
+                        <div className="absolute right-2.5 top-2.5 rounded-lg bg-amber-400/90 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-black">
+                          Resume {fmtTime(epHistory.progress)}
+                        </div>
+                      ) : null}
                       {ep.runtime ? (
                         <div className="absolute bottom-2 right-2.5 text-[10px] font-bold text-zinc-300">
                           {ep.runtime}m

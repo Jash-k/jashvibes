@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import BrandLogo from '@/components/BrandLogo';
-import Icon from '@/components/Icons';
 import {
   FANCODE_FEED,
   bestFancodeVariant,

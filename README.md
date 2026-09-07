@@ -12,6 +12,7 @@ app_port: 7860
 
 Tamil-first private streaming hub — movies, series, live TV, music, sports and classics in one Next.js app.
 
+> **v8.5.0** — every video surface now runs one engine and one chrome (`components/player/JashPlayer.js` + `usePlaybackEngine` + `lib/player/*`): same resume rules, same error cards, same recovery ladder, same 37-command keyboard/gesture parity. The four old players and the `hls.js` dependency are deleted; `/player-lab` is the fixture harness. See `docs/PLAYER.md`.
 > **v6.5** — live-cricket match feeds and all background polling revoked (the Render free-tier usage spike it caused got the service suspended). /sports is now static Live-TV + FanCode streams; match-center scorecards fetch once per open.
 > **v6.5.4** — internal keep-alive: the server pings its own `/api/health` every 10 minutes so the Render free tier never sleeps (auto URL via `RENDER_EXTERNAL_URL`; disable with `KEEPALIVE=0`). Stremio works out of the box via the built-in Global Stremio addon default.
 > **v6** — API firewall (all routes authenticated), gesture player, personal library. Personal, single-tenant deployment.
@@ -22,7 +23,7 @@ Tamil-first private streaming hub — movies, series, live TV, music, sports and
 
 - **Movies & Series** — TamilMV daily catalog + TMDB metadata, manual Match-to-TMDB for unmatched posters, multi-provider embed playback with per-provider health checks, plus your Stremio addon as a direct-file server inside the watch page (Auto chain: Stremio → Mirchi → embeds, with an on-page quality dropdown).
 - **▶ Continue Watching & ❤ My List** — automatic watch history with playback-position resume (direct streams), favorites, per-title server memory. Stored in `localStorage` — no account, no DB cost.
-- **Gesture video player** — double-tap seek ±10s (stacks), vertical swipe = volume (right) / brightness (left), horizontal swipe = scrub, long-press = 2× speed, screen lock, quality/subtitle/speed panels, external `.srt/.vtt` upload.
+- **Unified player (JashPlayer)** — one engine for /watch, /live, /classics, /stremio-watch and /sports: Shaka for HLS/DASH (native HLS on Safari when no headers are needed), double-tap seek ±10s (stacks), vertical swipe = volume (right) / brightness (left), horizontal swipe = scrub, long-press = 2× speed, screen lock, quality/audio/subtitle/speed sheets, external `.srt/.vtt` import with delay + size, PiP (Android + iOS), AirPlay, wake-lock, A-B loop, freeze frame, canvas snapshot, wheel volume / shift-wheel speed, stats overlay, 37-command shortcut map, live-vs-DVR detection and an auto-retry ladder that ends in a specific, actionable error card. See `docs/PLAYER.md`.
 - **Live TV** — Jio (ClearKey/Shaka), Sony Ten/Sports Jio re-stream source, M3U sources, manual 6-catalog admin panel (Live Service). New default sources self-seed with a one-time background sync; only the curated Tamil cricket feeds auto-publish, everything else needs manual mapping.
 - **Music (ராக வானம்)** — JioSaavn search, charts, albums, artists, playlists, Spotify import.
 - **Sports** — FanCode/Willow **Cricket Live TV** channels with an in-page player, plus other-sports FanCode live streams (separate section). Cricket match-center scorecards load on demand. Nothing polls in the background — every sports page fetch runs once on load (free-tier friendly).
@@ -109,14 +110,19 @@ middleware.js               # API auth firewall + rate limiting  (v6)
 app/
   page.js                   # home: Latest Releases + Match-to-TMDB posters + library rows
   watch/[type]/[tmdbId]/    # VOD watch page (provider select, S/E picker)
+  player-lab/               # /player-lab: player fixture harness (noindex, dev tool)
   my-list/                  # favorites + continue-watching library
   live/ music/ sports/ classics/ stremio*/ embed-browser/
   api/                      # ~70 routes (all session-protected)
 components/
-  VideoPlayer.jsx           # gesture player (hls.js + native)
+  player/JashPlayer.js      # the one video player: chrome (controls, menus, gestures)
+  player/usePlaybackEngine.js  # element + Shaka + recovery + resume + subtitles
+  player/PlayerMenus.js     # quality / audio / subtitles / sources / context sheets
   LibraryRows.js            # home-page Continue Watching / My List
   AuthGate.js               # unlock screen + lock button
 lib/
+  player/                   # pure modules: kind, errors, recovery, resume, subtitles, prefs,
+                            # labels, commands + policy/{liveTv,stream}.js  (unit-tested)
   serverAuth.js             # token create/verify (shared with middleware logic)
   watchStore.js             # localStorage library
   providers/ tmdb.js liveTv.js musicApi.js tamilmvScraper.js ...
@@ -170,3 +176,6 @@ For personal/educational use only. Host only sources you are authorized to acces
 
 ## v8.4.3
 - BrandLogo resilient fallback chain (logo.png -> logo-source.webp -> JV monogram) fixes invisible mini logo when /public/brand is missing from file-wise deploys. sw v59.
+
+## v8.5.0
+- Player unification (see `docs/PLAYER.md`): `components/player/JashPlayer.js` + `usePlaybackEngine` replace DirectWatchPlayer, UniversalVideoPlayer, VideoPlayer.jsx (hls.js) and two hand-rolled Shaka copies inside /live and /watch. /live, /watch, /stremio-watch, /classics and /sports/player now share one resume rule (20s floor, last 15s refused, ≥95% counts as finished), one progress writer (5s · pause · fullscreen · pagehide · ended — Continue Watching finally fills from /classics and /stremio-watch too), one error mapping with the specific fix (retry / next source / drop DRM / refresh token / copy URL), one recovery ladder (retry-streaming → reanchor → reload → drop-drm → rotate-source, 12s ceiling) and one 37-command input table with a parity test so no command ships keyboard-only on touch devices. Source-specific behaviour moved to policies: `lib/player/policy/liveTv.js` (Jio token dance, ClearKey, header/segment rewriting, Pocket proxy) and `lib/player/policy/stream.js` (ReTro Widevine/ClearKey + Stremio headers). New: /player-lab fixture harness, subtitle delay + size, A-B loop, stats panel, ambient dim, data-saver cap, Live Service → Tools player-report queue. Deleted the `hls.js` dependency (nothing else used it) and added `eslint` + react plugins as devDependencies so `npm run lint:player` runs from a clean clone. 76 assertions in `tests/player-*.test.js` (`npm test`), `npm run lint:player` clean (0 errors, 0 warnings). sw v60.

@@ -1147,6 +1147,26 @@ html.jv-cursor-fx :fullscreen, html.jv-cursor-fx :fullscreen * { cursor: auto !i
 }
 html.day-mode .jv-glowcursor { display: none; } /* light theme keeps the reticle */
 
+/* ── Unified player (JashPlayer) ───────────────────────────────────── */
+/* Double-tap / hold-to-2x badges in the chrome fade-expand through this. The
+   animation is requested from Tailwind utilities
+   (`animate-[jvflash_0.6s_ease-out_forwards]`), so the keyframes have to live
+   here — inside the stylesheet every route already imports. */
+@keyframes jvflash {
+  0% { opacity: 0.9; transform: scale(0.7); }
+  100% { opacity: 0; transform: scale(1.4); }
+}
+
+/* Ambient ("theater") mode: the player dims the page with a fixed scrim of its
+   own and marks <html> so the page background goes black instead of glowing
+   through the scrim's blur. */
+.jv-theater,
+.jv-theater body { background-color: #000 !important; }
+
+/* Landscape on a phone: the video already fills the viewport, so any rounding
+   the host page adds around the player is pure lost picture. */
+.jv-landscape-phone { border-radius: 0 !important; }
+
 @media (prefers-reduced-motion: reduce) {
   .jv-masonry-item { animation: none; opacity: 1; filter: none; translate: none; }
   .jv-tilt-inner { transform: none !important; }

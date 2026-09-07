@@ -3,9 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import UniversalVideoPlayer from '@/components/player/UniversalVideoPlayer';
-
-function isDash(url = '') { return /\.mpd(\?|#|$)/i.test(String(url || '')); }
+import JashPlayer from '@/components/player/JashPlayer';
 
 export default function SportsPlayerPage() {
   const searchParams = useSearchParams();
@@ -44,13 +42,20 @@ export default function SportsPlayerPage() {
         <span className="hidden rounded-full border border-white/10 bg-black/70 px-4 py-2 text-xs font-bold text-zinc-400 sm:inline">{title}</span>
       </div>
       {status === 'loading' ? <div className="grid h-full place-items-center text-sm font-black uppercase tracking-widest text-amber-300">Loading sports player…</div> : null}
-      {status === 'error' ? <div className="grid h-full place-items-center p-6 text-center text-red-200">{error}</div> : null}
-      {status === 'ready' && url ? (
-        <UniversalVideoPlayer
-          url={url}
-          title={title}
-          onError={(message) => { setError(message || 'Playback failed'); setStatus('error'); }}
-        />
+      {status === 'error' && !url ? <div className="grid h-full place-items-center p-6 text-center text-red-200">{error}</div> : null}
+      {url ? (
+        <div className="h-dvh w-full">
+          <JashPlayer
+            source={{ url }}
+            display={{ title, aspect: 'fill' }}
+            className="h-full w-full"
+            on={{
+              // The player keeps its own error card (with retry / next source);
+              // the page only mirrors the message for the header.
+              onError: (info) => setError(info?.message || 'Playback failed'),
+            }}
+          />
+        </div>
       ) : null}
     </main>
   );

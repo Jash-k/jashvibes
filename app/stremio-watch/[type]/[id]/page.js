@@ -1,8 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
-import UniversalVideoPlayer from '@/components/player/UniversalVideoPlayer';
+import JashPlayer from '@/components/player/JashPlayer';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 
@@ -70,8 +69,9 @@ export default function StremioPlayerPage() {
         if (!response.ok) throw new Error(data?.error || 'Stremio meta failed');
         setItem(data.item);
         if (type === 'series' && data.item?.videos?.length) {
-          const wantedSeason = Number(searchParams?.get('season') || idEpisodeMatch?.[1] || 1);
-          const wantedEpisode = Number(searchParams?.get('episode') || idEpisodeMatch?.[2] || 1);
+          const routeEpisode = String(id || '').match(/^tt\d+:(\d+):(\d+)$/i);
+          const wantedSeason = Number(searchParams?.get('season') || routeEpisode?.[1] || 1);
+          const wantedEpisode = Number(searchParams?.get('episode') || routeEpisode?.[2] || 1);
           // Only adopt meta's numbering when it actually contains the episode
           // the viewer asked for. Falling back to videos[0] used to silently
           // swap the selection to the first episode and reload wrong streams.
@@ -157,19 +157,20 @@ export default function StremioPlayerPage() {
 
 
   const activeStream = streams[streamIndex] || null;
-  const streamQualityOptions = useMemo(() => streams.map((stream, index) => ({
-    label: compactQualityLabel(stream, index),
-    value: index,
-  })), [streams]);
-
   const activePlayerTitle = currentEpisodeInfo
     ? `${item?.title || 'Stremio'} S${currentEpisodeInfo.season}E${currentEpisodeInfo.episode}`
     : item?.title || activeStream?.title || 'Stremio';
 
   // Unified stream-source list for the player menu (labels from catalog meta).
+  // The url rides along so the player can rotate to another stream itself.
   const watchSources = useMemo(
-    () => streamQualityOptions.map((option) => ({ label: option.label })),
-    [streamQualityOptions],
+    () => streams.map((stream, index) => ({
+      url: stream.url,
+      label: compactQualityLabel(stream, index),
+      quality: compactQualityLabel(stream, index).split(' ')[0],
+      sizeBytes: Number(stream.sizeBytes) || 0,
+    })),
+    [streams],
   );
   const handlePickSource = useCallback((index) => setStreamIndex(index), []);
   const handleAutoFallback = useCallback(() => {
@@ -178,6 +179,37 @@ export default function StremioPlayerPage() {
   const handlePlaybackError = useCallback((message) => {
     setError(message || 'Stremio playback failed. Try another stream quality.');
   }, []);
+
+  // Continue Watching needs a row to exist before progress can be written to
+  // it; the engine upserts one when it is missing so a Stremio watch-through
+  // finally shows up in the catalogue (it used to toast a resume it never saved).
+  const libraryEntry = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    return {
+      type,
+      tmdbId: null,
+      ottTitle: id,
+      title: activePlayerTitle,
+      posterUrl: currentEpisodeInfo?.thumbnail || item?.posterUrl || '',
+      backdropUrl: item?.backdropUrl || '',
+      year: item?.year || '',
+      season: type === 'series' ? selectedSeason : 0,
+      episode: type === 'series' ? selectedEpisodeNumber : 0,
+      provider: `stremio:${stremioSource}`,
+      href: `${window.location.pathname}${window.location.search}`,
+    };
+  }, [activePlayerTitle, currentEpisodeInfo?.thumbnail, id, item?.backdropUrl, item?.posterUrl, item?.year, selectedEpisodeNumber, selectedSeason, stremioSource, type]);
+
+  const nextEpisodeTarget = useMemo(() => {
+    if (type !== 'series') return null;
+    const index = episodesForSeason.findIndex((video) => Number(video.episode) === Number(selectedEpisodeNumber));
+    const next = index >= 0 ? episodesForSeason[index + 1] : null;
+    if (!next) return null;
+    return {
+      label: `S${next.season} E${next.episode} • ${next.title || ''}`.trim(),
+      onPlay: () => setSelectedEpisodeNumber(Number(next.episode) || 1),
+    };
+  }, [episodesForSeason, selectedEpisodeNumber, type]);
 
   // "Single screen": turn the player shell into a full-tab theatre view —
   // same tab, same player UI, nothing else on screen.
@@ -215,17 +247,36 @@ export default function StremioPlayerPage() {
           <div ref={shellRef} className="classics-player-shell overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0 sm:rounded-3xl">
             <div className="jv-native-cursor relative aspect-video h-full w-full bg-black fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:aspect-auto">
               {activeStream?.url ? (
-                <UniversalVideoPlayer
-                  url={activeStream.url}
-                  title={activePlayerTitle}
-                  poster={currentEpisodeInfo?.thumbnail || item?.backdropUrl || item?.posterUrl || ''}
-                  watchKey={`stremio:${type}:${id}:${selectedSeason}:${selectedEpisodeNumber}`}
-                  sources={watchSources}
-                  activeSource={streamIndex}
-                  onPickSource={handlePickSource}
-                  onAutoFallback={handleAutoFallback}
-                  nextEpisode={null}
-                  onError={handlePlaybackError}
+                <JashPlayer
+                  key={`stremio:${type}:${id}:${selectedSeason}:${selectedEpisodeNumber}`}
+                  source={{
+                    url: activeStream.url,
+                    label: watchSources[streamIndex]?.label || '',
+                    sizeBytes: Number(activeStream.sizeBytes) || 0,
+                  }}
+                  display={{
+                    title: activePlayerTitle,
+                    subtitle: currentEpisodeInfo ? `S${currentEpisodeInfo.season} E${currentEpisodeInfo.episode}` : '',
+                    poster: currentEpisodeInfo?.thumbnail || item?.backdropUrl || item?.posterUrl || '',
+                    aspect: 'fill',
+                  }}
+                  library={{
+                    watchKey: `stremio:${type}:${id}:${selectedSeason}:${selectedEpisodeNumber}`,
+                    entry: libraryEntry,
+                  }}
+                  lineup={{
+                    sources: watchSources,
+                    activeIndex: streamIndex,
+                    onPickSource: handlePickSource,
+                    nextEpisode: nextEpisodeTarget,
+                  }}
+                  on={{
+                    onError: (info) => handlePlaybackError(info?.message),
+                    // A dead stream should hop to the next provider stream, the
+                    // way the old auto-fallback hook did — but with the position kept.
+                    onFatal: () => handleAutoFallback(),
+                  }}
+                  className="h-full w-full"
                 />
               ) : null}
               {streamStatus === 'loading' ? <div className="absolute inset-0 grid place-items-center bg-black/50"><span className="rounded-full bg-black/80 px-5 py-3 text-sm font-bold">Loading Stremio stream...</span></div> : null}
