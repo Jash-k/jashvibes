@@ -64,6 +64,7 @@ import {
   useWakeLock,
 } from './usePlayerEnvironment';
 import { usePlayerGestures } from './usePlayerGestures';
+import { aspectLabel, isAspectMode, pictureStyle } from '@/lib/player/aspect';
 
 const HIDE_DELAY_MS = 4000;
 const AUTO_ADVANCE_LEAD_SECONDS = 10;
@@ -909,6 +910,37 @@ export function JashPlayer(props) {
 
   // ----------------------------------------------------------------- derived UI
   const commandList = useMemo(() => Object.entries(COMMANDS).map(([name, command]) => ({ name, ...command })), []);
+
+  // A sheet is modal, so Escape must close it whether or not the player still holds focus — losing
+  // that focus is easy (clicking a rail row, tabbing out) and with the old page-wide backdrop it left
+  // the whole site unclickable with nothing on screen to click: the reported "opened and freezed".
+  useEffect(() => {
+    if (!menu && !contextMenu) return undefined;
+    const onDocKey = (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      setMenu(null);
+      setContextMenu(null);
+    };
+    document.addEventListener?.('keydown', onDocKey, true);
+    return () => document.removeEventListener?.('keydown', onDocKey, true);
+  }, [contextMenu, menu]);
+
+  // Say it once, at the moment the scrubber starts lying, rather than every frame afterwards.
+  const seekRefusedNotedRef = useRef(false);
+  useEffect(() => {
+    if (!engine.seekRefused) {
+      seekRefusedNotedRef.current = false;
+      return;
+    }
+    if (seekRefusedNotedRef.current) return;
+    seekRefusedNotedRef.current = true;
+    setNotice({
+      tone: 'warn',
+      text: 'This host ignores byte-range requests, so seeking is limited to the part already downloaded. Playback will not restart from 0.',
+    });
+  }, [engine.seekRefused]);
   const qualityLabel = prefs.qualityAuto || !prefs.qualityHeight ? 'Auto' : Number(prefs.qualityHeight) >= 2160 ? '4K' : `${prefs.qualityHeight}p`;
 
   const subtitleOn = (tracks.text || []).some((track) => track.active) || Boolean(engine.externalSubtitle);
@@ -929,6 +961,9 @@ export function JashPlayer(props) {
   }, [copyText, display.title, engine, frozenFrame, reportDead, rotateSource, snapshot, sourceUrls.length, title, toggleFreeze, url]);
 
   // ---------------------------------------------------------------------- render
+  // The viewer's picture choice (Fill / 4:3 / scope / stretch…) is inline style, so it beats the
+  // class-level `object-contain` without re-laying out the frame. `auto` returns {} and the class wins.
+  const aspectMode = isAspectMode(prefs.aspect) ? prefs.aspect : 'auto';
   const videoNode = children || (
     <video
       ref={setVideoRef}
@@ -936,6 +971,7 @@ export function JashPlayer(props) {
       autoPlay={autoPlay}
       preload="auto"
       className="absolute inset-0 h-full w-full bg-black object-contain"
+      style={pictureStyle(aspectMode)}
       onClick={coarse ? undefined : () => runCommand('togglePlay')}
     />
   );
@@ -1142,6 +1178,7 @@ export function JashPlayer(props) {
           <div
             ref={trackRef}
             className="group/track relative -my-2 cursor-pointer py-3"
+            title={engine.seekRefused ? 'This host ignores byte-range requests: you can scrub within what has downloaded' : undefined}
             onPointerDown={onTrackDown}
             onPointerMove={onTrackMove}
             onPointerUp={onTrackUp}
@@ -1167,6 +1204,11 @@ export function JashPlayer(props) {
               style={{ left: `${playedRatio * 100}%` }}
             />
             <ScrubPreview preview={preview} poster={display.poster || poster} seconds={preview ? { time: preview.time } : null} />
+            {engine.seekRefused ? (
+              <p className="pointer-events-none absolute -top-3 right-0 rounded-full bg-black/70 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-200/85">
+                scrub limited to downloaded
+              </p>
+            ) : null}
           </div>
         ) : live ? (
           <LiveBadge
@@ -1314,6 +1356,12 @@ export function JashPlayer(props) {
             engine.startOver();
           }}
           onOpenShortcuts={() => setMenu('shortcuts')}
+          aspect={aspectMode}
+          onPickAspect={(value) => {
+            if (!isAspectMode(value)) return;
+            engine.setPref('aspect', value);
+            setNotice({ tone: 'info', text: `Aspect ratio: ${aspectLabel(value)}` });
+          }}
           canPip={canPip}
           pipActive={pipActive}
           onTogglePip={() => togglePip()}

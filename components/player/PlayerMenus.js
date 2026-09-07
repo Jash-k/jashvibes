@@ -10,6 +10,7 @@
 import { memo, useEffect, useRef } from 'react';
 import { Icon, PATHS } from './PlayerIcons';
 import { fmtTime } from '@/lib/player/labels';
+import { ASPECT_MODES } from '@/lib/player/aspect';
 
 export const Menu = memo(function Menu({ title, subtitle, onClose, children, wide = false, coarse = false, footer }) {
   const panelRef = useRef(null);
@@ -23,21 +24,34 @@ export const Menu = memo(function Menu({ title, subtitle, onClose, children, wid
       }
     };
     node?.addEventListener?.('keydown', onKey);
+    // Focus the dialog: a sheet you cannot reach with the keyboard is a sheet you cannot leave with it.
+    node?.focus?.({ preventScroll: true });
     return () => node?.removeEventListener?.('keydown', onKey);
   }, [onClose]);
 
   const sheet = coarse
-    ? 'absolute inset-x-0 bottom-0 z-50 max-h-[70%] overflow-hidden rounded-t-3xl border-t border-white/10 bg-zinc-950/97 pb-[max(env(safe-area-inset-bottom),16px)] shadow-[0_-18px_60px_rgba(0,0,0,.8)]'
+    ? 'absolute inset-x-0 bottom-0 z-50 max-h-[min(70%,calc(100%-3rem))] overflow-hidden rounded-t-3xl border-t border-white/10 bg-zinc-950/97 pb-[max(env(safe-area-inset-bottom),16px)] shadow-[0_-18px_60px_rgba(0,0,0,.8)]'
     // Anchored inside the player box rather than floating above it: the sheets are
     // siblings of the control bar, so an outside-above anchor put the whole menu
     // outside the frame, where `overflow-hidden` clipped it. That is why clicking a
     // control on desktop looked like "nothing happened".
-    : `absolute bottom-28 right-2 z-50 max-h-[70%] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/95 shadow-[0_18px_60px_rgba(0,0,0,0.7)] backdrop-blur ${wide ? 'w-[19rem]' : 'w-48'}`;
+    : `absolute bottom-28 right-2 z-50 max-h-[min(70%,calc(100%-8rem))] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/95 shadow-[0_18px_60px_rgba(0,0,0,0.7)] backdrop-blur ${wide ? 'w-[19rem]' : 'w-48'}`;
 
   return (
     <>
-      <div data-dvp="controls" className="fixed inset-0 z-40" onClick={onClose} onContextMenu={(event) => { event.preventDefault(); onClose?.(); }} />
-      <div ref={panelRef} data-dvp="controls" className={`${sheet} text-white`} role="dialog" aria-label={title}>
+            {/* The dismissal layer belongs to the player frame, not to the site. A `fixed inset-0` version
+          made the whole page unclickable while a sheet was open — invisible, because nothing dims it —
+          so a sheet that failed to render (or was clipped by the frame) looked exactly like a frozen
+          page, with no Escape and no close button in sight. */}
+      <div data-dvp="controls" className="absolute inset-0 z-40 bg-black/35" onClick={onClose} onContextMenu={(event) => { event.preventDefault(); onClose?.(); }} />
+      <div
+        ref={panelRef}
+        data-dvp="controls"
+        tabIndex={-1}
+        className={`${sheet} text-white outline-none`}
+        role="dialog"
+        aria-label={title}
+      >
         <div className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-3">
           <div className="min-w-0">
             <p className="text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-300/85">{title}</p>
@@ -52,7 +66,7 @@ export const Menu = memo(function Menu({ title, subtitle, onClose, children, wid
             <Icon d={PATHS.close} className="h-4 w-4" />
           </button>
         </div>
-        <div className="max-h-[52vh] overflow-y-auto overscroll-contain py-1">{children}</div>
+        <div className="max-h-[min(52vh,calc(100%-6rem))] overflow-y-auto overscroll-contain py-1">{children}</div>
         {footer ? <div className="border-t border-white/10 px-4 py-2.5 text-[11px] font-semibold text-white/55">{footer}</div> : null}
       </div>
     </>
@@ -411,6 +425,8 @@ export const SettingsMenu = memo(function SettingsMenu({
   onToggleFreeze,
   onRestart,
   onOpenShortcuts,
+  aspect = 'auto',
+  onPickAspect,
   canPip = false,
   pipActive = false,
   onTogglePip,
@@ -445,6 +461,25 @@ export const SettingsMenu = memo(function SettingsMenu({
             {height}p
           </MenuItem>
         ))}
+      </MenuSection>
+
+      <MenuSection label="Aspect ratio" note="Applied to the picture, remembered on this device. Fill crops the black bars; the fixed ratios letterbox the frame instead.">
+        <div className="flex flex-wrap gap-1.5">
+          {ASPECT_MODES.map((mode) => (
+            <button
+              key={mode.id}
+              type="button"
+              onClick={() => onPickAspect?.(mode.id)}
+              aria-pressed={aspect === mode.id}
+              title={mode.hint ? `${mode.label} — ${mode.hint}` : mode.label}
+              className={`min-h-[36px] rounded-full border px-2.5 py-1 text-[11px] font-black transition ${
+                aspect === mode.id ? 'border-fuchsia-300/60 bg-fuchsia-500/20 text-fuchsia-50' : 'border-white/10 bg-white/[0.03] text-white/70 hover:border-white/30 hover:text-white'
+              }`}
+            >
+              {mode.label}
+            </button>
+          ))}
+        </div>
       </MenuSection>
 
       <MenuSection label="Speed">

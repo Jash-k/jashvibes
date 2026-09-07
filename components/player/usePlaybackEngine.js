@@ -27,6 +27,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  clampSeekTarget,
   clampToSeekWindow,
   derivePlaybackModel,
   detectKind,
@@ -160,6 +161,12 @@ export function usePlaybackEngine(options = {}) {
   // answer the first `currentTime` write with a clamped position; one re-issue
   // usually lands it, and it is capped so we can never fight the user in a loop.
   const seekVerifyRef = useRef(null);
+  // Set once a seek has been *demonstrated* to be refused: asked for X, landed nowhere near X, twice.
+  // A host that supports ranges either lands or errors, so the only explanation left is no byte-range
+  // support — and the honest response is to stop pretending the file is scrubable, not to reload it.
+  const noRangeRef = useRef(false);
+  const noRangeHoldRef = useRef(0);
+  const [seekRefused, setSeekRefused] = useState(false);
   const lastPositionRef = useRef(0);
   const lastSampleTimeRef = useRef(0);
   const dropDrmRef = useRef(false);
@@ -315,20 +322,24 @@ export function usePlaybackEngine(options = {}) {
   const seekTo = useCallback((target) => {
     const el = videoRef.current;
     if (!el) return false;
-    const clamped = clampToSeekWindow(el, Number(target));
+    const asked = Number(target);
+    const clamped = clampSeekTarget(el, asked, { noRange: noRangeRef.current });
     if (clamped === null) return false;
+    if (noRangeRef.current && Number.isFinite(asked) && Math.abs(clamped - asked) > 1) {
+      commitStatus('ready', 'This host ignores byte-range requests — seeking is limited to what has downloaded.');
+    }
     try {
       el.currentTime = clamped;
       setTime(clamped);
       lastPositionRef.current = clamped;
       // Give the fetch a chance before any recovery may fire (see SEEK_GRACE_MS).
       seekGraceUntilRef.current = Date.now() + SEEK_GRACE_MS;
-      seekVerifyRef.current = { target: clamped, tries: 0 };
+      seekVerifyRef.current = { target: clamped, tries: 0, asked };
       return true;
     } catch {
       return false;
     }
-  }, []);
+  }, [commitStatus]);
 
   const seekBy = useCallback((delta) => {
     const el = videoRef.current;
@@ -643,6 +654,13 @@ export function usePlaybackEngine(options = {}) {
 
     stallSamplesRef.current = 0;
     lastSampleTimeRef.current = Number(el.currentTime) || 0;
+    // Evidence is per-source, not per-reload: a recovery attempt on the same URL must keep the refusal
+    // (otherwise the ladder and the seek fight each other forever), while a new source starts clean.
+    if (reason === 'initial' && noRangeRef.current) {
+      noRangeRef.current = false;
+      noRangeHoldRef.current = 0;
+      setSeekRefused(false);
+    }
     setErrorInfo(null);
     setAttemptNote('');
     commitStatus(reason === 'initial' ? 'loading' : 'recovering', reason === 'initial' ? 'Loading stream…' : 'Recovering…');
@@ -884,7 +902,7 @@ export function usePlaybackEngine(options = {}) {
       live,
       model: { live, canSeek: derivePlaybackModel(el).canSeek },
       error: mapped,
-      seeking: Boolean(el?.seeking) || Date.now() < seekGraceUntilRef.current,
+      seeking: Boolean(el?.seeking) || Date.now() < seekGraceUntilRef.current || Date.now() < noRangeHoldRef.current,
     });
     caps.hasPolicyRecovery = typeof activePolicy?.recover === 'function' && Boolean(activePolicy.hasRecovery?.());
     if (isDrmConfigError(mapped) && !dropDrmRef.current) caps.hasDrm = true;
@@ -1084,7 +1102,19 @@ export function usePlaybackEngine(options = {}) {
       if (!verify) return;
       const landed = Number(el.currentTime) || 0;
       const model = derivePlaybackModel(el);
-      if (!model.live && Math.abs(landed - verify.target) > 1.5 && verify.tries < 1 && verify.target < (Number(el.duration) || Infinity) - 1) {
+      const missed = Math.abs(landed - verify.target) > 1.5;
+      if (missed && verify.tries >= 1 && !noRangeRef.current && !model.live) {
+        noRangeRef.current = true;
+        setSeekRefused(true);
+        // Hold the recovery ladder while playback continues from wherever the file actually is. A
+        // reload on a host with no ranges restarts the download, which is exactly the "starts from 0"
+        // complaint — so the ladder has to be told this stall is explained.
+        noRangeHoldRef.current = Date.now() + 20_000;
+        commitStatus('ready', 'This host ignores byte-range requests — forward seeks are limited to what has downloaded.');
+        seekVerifyRef.current = null;
+        return;
+      }
+      if (!model.live && missed && verify.tries < 1 && verify.target < (Number(el.duration) || Infinity) - 1) {
         // We asked for X and the element reported Y — it refused the range rather
         // than finishing the seek. Push it once more before anything else decides
         // the file is broken (that decision is what used to restart playback).
@@ -1432,6 +1462,11 @@ export function usePlaybackEngine(options = {}) {
       setResumePrompt(null);
       seekTo(0);
     },
+    /**
+     * True once the host has refused a seek twice. The bar uses it to show why the scrubber only
+     * reaches as far as the download, instead of looking broken.
+     */
+    seekRefused,
   };
 }
 

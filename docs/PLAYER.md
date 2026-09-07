@@ -263,6 +263,18 @@ on; and a pointer-less device still gets every command that has a key binding.
   carries the position across the `src` re-attach (`positionPreserved`) instead
   of restarting the file. A genuinely dead element still reaches the ladder, so
   this is a delay, not a disable.
+- **Some hosts ignore `Accept-Ranges`, and that cannot be detected from the URL.** A Telegram or CDN
+  file that restarts the download instead of serving a range looks identical to a broken stream: the
+  seek lands at 0, the file plays, and the ladder reloads it — which is the complaint itself, "some
+  streams seek, some restart from 0". `capabilitiesFor` takes no hint about range support, and a HEAD
+  request per source is not free on a metered phone. So the engine *earns* the verdict: `seekVerifyRef`
+  remembers what was **asked** (not what was clamped to), one retry, and a second consecutive miss on a
+  non-live finite file sets `noRangeRef`. From then on `clampSeekTarget(…, { noRange: true })` keeps
+  forward seeks inside the downloaded part (5 s of headroom, never behind `currentTime`), `seekRefused`
+  is exposed so the scrubber says "scrub limited to downloaded", and `noRangeHoldRef` holds the ladder
+  20 s — during which a stall is explained rather than "fixed" by a reload that restarts the file at 0.
+  The verdict resets when a *new* source loads (`reason === 'initial'`), never on a reload of the same
+  one, or the ladder and the seek would fight each other forever.
 - **One entry point for the rest**: the bar is play, ±10, time, volume (desktop),
   the burger and fullscreen. The burger is labelled with the current quality and
   opens `SettingsMenu`, whose first section is the rendition list. Freeze frame, PiP,
@@ -276,7 +288,7 @@ on; and a pointer-less device still gets every command that has a key binding.
 
 ## 6b. The settings sheet (`SettingsMenu`)
 
-Quality (inline) · Speed (Slower / Normal / Faster + chips) · Audio (only when the file has more
+Quality (inline) · Aspect ratio (Auto / Fill / 16:9 / 4:3 / 2.39:1 / 9:16 / Stretch) · Speed (Slower / Normal / Faster + chips) · Audio (only when the file has more
 than one track) · Subtitles (on/off, import, delay & style) · Source (only when there are
 mirrors) · This video (freeze frame, restart from 0, PiP, AirPlay) · Interface (stats).
 
@@ -284,7 +296,19 @@ On desktop the panel anchors **inside** the player box (`bottom-28 right-2`), no
 sheets are siblings of the control bar, so an outside-above anchor (`bottom-full`) placed them
 outside a frame that is `overflow-hidden` — that is what "I clicked settings and nothing
 happened" was. Both the panel and its backdrop carry `data-dvp="controls"`, so they are treated
-as chrome by the pointer/gesture layer instead of as the video surface.
+as chrome by the pointer/gesture layer instead of as the video surface. The backdrop is `absolute`, not
+`fixed`: a page-wide invisible blocker meant that if the panel was ever clipped or failed to render, the
+site stayed unclickable with nothing on screen to click — and Escape only worked while the player still
+had focus, which a click on the channel rail takes away. That pair is what "the shortcut menu opens and
+freezes" was. Now the panel takes focus on mount (`tabIndex={-1}` + `focus()`) and `JashPlayer` listens
+for Escape on the document while `menu`/`contextMenu` is set.
+
+`aspect` in `jash:player:v1` is the *picture* inside the frame (`lib/player/aspect.js` → inline style on
+the `<video>`), a different thing from the `aspect` **prop** a page passes to size the *box* (§3):
+`/live`, `/watch`, `/classics`, `/sports/player` and `/stremio-watch` all hand the chrome `'fill'` to say
+"this shell is 16:9", and forcing the picture to 4:3 letterboxes inside that shell instead of resizing it.
+A stale stored value falls back to `auto` via `isAspectMode`, so a preference written by a future build can
+never produce a zero-height frame.
 - **Preferences** (`jash:player:v1`) are deliberately **global** — one speed,
   volume, quality cap and subtitle style for the whole app, not per host or per
   title. Per-source memory was planned and dropped: on a metered connection the
