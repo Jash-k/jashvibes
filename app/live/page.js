@@ -4,6 +4,7 @@ import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import JashPlayer from '@/components/player/JashPlayer';
+import { DayStrip, GuideNowLine, GuideStatus, ProgrammeCard, SourceBadges, useLiveGuide } from '@/components/live/LiveGuide';
 import { createLiveTvPolicy, isPocketChannel } from '@/lib/player/policy/liveTv';
 import PlayerIncidents from '@/components/player/PlayerIncidents';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
@@ -22,6 +23,7 @@ import {
 } from '@/lib/jioPlayback';
 
 const FAVORITES_KEY = 'jash_live_tv_favorites';
+const LIVE_GUIDE_ROW_STORAGE_KEY = 'jash_live_guide_row';
 const LIVE_CACHE_KEY = 'jash:live:v10-manual-catalogs';
 
 function normalize(value = '') {
@@ -69,6 +71,29 @@ export default function LiveTVPage() {
   const [favorites, setFavorites] = useState([]);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [serviceOpen, setServiceOpen] = useState(false);
+  // Phone-only: the guide strip sits beside the live tile instead of below it. Persisted, because the
+  // choice is per-device — a desktop has no reason to inherit it, and a page that re-stacks itself on
+  // reload loses the place the viewer came back to.
+  const [guideCompact, setGuideCompact] = useState(false);
+  useEffect(() => {
+    try {
+      setGuideCompact(window.localStorage.getItem(LIVE_GUIDE_ROW_STORAGE_KEY) === '1');
+    } catch {
+      /* private mode: stay stacked, which is the safe default on a small screen */
+    }
+  }, []);
+  const toggleGuideRow = useCallback(() => {
+    setGuideCompact((current) => {
+      const next = !current;
+      try {
+        if (next) window.localStorage.setItem(LIVE_GUIDE_ROW_STORAGE_KEY, '1');
+        else window.localStorage.removeItem(LIVE_GUIDE_ROW_STORAGE_KEY);
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     try {
@@ -208,6 +233,24 @@ export default function LiveTVPage() {
     return sortChannelsForCatalog(filtered, category);
   }, [channels, category, query, showFavoritesOnly, favoriteSet]);
 
+  // Deliberately fed the WHOLE lineup, not `filteredChannels`: the response is a few KB, so searching
+  // and filtering stay instant instead of turning into a request per keystroke.
+  const guide = useLiveGuide({ channels, activeId: active?.id || '' });
+  const guideCoverage = useMemo(() => {
+    const rows = [...guide.rows.values()];
+    return { linked: rows.filter((row) => row.matched).length, unlinked: rows.filter((row) => !row.matched).length };
+  }, [guide.rows]);
+  const [guideRefreshing, setGuideRefreshing] = useState(false);
+  const refreshGuideFeed = useCallback(async () => {
+    setGuideRefreshing(true);
+    try {
+      const ok = await guide.refresh();
+      return ok;
+    } finally {
+      setGuideRefreshing(false);
+    }
+  }, [guide]);
+
   const activeFilteredIndex = useMemo(() => {
     if (!active?.id) return -1;
     return filteredChannels.findIndex((channel) => channel.id === active.id);
@@ -314,8 +357,14 @@ export default function LiveTVPage() {
       </header>
 
       <section className="mx-auto flex max-w-7xl flex-col items-stretch gap-3 px-3 py-3 sm:gap-4 sm:px-6 sm:py-5 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(300px,22rem)] lg:items-start xl:grid-cols-[minmax(0,1fr)_minmax(320px,24rem)] lg:px-8">
-        <div className="contents min-w-0 space-y-3 sm:space-y-4 lg:block lg:sticky lg:top-24 lg:self-start lg:space-y-3">
-          <div id="live-player-shell" className="sticky top-0 sm:top-[var(--live-header-h,84px)] z-40 overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black/50 fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0 sm:rounded-3xl lg:static">
+        <div className="contents min-w-0 space-y-3 sm:space-y-4 lg:block lg:min-h-0 lg:sticky lg:top-[calc(var(--live-header-h,84px)+1rem)] lg:self-start lg:space-y-3">
+          {/* R1 phone row: the live tile and one line of guide share a single sticky strip, so the
+              channel, what is on and the minutes left are all above the fold while the video keeps its
+              16:9 letterbox. One <video> in a flex container — the guide is a neighbour, never a wrapper,
+              because a wrapper that re-renders around the player is how a seek restarts a Telegram file.
+              At >=sm the strip is a plain column again and the card sits under the player. */}
+          <div className={`sticky top-0 z-40 flex flex-col gap-2 sm:top-[var(--live-header-h,84px)] lg:static ${guideCompact ? 'max-sm:flex-row max-sm:items-stretch' : ''}`}>
+            <div id="live-player-shell" className={`overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black/50 fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0 sm:rounded-3xl ${guideCompact ? 'max-sm:w-[54%] max-sm:shrink-0 max-sm:self-center' : ''}`}>
             <div className="relative aspect-video h-full w-full bg-black fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:aspect-auto">
               {active?.playable && livePolicy ? (
                 <JashPlayer
@@ -344,16 +393,52 @@ export default function LiveTVPage() {
                 </div>
               )}
 
+              </div>
             </div>
+            {guideCompact ? (
+              <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5 self-center py-0.5">
+                <p className="truncate text-[11px] font-black text-white">{active?.name || 'Tamil Live TV'}</p>
+                <GuideNowLine row={guide.get(active?.id)} at={guide.at} />
+                <div className="flex items-center gap-1.5">
+                  <SourceBadges channel={active || {}} row={guide.get(active?.id)} />
+                  <button
+                    type="button"
+                    onClick={toggleGuideRow}
+                    className="ml-auto grid h-6 w-6 shrink-0 place-items-center rounded-lg border border-white/15 bg-white/[0.06] text-[11px] font-black text-white transition hover:border-fuchsia-400/60"
+                    title="Put the guide back under the player"
+                    aria-label="Expand the guide below the player"
+                  >
+                    ⤢
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-zinc-950/80 p-3 sm:rounded-3xl sm:p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <div className="flex items-center gap-2.5"><h1 className="truncate text-xl font-black text-white sm:text-2xl">{active?.name || 'Tamil Live TV'}</h1><span className="jv-badge-live shrink-0"><span className="jv-livepulse" />Live</span></div>
-                <p className="mt-1 text-xs font-semibold text-zinc-400 sm:text-sm">
-                  {active ? `${getChannelCatalogIds(active).map(catalogLabel).join(' + ') || 'Initial Jio'} • ${active.source || 'Jio'} • ${(active.format || 'HLS').toUpperCase()}${active.keyId && active.key ? ' • ClearKey DRM' : ''}` : `Loaded ${channels.length} manually mapped channels`}
+                <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-zinc-400 sm:text-sm">
+                  <span className="truncate">{active ? `${getChannelCatalogIds(active).map(catalogLabel).join(' + ') || 'Initial Jio'} • ${active.source || 'Jio'}${active.keyId && active.key ? ' • ClearKey DRM' : ''}` : `Loaded ${channels.length} manually mapped channels`}</span>
+                  <button
+                    type="button"
+                    onClick={toggleGuideRow}
+                    className="shrink-0 rounded-full border border-white/12 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-zinc-300 sm:hidden"
+                    title="Put the guide beside the player"
+                  >
+                    {guideCompact ? 'below' : 'beside'}
+                  </button>
                 </p>
+                <ProgrammeCard
+                  className="mt-2.5"
+                  loading={guide.loading}
+                  row={guide.get(active?.id)}
+                  channel={active || {}}
+                  status={guide.status}
+                  at={guide.at}
+                  onOpenPanel={() => setServiceOpen(true)}
+                />
               </div>
             </div>
 
@@ -394,6 +479,8 @@ export default function LiveTVPage() {
               </div>
             </div>
           </div>
+
+          <DayStrip row={guide.get(active?.id)} at={guide.at} loading={guide.loading} />
         </div>
 
         <aside className="min-w-0 space-y-3 lg:w-full">
@@ -446,6 +533,9 @@ export default function LiveTVPage() {
               >
                 ★
               </button>
+            </div>
+            <div className="mt-2 border-t border-white/[0.06] pt-2">
+              <GuideStatus status={guide.status} linked={guideCoverage.linked} unlinked={guideCoverage.unlinked} onRefresh={refreshGuideFeed} refreshing={guideRefreshing} />
             </div>
           </div>
 
@@ -502,11 +592,14 @@ export default function LiveTVPage() {
                         {isActive ? <span className="h-2 w-2 rounded-full bg-red-500 animate-ping" /> : null}
                       </div>
                       <p className="mt-1 truncate text-xs text-zinc-400">{getChannelCatalogIds(channel).map(catalogLabel).join(' + ') || 'Initial Jio'} • {channel.source || 'Jio'}</p>
-                      <div className="mt-1 flex items-center gap-1.5">
-                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${channel.playable ? 'bg-green-500/15 text-green-300 border border-green-500/20' : 'bg-orange-500/15 text-orange-300 border border-orange-500/20'}`}>{(channel.format || 'HLS').toUpperCase()}</span>
-                        {channel.keyId && channel.key ? <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[9px] font-black text-blue-200 border border-blue-500/20">DRM</span> : null}
-                        <span className="text-[10px] font-bold text-zinc-500">LIVE HD</span>
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-1.5">
+                          <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${channel.playable ? 'bg-green-500/15 text-green-300 border border-green-500/20' : 'bg-orange-500/15 text-orange-300 border border-orange-500/20'}`}>{(channel.format || 'HLS').toUpperCase()}</span>
+                          {channel.keyId && channel.key ? <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[9px] font-black text-blue-200 border border-blue-500/20">DRM</span> : null}
+                        </span>
+                        <SourceBadges channel={channel} row={guide.get(channel.id)} />
                       </div>
+                      <GuideNowLine row={guide.get(channel.id)} at={guide.at} className="mt-1.5" />
                     </div>
                   </button>
 
@@ -533,6 +626,15 @@ export default function LiveTVPage() {
       </section>
       <LiveServicePanel
         open={serviceOpen}
+        epg={{
+          rows: guide.rows,
+          status: guide.status,
+          error: guide.error,
+          linked: guideCoverage.linked,
+          unlinked: guideCoverage.unlinked,
+          refresh: refreshGuideFeed,
+          refreshing: guideRefreshing,
+        }}
         onClose={() => { setServiceOpen(false); loadChannelsForSource(); }}
         onPreview={(channel) => selectChannel(channel)}
         onMainRefresh={() => loadChannelsForSource('all')}
@@ -542,6 +644,191 @@ export default function LiveTVPage() {
 }
 
 const SERVICE_TOKEN_KEY = 'jash_live_service_token';
+
+/**
+ * Guide (EPG) tab of the live service panel: the feed's health, how much of the published lineup
+ * resolves to it, and the manual binding picker for the rest.
+ *
+ * Two rules, both learned from this app being a single-tenant free-tier box:
+ *  • the only write here is `tvgId` on the channel document — the guide index is never persisted, so
+ *    a mapping costs one PATCH and nothing else;
+ *  • the lookup is served from the already-parsed day index (in memory, one hour TTL), so opening
+ *    this tab does not download a 65 MB feed. "Refresh feed now" is the one button that does, and it
+ *    goes through the same single-flight cache the page polls, so it cannot stack up.
+ */
+function LiveEpgPanel({ channels = [], onAction, epg = null }) {
+  const [scope, setScope] = useState('all');
+  const [query, setQuery] = useState('');
+  const [editing, setEditing] = useState('');
+  const [term, setTerm] = useState('');
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [note, setNote] = useState('');
+  const status = epg?.status || null;
+
+  const rows = useMemo(() => {
+    const needle = normalize(query);
+    return channels
+      .filter((channel) => channel.channelId || channel.id)
+      .map((channel) => ({ channel, row: epg?.rows?.get?.(channel.channelId || channel.id) || null }))
+      .filter(({ channel, row }) => {
+        if (scope === 'unlinked' && row?.matched) return false;
+        if (scope === 'linked' && !row?.matched) return false;
+        if (!needle) return true;
+        return normalize(`${channel.name} ${channel.tvgId || ''} ${row?.epgName || ''}`).includes(needle);
+      });
+  }, [channels, epg?.rows, scope, query]);
+
+  useEffect(() => {
+    const value = term.trim();
+    if (value.length < 2) {
+      setResults([]);
+      setSearching(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setSearching(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/live-epg/guide?lookup=${encodeURIComponent(value)}`, { cache: 'no-store' });
+        const data = await response.json().catch(() => ({}));
+        if (cancelled) return;
+        setResults(data.results || []);
+        if (!response.ok || data.ok === false) setNote(data.error || 'Guide lookup failed');
+      } catch (error) {
+        if (!cancelled) {
+          setResults([]);
+          setNote(`Guide lookup failed: ${error.message || 'unknown error'}`);
+        }
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 250); // the feed carries 1,190 names; one request per keystroke would be pointless work
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [term]);
+
+  async function bind(channel, epgId, epgName) {
+    try {
+      await onAction?.(channel, 'setEpg', { epgId, epgName });
+      setEditing('');
+      setTerm('');
+      setResults([]);
+      setNote(epgId ? `${channel.name} → ${epgName || epgId}. The next guide poll picks it up.` : `${channel.name} unlinked from the guide.`);
+    } catch (error) {
+      setNote(error.message || 'Could not save the guide binding');
+    }
+  }
+
+  const linked = epg?.linked ?? 0;
+  const unlinked = epg?.unlinked ?? 0;
+  const ageMinutes = status?.ageMs != null ? Math.round(status.ageMs / 60000) : null;
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-black text-white">Live TV guide (XMLTV)</p>
+            <p className="mt-1 text-xs leading-5 text-zinc-400">
+              Pocket-EPG is fetched once per hour and parsed once per day; <code className="rounded bg-black/50 px-1">LIVE_EPG_URL</code> overrides the feed and <code className="rounded bg-black/50 px-1">LIVE_EPG_TTL_MS</code> the interval.
+              Nothing lands in MongoDB — a listing is derived data, so a refresh can always redo it.
+            </p>
+            <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-bold text-zinc-300">
+              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-emerald-200">{linked} linked</span>
+              <span className={`rounded-full px-2 py-0.5 ${unlinked ? 'bg-orange-500/15 text-orange-200' : 'bg-white/[0.06] text-zinc-400'}`}>{unlinked} to map</span>
+              <span className="text-zinc-500">
+                {ageMinutes == null ? 'index loading' : `index ${ageMinutes} min old`}
+                {status?.feedChannels ? ` • ${status.feedChannels} feed channels` : ''}
+                {status?.feedBytes ? ` • ${(status.feedBytes / 1e6).toFixed(1)} MB` : ''}
+              </span>
+            </p>
+            {status?.url ? <p className="mt-1 truncate text-[10px] font-semibold text-zinc-500">{status.url}</p> : null}
+            {status?.error ? <p className="mt-1 text-[11px] font-bold text-orange-300">last fetch failed: {status.error} (serving the previous listing)</p> : null}
+          </div>
+          <button
+            onClick={epg?.refresh}
+            disabled={!epg?.refresh || epg?.refreshing}
+            className="rounded-2xl border border-purple-300/30 bg-purple-500/10 px-3 py-2 text-xs font-black text-purple-100 transition hover:border-purple-300/70 disabled:opacity-50"
+            title="Re-download the feed now. Shares the page's single-flight cache, so it cannot stack up."
+          >
+            {epg?.refreshing ? 'Refreshing…' : 'Refresh feed now'}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {[['all', `All · ${channels.length}`], ['unlinked', `Needs mapping · ${unlinked}`], ['linked', `Linked · ${linked}`]].map(([id, label]) => (
+          <button key={id} onClick={() => setScope(id)} className={`rounded-2xl border px-3 py-1.5 text-xs font-black transition ${scope === id ? 'border-purple-400 bg-purple-500/20 text-purple-100' : 'border-white/10 bg-white/[0.04] text-zinc-300'}`}>{label}</button>
+        ))}
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter by channel" className="min-w-[10rem] flex-1 rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-purple-400" />
+      </div>
+
+      {note ? <p className="rounded-2xl bg-white/[0.04] p-3 text-xs leading-5 text-zinc-300">{note}</p> : null}
+      {!channels.length ? <p className="rounded-2xl border border-white/10 p-5 text-center text-sm text-zinc-500">No published channels for this profile yet — map channels first, then bind them to the guide.</p> : null}
+
+      <div className="space-y-2">
+        {rows.map(({ channel, row }) => (
+          <div key={channel.channelId || channel.id} className="rounded-3xl border border-white/10 bg-black/25 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-black text-white">{channel.name}</p>
+                <p className="mt-0.5 truncate text-[11px] font-semibold text-zinc-500">
+                  {channel.source || 'source'}
+                  {channel.tvgId ? ` • bound to ${channel.tvgId}` : ' • no explicit binding'}
+                  {row?.matched && row.via !== 'tvgId' ? ` • matched by ${row.via} → ${row.epgName || row.epgId}` : ''}
+                </p>
+                {row?.now ? <p className="mt-0.5 truncate text-[11px] font-bold text-zinc-300">now: {row.now.title}</p> : null}
+              </div>
+              <button
+                onClick={() => { setEditing(editing === (channel.channelId || channel.id) ? '' : (channel.channelId || channel.id)); setTerm(''); setResults([]); setNote(''); }}
+                className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-black text-zinc-200 transition hover:border-purple-300/60"
+              >
+                {row?.matched ? 'Change binding' : 'Map guide'}
+              </button>
+              {channel.tvgId ? (
+                <button onClick={() => bind(channel, '', '')} className="rounded-2xl border border-white/10 px-3 py-2 text-xs font-black text-zinc-400 transition hover:border-orange-300/60 hover:text-orange-200" title="Drop the explicit binding and fall back to name matching">
+                  Unlink
+                </button>
+              ) : null}
+            </div>
+
+            {editing === (channel.channelId || channel.id) ? (
+              <div className="mt-3 rounded-2xl border border-purple-300/20 bg-purple-500/[0.06] p-3">
+                <input
+                  autoFocus
+                  value={term}
+                  onChange={(event) => setTerm(event.target.value)}
+                  placeholder="Search the guide feed by name (2+ characters)"
+                  className="w-full rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-purple-400"
+                />
+                <p className="mt-2 text-[11px] font-semibold text-zinc-400">
+                  {searching ? 'Searching the parsed feed…' : term.trim().length < 2 ? 'Type at least two characters. Results come from the same day index the page uses.' : results.length ? `${results.length} match${results.length > 1 ? 'es' : ''}` : 'Nothing in the feed matches that name.'}
+                </p>
+                {results.length ? (
+                  <div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto pr-1">
+                    {results.map((item) => (
+                      <button key={item.id} onClick={() => bind(channel, item.id, item.name)} className="flex w-full items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-left transition hover:border-purple-300/60">
+                        {item.logo ? <img src={item.logo} alt="" className="h-6 w-6 shrink-0 rounded bg-black object-contain" loading="lazy" /> : null}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-black text-white">{item.name}</span>
+                          <span className="block truncate text-[10px] font-semibold text-zinc-500">id {item.id}</span>
+                        </span>
+                        {item.id === channel.tvgId ? <span className="shrink-0 rounded-full bg-purple-500/20 px-2 py-0.5 text-[9px] font-black text-purple-100">current</span> : null}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function ServicePreviewPlayer({ channel }) {
   // Same policy as the main panel, so a preview that works is a channel that
@@ -574,7 +861,7 @@ function ServicePreviewPlayer({ channel }) {
   );
 }
 
-function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
+function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null }) {
   const [token, setToken] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
@@ -833,7 +1120,9 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
           unmapped: Math.max(0, current.unmapped + (isMapped ? -1 : 1)),
         }));
       }
-      setMessage(action === 'swapCatalogPosition'
+      setMessage(action === 'setEpg'
+        ? `${updated.name} guide binding saved. Listings refresh with the next guide poll.`
+        : action === 'swapCatalogPosition'
         ? `${catalogLabel(patch.catalogId)} order updated.`
         : isMapped
           ? `${updated.name} mapped to ${getChannelCatalogIds(updated).map(catalogLabel).join(' + ')}.`
@@ -1029,6 +1318,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
                   ['selected', 'Catalog order'],
                   ['tools', 'Tools'],
                   ['duplicates', 'Duplicates'],
+                  ['epg', 'Guide (EPG)'],
                 ].map(([id, label]) => <button key={id} onClick={() => setTab(id)} className={`rounded-2xl px-4 py-3 text-left text-sm font-black ${tab === id ? 'bg-purple-500 text-black' : 'bg-white/[0.04] text-zinc-300'}`}>{label}</button>)}
               </div>
               <div className="mt-4 space-y-2">
@@ -1119,6 +1409,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh }) {
                 <button onClick={importBackup} className="rounded-2xl bg-purple-500 px-4 py-3 text-sm font-black text-black">Import backup</button>
               </div> : null}
 
+              {tab === 'epg' ? <LiveEpgPanel channels={selectedChannels} onAction={channelAction} epg={epg} /> : null}
               {tab === 'duplicates' ? <div className="space-y-3">{duplicates.map((group) => <div key={group.key} className="rounded-3xl border border-white/10 bg-white/[0.03] p-3"><p className="mb-2 text-sm font-black">{group.key} • {group.count}</p><div className="space-y-2">{group.channels.map((channel) => <ChannelManagerRow key={channel.channelId} channel={channel} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} />)}</div></div>)}{!duplicates.length ? <p className="rounded-2xl border border-white/10 p-5 text-center text-sm text-zinc-500">Click Find duplicates in Tools.</p> : null}</div> : null}
             </main>
 

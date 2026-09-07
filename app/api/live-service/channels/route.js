@@ -213,6 +213,11 @@ export async function PATCH(request) {
       }
 
       if (body.selected !== undefined && !catalogMutation) doc.selected = Boolean(body.selected);
+      // The guide binding is a user decision, so it must survive whatever the next source sync writes:
+      // tvgId is only re-derived when the field is empty (see lib/liveTv). An empty epgId is a real
+      // state — "no guide for this channel" — not a missing field, hence the explicit action check.
+      if (action === 'setEpg' || body.epgId !== undefined) doc.tvgId = String(body.epgId || '').trim().slice(0, 120);
+
       if (action === 'hide') doc.hidden = true;
       if (action === 'unhide') doc.hidden = false;
       if (action === 'favorite') doc.favorite = true;
