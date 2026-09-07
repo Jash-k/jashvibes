@@ -48,6 +48,10 @@ test('desktop layout: the left pane is unclipped, and the rail rows carry real l
   assert.match(page, /<GuideNowLine row=\{guide\.get\(channel\.id\)\}/, 'every rail row answers with its own schedule');
   assert.ok(!page.includes('>LIVE HD<'), 'the placeholder "LIVE HD" line is gone — a fake listing is worse than none');
   assert.match(page, /<GuideStatus/, 'the rail states how much of the lineup actually links');
+  // One live marker for the whole surface: the player owns it, the rail row marks the tuned channel
+  // with styling instead of a second pulsing dot.
+  assert.ok(!page.includes('animate-ping'), 'no ping dot in the channel list');
+  assert.ok(!page.includes('jv-badge-live'), 'no repeated Live pill under the player');
 });
 
 test('the guide is fetched once for the whole lineup, never per filter keystroke', () => {

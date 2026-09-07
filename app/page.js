@@ -677,7 +677,6 @@ export default function LandingPage() {
   const [movies, setMovies] = useState([]);
   const [series, setSeries] = useState([]);
   const [activeTab, setActiveTab] = useState('movies');
-  const [filterMode, setFilterMode] = useState('all'); // 'all' | 'tamil' | '4k' | 'top'
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [updatedAt, setUpdatedAt] = useState(null);
   const [scrapeStatus, setScrapeStatus] = useState('loading');
@@ -852,24 +851,10 @@ export default function LandingPage() {
     return () => observer.disconnect();
   }, [activeTab, loadMore, scrapeStatus]);
 
-  const rawItems = activeTab === 'movies' ? movies : series;
-  const currentItems = useMemo(() => {
-    if (filterMode === 'all') return rawItems;
-    if (filterMode === '4k') {
-      return rawItems.filter((item) => {
-        const tier = item?.qualityTier || '';
-        const label = item?.qualityLabel || item?.title || '';
-        return tier === '4k' || tier === '1080p' || /4k|2160p|1080p|fhd/i.test(label);
-      });
-    }
-    if (filterMode === 'tamil') {
-      return rawItems.filter((item) => /tamil|tam/i.test(`${item.title} ${item.rawTitle || ''} ${item.synopsis || ''}`));
-    }
-    if (filterMode === 'top') {
-      return rawItems.filter((item) => Number(item.rating) >= 7.0);
-    }
-    return rawItems;
-  }, [rawItems, filterMode]);
+  // The "Quick Filter Rail" (4K / Tamil / High rated) is removed by request. It re-filtered whatever
+  // had been loaded so far, which made a page of the catalog look empty when the next page simply had
+  // not arrived yet — tabs and search are the honest filters, because both go to the provider.
+  const currentItems = activeTab === 'movies' ? movies : series;
   const [debugQuality, setDebugQuality] = useState(false);
   useEffect(() => {
     try {
@@ -990,29 +975,6 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Quick Filter Rail */}
-          <div className="mt-4 flex flex-wrap items-center gap-1.5 border-t border-white/10 pt-3 sm:gap-2">
-            <span className="mr-1 text-[11px] font-black uppercase tracking-wider text-zinc-500">Filter:</span>
-            {[
-              { id: 'all', label: 'All Titles' },
-              { id: '4k', label: '✨ 4K / 1080p FHD' },
-              { id: 'tamil', label: '🎬 Tamil Audio' },
-              { id: 'top', label: '★ High Rated (7.0+)' },
-            ].map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setFilterMode(f.id)}
-                className={`rounded-full border px-3 py-1 text-xs font-bold transition ${
-                  filterMode === f.id
-                    ? 'border-amber-400/60 bg-amber-500/20 text-amber-200'
-                    : 'border-white/10 bg-white/[0.03] text-zinc-400 hover:border-white/25 hover:text-white'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
 
           {currentStatus === 'loading' ? (
             <p className="mt-4 text-sm text-zinc-500">Loading latest scraped titles...</p>

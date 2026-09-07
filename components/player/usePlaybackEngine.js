@@ -232,10 +232,21 @@ export function usePlaybackEngine(options = {}) {
     } catch {}
   }, []);
 
+  // A live stream is not resumable and must not occupy a Continue Watching row. Pages in live mode are
+  // expected to pass `library.persist: false`; this is the backstop, computed from the element so a
+  // DVR-windowed simulcast cannot slip a row in through the progress writer.
+  function playingLive(el) {
+    try {
+      return Boolean(derivePlaybackModel(el).live);
+    } catch {
+      return false;
+    }
+  }
+
   const flushProgress = useCallback(() => {
     if (!persistRef.current || !watchKey) return;
     const el = videoRef.current;
-    if (!el) return;
+    if (!el || playingLive(el)) return;
     try {
       saveOrUpsertProgress(
         { key: watchKey, ...(libraryEntryRef.current || {}) },
@@ -249,7 +260,7 @@ export function usePlaybackEngine(options = {}) {
     () =>
       createProgressWriter({
         onChange: ({ progress, duration: total }) => {
-          if (!persistRef.current || !watchKey) return;
+          if (!persistRef.current || !watchKey || playingLive(videoRef.current)) return;
           try {
             saveOrUpsertProgress({ key: watchKey, ...(libraryEntryRef.current || {}) }, progress, total);
           } catch {}

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import JashPlayer from '@/components/player/JashPlayer';
 import { DayStrip, GuideNowLine, GuideStatus, ProgrammeCard, SourceBadges, useLiveGuide } from '@/components/live/LiveGuide';
 import { createLiveTvPolicy, isPocketChannel } from '@/lib/player/policy/liveTv';
@@ -378,7 +378,10 @@ export default function LiveTVPage() {
                     subtitle: `${active.source || 'Jio'} • ${(active.format || 'HLS').toUpperCase()}${active.keyId && active.key ? ' • ClearKey' : ''}`,
                     aspect: 'fill',
                   }}
-                  library={{ watchKey: `live:${active.id}` }}
+                  // The watchKey keeps each channel its own source identity (so a tune re-attaches
+                  // cleanly) but `persist: false` keeps live TV out of Continue Watching: a simulcast
+                  // has nothing to resume, and it used to store an "Untitled" row for it.
+                  library={{ watchKey: `live:${active.id}`, persist: false }}
                   onPrev={() => navigateChannel(-1)}
                   onNext={() => navigateChannel(1)}
                 />
@@ -418,7 +421,7 @@ export default function LiveTVPage() {
           <div className="rounded-2xl border border-white/10 bg-zinc-950/80 p-3 sm:rounded-3xl sm:p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
-                <div className="flex items-center gap-2.5"><h1 className="truncate text-xl font-black text-white sm:text-2xl">{active?.name || 'Tamil Live TV'}</h1><span className="jv-badge-live shrink-0"><span className="jv-livepulse" />Live</span></div>
+                <div className="flex items-center gap-2.5"><h1 className="truncate text-xl font-black text-white sm:text-2xl">{active?.name || 'Tamil Live TV'}</h1></div>
                 <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-zinc-400 sm:text-sm">
                   <span className="truncate">{active ? `${getChannelCatalogIds(active).map(catalogLabel).join(' + ') || 'Initial Jio'} • ${active.source || 'Jio'}${active.keyId && active.key ? ' • ClearKey DRM' : ''}` : `Loaded ${channels.length} manually mapped channels`}</span>
                   <button
@@ -587,10 +590,10 @@ export default function LiveTVPage() {
                       {channel.logo ? <img src={channel.logo} alt="" className="max-h-full max-w-full object-fill" loading="lazy" /> : <span className="text-xs font-black text-zinc-500">TV</span>}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className={`truncate text-sm font-black ${isActive ? 'text-white' : 'text-zinc-100'}`}>{channel.name || 'Channel'}</p>
-                        {isActive ? <span className="h-2 w-2 rounded-full bg-red-500 animate-ping" /> : null}
-                      </div>
+                      {/* The active row is already unmistakable (red border, gradient wash, white title),
+                          and the player carries the one LIVE marker this page needs — a pulsing dot here
+                          was a second "live" symbol for the same channel. */}
+                      <p className={`truncate text-sm font-black ${isActive ? 'text-white' : 'text-zinc-100'}`}>{channel.name || 'Channel'}</p>
                       <p className="mt-1 truncate text-xs text-zinc-400">{getChannelCatalogIds(channel).map(catalogLabel).join(' + ') || 'Initial Jio'} • {channel.source || 'Jio'}</p>
                       <div className="mt-1 flex items-center justify-between gap-2">
                         <span className="flex items-center gap-1.5">
@@ -644,6 +647,16 @@ export default function LiveTVPage() {
 }
 
 const SERVICE_TOKEN_KEY = 'jash_live_service_token';
+/**
+ * How many channel rows the service panel puts on screen at once.
+ *
+ * A fresh source can carry 5,000 channels and every row is ~12 buttons, so mounting the whole list
+ * blocked the main thread for seconds — "the panel froze" was never the network, it was React. The
+ * manual-mapping list is therefore paged by the API (limit/page/q, which the route already supported),
+ * and the remaining lists grow in these steps on demand.
+ */
+const PANEL_PAGE_SIZE = 200;
+const ROW_STEP = 400;
 
 /**
  * Guide (EPG) tab of the live service panel: the feed's health, how much of the published lineup
@@ -837,7 +850,9 @@ function ServicePreviewPlayer({ channel }) {
 
   return (
     <div className="overflow-hidden rounded-2xl border border-white/10 bg-black">
-      <div className="aspect-video bg-black">
+      {/* `relative` + an explicit aspect box: the compact player fills this rather than sizing itself,
+          and without a positioned parent the absolute video/controls had nothing to sit in. */}
+      <div className="relative aspect-video bg-black">
         {channel?.url && policy ? (
           <JashPlayer
             source={{ url: channel.url, kind: 'auto', label: channel.name }}
@@ -850,7 +865,9 @@ function ServicePreviewPlayer({ channel }) {
             display={{ title: channel.name || 'Preview', aspect: 'fill', bufferAheadSeconds: 6 }}
           />
         ) : (
-          <div className="grid h-full place-items-center text-xs text-zinc-500">Select a channel to preview</div>
+          <div className="grid h-full place-items-center px-4 text-center text-xs font-semibold leading-5 text-zinc-500">
+            {channel ? `${channel.name || 'This channel'} has no stream URL to preview` : 'Pick Preview on any channel row'}
+          </div>
         )}
       </div>
       <div className="border-t border-white/10 px-3 py-2 text-[11px] text-zinc-400">
@@ -881,6 +898,14 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
   const [categoryFilter, setCategoryFilter] = useState('');
   const [mappingFilter, setMappingFilter] = useState('all');
   const [channelsLoaded, setChannelsLoaded] = useState(false);
+  const [channelsPage, setChannelsPage] = useState(1);
+  const [channelsPageInfo, setChannelsPageInfo] = useState({ total: 0, hasMore: false });
+  // The search box and both selects are applied by the API, not in the browser: a channel on row
+  // 4,300 of a 5,000-row source is otherwise unreachable, and re-filtering thousands of rows on every
+  // keystroke is what made the panel feel stuck while typing. This token records exactly which filters
+  // the mounted page answers to, so `channelRowsFiltered` never filters twice with different rules.
+  const [serverFilter, setServerFilter] = useState(null);
+  const [rowLimit, setRowLimit] = useState(ROW_STEP);
   const [channelStats, setChannelStats] = useState({ total: 0, mapped: 0, unmapped: 0 });
   const [orderCatalog, setOrderCatalog] = useState('main');
   const [activeProfile, setActiveProfile] = useState('default');
@@ -955,9 +980,10 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
     setProfiles(data.profiles || []);
   }
 
-  async function loadChannels({ mapped = false, sourceId = sourceFilter } = {}) {
+  async function loadChannels({ mapped = false, sourceId = sourceFilter, page = 1, q = '', map = '', category = '' } = {}) {
     if (!token) return;
-    const params = new URLSearchParams({ limit: mapped ? '1000' : '5000' });
+    const needle = String(q || '').trim();
+    const params = new URLSearchParams({ limit: mapped ? '1000' : String(PANEL_PAGE_SIZE) });
     if (mapped) {
       params.set('mapped', '1');
       params.set('profile', activeProfile);
@@ -967,15 +993,27 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
         setCategories([]);
         setChannelsLoaded(false);
         setChannelStats({ total: 0, mapped: 0, unmapped: 0 });
+        setChannelsPageInfo({ total: 0, hasMore: false });
+        setServerFilter(null);
         return;
       }
       params.set('sourceId', sourceId);
+      params.set('page', String(Math.max(1, Number(page) || 1)));
+      if (needle) params.set('q', needle);
+      if (map === 'mapped') params.set('mapped', '1');
+      if (map === 'unmapped') params.set('mapped', '0');
+      if (category) params.set('category', category);
     }
 
     const data = await api(`/api/live-service/channels?${params.toString()}`);
     if (mapped) {
       setSelectedChannels(data.channels || []);
     } else {
+      setChannelsPage(Number(data.page) || Math.max(1, Number(page) || 1));
+      setChannelsPageInfo({ total: Number(data.sourceTotal ?? data.total) || 0, hasMore: Boolean(data.hasMore) });
+      setServerFilter({ q: needle, map, category, page: Number(data.page) || Math.max(1, Number(page) || 1) });
+      // The stats line is the server's count for the source, not the page in front of us.
+      setChannelStats((current) => ({ ...current, total: Number(data.sourceTotal ?? data.total) || current.total }));
       setChannels(data.channels || []);
       setCategories(data.categories || []);
       setChannelsLoaded(true);
@@ -995,14 +1033,36 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
     setLoading(true);
     setMessage('');
     try {
-      await loadChannels({ sourceId: sourceFilter });
-      setMessage('Source channels loaded. Map only the channels you want to publish.');
+      await loadChannels({ sourceId: sourceFilter, page: 1, q: channelQuery, map: mappingFilter, category: categoryFilter });
+      setMessage(`First ${PANEL_PAGE_SIZE} channels loaded. Search or page through the rest — the whole catalog is never mounted at once.`);
     } catch (err) {
       setMessage(err.message || 'Unable to load source channels');
     } finally {
       setLoading(false);
     }
   }
+
+  // The search box goes to the API instead of filtering a loaded page: a name that lives on row
+  // 4,300 of a 5,000-channel source is otherwise unreachable, and re-filtering 5,000 objects on
+  // every keystroke is what made the panel feel stuck while typing.
+  useEffect(() => {
+    if (!open || tab !== 'channels' || !channelsLoaded || !sourceFilter) return undefined;
+    const q = channelQuery.trim();
+    if (serverFilter && serverFilter.q === q && serverFilter.map === mappingFilter && serverFilter.category === categoryFilter && serverFilter.page === 1) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      loadChannels({ sourceId: sourceFilter, page: 1, q, map: mappingFilter, category: categoryFilter }).catch(() => {});
+    }, 320);
+    return () => window.clearTimeout(timer);
+    // loadChannels is recreated per render on purpose; the deps above are the triggers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelQuery, mappingFilter, categoryFilter, open, tab, channelsLoaded, sourceFilter]);
+
+  // A new tab or a new filter should never inherit a half-scrolled 800-row list.
+  useEffect(() => {
+    setRowLimit(ROW_STEP);
+  }, [tab, orderCatalog, mainPanelCategory, mainPanelSource, channelQuery, mappingFilter, categoryFilter]);
 
   async function loadMainPanelPreview() {
     if (!token) return;
@@ -1039,6 +1099,9 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
     setCategoryFilter('');
     setChannelQuery('');
     setMappingFilter('all');
+    setChannelsPage(1);
+    setChannelsPageInfo({ total: 0, hasMore: false });
+    setServerFilter(null);
   }, [sourceFilter]);
   // Same reason as above: a profile switch reloads the table once.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1273,6 +1336,11 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
     return sortChannelsForCatalog(filtered, mainPanelCategory);
   }, [mainPanelChannels, mainPanelQuery, mainPanelCategory, mainPanelSource]);
   const channelRowsFiltered = useMemo(() => {
+    const applied = Boolean(serverFilter)
+      && serverFilter.q === channelQuery.trim()
+      && serverFilter.map === mappingFilter
+      && serverFilter.category === categoryFilter;
+    if (applied) return channels; // the page in hand is already the answer
     const q = normalize(channelQuery);
     return channels.filter((channel) => {
       const mapped = Boolean(channel.mapped || getChannelCatalogIds(channel).length);
@@ -1282,7 +1350,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
       if (!q) return true;
       return normalize(`${channel.name} ${channel.category} ${channel.source}`).includes(q);
     });
-  }, [channels, channelQuery, categoryFilter, mappingFilter]);
+  }, [channels, channelQuery, mappingFilter, categoryFilter, serverFilter]);
   const orderedCatalogChannels = useMemo(() => {
     return sortChannelsForCatalog(
       selectedChannels.filter((channel) => getChannelCatalogIds(channel).includes(orderCatalog)),
@@ -1364,8 +1432,21 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
                     <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white"><option value="">All source categories</option>{categories.map((c) => <option key={c} value={c}>{c}</option>)}</select>
                     <select value={mappingFilter} onChange={(e) => setMappingFilter(e.target.value)} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white"><option value="all">Mapped + unmapped</option><option value="mapped">Mapped only</option><option value="unmapped">Unmapped only</option></select>
                   </div>
-                  <p className="text-xs text-zinc-500">Showing {channelRowsFiltered.length} loaded channel(s).</p>
+                  <p className="text-xs text-zinc-500">
+                    Page {channelsPage} • {channelRowsFiltered.length} of {channelsPageInfo.total || channelStats.total || '?'} channels on this source
+                    {serverFilter?.q ? ` • search: “${serverFilter.q}”` : ''}
+                    {serverFilter && serverFilter.map !== 'all' ? ` • ${serverFilter.map}` : ''}
+                  </p>
                   {channelRowsFiltered.map((channel) => <ChannelManagerRow key={channel.channelId} channel={channel} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} onCatalogToggle={toggleCatalog} onPosition={setCatalogPosition} />)}
+                  <PanelPager
+                    page={channelsPage}
+                    total={channelsPageInfo.total || channelStats.total || 0}
+                    pageSize={PANEL_PAGE_SIZE}
+                    hasMore={channelsPageInfo.hasMore}
+                    loading={loading}
+                    onPrev={() => loadChannels({ sourceId: sourceFilter, page: channelsPage - 1, q: channelQuery, map: mappingFilter, category: categoryFilter }).catch(() => {})}
+                    onNext={() => loadChannels({ sourceId: sourceFilter, page: channelsPage + 1, q: channelQuery, map: mappingFilter, category: categoryFilter }).catch(() => {})}
+                  />
                   {!channelRowsFiltered.length ? <p className="rounded-2xl border border-white/10 p-5 text-center text-sm text-zinc-500">No channels match these filters.</p> : null}
                 </> : <p className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-zinc-500">No source catalog loaded. This keeps service-panel startup fast.</p>}
               </div> : null}
@@ -1379,7 +1460,8 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
                     <input value={mainPanelQuery} onChange={(event) => setMainPanelQuery(event.target.value)} placeholder="Search main panel" className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none" />
                   </div>
                 </div>
-                {mainPanelFiltered.map((channel) => <ChannelManagerRow key={channel.channelId || channel.id} channel={channel} selectedMode positionCatalog={mainPanelCategory === 'all' ? '' : mainPanelCategory} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} onCatalogToggle={toggleCatalog} onPosition={setCatalogPosition} />)}
+                {mainPanelFiltered.slice(0, rowLimit).map((channel) => <ChannelManagerRow key={channel.channelId || channel.id} channel={channel} selectedMode positionCatalog={mainPanelCategory === 'all' ? '' : mainPanelCategory} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} onCatalogToggle={toggleCatalog} onPosition={setCatalogPosition} />)}
+                {mainPanelFiltered.length > rowLimit ? <RowShowMore shown={rowLimit} total={mainPanelFiltered.length} onMore={() => startTransition(() => setRowLimit((current) => current + ROW_STEP))} /> : null}
                 {!mainPanelFiltered.length ? <p className="rounded-2xl border border-white/10 p-5 text-center text-sm text-zinc-500">No main panel channels for this filter.</p> : null}
               </div> : null}
 
@@ -1389,7 +1471,8 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
                   <p className="mt-1 text-xs leading-5 text-zinc-400">A channel can have a different position in every catalog. Use arrows for quick changes or click its position badge to enter an exact number.</p>
                   <select value={orderCatalog} onChange={(event) => setOrderCatalog(event.target.value)} className="mt-3 w-full rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white sm:max-w-xs">{LIVE_CATALOGS.map((catalog) => <option key={catalog.id} value={catalog.id}>{catalog.name}</option>)}</select>
                 </div>
-                {orderedCatalogChannels.map((channel) => <ChannelManagerRow key={channel.channelId} channel={channel} selectedMode positionCatalog={orderCatalog} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} onCatalogToggle={toggleCatalog} onPosition={setCatalogPosition} onUp={(ch) => reorder(ch, -10)} onDown={(ch) => reorder(ch, 10)} />)}
+                {orderedCatalogChannels.slice(0, rowLimit).map((channel) => <ChannelManagerRow key={channel.channelId} channel={channel} selectedMode positionCatalog={orderCatalog} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} onCatalogToggle={toggleCatalog} onPosition={setCatalogPosition} onUp={(ch) => reorder(ch, -10)} onDown={(ch) => reorder(ch, 10)} />)}
+                {orderedCatalogChannels.length > rowLimit ? <RowShowMore shown={rowLimit} total={orderedCatalogChannels.length} onMore={() => startTransition(() => setRowLimit((current) => current + ROW_STEP))} /> : null}
                 {!orderedCatalogChannels.length ? <p className="rounded-2xl border border-white/10 p-5 text-center text-sm text-zinc-500">No channels mapped to {catalogLabel(orderCatalog)}.</p> : null}
               </div> : null}
 
@@ -1424,6 +1507,37 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
         )}
       </section>
     </div>
+  );
+}
+
+/**
+ * Page stepper for the server-paged source catalog. Nothing here fetches on its own: the panel keeps
+ * one request per page so a 5,000-channel source is browsable without ever mounting the whole thing.
+ */
+function PanelPager({ page = 1, total = 0, pageSize = 0, hasMore = false, loading = false, onPrev, onNext }) {
+  const lastPage = pageSize > 0 ? Math.max(1, Math.ceil(total / pageSize)) : page;
+  if (total <= pageSize && page <= 1 && !hasMore) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold text-zinc-300">
+      <span className="text-zinc-500">
+        page {page} / {lastPage} • {total ? `${Math.min(total, (page - 1) * pageSize + 1)}–${Math.min(total, page * pageSize)} of ${total}` : 'counting…'}
+      </span>
+      <span className="flex items-center gap-1.5">
+        <button type="button" onClick={onPrev} disabled={loading || page <= 1} className="rounded-full border border-white/10 px-3 py-1 font-black transition hover:border-purple-300/60 disabled:opacity-35">‹ Prev</button>
+        <button type="button" onClick={onNext} disabled={loading || !hasMore} className="rounded-full border border-white/10 px-3 py-1 font-black transition hover:border-purple-300/60 disabled:opacity-35">Next ›</button>
+      </span>
+    </div>
+  );
+}
+
+/** Deliberately not "load everything": the button says how much is waiting so it is a choice, not a trap. */
+function RowShowMore({ shown = 0, total = 0, onMore }) {
+  const left = Math.max(0, total - shown);
+  if (!left) return null;
+  return (
+    <button type="button" onClick={onMore} className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-black text-zinc-300 transition hover:border-purple-300/60">
+      Show {Math.min(left, ROW_STEP)} more · {left} still hidden
+    </button>
   );
 }
 

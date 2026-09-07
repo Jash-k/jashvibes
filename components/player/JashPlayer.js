@@ -947,7 +947,10 @@ export function JashPlayer(props) {
         data-dvp="root"
         data-dvp-compact="1"
         tabIndex={-1}
-        className={`group/player relative isolate overflow-hidden rounded-xl bg-black text-white outline-none ${className}`}
+        // Every child of this variant is absolutely positioned (video, spinner, overlays, bar), so the
+        // root needs the caller's box: h-full/w-full is the contract. Without it a compact player inside
+        // an aspect-ratio wrapper collapsed to 0px and showed nothing at all.
+        className={`group/player relative isolate h-full w-full overflow-hidden rounded-xl bg-black text-white outline-none ${className}`}
       >
         {videoNode}
         {status !== 'ready' && status !== 'error' ? <Spinner label={statusMessage || attemptNote || 'Loading…'} /> : null}

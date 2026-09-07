@@ -223,7 +223,12 @@ export const TopBar = memo(function TopBar({ title, subtitle, live, liveLabel = 
           </button>
         ) : null}
       </div>
-      {live && !canSeek ? (
+      {/* One live marker per player, never two. The bar row below the title used to repeat exactly
+          what LiveBadge already draws in the control row for a non-seekable stream — same red ping,
+          same word — which is what looked like a glitch while a channel was loading. It only appears
+          now when the control row is showing a DVR track instead of that badge, so a timeshifted feed
+          keeps a LIVE indicator and a plain simulcast keeps exactly one. */}
+      {live && canSeek ? (
         <p className="mt-1 flex items-center gap-2 pl-1">
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
