@@ -28,12 +28,16 @@ export const Menu = memo(function Menu({ title, subtitle, onClose, children, wid
 
   const sheet = coarse
     ? 'absolute inset-x-0 bottom-0 z-50 max-h-[70%] overflow-hidden rounded-t-3xl border-t border-white/10 bg-zinc-950/97 pb-[max(env(safe-area-inset-bottom),16px)] shadow-[0_-18px_60px_rgba(0,0,0,.8)]'
-    : `absolute bottom-full right-0 z-50 mb-2 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/95 shadow-[0_18px_60px_rgba(0,0,0,0.7)] backdrop-blur ${wide ? 'w-[19rem]' : 'w-48'}`;
+    // Anchored inside the player box rather than floating above it: the sheets are
+    // siblings of the control bar, so an outside-above anchor put the whole menu
+    // outside the frame, where `overflow-hidden` clipped it. That is why clicking a
+    // control on desktop looked like "nothing happened".
+    : `absolute bottom-28 right-2 z-50 max-h-[70%] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/95 shadow-[0_18px_60px_rgba(0,0,0,0.7)] backdrop-blur ${wide ? 'w-[19rem]' : 'w-48'}`;
 
   return (
     <>
-      <div data-dvp="menu-backdrop" className="fixed inset-0 z-40" onClick={onClose} onContextMenu={(event) => { event.preventDefault(); onClose?.(); }} />
-      <div ref={panelRef} className={`${sheet} text-white`} role="dialog" aria-label={title}>
+      <div data-dvp="controls" className="fixed inset-0 z-40" onClick={onClose} onContextMenu={(event) => { event.preventDefault(); onClose?.(); }} />
+      <div ref={panelRef} data-dvp="controls" className={`${sheet} text-white`} role="dialog" aria-label={title}>
         <div className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-3">
           <div className="min-w-0">
             <p className="text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-300/85">{title}</p>
@@ -55,11 +59,12 @@ export const Menu = memo(function Menu({ title, subtitle, onClose, children, wid
   );
 });
 
-export const MenuItem = memo(function MenuItem({ active, onClick, children, hint, icon, disabled, role }) {
+export const MenuItem = memo(function MenuItem({ active, onClick, children, hint, icon, disabled, role, command }) {
   return (
     <button
       type="button"
       role={role}
+      data-jash-command={command}
       disabled={disabled}
       onClick={onClick}
       className={`flex min-h-[44px] w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] font-semibold transition ${
@@ -110,10 +115,11 @@ export const MenuSlider = memo(function MenuSlider({ label, value, min = 0, max 
   );
 });
 
-export const MenuToggle = memo(function MenuToggle({ label, checked, onChange, hint }) {
+export const MenuToggle = memo(function MenuToggle({ label, checked, onChange, hint, command }) {
   return (
     <button
       type="button"
+      data-jash-command={command}
       role="switch"
       aria-checked={Boolean(checked)}
       onClick={() => onChange?.(!checked)}
@@ -268,11 +274,11 @@ export const SubtitlesMenu = memo(function SubtitlesMenu({
       {canStyleExternal ? (
         <MenuSection label="Timing & style">
           <div className="flex items-center gap-2 py-1">
-            <button type="button" onClick={() => onDelay?.(-250)} className="min-h-[44px] flex-1 rounded-xl border border-white/15 px-2 text-[12px] font-black text-white transition hover:border-fuchsia-400/50">
+            <button type="button" data-jash-command="subtitleDelayDown" onClick={() => onDelay?.(-250)} className="min-h-[44px] flex-1 rounded-xl border border-white/15 px-2 text-[12px] font-black text-white transition hover:border-fuchsia-400/50">
               −250 ms
             </button>
             <span className="min-w-[4.5rem] text-center text-[12px] font-black tabular-nums text-white">{Math.round(Number(delayMs) || 0)} ms</span>
-            <button type="button" onClick={() => onDelay?.(250)} className="min-h-[44px] flex-1 rounded-xl border border-white/15 px-2 text-[12px] font-black text-white transition hover:border-fuchsia-400/50">
+            <button type="button" data-jash-command="subtitleDelayUp" onClick={() => onDelay?.(250)} className="min-h-[44px] flex-1 rounded-xl border border-white/15 px-2 text-[12px] font-black text-white transition hover:border-fuchsia-400/50">
               +250 ms
             </button>
           </div>
@@ -369,3 +375,189 @@ export const TimeBubble = memo(function TimeBubble({ label, seconds, delta }) {
 });
 
 export default Menu;
+
+/**
+ * The one sheet behind the bar's settings button.
+ *
+ * Earlier the bar carried a pill per capability (speed, quality, audio, CC,
+ * sources, loop, ambient, lock, stats, keyboard) and on a phone most of them
+ * were `hidden sm:grid` — so the reachable ones were the ones nobody needed
+ * and the quality list was effectively missing. Everything now lives here:
+ * quality and speed inline (the two you actually reach for), audio/sources when
+ * there is more than one, and a row for every sub-sheet and toggle.
+ */
+export const SettingsMenu = memo(function SettingsMenu({
+  heights = [],
+  activeHeight = 0,
+  autoQuality = true,
+  onPickHeight,
+  onAutoHeight,
+  variants = [],
+  rate = 1,
+  onPickRate,
+  audio = [],
+  audioLanguage = '',
+  onPickAudio,
+  sources = [],
+  activeSourceIndex = 0,
+  onPickSource,
+  captionsOn = false,
+  textTracks = [],
+  onToggleCaptions,
+  onOpenSubtitles,
+  statsOn = false,
+  onToggleStats,
+  frozen = false,
+  onToggleFreeze,
+  onRestart,
+  onOpenShortcuts,
+  canPip = false,
+  pipActive = false,
+  onTogglePip,
+  canAirPlay = false,
+  onAirPlay,
+  note,
+  coarse = false,
+  onClose,
+}) {
+  const hasRenditions = variants.length > 1;
+  return (
+    <Menu
+      title="Quality & settings"
+      subtitle={hasRenditions ? `${variants.length} renditions` : 'One rendition — the server picks'}
+      onClose={onClose}
+      coarse={coarse}
+      wide
+      footer={note}
+    >
+      <MenuSection label="Quality" note={hasRenditions ? null : 'A plain file has one rendition; the CDN decides the bitrate.'}>
+        <MenuItem command="qualityAuto" active={autoQuality} onClick={() => onAutoHeight?.()}>
+          Auto
+        </MenuItem>
+        {heights.map((height) => (
+          <MenuItem
+            key={height}
+            command="cycleQuality"
+            active={!autoQuality && Number(activeHeight) === height}
+            onClick={() => onPickHeight?.(height)}
+            hint={height >= 2160 ? '4K' : height >= 1080 ? 'Full HD' : height >= 720 ? 'HD' : ''}
+          >
+            {height}p
+          </MenuItem>
+        ))}
+      </MenuSection>
+
+      <MenuSection label="Speed">
+        <div className="mb-1.5 flex gap-1.5">
+          <button
+            type="button"
+            data-jash-command="speedDown"
+            onClick={() => onPickRate?.(Math.max(0.25, (Number(rate) || 1) - 0.25))}
+            className="min-h-[40px] flex-1 rounded-full border border-white/10 bg-white/[0.03] text-[12px] font-black text-white/80 transition hover:border-white/30 hover:text-white"
+          >
+            Slower
+          </button>
+          <button
+            type="button"
+            data-jash-command="speedReset"
+            onClick={() => onPickRate?.(1)}
+            className="min-h-[40px] flex-1 rounded-full border border-white/10 bg-white/[0.03] text-[12px] font-black text-white/80 transition hover:border-white/30 hover:text-white"
+          >
+            Normal
+          </button>
+          <button
+            type="button"
+            data-jash-command="speedUp"
+            onClick={() => onPickRate?.(Math.min(16, (Number(rate) || 1) + 0.25))}
+            className="min-h-[40px] flex-1 rounded-full border border-white/10 bg-white/[0.03] text-[12px] font-black text-white/80 transition hover:border-white/30 hover:text-white"
+          >
+            Faster
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {SPEED_OPTIONS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => onPickRate?.(option)}
+              className={`min-h-[40px] rounded-full border px-3 text-[12px] font-black tabular-nums transition ${
+                Math.abs(Number(rate) - option) < 0.001
+                  ? 'border-fuchsia-400/60 bg-fuchsia-500/20 text-fuchsia-100'
+                  : 'border-white/10 bg-white/[0.03] text-white/75 hover:border-white/30 hover:text-white'
+              }`}
+            >
+              {option === 1 ? '1×' : `${option}×`}
+            </button>
+          ))}
+        </div>
+      </MenuSection>
+
+      {audio.length > 1 ? (
+        <MenuSection label={`Audio · ${audio.length} tracks`}>
+          {audio.map((track) => (
+            <MenuItem
+              key={`${track.id ?? track.language}-${track.label || ''}`}
+              command="cycleAudioTrack"
+              active={track.active || (track.language && track.language === audioLanguage && !audio.some((item) => item.active))}
+              onClick={() => onPickAudio?.(track.language || track.id)}
+              hint={track.channels ? `${track.channels}ch` : ''}
+            >
+              {track.label || track.language || `Track ${track.id}`}
+            </MenuItem>
+          ))}
+        </MenuSection>
+      ) : null}
+
+      <MenuSection label="Subtitles">
+        <MenuItem command="cycleCaptions" active={captionsOn} onClick={() => onToggleCaptions?.()} hint={textTracks.length ? `${textTracks.length} in stream` : 'none in stream'}>
+          {captionsOn ? 'On' : 'Off'}
+        </MenuItem>
+        <MenuItem command="openSubtitles" onClick={() => onOpenSubtitles?.()}>Track, delay & style…</MenuItem>
+      </MenuSection>
+
+      {sources.length > 1 ? (
+        <MenuSection label={`Source · ${sources.length} mirrors`}>
+          {sources.map((source, index) => (
+            <MenuItem
+              key={`${typeof source === 'string' ? source : source?.url || index}`}
+              active={index === Number(activeSourceIndex)}
+              onClick={() => onPickSource?.(index)}
+              hint={typeof source === 'string' ? '' : source?.label || ''}
+            >
+              {typeof source === 'string' ? `Mirror ${index + 1}` : source?.label || `Mirror ${index + 1}`}
+            </MenuItem>
+          ))}
+        </MenuSection>
+      ) : null}
+
+      <MenuSection label="This video">
+        <MenuItem command="freezeFrame" active={frozen} onClick={() => onToggleFreeze?.()} hint="⇧F">
+          {frozen ? 'Unfreeze frame' : 'Freeze frame'}
+        </MenuItem>
+        <MenuItem command="restart" onClick={() => onRestart?.()}>
+          Restart from 0
+        </MenuItem>
+        {canPip ? (
+          <MenuItem command="togglePip" active={pipActive} onClick={() => onTogglePip?.()} hint="P">
+            {pipActive ? 'Exit picture in picture' : 'Picture in picture'}
+          </MenuItem>
+        ) : null}
+        {canAirPlay ? (
+          <MenuItem command="togglePip" onClick={() => onAirPlay?.()}>
+            AirPlay to a TV or speaker
+          </MenuItem>
+        ) : null}
+      </MenuSection>
+
+      <MenuSection label="Interface">
+        <MenuToggle command="toggleStats" label="Playback stats" hint="Codecs, buffer, dropped frames" checked={statsOn} onChange={() => onToggleStats?.()} />
+      </MenuSection>
+
+      <div className="border-t border-white/[0.07] px-4 py-2.5">
+        <MenuItem command="closeMenus" onClick={() => onOpenShortcuts?.()}>
+          Keyboard shortcuts
+        </MenuItem>
+      </div>
+    </Menu>
+  );
+})

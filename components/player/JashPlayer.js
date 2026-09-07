@@ -31,6 +31,7 @@ import {
   AudioMenu,
   ContextMenu,
   QualityMenu,
+  SettingsMenu,
   ShortcutList,
   SourcesMenu,
   SpeedMenu,
@@ -39,7 +40,6 @@ import {
 } from './PlayerMenus';
 import {
   CenterPulse,
-  DataSaverChip,
   ErrorCard,
   HoldBadge,
   LiveBadge,
@@ -58,7 +58,6 @@ import {
   useCoarsePointer,
   useFullscreen,
   useLandscapePhone,
-  useNetworkInfo,
   useOnlineStatus,
   usePip,
   useVibrate,
@@ -111,7 +110,6 @@ export function JashPlayer(props) {
 
   const coarse = useCoarsePointer();
   const landscapePhone = useLandscapePhone();
-  const network = useNetworkInfo();
   const online = useOnlineStatus();
 
   // --------------------------------------------------------------- policy build
@@ -240,7 +238,6 @@ export function JashPlayer(props) {
   const [dropTarget, setDropTarget] = useState(false);
   const [notice, setNotice] = useState(null);
   const [skipCountdown, setSkipCountdown] = useState(null);
-  const [dataSaverPrompt, setDataSaverPrompt] = useState(false);
   const [scrubValue, setScrubValue] = useState(null);
   const [preview, setPreview] = useState(null);
   const [frozenFrame, setFrozenFrame] = useState('');
@@ -342,7 +339,7 @@ export function JashPlayer(props) {
     locked ||
     status === 'recovering' ||
     status === 'loading';
-  const toastIsActionable = Boolean(resumePrompt) || Boolean(errorInfo) || skipCountdown !== null || Boolean(dataSaverPrompt) || Boolean(notice);
+  const toastIsActionable = Boolean(resumePrompt) || Boolean(errorInfo) || skipCountdown !== null || Boolean(notice);
   useEffect(() => {
     if (controlsAreBusy || toastIsActionable) {
       setVisible(true);
@@ -846,18 +843,11 @@ export function JashPlayer(props) {
     return () => window.clearTimeout(timer);
   }, [nextEpisode, playing, skipCountdown]);
 
-  // --------------------------------------------------------- data-saver nudge
+  // ------------------------------------------------------------- codec warning
   const codecWarning = useMemo(
     () => warnForSource({ url, label: source.label || '', title: display.title || title || '' }),
     [display.title, source.label, title, url],
   );
-
-  useEffect(() => {
-    if (compact || !network.slow || prefs.dataSaver || status !== 'ready') return;
-    setDataSaverPrompt(true);
-  }, [compact, network.slow, prefs.dataSaver, status]);
-
-  const lowestHeight = heights.length ? heights[heights.length - 1] : 0;
 
   // --------------------------------------------------------------- subtitle drop
   const importSubtitleFile = useCallback(
@@ -919,14 +909,8 @@ export function JashPlayer(props) {
 
   // ----------------------------------------------------------------- derived UI
   const commandList = useMemo(() => Object.entries(COMMANDS).map(([name, command]) => ({ name, ...command })), []);
-  const rateLabel = `${Number(videoEl?.playbackRate) || Number(prefs.rate) || 1}×`;
   const qualityLabel = prefs.qualityAuto || !prefs.qualityHeight ? 'Auto' : Number(prefs.qualityHeight) >= 2160 ? '4K' : `${prefs.qualityHeight}p`;
-  const audioLabel = useMemo(() => {
-    const list = tracks.audio || [];
-    if (list.length <= 1) return null;
-    const current = list.find((track) => track.active) || list.find((track) => track.language === prefs.audioLanguage);
-    return current?.label || current?.language || `${list.length} tracks`;
-  }, [prefs.audioLanguage, tracks.audio]);
+
   const subtitleOn = (tracks.text || []).some((track) => track.active) || Boolean(engine.externalSubtitle);
 
   const contextItems = useMemo(() => {
@@ -1133,19 +1117,6 @@ export function JashPlayer(props) {
         />
       ) : null}
 
-      {dataSaverPrompt && network.slow && !prefs.dataSaver ? (
-        <DataSaverChip
-          effectiveType={network.effectiveType}
-          bytes={Number(source.sizeBytes) || 0}
-          onDismiss={() => setDataSaverPrompt(false)}
-          onSave={() => {
-            setDataSaverPrompt(false);
-            engine.setPref('dataSaver', true);
-            if (lowestHeight) engine.selectQualityHeight(lowestHeight);
-          }}
-        />
-      ) : null}
-
       {notice ? (
         <NoticeBar
           tone={notice.tone}
@@ -1269,133 +1240,23 @@ export function JashPlayer(props) {
           <div className="flex-1" />
 
           <div className="flex items-center gap-0.5 sm:gap-1">
-            {!live ? (
-              <button
-                type="button"
-                data-jash-command="speedUp"
-                onClick={() => setMenu(menu === 'speed' ? null : 'speed')}
-                aria-label="Playback speed"
-                className="grid h-11 min-w-[3rem] place-items-center rounded-full border border-white/15 px-2 text-[11px] font-black text-white transition hover:border-fuchsia-400/50 hover:text-fuchsia-200"
-              >
-                {rateLabel}
-              </button>
-            ) : null}
-
+            {/* Two controls on the right: the bitrate you are getting, and one
+                sheet that holds everything else. The old bar had a pill per
+                capability and on a phone most of them were `hidden sm:grid`, so
+                quality looked missing while dead icons took the space. */}
+            {/* The one entry point: the quality list is the first thing in it, so a
+                phone is a single tap from "which bitrate am I getting". */}
             <button
               type="button"
               data-jash-command="cycleQuality"
-              onClick={() => setMenu(menu === 'quality' ? null : 'quality')}
-              aria-label="Quality"
-              className={`grid h-11 min-w-[3rem] place-items-center rounded-full border px-2 text-[11px] font-black transition ${
-                qualityLabel === 'Auto' ? 'border-white/15 text-white hover:border-fuchsia-400/50' : 'border-fuchsia-400/50 bg-fuchsia-500/10 text-fuchsia-100'
-              }`}
+              onClick={() => setMenu(menu === 'settings' ? null : 'settings')}
+              aria-label="Quality and settings"
+              className="grid h-11 min-w-[4.25rem] place-items-center gap-1.5 rounded-full border border-white/15 px-2.5 text-[11px] font-black text-white transition hover:border-fuchsia-400/50 hover:text-fuchsia-200"
             >
-              {qualityLabel}
-            </button>
-
-            {audioLabel ? (
-              <button
-                type="button"
-                data-jash-command="cycleAudioTrack"
-                onClick={() => setMenu(menu === 'audio' ? null : 'audio')}
-                aria-label="Audio track"
-                className="hidden h-11 max-w-[7rem] place-items-center rounded-full border border-white/15 px-2.5 text-[11px] font-black text-white transition hover:border-fuchsia-400/50 sm:grid"
-              >
-                <span className="truncate">{audioLabel}</span>
-              </button>
-            ) : null}
-
-            <button
-              type="button"
-              data-jash-command="openSubtitles"
-              onClick={() => setMenu(menu === 'subtitles' ? null : 'subtitles')}
-              aria-label="Subtitles"
-              className={`grid h-11 w-11 place-items-center rounded-full transition hover:bg-white/10 ${subtitleOn ? 'text-fuchsia-300' : 'text-white/85'}`}
-            >
-              <Icon d={PATHS.cc} className="h-5 w-5" />
-            </button>
-
-            {sourceUrls.length > 1 ? (
-              <button
-                type="button"
-                onClick={() => setMenu(menu === 'sources' ? null : 'sources')}
-                aria-label="Stream sources"
-                className="grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10"
-              >
-                <Icon d={PATHS.list} className="h-5 w-5" />
-              </button>
-            ) : null}
-
-            <button
-              type="button"
-              data-jash-command="loopSegment"
-              onClick={() => runCommand('loopSegment')}
-              aria-label={abLoop.a != null && abLoop.b == null ? 'Set loop end' : 'A-B loop'}
-              className={`hidden h-11 w-11 place-items-center rounded-full transition hover:bg-white/10 sm:grid ${abLoop.a != null ? 'text-emerald-300' : 'text-white/85'}`}
-            >
-              <Icon d={PATHS.loop} className="h-[18px] w-[18px]" />
-            </button>
-
-            <button
-              type="button"
-              data-jash-command="toggleAmbient"
-              onClick={() => runCommand('toggleAmbient')}
-              aria-label="Ambient dim"
-              className={`hidden h-11 w-11 place-items-center rounded-full transition hover:bg-white/10 sm:grid ${prefs.ambient ? 'text-amber-300' : 'text-white/60'}`}
-            >
-              <Icon d={PATHS.bulb} className="h-5 w-5" />
-            </button>
-
-            <button
-              type="button"
-              data-jash-command="lockControls"
-              onClick={() => setLocked((current) => !current)}
-              aria-label={locked ? 'Unlock controls' : 'Lock controls'}
-              className={`grid h-11 w-11 place-items-center rounded-full transition hover:bg-white/10 ${locked ? 'text-fuchsia-300' : 'text-white/85'}`}
-            >
-              <Icon d={PATHS.lock} className="h-5 w-5" />
-            </button>
-
-            {canAirPlay ? (
-              <button
-                type="button"
-                onClick={showAirPlay}
-                aria-label="AirPlay"
-                className="hidden h-11 w-11 place-items-center rounded-full text-white/85 transition hover:bg-white/10 sm:grid"
-              >
-                <Icon d={PATHS.airplay} className="h-5 w-5" />
-              </button>
-            ) : null}
-
-            {canPip ? (
-              <button
-                type="button"
-                data-jash-command="togglePip"
-                onClick={() => togglePip()}
-                aria-label="Picture in picture"
-                className={`grid h-11 w-11 place-items-center rounded-full transition hover:bg-white/10 ${pipActive ? 'text-fuchsia-300' : 'text-white/85'}`}
-              >
-                <Icon d={PATHS.pip} className="h-5 w-5" />
-              </button>
-            ) : null}
-
-            <button
-              type="button"
-              data-jash-command="toggleStats"
-              onClick={() => engine.toggleStats()}
-              aria-label="Playback stats"
-              className={`hidden h-11 w-11 place-items-center rounded-full transition hover:bg-white/10 sm:grid ${engine.showStats ? 'text-emerald-300' : 'text-white/60'}`}
-            >
-              <Icon d={PATHS.stats} className="h-[18px] w-[18px]" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setMenu(menu === 'shortcuts' ? null : 'shortcuts')}
-              aria-label="Keyboard shortcuts"
-              className={`hidden h-11 w-11 place-items-center rounded-full transition hover:bg-white/10 sm:grid ${menu === 'shortcuts' ? 'text-fuchsia-300' : 'text-white/70'}`}
-            >
-              <Icon d={PATHS.gear} className="h-5 w-5" />
+              <span className="flex items-center gap-1.5">
+                <Icon d={PATHS.list} className="h-4 w-4" />
+                {qualityLabel}
+              </span>
             </button>
 
             {canFullscreen ? (
@@ -1413,6 +1274,51 @@ export function JashPlayer(props) {
         </div>
       </div>
 
+      {menu === 'settings' ? (
+        <SettingsMenu
+          coarse={coarse}
+          onClose={() => setMenu(null)}
+          variants={tracks.video || []}
+          heights={heights}
+          activeHeight={Number(prefs.qualityHeight) || 0}
+          autoQuality={Boolean(prefs.qualityAuto)}
+          onPickHeight={(height) => engine.selectQualityHeight(height)}
+          onAutoHeight={() => engine.setAutoQuality()}
+          rate={Number(videoEl?.playbackRate) || 1}
+          onPickRate={(value) => engine.setRate(value)}
+          audio={tracks.audio || []}
+          audioLanguage={prefs.audioLanguage}
+          onPickAudio={(language) => engine.selectAudioLanguage(language)}
+          sources={sources}
+          activeSourceIndex={rotateIndex}
+          onPickSource={(index) => {
+            engine.rotateFallback(index);
+            try {
+              onPickSource?.(index);
+            } catch {}
+            setMenu(null);
+          }}
+          captionsOn={subtitleOn}
+          textTracks={tracks.text || []}
+          onToggleCaptions={() => runCommand('cycleCaptions')}
+          onOpenSubtitles={() => setMenu('subtitles')}
+          statsOn={engine.showStats}
+          onToggleStats={() => engine.toggleStats()}
+          frozen={Boolean(frozenFrame)}
+          onToggleFreeze={toggleFreeze}
+          onRestart={() => {
+            setMenu(null);
+            engine.startOver();
+          }}
+          onOpenShortcuts={() => setMenu('shortcuts')}
+          canPip={canPip}
+          pipActive={pipActive}
+          onTogglePip={() => togglePip()}
+          canAirPlay={canAirPlay}
+          onAirPlay={() => showAirPlay()}
+          note={codecWarning.risky ? `Codec flags: ${codecWarning.tags.join(', ')} — this file may not decode on some phones.` : undefined}
+        />
+      ) : null}
       {menu === 'speed' ? (
         <SpeedMenu rate={Number(videoEl?.playbackRate) || 1} onPick={(value) => { engine.setRate(value); setMenu(null); }} coarse={coarse} onClose={() => setMenu(null)} />
       ) : null}

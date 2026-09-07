@@ -94,6 +94,48 @@ test('parity: no command is reachable on exactly one device class by accident', 
   }
 });
 
+test('every button/menu claim points at a control that actually exists', () => {
+  // The bug this catches: a command flagged `button: true` whose button was
+  // removed from the bar (or hidden behind `sm:`), so on a phone the capability
+  // silently disappeared. Each claim must match a data-jash-command attribute in
+  // the chrome or in the settings sheet.
+  const files = ['components/player/JashPlayer.js', 'components/player/PlayerMenus.js', 'components/player/PlayerOverlays.js']
+    .map((rel) => path.resolve(import.meta.dirname, '..', rel))
+    .filter(existsSync)
+    .map((file) => readFileSync(file, 'utf8'))
+    .join('\n');
+  assert.ok(files.length > 100, 'chrome sources should be readable');
+  const claim = (name) =>
+    files.includes(`data-jash-command="${name}"`) || // a raw button in the chrome
+    files.includes(`command="${name}"`); // a <MenuItem command="…"> row
+  for (const [name, command] of Object.entries(COMMANDS)) {
+    if (!command.button && !command.menu) continue;
+    const where = [command.button && 'a bar button', command.menu && 'a menu row'].filter(Boolean).join(' and ');
+    assert.ok(claim(name), `${name} declares ${where} but no control carries data-jash-command="${name}"`);
+  }
+});
+
+test('sheets are chrome, so a tap inside one is never read as a tap on the video', () => {
+  // Regression: the panels were rendered without data-dvp="controls", so the
+  // player's pointer handling treated a tap inside the sheet as a tap on the
+  // surface (toggle play / close the sheet) and the control under your finger
+  // never fired. The panel and its backdrop must both be marked as chrome.
+  const file = path.resolve(import.meta.dirname, '../components/player/PlayerMenus.js');
+  const source = readFileSync(file, 'utf8');
+  const menuDef = source.slice(source.indexOf('export const Menu = memo'), source.indexOf('export const MenuItem'));
+  assert.ok(menuDef.length > 200, 'Menu component should be findable');
+  assert.equal(
+    (menuDef.match(/data-dvp="controls"/g) || []).length,
+    2,
+    'the sheet panel and its backdrop must both carry data-dvp="controls"',
+  );
+  // Sheets must be anchored inside the frame: an above-the-box anchor put them
+  // where the frame's overflow clipping hid them completely.
+  assert.ok(menuDef.includes('inset-x-0 bottom-0'), 'the touch sheet should pin to the bottom of the frame');
+  assert.ok(menuDef.includes('bottom-28 right-2'), 'the desktop panel should sit above the bar, inside the frame');
+  assert.ok(!menuDef.includes('bottom-full'), 'a sheet anchored outside the player box is invisible');
+});
+
 test('the chrome wires every declared command and never hard-codes keys', (t) => {
   const chromePath = path.resolve(import.meta.dirname, '../components/player/JashPlayer.js');
   if (!existsSync(chromePath)) return t.skip('components/player/JashPlayer.js does not exist yet');

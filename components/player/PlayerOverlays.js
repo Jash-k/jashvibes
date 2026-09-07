@@ -8,7 +8,7 @@
 
 import { memo } from 'react';
 import { Icon, PATHS } from './PlayerIcons';
-import { fmtClock, fmtSize, fmtTime } from '@/lib/player/labels';
+import { fmtClock, fmtTime } from '@/lib/player/labels';
 
 export const Spinner = memo(function Spinner({ label = 'Buffering stream…', tone = 'default' }) {
   return (
@@ -132,7 +132,7 @@ export const ErrorCard = memo(function ErrorCard({ info, url, onRetry, onRotate,
     <div data-dvp="controls" className="absolute inset-0 z-30 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-3xl border border-white/10 bg-zinc-950/95 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.75)]">
         <div className="flex items-center gap-2 text-amber-300">
-          <Icon d={online ? PATHS.warning : PATHS.dataSaver} className="h-5 w-5" />
+          <Icon d={online ? PATHS.warning : PATHS.offline} className="h-5 w-5" />
           <p className="text-[10px] font-black uppercase tracking-[0.22em]">{online ? (info.kind || 'Playback error') : 'Offline'}</p>
           {info.code ? <p className="ml-auto text-[10px] font-black uppercase tracking-wider text-white/35">{typeof info.code === 'number' ? `code ${info.code}` : info.code}</p> : null}
         </div>
@@ -260,6 +260,7 @@ export const SkipButton = memo(function SkipButton({ label, onClick, side = 'rig
     <button
       data-dvp="controls"
       type="button"
+      data-jash-command="skipMarks"
       onClick={onClick}
       className={`absolute bottom-24 z-30 flex items-center gap-2 rounded-xl border border-white/25 bg-black/75 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-[0_0_28px_rgba(0,0,0,0.5)] backdrop-blur transition hover:scale-[1.02] hover:border-fuchsia-300/70 sm:bottom-28 ${
         side === 'right' ? 'right-3 sm:right-4' : 'left-3 sm:left-4'
@@ -330,24 +331,6 @@ export const ScrubPreview = memo(function ScrubPreview({ preview, poster, second
       ) : null}
       <p className="px-2 py-1 text-center text-[11px] font-black tabular-nums text-white">{fmtTime(seconds.time ?? 0)}</p>
       {seconds.label ? <p className="px-2 pb-1 text-center text-[9px] font-bold uppercase tracking-wider text-white/45">{seconds.label}</p> : null}
-    </div>
-  );
-});
-
-export const DataSaverChip = memo(function DataSaverChip({ effectiveType, bytes, onSave, onDismiss }) {
-  return (
-    <div data-dvp="controls" className="absolute inset-x-3 bottom-24 z-30 flex items-center gap-2 rounded-2xl border border-amber-300/30 bg-amber-950/70 px-3 py-2 text-[11.5px] font-semibold text-amber-100 backdrop-blur sm:bottom-28">
-      <Icon d={PATHS.dataSaver} className="h-4 w-4 shrink-0" />
-      <span className="min-w-0 flex-1">
-        {effectiveType ? `Network is ${effectiveType.toUpperCase()}` : 'Metered connection'}
-        {bytes ? ` · this file is ${fmtSize(bytes)}` : ''}. Lower quality avoids re-buffering.
-      </span>
-      <button type="button" onClick={onSave} className="shrink-0 rounded-full bg-amber-300 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-black">
-        Data saver
-      </button>
-      <button type="button" onClick={onDismiss} aria-label="Dismiss" className="shrink-0 text-amber-100/60 hover:text-amber-50">
-        <Icon d={PATHS.close} className="h-4 w-4" />
-      </button>
     </div>
   );
 });

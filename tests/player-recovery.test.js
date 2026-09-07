@@ -35,7 +35,7 @@ test('the ladder runs in order and says so in the user’s language', () => {
 
   const third = nextRecoveryAction(fresh({ rungIndex: 1, attemptCounts: { [RUNGS.RETRY_STREAMING]: 2, [RUNGS.REANCHOR]: 1 } }), ALL_CAPS, DEFAULT_LADDER);
   assert.equal(third.rung, RUNGS.RELOAD);
-  assert.equal(third.positionPreserved, false, 'a reload must not try to preserve a position it cannot reach');
+  assert.equal(third.positionPreserved, true, 'a reload must land back on the same second — for plain files it is the difference between recovering and restarting');
 });
 
 test('per-rung budgets are enforced, then the rung is skipped not repeated', () => {
@@ -137,4 +137,41 @@ test('every rung has copy, and the default ladder contains only real rungs', () 
     assert.ok(RUNG_LABELS[rung]?.length > 8, `${rung} needs user-facing copy`);
     assert.notEqual(rung, RUNGS.GIVE_UP, 'giving up is not something to retry');
   }
+});
+
+test('a cold seek is never treated as a stall', () => {
+  // The single most reported symptom on Telegram/Stremio direct files: seeking
+  // into unfetched bytes used to trigger the ladder, whose reload rung restarts
+  // the file at 0. `seeking` must freeze the ladder completely.
+  const base = { canReload: true, canReanchor: false, hasDrm: false, hasFallbackSources: true, live: false };
+  const state = { rungIndex: -1, attemptCounts: {}, startedAt: 0, now: 0 };
+  assert.equal(nextRecoveryAction({ ...state, startedAt: 1000, now: 1200 }, { ...base, seeking: true, errorKind: 'timeout' }), null);
+  assert.notEqual(nextRecoveryAction({ ...state, startedAt: 1000, now: 1200 }, { ...base, seeking: false, errorKind: 'timeout' }), null);
+});
+
+test('every rung reports positionPreserved so recovery cannot reset the file', () => {
+  const caps = {
+    canRetryStreaming: true,
+    canReanchor: true,
+    canReload: true,
+    hasDrm: true,
+    hasFallbackSources: true,
+    hasPolicyRecovery: true,
+    live: true,
+  };
+  let rungIndex = -1;
+  const counts = {};
+  let now = 0;
+  let steps = 0;
+  for (;;) {
+    const action = nextRecoveryAction({ rungIndex, attemptCounts: counts, startedAt: 0, now, reloadAttempts: steps }, caps);
+    if (!action) break;
+    assert.equal(action.positionPreserved, true, `${action.rung} must preserve the position`);
+    rungIndex = DEFAULT_LADDER.indexOf(action.rung);
+    counts[action.rung] = (counts[action.rung] || 0) + 1;
+    now += 300;
+    steps += 1;
+    assert.ok(steps < 30, 'the ladder must terminate');
+  }
+  assert.ok(steps >= 5, `the full ladder should have been walked (got ${steps})`);
 });

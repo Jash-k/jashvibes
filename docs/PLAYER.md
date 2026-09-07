@@ -61,7 +61,7 @@ Rules that keep it honest:
 | `lib/player/recovery.js` | The rung ladder (`retry-streaming → reanchor → reload → drop-drm → rotate-source`), per-run budgets, 12 s ceiling |
 | `lib/player/resume.js` | Resume plan (20 s floor, refuse the last 15 s, ≥95 % = finished) + throttled progress writer |
 | `lib/player/subtitles.js` | SRT→VTT, cue shifting, object-URL track lifecycle, subtitle style → `::cue` CSS |
-| `lib/player/prefs.js` | One `localStorage` key (`jash:player:v1`) for rate/quality/volume/brightness/captions/ambient/data-saver, with legacy-key lift |
+| `lib/player/prefs.js` | One `localStorage` key (`jash:player:v1`) for rate/quality/volume/brightness/captions/ambient, with legacy-key lift |
 | `lib/player/labels.js` | `fmtTime`/`fmtClock`/`fmtSize`, source-label parsing, source-list building, codec warnings |
 | `lib/player/commands.js` | The 37-command input table: keys, gestures, buttons, menus + the parity report |
 | `lib/player/policy/liveTv.js` | Live TV: Jio token resolution, ClearKey, header/segment rewriting, Pocket proxy, streaming config |
@@ -216,8 +216,9 @@ Every binding in the table below is exactly what `COMMANDS` declares:
 Mobile-specific behaviour: bottom sheets instead of dropdowns, haptics on
 long-press and on seek, `wakeLock` while playing, landscape-phone full-bleed
 (CSS: `.jv-landscape-phone`), auto-PiP when the tab hides on live audio-ish
-feeds, data-saver cap (`prefs.dataSaver`, auto-suggested on `saveData`
-networks), and controls that never auto-hide while paused.
+feeds, and controls that never auto-hide while paused. The bar carries the quality
+label inside the burger, and the burger opens the sheet whose first section is the
+rendition list — one tap from "which bitrate am I getting" on any device.
 
 TV-specific: the root is a focusable `role="region"`, so remote keys reach the
 same `commandForKey` path; `.jv-theater` blackens the page while ambient dim is
@@ -247,10 +248,43 @@ on; and a pointer-less device still gets every command that has a key binding.
   react to `onFatal` if they want to fall back to another provider.
 - **Recovery**: the ladder runs *before* the error card appears. On a source
   with alternates, soft rungs are capped at 2 and the rest is spent rotating.
-- **Data-saver**: `useNetworkInfo()` reports `effectiveType ∈ {2g, slow-2g, 3g}`
-  or `saveData`; on a slow link the chrome offers a chip (with the file's
-  `sizeBytes` when the page passes one) that pins ABR to the lowest rendition
-  and remembers it in `prefs.dataSaver`.
+- **The seek window is the timeline, not the buffer** (`lib/player/kind.js`):
+  `readSeekWindow` prefers a finite `duration` and only consults `el.seekable` for
+  live-style manifests or when DVR has trimmed the head. Trusting `seekable` first
+  was the actual cause of "seek restarts from 0" on single-file streams: for a plain
+  MP4 it reports only what has been downloaded, so `clampToSeekWindow` rewrote
+  "seek to 58:00" into "seek to 4 s" — no error, nothing to retry, and a scrubber
+  that thought 4 s was the whole file.
+- **Seeking a file that is not downloaded yet** (the direct MP4/MKV path, e.g.
+  Telegram-hosted Stremio streams): a seek into a byte range that is not cached
+  can take many seconds without `currentTime` moving, which is exactly what the
+  stall watchdog used to read as a dead element. While `el.seeking` is true — or
+  within `SEEK_GRACE_MS` of `seekTo` — the ladder is not started, and `RELOAD`
+  carries the position across the `src` re-attach (`positionPreserved`) instead
+  of restarting the file. A genuinely dead element still reaches the ladder, so
+  this is a delay, not a disable.
+- **One entry point for the rest**: the bar is play, ±10, time, volume (desktop),
+  the burger and fullscreen. The burger is labelled with the current quality and
+  opens `SettingsMenu`, whose first section is the rendition list. Freeze frame, PiP,
+  AirPlay, stats and the source/audio/subtitle pickers are in the same sheet, so
+  nothing sits behind a `sm:` breakpoint: a control the phone cannot see is a control
+  that does not exist.
+- **Removed on request**: A–B loop, ambient dim and lock have no UI anywhere — bar
+  *and* sheet. `loopSegment` / `toggleAmbient` / `lockControls` remain keyboard
+  commands declared `desktopOnly`, which is what keeps the parity test from
+  re-claiming a control that no longer ships.
+
+## 6b. The settings sheet (`SettingsMenu`)
+
+Quality (inline) · Speed (Slower / Normal / Faster + chips) · Audio (only when the file has more
+than one track) · Subtitles (on/off, import, delay & style) · Source (only when there are
+mirrors) · This video (freeze frame, restart from 0, PiP, AirPlay) · Interface (stats).
+
+On desktop the panel anchors **inside** the player box (`bottom-28 right-2`), not above it: the
+sheets are siblings of the control bar, so an outside-above anchor (`bottom-full`) placed them
+outside a frame that is `overflow-hidden` — that is what "I clicked settings and nothing
+happened" was. Both the panel and its backdrop carry `data-dvp="controls"`, so they are treated
+as chrome by the pointer/gesture layer instead of as the video surface.
 - **Preferences** (`jash:player:v1`) are deliberately **global** — one speed,
   volume, quality cap and subtitle style for the whole app, not per host or per
   title. Per-source memory was planned and dropped: on a metered connection the

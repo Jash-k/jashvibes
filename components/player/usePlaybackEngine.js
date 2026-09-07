@@ -42,6 +42,10 @@ import { DEFAULT_LADDER, RUNGS, capabilitiesFor, nextRecoveryAction } from '@/li
 import { createSubtitleTrack, releaseSubtitleTrack, shiftVttCues, subtitleStyleToCss } from '@/lib/player/subtitles';
 
 const TIME_TICK_MS = 250;
+/** How long a seek may take to produce progress before the ladder may react.
+ *  Telegram/Stremio files are fetched lazily, so a jump to an unbuffered
+ *  minute can legitimately spend 10+ seconds on one byte-range request. */
+const SEEK_GRACE_MS = 25_000;
 const WATCHDOG_MS = 500;
 const STALL_SAMPLES = 3; // ~1.5 s before the spinner appears
 const FATAL_STALL_SAMPLES = 16; // ~8 s before the recovery ladder starts
@@ -151,6 +155,12 @@ export function usePlaybackEngine(options = {}) {
   const resumeAppliedRef = useRef(false);
   const scrubbingRef = useRef({ active: false, value: 0 });
   const stallSamplesRef = useRef(0);
+  const seekGraceUntilRef = useRef(0);
+  // { target, tries } — a seek the element has not honoured yet. Some file hosts
+  // answer the first `currentTime` write with a clamped position; one re-issue
+  // usually lands it, and it is capped so we can never fight the user in a loop.
+  const seekVerifyRef = useRef(null);
+  const lastPositionRef = useRef(0);
   const lastSampleTimeRef = useRef(0);
   const dropDrmRef = useRef(false);
   const offlineRef = useRef(typeof navigator !== 'undefined' ? navigator.onLine === false : false);
@@ -299,6 +309,10 @@ export function usePlaybackEngine(options = {}) {
     try {
       el.currentTime = clamped;
       setTime(clamped);
+      lastPositionRef.current = clamped;
+      // Give the fetch a chance before any recovery may fire (see SEEK_GRACE_MS).
+      seekGraceUntilRef.current = Date.now() + SEEK_GRACE_MS;
+      seekVerifyRef.current = { target: clamped, tries: 0 };
       return true;
     } catch {
       return false;
@@ -832,6 +846,20 @@ export function usePlaybackEngine(options = {}) {
       return;
     }
 
+    // A seek into a byte range the browser has not downloaded yet stops
+    // `currentTime` without breaking the element — which is what the stall
+    // watchdog reads as a dead player. Reloading there is what restarted the file
+    // at 0:00, so hold instead: buffering stays visible and the counter is parked
+    // one sample short, so the next tick asks again. Once `el.seeking` clears and
+    // the grace window expires (SEEK_GRACE_MS after the last commanded seek), the
+    // ladder below runs normally — a real stall is delayed, never excused.
+    if (el && mapped.kind === 'stall' && (el.seeking || Date.now() < seekGraceUntilRef.current)) {
+      commitStatus('buffering', mapped.message);
+      setAttemptNote('Waiting for that part of the file to download…');
+      stallSamplesRef.current = FATAL_STALL_SAMPLES - 1;
+      return;
+    }
+
     const state = ladderRef.current;
     if (!state.startedAt) state.startedAt = Date.now();
 
@@ -845,6 +873,7 @@ export function usePlaybackEngine(options = {}) {
       live,
       model: { live, canSeek: derivePlaybackModel(el).canSeek },
       error: mapped,
+      seeking: Boolean(el?.seeking) || Date.now() < seekGraceUntilRef.current,
     });
     caps.hasPolicyRecovery = typeof activePolicy?.recover === 'function' && Boolean(activePolicy.hasRecovery?.());
     if (isDrmConfigError(mapped) && !dropDrmRef.current) caps.hasDrm = true;
@@ -883,7 +912,13 @@ export function usePlaybackEngine(options = {}) {
 
     window.setTimeout(async () => {
       try {
-        if (action.positionPreserved && el) pendingSeekRef.current = Number(el.currentTime) || pendingSeekRef.current;
+        if (action.positionPreserved && el) {
+          // Prefer the live position, then the last position we commanded, then
+          // whatever a previous rung already parked. `el.currentTime` is 0 right
+          // after the browser gave up on a seek, so it cannot be the only source.
+          const keep = Number(el.currentTime) || lastPositionRef.current || Number(pendingSeekRef.current) || 0;
+          if (keep > 1 || live) pendingSeekRef.current = keep;
+        }
 
         switch (action.rung) {
           case RUNGS.RETRY_STREAMING:
@@ -1030,7 +1065,29 @@ export function usePlaybackEngine(options = {}) {
         handlersRef.current.onEnded?.();
       } catch {}
     };
-    const onSeeked = () => refreshModel();
+    const onSeeked = () => {
+      refreshModel();
+      // The seek landed; from here a lack of progress is a real stall again.
+      stallSamplesRef.current = Math.min(stallSamplesRef.current, STALL_SAMPLES);
+      const verify = seekVerifyRef.current;
+      if (!verify) return;
+      const landed = Number(el.currentTime) || 0;
+      const model = derivePlaybackModel(el);
+      if (!model.live && Math.abs(landed - verify.target) > 1.5 && verify.tries < 1 && verify.target < (Number(el.duration) || Infinity) - 1) {
+        // We asked for X and the element reported Y — it refused the range rather
+        // than finishing the seek. Push it once more before anything else decides
+        // the file is broken (that decision is what used to restart playback).
+        verify.tries += 1;
+        seekGraceUntilRef.current = Date.now() + SEEK_GRACE_MS;
+        try {
+          el.currentTime = clampToSeekWindow(el, verify.target);
+        } catch {
+          seekVerifyRef.current = null;
+        }
+        return;
+      }
+      seekVerifyRef.current = null;
+    };
     const onError = () => {
       if (!el.error) return;
       failureRef.current?.(mapPlaybackError(el.error, { offline: offlineRef.current }), 'element');
@@ -1061,6 +1118,10 @@ export function usePlaybackEngine(options = {}) {
       if (userWantsPlayRef.current && !el.paused && !el.ended) {
         const advanced = current - lastSampleTimeRef.current;
         if (advanced > 0.05) {
+          lastPositionRef.current = current;
+          // Playing again: the seek landed, so stop granting it protection.
+          seekGraceUntilRef.current = 0;
+          seekVerifyRef.current = null;
           if (stallSamplesRef.current >= STALL_SAMPLES) {
             markHealthy();
             setStatus((state) => (state === 'buffering' ? 'ready' : state));

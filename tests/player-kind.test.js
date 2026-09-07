@@ -60,6 +60,25 @@ test('needsEngine: DASH always, HLS only without native playback, files never', 
   assert.equal(needsEngine('https://a/x.mp4', 'direct'), false);
 });
 
+test('readSeekWindow: a finite duration wins over the buffered head of a plain file', () => {
+  // The regression this pins: a Telegram/Stremio MP4 that has only buffered 4 s
+  // still has a 3600 s timeline. Treating `seekable` as the seek range clamped
+  // every user seek back to ~4 s, which looked like "seeking restarts the file".
+  const partial = fakeElement({ duration: 3600, seekable: [[0, 4.2]] });
+  assert.deepEqual(readSeekWindow(partial), { start: 0, end: 3600 });
+  assert.equal(clampToSeekWindow(partial, 3500), 3500, 'a seek into unbuffered bytes must not be clamped');
+  assert.equal(clampToSeekWindow(partial, 3600), 3599.75, 'still keeps 0.25 s off the very end');
+  // A host that ignores Range leaves `seekable` covering only the head; the
+  // scrubber must still span the whole file.
+  assert.ok(progressRatio(fakeElement({ duration: 100, seekable: [[0, 4]], currentTime: 50 })) === 0.5);
+  // DVR trimming of a finite file: honour the slid start, never the short end.
+  assert.deepEqual(readSeekWindow(fakeElement({ duration: 3600, seekable: [[100, 200]] })), { start: 100, end: 3600 });
+  // A live-style manifest has no duration, so the window stays the seekable one.
+  const live = fakeElement({ duration: Infinity, seekable: [[1000, 1030]] });
+  assert.deepEqual(readSeekWindow(live), { start: 1000, end: 1030 });
+  assert.equal(clampToSeekWindow(live, 20), 1000, 'a live window still clamps forward to its start');
+});
+
 test('readSeekWindow: seekable wins, finite duration is the fallback, Infinity is no window', () => {
   assert.deepEqual(readSeekWindow(fakeElement({ seekable: [[10, 60]] })), { start: 10, end: 60 });
   assert.deepEqual(readSeekWindow(fakeElement({ duration: 300 })), { start: 0, end: 300 });

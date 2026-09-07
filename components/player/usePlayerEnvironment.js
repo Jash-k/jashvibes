@@ -36,34 +36,11 @@ export function useLandscapePhone() {
   return landscape;
 }
 
-const SLOW_TYPES = new Set(['slow-2g', '2g', '3g']);
 
 /**
  * `navigator.connection` — used for data-saver defaults and the "480p to avoid
  * buffering" chip. Also reports the file size warning for big remuxes.
  */
-export function useNetworkInfo() {
-  const [info, setInfo] = useState({ effectiveType: '', saveData: false, downlink: 0, slow: false });
-  useEffect(() => {
-    if (typeof navigator === 'undefined') return undefined;
-    const connection = navigator.connection;
-    if (!connection) return undefined;
-    const apply = () => {
-      const effectiveType = String(connection.effectiveType || '');
-      setInfo({
-        effectiveType,
-        saveData: Boolean(connection.saveData),
-        downlink: Number(connection.downlink) || 0,
-        slow: SLOW_TYPES.has(effectiveType) || Boolean(connection.saveData),
-      });
-    };
-    apply();
-    connection.addEventListener?.('change', apply);
-    return () => connection.removeEventListener?.('change', apply);
-  }, []);
-  return info;
-}
-
 export function useOnlineStatus() {
   const [online, setOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine !== false);
   useEffect(() => {
