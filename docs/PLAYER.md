@@ -263,18 +263,29 @@ on; and a pointer-less device still gets every command that has a key binding.
   carries the position across the `src` re-attach (`positionPreserved`) instead
   of restarting the file. A genuinely dead element still reaches the ladder, so
   this is a delay, not a disable.
-- **Some hosts ignore `Accept-Ranges`, and that cannot be detected from the URL.** A Telegram or CDN
-  file that restarts the download instead of serving a range looks identical to a broken stream: the
-  seek lands at 0, the file plays, and the ladder reloads it — which is the complaint itself, "some
-  streams seek, some restart from 0". `capabilitiesFor` takes no hint about range support, and a HEAD
-  request per source is not free on a metered phone. So the engine *earns* the verdict: `seekVerifyRef`
-  remembers what was **asked** (not what was clamped to), one retry, and a second consecutive miss on a
-  non-live finite file sets `noRangeRef`. From then on `clampSeekTarget(…, { noRange: true })` keeps
-  forward seeks inside the downloaded part (5 s of headroom, never behind `currentTime`), `seekRefused`
-  is exposed so the scrubber says "scrub limited to downloaded", and `noRangeHoldRef` holds the ladder
-  20 s — during which a stall is explained rather than "fixed" by a reload that restarts the file at 0.
-  The verdict resets when a *new* source loads (`reason === 'initial'`), never on a reload of the same
-  one, or the ladder and the seek would fight each other forever.
+- **A jump the browser cannot resolve restarts the read — and it is not always the server's fault.**
+  Two different causes look identical on screen: the origin does not answer `Range` (so a byte offset
+  is impossible), or the origin answers *perfectly* and the **container** has no index a browser demuxer
+  can use. The second one is the common case on Telegram-backed Stremio sources: those files are
+  `video/x-matroska`, Matroska/WebM requires a `Cues` element for seeking, and when it is missing or
+  placed after the data, Chromium answers a forward seek by *scanning linearly from where it is* — the
+  download walks toward the target, which reads as "it started from 0". Stremio itself has no such
+  problem: mpv/FFmpeg build their own index by bisecting with range requests, so the same file seeks
+  instantly. Measured on the default Global Stremio addon, which is why the wording of this section
+  changed once: `Range: bytes=0-` → `206` + `content-range: bytes 0-963985796/963985797`,
+  `accept-ranges: bytes`, `access-control-allow-origin: *`, and repeated mid-file and tail ranges all
+  `206` — the host serves ranges, the demuxer still cannot jump. (Recipe worth re-running: fetch
+  `/stream/movie/<imdb>.json` from the addon, then `curl -s -o /dev/null -D - -r 20000000-20001023 <url>`.)
+  Because `capabilitiesFor` cannot see either cause from the URL and a HEAD probe per source is not free
+  on a metered phone, the engine *earns* the verdict instead: `seekVerifyRef` remembers what was
+  **asked** (not what it settled for), retries once, and a second consecutive miss on a non-live finite
+  file sets `coarseSeekRef`. From then on `clampSeekTarget(…, { coarse: true })` keeps forward seeks
+  inside what has been read (5 s of headroom, never behind `currentTime`), `seekRefused` is exposed so
+  the scrubber says "scrub limited to downloaded", and `coarseSeekHoldRef` holds the ladder for 20 s, so
+  a pause that is explained is not "fixed" by a reload that re-reads the file. The verdict resets when a
+  *new* source loads (`reason === 'initial'`), never on a reload of the same one, or the ladder and the
+  seek would fight each other forever. The message names **the file**, never the host, because in the
+  common case the host is fine.
 - **One entry point for the rest**: the bar is play, ±10, time, volume (desktop),
   the burger and fullscreen. The burger is labelled with the current quality and
   opens `SettingsMenu`, whose first section is the rendition list. Freeze frame, PiP,

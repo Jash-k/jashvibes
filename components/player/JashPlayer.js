@@ -938,7 +938,7 @@ export function JashPlayer(props) {
     seekRefusedNotedRef.current = true;
     setNotice({
       tone: 'warn',
-      text: 'This host ignores byte-range requests, so seeking is limited to the part already downloaded. Playback will not restart from 0.',
+      text: 'This file has no seek index the browser can use, so a long jump would mean re-reading it from the start. Scrubbing stays inside what has downloaded, and playback will not restart at 0.',
     });
   }, [engine.seekRefused]);
   const qualityLabel = prefs.qualityAuto || !prefs.qualityHeight ? 'Auto' : Number(prefs.qualityHeight) >= 2160 ? '4K' : `${prefs.qualityHeight}p`;
@@ -1178,7 +1178,7 @@ export function JashPlayer(props) {
           <div
             ref={trackRef}
             className="group/track relative -my-2 cursor-pointer py-3"
-            title={engine.seekRefused ? 'This host ignores byte-range requests: you can scrub within what has downloaded' : undefined}
+            title={engine.seekRefused ? 'The browser cannot jump ahead in this file: you can scrub within what has downloaded' : undefined}
             onPointerDown={onTrackDown}
             onPointerMove={onTrackMove}
             onPointerUp={onTrackUp}

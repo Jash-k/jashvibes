@@ -83,7 +83,7 @@ test('a normal host may be seeked anywhere the window allows', () => {
   assert.equal(clampSeekTarget(null, 5), null);
 });
 
-test('a host that restarts the download is seek-limited to what has downloaded', () => {
+test('a file the browser cannot jump ahead in is seek-limited to what has been read', () => {
   const el = {
     duration: 600,
     currentTime: 10,
@@ -91,22 +91,24 @@ test('a host that restarts the download is seek-limited to what has downloaded',
     buffered: { length: 1, start: () => 0, end: () => 120 },
   };
   assert.equal(readBufferedEnd(el), 120);
-  assert.equal(clampSeekTarget(el, 90, { noRange: true }), 90, 'inside the buffer: straight through');
-  assert.equal(clampSeekTarget(el, 300, { noRange: true }), 115, 'past the buffer: land 5 s before its end, still ahead of where we are');
-  assert.equal(clampSeekTarget(el, 5, { noRange: true }), 5, 'backwards is free — the browser already has those bytes in the same stream');
+  assert.equal(clampSeekTarget(el, 90, { coarse: true }), 90, 'inside the buffer: straight through');
+  assert.equal(clampSeekTarget(el, 300, { coarse: true }), 115, 'past the buffer: land 5 s before its end, still ahead of where we are');
+  assert.equal(clampSeekTarget(el, 5, { coarse: true }), 5, 'backwards is free — the browser already has those bytes in the same stream');
   const nothingBuffered = { ...el, buffered: { length: 0 }, currentTime: 42 };
-  assert.equal(clampSeekTarget(nothingBuffered, 300, { noRange: true }), 43, 'with no buffer report at all, only a nudge is allowed');
+  assert.equal(clampSeekTarget(nothingBuffered, 300, { coarse: true }), 43, 'with no buffer report at all, only a nudge is allowed');
 });
 
-test('the engine learns the refusal from evidence, says so, and does not reload the file', () => {
+test('the engine learns the refusal from evidence, says so, and does not re-read the file', () => {
   const engine = read('../components/player/usePlaybackEngine.js');
-  assert.match(engine, /clampSeekTarget\(el, asked, \{ noRange: noRangeRef\.current \}\)/);
+  assert.match(engine, /clampSeekTarget\(el, asked, \{ coarse: coarseSeekRef\.current \}\)/);
   assert.match(engine, /seekVerifyRef\.current = \{ target: clamped, tries: 0, asked \}/, 'the retry has to know what was asked, not what was settled for');
-  assert.match(engine, /noRangeRef\.current = true;\s*\n\s*setSeekRefused\(true\);/, 'two refused seeks on the same host is the verdict');
-  assert.match(engine, /noRangeHoldRef\.current = Date\.now\(\) \+ 20_000;/, 'the recovery ladder is held while playback continues from where the file actually is');
-  assert.match(engine, /Date\.now\(\) < noRangeHoldRef\.current/, 'held means the ladder sees "seeking", so it will not reload the source');
-  assert.match(engine, /if \(reason === 'initial' && noRangeRef\.current\)/, 'a new source starts clean; a reload on the same one does not');
+  assert.match(engine, /coarseSeekRef\.current = true;\s*\n\s*setSeekRefused\(true\);/, 'two refused seeks on one file is the verdict');
+  assert.match(engine, /coarseSeekHoldRef\.current = Date\.now\(\) \+ 20_000;/, 'the recovery ladder is held while playback continues from where the file actually is');
+  assert.match(engine, /Date\.now\(\) < coarseSeekHoldRef\.current/, 'held means the ladder sees "seeking", so it will not reload the source');
+  assert.match(engine, /if \(reason === 'initial' && coarseSeekRef\.current\)/, 'a new source starts clean; a reload on the same one does not');
   assert.match(engine, /^\s*seekRefused,$/m, 'the UI needs the state to stop promising a scrubber that lies');
   const player = read('../components/player/JashPlayer.js');
   assert.match(player, /engine\.seekRefused/, 'and the player shows it on the track');
+  assert.ok(!engine.includes('This host ignores byte-range requests'), 'the file, not the host, is what the message may blame');
+  assert.ok(!player.includes('This host ignores byte-range requests'), 'the file, not the host, is what the message may blame');
 });

@@ -162,10 +162,12 @@ export function usePlaybackEngine(options = {}) {
   // usually lands it, and it is capped so we can never fight the user in a loop.
   const seekVerifyRef = useRef(null);
   // Set once a seek has been *demonstrated* to be refused: asked for X, landed nowhere near X, twice.
-  // A host that supports ranges either lands or errors, so the only explanation left is no byte-range
-  // support — and the honest response is to stop pretending the file is scrubable, not to reload it.
-  const noRangeRef = useRef(false);
-  const noRangeHoldRef = useRef(0);
+  // The refusal says the browser cannot resolve a jump in this file — no `Accept-Ranges`, or a
+  // container with no seek index a browser demuxer can use (MKV without `Cues`). It does NOT say the
+  // host is broken: the Telegram-backed Stremio sources answer `206` + `Content-Range` correctly and
+  // still restart, because Chromium answers a cueless file by scanning forward from where it is.
+  const coarseSeekRef = useRef(false);
+  const coarseSeekHoldRef = useRef(0);
   const [seekRefused, setSeekRefused] = useState(false);
   const lastPositionRef = useRef(0);
   const lastSampleTimeRef = useRef(0);
@@ -323,10 +325,10 @@ export function usePlaybackEngine(options = {}) {
     const el = videoRef.current;
     if (!el) return false;
     const asked = Number(target);
-    const clamped = clampSeekTarget(el, asked, { noRange: noRangeRef.current });
+    const clamped = clampSeekTarget(el, asked, { coarse: coarseSeekRef.current });
     if (clamped === null) return false;
-    if (noRangeRef.current && Number.isFinite(asked) && Math.abs(clamped - asked) > 1) {
-      commitStatus('ready', 'This host ignores byte-range requests — seeking is limited to what has downloaded.');
+    if (coarseSeekRef.current && Number.isFinite(asked) && Math.abs(clamped - asked) > 1) {
+      commitStatus('ready', 'The browser cannot jump ahead in this file — the seek stayed inside what it has read.');
     }
     try {
       el.currentTime = clamped;
@@ -656,9 +658,9 @@ export function usePlaybackEngine(options = {}) {
     lastSampleTimeRef.current = Number(el.currentTime) || 0;
     // Evidence is per-source, not per-reload: a recovery attempt on the same URL must keep the refusal
     // (otherwise the ladder and the seek fight each other forever), while a new source starts clean.
-    if (reason === 'initial' && noRangeRef.current) {
-      noRangeRef.current = false;
-      noRangeHoldRef.current = 0;
+    if (reason === 'initial' && coarseSeekRef.current) {
+      coarseSeekRef.current = false;
+      coarseSeekHoldRef.current = 0;
       setSeekRefused(false);
     }
     setErrorInfo(null);
@@ -902,7 +904,7 @@ export function usePlaybackEngine(options = {}) {
       live,
       model: { live, canSeek: derivePlaybackModel(el).canSeek },
       error: mapped,
-      seeking: Boolean(el?.seeking) || Date.now() < seekGraceUntilRef.current || Date.now() < noRangeHoldRef.current,
+      seeking: Boolean(el?.seeking) || Date.now() < seekGraceUntilRef.current || Date.now() < coarseSeekHoldRef.current,
     });
     caps.hasPolicyRecovery = typeof activePolicy?.recover === 'function' && Boolean(activePolicy.hasRecovery?.());
     if (isDrmConfigError(mapped) && !dropDrmRef.current) caps.hasDrm = true;
@@ -1103,14 +1105,14 @@ export function usePlaybackEngine(options = {}) {
       const landed = Number(el.currentTime) || 0;
       const model = derivePlaybackModel(el);
       const missed = Math.abs(landed - verify.target) > 1.5;
-      if (missed && verify.tries >= 1 && !noRangeRef.current && !model.live) {
-        noRangeRef.current = true;
+      if (missed && verify.tries >= 1 && !coarseSeekRef.current && !model.live) {
+        coarseSeekRef.current = true;
         setSeekRefused(true);
         // Hold the recovery ladder while playback continues from wherever the file actually is. A
-        // reload on a host with no ranges restarts the download, which is exactly the "starts from 0"
-        // complaint — so the ladder has to be told this stall is explained.
-        noRangeHoldRef.current = Date.now() + 20_000;
-        commitStatus('ready', 'This host ignores byte-range requests — forward seeks are limited to what has downloaded.');
+        // reload re-opens the file, which is exactly the "starts from 0" complaint — so the ladder has
+        // to be told that this particular pause is explained rather than fatal.
+        coarseSeekHoldRef.current = Date.now() + 20_000;
+        commitStatus('ready', 'No usable seek index for the browser: long jumps would re-read the file, so seeks stay inside what has downloaded.');
         seekVerifyRef.current = null;
         return;
       }
