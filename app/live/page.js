@@ -8,6 +8,7 @@ import { DayStrip, GuideNowLine, GuideStatus, ProgrammeCard, SourceBadges, useLi
 import { createLiveTvPolicy, isPocketChannel } from '@/lib/player/policy/liveTv';
 import PlayerIncidents from '@/components/player/PlayerIncidents';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
+import { writeLiveNow } from '@/lib/liveNow';
 import {
   LIVE_CATALOGS,
   catalogLabel,
@@ -236,6 +237,19 @@ export default function LiveTVPage() {
   // Deliberately fed the WHOLE lineup, not `filteredChannels`: the response is a few KB, so searching
   // and filtering stay instant instead of turning into a request per keystroke.
   const guide = useLiveGuide({ channels, activeId: active?.id || '' });
+
+  // Publish what is on air, for the one line the homepage is allowed to print (see lib/liveNow.js).
+  // It rides the guide the page already fetched, so this costs no extra request anywhere.
+  const guideRows = guide.rows;
+  useEffect(() => {
+    try {
+      const row = (active?.id && guideRows.get(active.id)) || [...guideRows.values()][0];
+      if (!row?.now) return;
+      writeLiveNow({ channel: active?.name || row?.name || '', title: row.now.title, minutesLeft: row.now.minutes });
+    } catch {
+      // A homepage convenience must never be able to break the player page.
+    }
+  }, [active, guideRows]);
   const guideCoverage = useMemo(() => {
     const rows = [...guide.rows.values()];
     return { linked: rows.filter((row) => row.matched).length, unlinked: rows.filter((row) => !row.matched).length };

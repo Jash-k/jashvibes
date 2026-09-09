@@ -8,7 +8,10 @@ import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '
 import Icon from '@/components/Icons';
 import MasonryGrid from '@/components/MasonryGrid';
 import { releaseQualityChip, parseReleaseQuality, chipClassForTier, labelForTier } from '@/lib/quality';
-import { isFavoriteItem, makeWatchKey, toggleFavoriteItem, useLibraryVersion } from '@/lib/watchStore';
+import { getHistory, getProgressPercent, isFavoriteItem, makeWatchKey, toggleFavoriteItem, useLibraryVersion } from '@/lib/watchStore';
+import RailNav from '@/components/rail/RailNav';
+import RailFocus from '@/components/rail/RailFocus';
+import { readLiveNow } from '@/lib/liveNow';
 
 const PAGE_SIZE = 15;
 const HOME_CACHE_KEY = 'jash:home:v5';
@@ -116,10 +119,14 @@ function SearchBox({ onOpenPalette }) {
             <div className="p-4 text-sm text-zinc-400">No TMDB titles found.</div>
           ) : null}
 
-          {results.map((item) => (
+          {results
+            // Without a tmdbId there is nothing for /watch to resolve, so a row for it would be a
+            // broken link — and `watchHref` is now the only place a watch link is built.
+            .filter((item) => item?.tmdbId)
+            .map((item) => (
             <Link
               key={`${item.type}-${item.tmdbId}`}
-              href={`/watch/${item.type}/${item.tmdbId}${watchQualityParam(item)}`}
+              href={watchHref(item)}
               className="flex gap-3 rounded-2xl p-2 transition hover:bg-white/[0.06]"
               onClick={() => setQuery('')}
             >
@@ -200,6 +207,18 @@ function watchQualityParam(item, hasQuery = false) {
   const tier = item?.qualityTier || parseReleaseQuality(qualitySourceText(item)).tier;
   if (!tier) return '';
   return `${hasQuery ? '&' : '?'}quality=${encodeURIComponent(tier)}`;
+}
+
+/**
+ * The single shape of a watch link on this page. MediaCard and the focus panel both need it, and two
+ * copies of a URL builder is how one of them ends up dropping the quality hint.
+ */
+function watchHref(item) {
+  if (!item?.tmdbId) return undefined;
+  const episode = item.type === 'series' && (item.season || item.episode)
+    ? `?season=${item.season || 1}&episode=${item.episode || 1}`
+    : '';
+  return `/watch/${item.type}/${item.tmdbId}${episode}${watchQualityParam(item, Boolean(episode))}`;
 }
 
 function MatchDialog({ item, onClose, onMatched }) {
@@ -295,9 +314,7 @@ function QualityDebugLine({ items = [] }) {
 function MediaCard({ item, onItemMatched, delay = 0 }) {
   const [matchOpen, setMatchOpen] = useState(false);
   const hasTMDB = Boolean(item.tmdbId);
-  const href = hasTMDB
-    ? `/watch/${item.type}/${item.tmdbId}${item.type === 'series' && (item.season || item.episode) ? `?season=${item.season || 1}&episode=${item.episode || 1}` : ''}${watchQualityParam(item, item.type === 'series' && Boolean(item.season || item.episode))}`
-    : undefined;
+  const href = hasTMDB ? watchHref(item) : undefined;
   const Wrapper = hasTMDB ? Link : 'div';
   const qualityChip = item?.type === 'series'
     ? { label: 'Series', cls: 'border-white/15 bg-black/60 text-zinc-200' }
@@ -506,173 +523,6 @@ function TabButton({ active, children, count, onClick }) {
   );
 }
 
-function HeroCarousel({ items }) {
-  const slides = useMemo(
-    () => (items || []).filter((item) => item.tmdbId && (item.backdropUrl || item.posterUrl)).slice(0, 6),
-    [items],
-  );
-  const [idx, setIdx] = useState(0);
-  const [progress, setProgress] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
-  const touchRef = useRef(null);
-  useLibraryVersion();
-
-  useEffect(() => {
-    if (slides.length < 2 || isPaused) return undefined;
-    const interval = 50; // update every 50ms
-    const totalDuration = 7000; // 7 seconds
-    const step = (interval / totalDuration) * 100;
-
-    const timer = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          setIdx((curr) => (curr + 1) % slides.length);
-          return 0;
-        }
-        return prev + step;
-      });
-    }, interval);
-
-    return () => clearInterval(timer);
-  }, [slides.length, isPaused, idx]);
-
-  if (!slides.length) return null;
-
-  const current = Math.min(idx, slides.length - 1);
-  const go = (dir) => {
-    setProgress(0);
-    setIdx((value) => (value + dir + slides.length) % slides.length);
-  };
-
-  const jumpTo = (slideIdx) => {
-    setProgress(0);
-    setIdx(slideIdx);
-  };
-
-  return (
-    <section aria-label="Featured releases" className="mx-auto mt-6 max-w-7xl px-4 sm:mt-8 sm:px-6 lg:px-8">
-      <div
-        className="jv-hero jv-reveal relative h-[56svh] min-h-[320px] max-h-[580px] overflow-hidden rounded-3xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/60"
-        onMouseEnter={() => setIsPaused(true)}
-        onMouseLeave={() => setIsPaused(false)}
-        onPointerMove={(event) => {
-          if (event.pointerType !== 'mouse') return;
-          const rect = event.currentTarget.getBoundingClientRect();
-          event.currentTarget.style.setProperty('--hpx', ((event.clientX - rect.left) / rect.width - 0.5).toFixed(3));
-          event.currentTarget.style.setProperty('--hpy', ((event.clientY - rect.top) / rect.height - 0.5).toFixed(3));
-        }}
-        onPointerLeave={(event) => {
-          event.currentTarget.style.removeProperty('--hpx');
-          event.currentTarget.style.removeProperty('--hpy');
-        }}
-        onTouchStart={(event) => { touchRef.current = event.touches[0].clientX; }}
-        onTouchEnd={(event) => {
-          const start = touchRef.current;
-          touchRef.current = null;
-          if (start == null) return;
-          const delta = event.changedTouches[0].clientX - start;
-          if (Math.abs(delta) > 48) {
-            go(delta < 0 ? 1 : -1);
-          }
-        }}
-      >
-        {slides.map((item, slideIdx) => {
-          const active = slideIdx === current;
-          const href = `/watch/${item.type}/${item.tmdbId}${item.type === 'series' ? `?season=${item.season || 1}&episode=${item.episode || 1}` : ''}${watchQualityParam(item, item.type === 'series')}`;
-          const heroChip = item.type === 'series' ? { label: 'Series', cls: 'border-white/15 bg-black/50 text-white' } : itemQualityChip(item);
-          const art = item.backdropUrl || item.posterUrl;
-          const favKey = makeWatchKey({ type: item.type, tmdbId: item.tmdbId });
-          const favorite = isFavoriteItem(favKey);
-          const year = String(item.releaseDate || '').slice(0, 4);
-          return (
-            <div
-              key={`${item.type}-${item.tmdbId}`}
-              className={`absolute inset-0 transition-opacity duration-[900ms] ease-out ${active ? 'z-10 opacity-100' : 'pointer-events-none z-0 opacity-0'}`}
-              aria-hidden={!active}
-            >
-              <img src={art} alt={item.title} loading={slideIdx === 0 ? "eager" : "lazy"} decoding="async" className="jv-hero-art h-full w-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/45 to-transparent" />
-              <div className="absolute inset-0 bg-gradient-to-r from-[#050505]/95 via-[#050505]/50 to-transparent" />
-              <div className="absolute inset-x-0 bottom-0 max-w-2xl p-4 sm:p-8 lg:p-10">
-                <p className="mb-1.5 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.26em] text-amber-300 sm:mb-2.5 sm:text-xs">
-                  <Icon name="sparkle" className="h-3.5 w-3.5" /> Featured Premiere
-                </p>
-                <h3 className="jv-hero-title line-clamp-2 text-2xl font-black leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">{item.title}</h3>
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-zinc-300 sm:mt-3 sm:text-xs">
-                  <span className={`rounded-full border px-2.5 py-0.5 uppercase tracking-wider backdrop-blur font-bold ${heroChip.cls || 'border-white/15 bg-black/50 text-white'}`}>{heroChip.label || 'Movie'}</span>
-                  {year ? <span className="rounded-full border border-white/15 bg-black/50 px-2.5 py-0.5 backdrop-blur font-bold">{year}</span> : null}
-                  {Number(item.rating) > 0 ? <span className="rounded-full border border-amber-300/30 bg-black/50 px-2.5 py-0.5 font-black text-amber-300 backdrop-blur">★ {Number(item.rating).toFixed(1)}</span> : null}
-                  <span className="rounded-full border border-purple-400/30 bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-200 backdrop-blur">Tamil Audio</span>
-                </div>
-                {item.synopsis ? (
-                  <p className="mt-2.5 line-clamp-2 text-xs leading-5 text-zinc-300 sm:text-sm sm:leading-6">{item.synopsis}</p>
-                ) : null}
-                <div className="mt-4 flex flex-wrap items-center gap-2.5 sm:mt-6 sm:gap-3">
-                  <Link href={href} className="jv-btn-solid !px-6 !py-3 text-sm sm:!px-8 sm:!py-3.5 sm:text-base font-black shadow-xl shadow-red-950/50">
-                    <Icon name="play" className="h-4 w-4 sm:h-5 sm:w-5" /> Play Now
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => toggleFavoriteItem({
-                      key: favKey,
-                      type: item.type,
-                      tmdbId: item.tmdbId,
-                      title: item.title,
-                      posterUrl: item.posterUrl,
-                      backdropUrl: item.backdropUrl,
-                      rating: item.rating,
-                      releaseDate: item.releaseDate,
-                    })}
-                    className="jv-btn-ghost !px-5 !py-3 text-sm font-bold sm:!py-3.5"
-                  >
-                    <span className={favorite ? "text-emerald-300" : ""}><Icon name={favorite ? "check" : "plus"} className="h-4 w-4" /></span>
-                    {favorite ? 'In My List' : 'Add to List'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-
-        {slides.length > 1 ? (
-          <>
-            <button type="button" aria-label="Previous featured title" onClick={() => go(-1)} className="absolute left-3 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur transition hover:bg-black/70 sm:grid">
-              <Icon name="chevL" className="h-5 w-5" />
-            </button>
-            <button type="button" aria-label="Next featured title" onClick={() => go(1)} className="absolute right-3 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur transition hover:bg-black/70 sm:grid">
-              <Icon name="chevR" className="h-5 w-5" />
-            </button>
-
-              {/* Apple TV+ style Segmented Progress Indicator */}
-            <div className="absolute bottom-4 right-4 z-20 flex items-center gap-2 sm:bottom-6 sm:right-8">
-              {slides.map((item, dotIdx) => {
-                const isCurrent = dotIdx === current;
-                const isPast = dotIdx < current;
-                return (
-                  <button
-                    key={`seg-${item.type}-${item.tmdbId}`}
-                    type="button"
-                    aria-label={`Featured slide ${dotIdx + 1}`}
-                    onClick={() => jumpTo(dotIdx)}
-                    className="group/seg relative h-1.5 w-8 overflow-hidden rounded-full bg-white/20 transition-all hover:h-2 hover:w-10 sm:w-12"
-                  >
-                    <div
-                      className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-amber-400 via-rose-500 to-purple-500 shadow-[0_0_8px_rgba(244,63,94,0.8)] transition-[width] duration-75 ease-linear"
-                      style={{
-                        width: isCurrent ? `${progress}%` : isPast ? '100%' : '0%',
-                      }}
-                    />
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        ) : null}
-      </div>
-    </section>
-  );
-}
-
 export default function LandingPage() {
   const [movies, setMovies] = useState([]);
   const [series, setSeries] = useState([]);
@@ -690,6 +540,64 @@ export default function LandingPage() {
   const sentinelRef = useRef(null);
 
   const featuredItems = useMemo(() => [...movies, ...series], [movies, series]);
+
+  // Rail OS: which title is under the ring is decided here, by the data, not by a timer. Unfinished
+  // items come first because they are the ones you actually press, then the current tab's list. An
+  // item with no TMDB match still gets a tile — hiding it would hide the reason to go match it.
+  const libraryVersion = useLibraryVersion();
+  // Read once, after mount, from localStorage: the homepage does not poll the guide, it remembers
+  // /live. Read during render it would also disagree with the server HTML, which has no storage.
+  const [liveNow, setLiveNow] = useState(null);
+  useEffect(() => {
+    setLiveNow(readLiveNow());
+  }, []);
+  const focusSlides = useMemo(() => {
+    const slides = [];
+    const seen = new Set();
+    for (const entry of getHistory().filter((item) => item?.href).slice(0, 3)) {
+      const key = entry.href;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      slides.push({
+        id: `resume-${entry.key || key}`,
+        title: entry.title || 'Untitled',
+        type: entry.type || 'movie',
+        href: entry.href,
+        infoHref: entry.href,
+        posterUrl: entry.posterUrl || entry.backdropUrl || '',
+        backdropUrl: entry.backdropUrl || entry.posterUrl || '',
+        chips: [],
+        progress: getProgressPercent(entry),
+        note: 'Where you left off',
+      });
+    }
+    for (const item of featuredItems) {
+      const backdrop = item.backdropUrl || item.posterUrl || '';
+      if (!backdrop) continue;
+      const href = watchHref(item);
+      const key = href || `${item.type}:${item.id || item.title}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const chip = item.type === 'series' ? null : itemQualityChip(item);
+      slides.push({
+        id: `${item.type}-${item.tmdbId || item.id || item.title}`,
+        title: item.title || 'Untitled',
+        year: item.year || '',
+        type: item.type || 'movie',
+        href,
+        infoHref: href,
+        posterUrl: item.posterUrl || backdrop,
+        backdropUrl: backdrop,
+        chips: chip?.label ? [chip.label] : [],
+        progress: 0,
+        note: href ? '' : 'No TMDB match yet — bind it once to unlock every stream server',
+      });
+    }
+    return slides.slice(0, 14);
+    // `libraryVersion` is the resume half of the list: getHistory() answers from a cache the store
+    // invalidates on its own, so the value is a stamp, not an input the body reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [featuredItems, libraryVersion]);
 
   useEffect(() => {
     const cached = readSessionCache(HOME_CACHE_KEY);
@@ -892,56 +800,60 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <main className="min-h-dvh overflow-x-hidden bg-[#050505] text-zinc-100">
+    <main className="jv-rail-shift min-h-dvh overflow-x-hidden bg-[#050505] text-zinc-100">
+      <RailNav
+        onOpenSearch={() => {
+          const node = document.getElementById('tmdb-search');
+          node?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+          node?.focus?.({ preventScroll: true });
+        }}
+      />
       <section className="relative overflow-visible border-b border-white/10">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,_rgba(220,38,38,0.28),_transparent_34%),radial-gradient(circle_at_85%_20%,_rgba(234,179,8,0.12),_transparent_30%),linear-gradient(to_bottom,_rgba(0,0,0,0),_#050505)]" />
-        <div className="relative mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-14 lg:px-8 lg:py-16">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-4xl">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
-                <img
-                  src="/brand/logo.png"
-                  alt="JaSH ViBeS logo"
-                  className="h-24 w-24 rounded-full object-contain drop-shadow-[0_0_28px_rgba(217,70,239,0.45)] sm:h-32 sm:w-32 lg:h-36 lg:w-36"
-                  loading="eager"
-                  decoding="async"
-                />
-                <h1 className="jash-vibes-logo text-4xl tracking-tight min-[380px]:text-5xl sm:text-7xl lg:text-8xl">
-                  JaSH ViBeS
-                </h1>
-              </div>
-              <div className="mt-6 flex flex-wrap gap-2">
-                <Link href="/music" title="Music — ராக வானம்" className="jv-btn-ghost">
-                  <span className="text-emerald-300"><Icon name="music" className="h-4 w-4" /></span> Music
-                </Link>
-                <Link href="/sports" className="jv-btn-ghost">
-                  <span className="text-amber-300"><Icon name="trophy" className="h-4 w-4" /></span> Sports
-                </Link>
-                <Link href="/live" className="jv-btn-ghost">
-                  <span className="text-red-400"><Icon name="live" className="h-4 w-4" /></span> Live TV
-                </Link>
-                <Link href="/classics" title="ReTro — Vintage Tamil Cinema" className="jv-btn-ghost">
-                  <span className="text-amber-400">🎞️</span> ReTro
-                </Link>
-                <a href="/stremio?home=1" onClick={(event) => { event.preventDefault(); window.location.assign('/stremio?home=1'); }} className="jv-btn-ghost">
-                  <span className="text-fuchsia-300"><Icon name="sparkle" className="h-4 w-4" /></span> Stremio
-                </a>
-                <Link href="/my-list" title="My List & Continue Watching" className="jv-btn-ghost">
-                  <span className="text-rose-400"><Icon name="heart" className="h-4 w-4" /></span> My List
-                </Link>
-                <CleanEmbedButtons />
-              </div>
-            </div>
-
-            <div className="sticky top-2 z-40 w-full lg:top-6 lg:max-w-md">
-              <SearchBox onOpenPalette={setPaletteOpen} />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_16%_0%,_rgba(220,38,38,0.24),_transparent_36%),radial-gradient(circle_at_88%_18%,_rgba(234,179,8,0.1),_transparent_30%),linear-gradient(to_bottom,_rgba(0,0,0,0),_#050505)]" />
+        {/* Rail OS keeps the brand line, the search field and the embed utilities in one slim bar. The
+            old header spent 12rem on a wordmark and six ghost buttons that the rail now owns — on a
+            phone that pushed the first actual title below the fold. */}
+        <div className="relative mx-auto flex w-full max-w-[1500px] flex-col gap-3 px-4 py-3.5 sm:px-6 lg:flex-row lg:items-center lg:gap-5 lg:px-8">
+          <div className="flex shrink-0 items-center gap-3">
+            <img
+              src="/brand/logo.png"
+              alt="JaSH ViBeS logo"
+              className="h-10 w-10 rounded-full object-contain drop-shadow-[0_0_18px_rgba(217,70,239,0.4)] sm:h-11 sm:w-11"
+              loading="eager"
+              decoding="async"
+              width="44"
+              height="44"
+            />
+            <div className="min-w-0">
+              <h1 className="jash-vibes-logo text-2xl leading-none tracking-tight sm:text-[26px]">JaSH ViBeS</h1>
+              <p className="mt-1 truncate text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">
+                {formatDateTime(updatedAt)}
+              </p>
             </div>
           </div>
 
+          <div className="w-full lg:max-w-md">
+            <SearchBox onOpenPalette={setPaletteOpen} />
+          </div>
+
+          {/* Utilities, not destinations — so they sit in the bar rather than the rail, and on a phone
+              they are still reachable: the six nav targets live in the bottom dock, these do not.
+              Stremio reloads the document on purpose: a manifest change has to drop the old config. */}
+          <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+            <a
+              href="/stremio?home=1"
+              onClick={(event) => { event.preventDefault(); window.location.assign('/stremio?home=1'); }}
+              className="jv-btn-ghost"
+              title="Stremio addon sources"
+            >
+              <span className="text-fuchsia-300"><Icon name="sparkle" className="h-4 w-4" /></span> Stremio
+            </a>
+            <CleanEmbedButtons />
+          </div>
         </div>
       </section>
 
-      <HeroCarousel items={featuredItems} />
+      <RailFocus slides={focusSlides} eyebrow="Now on your shelf" onAir={liveNow} />
 
       <LibraryRows />
 

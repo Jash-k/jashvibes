@@ -776,26 +776,8 @@ html.day-mode :is([class*="border-blue-300/"], [class*="border-blue-400/"], [cla
 html.day-mode :is([class*="border-indigo-300/"], [class*="border-indigo-400/"], [class*="border-indigo-500/"], [class*="border-violet-300/"], [class*="border-violet-400/"], [class*="border-violet-500/"], [class*="border-purple-300/"], [class*="border-purple-400/"], [class*="border-purple-500/"]) { border-color: rgba(124, 58, 237, 0.5) !important; }
 html.day-mode :is([class*="border-fuchsia-300/"], [class*="border-fuchsia-400/"], [class*="border-fuchsia-500/"], [class*="border-pink-300/"], [class*="border-pink-400/"], [class*="border-pink-500/"]) { border-color: rgba(217, 70, 239, 0.5) !important; }
 
-/* Hero banner: always cinematic. The title must stay BRIGHT over the artwork
-   in both themes (day-mode blankets would otherwise darken it). */
-.jv-hero-title {
-  color: #ffffff !important;
-  text-shadow:
-    0 2px 26px rgba(0, 0, 0, 0.95),
-    0 1px 8px rgba(0, 0, 0, 0.85),
-    0 0 44px rgba(0, 0, 0, 0.6);
-}
-html.day-mode .jv-hero [class*="text-white"] { color: #ffffff !important; }
-html.day-mode .jv-hero [class*="text-zinc-300"] { color: #e4e4e7 !important; }
-html.day-mode .jv-hero [class*="text-amber-300"] { color: #fcd34d !important; }
-html.day-mode .jv-hero [class*="bg-black/50"] { background-color: rgba(0, 0, 0, 0.5) !important; }
-html.day-mode .jv-hero .jv-btn-ghost {
-  color: #f4f4f5;
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.28);
-  box-shadow: none;
-}
-html.day-mode .jv-hero .jv-btn-ghost:hover { background: rgba(255, 255, 255, 0.18); border-color: rgba(255, 255, 255, 0.45); }
+/* The hero banner is gone (Rail OS owns the homepage now); the equivalent protection for the
+   focused title lives with .jv-focus-title below. */
 
 /* ---------------------------------------------------------------------------
  * Video Player UI (DirectWatchPlayer, Shaka, HLS, Fullscreen):
@@ -1074,12 +1056,6 @@ html.day-mode .jv-lyrics-frost{ background:rgba(26,10,38,.38)!important; -webkit
 }
 .jv-card:hover .jv-card-glare { opacity: 1; }
 
-/* --- Hero backdrop parallax --- */
-.jv-hero .jv-hero-art {
-  transform: translate3d(calc(var(--hpx, 0) * -14px), calc(var(--hpy, 0) * -9px), 0) scale(1.08);
-  transition: transform 700ms var(--jv-ease);
-}
-
 /* --- Shimmer kicker text --- */
 .jv-shimmer-text {
   background: linear-gradient(110deg, #f59e0b 20%, #ef4444 40%, #c026d3 60%, #a855f7 80%);
@@ -1173,3 +1149,186 @@ html.day-mode .jv-glowcursor { display: none; } /* light theme keeps the reticle
   .jv-card-glare { display: none; }
   .jv-shimmer-text { animation: none; }
 }
+
+/* ── Rail OS (homepage) ─────────────────────────────────────────────────────
+   The rail is the desktop/TV half of the navigation; `MobileDock` already owns phones. Sizes are
+   generous on purpose: this is read from a couch, and a target you have to hunt for with a D-pad is a
+   target nobody presses. */
+.jv-rail-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 3rem;
+  border-radius: 0.9rem;
+  padding: 0.4rem;
+  color: rgba(255, 255, 255, 0.62);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: color 180ms ease, background 180ms ease, border-color 180ms ease, transform 120ms ease;
+}
+.jv-rail-item:hover { color: #fff; background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.12); }
+.jv-rail-item:active { transform: scale(0.98); }
+.jv-rail-item-active { color: #fff; background: rgba(255, 255, 255, 0.07); border-color: rgba(255, 255, 255, 0.16); }
+.jv-rail-label { font-size: 0.78rem; font-weight: 900; letter-spacing: -0.01em; display: none; }
+.jv-rail-bar {
+  position: absolute;
+  left: -0.55rem;
+  top: 0.6rem;
+  bottom: 0.6rem;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #f59e0b, #dc2626 55%, #a855f7);
+  box-shadow: 0 0 14px rgba(244, 63, 94, 0.7);
+}
+@media (min-width: 1280px) { .jv-rail-label { display: block; } }
+
+/* The focused title. The art is absolutely positioned behind the copy and cross-fades on change, so
+   moving focus costs one paint — the old carousel paid a 50ms interval whether or not anyone looked. */
+.jv-focus { background: #06060a; }
+.jv-focus-art {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+  object-position: center 22%;
+  opacity: 0.55;
+  filter: saturate(0.95) contrast(1.05);
+  animation: jv-focus-in 420ms ease both;
+}
+.jv-focus-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to right, rgba(6, 6, 10, 0.96) 0%, rgba(6, 6, 10, 0.78) 38%, rgba(6, 6, 10, 0.35) 70%, rgba(6, 6, 10, 0.62) 100%),
+    linear-gradient(to top, rgba(6, 6, 10, 0.98) 0%, rgba(6, 6, 10, 0.2) 55%, rgba(6, 6, 10, 0.72) 100%);
+}
+@keyframes jv-focus-in { from { opacity: 0; transform: scale(1.015); } to { opacity: 0.55; transform: none; } }
+.jv-focus-eyebrow {
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+.jv-focus-title {
+  /* Over artwork in both themes: without a shadow the light-theme wash eats the letterforms, which is
+     the exact bug the old hero carried !important rules for. */
+  text-shadow: 0 2px 26px rgba(0, 0, 0, 0.85), 0 1px 8px rgba(0, 0, 0, 0.75);
+  margin-top: 0.35rem;
+  font-size: clamp(1.7rem, 5.4vw, 3.6rem);
+  line-height: 1.02;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: #fff;
+  max-width: 22ch;
+}
+.jv-focus-meta { margin-top: 0.5rem; font-size: 0.8rem; font-weight: 700; color: rgba(255, 255, 255, 0.66); }
+.jv-focus-note { margin-top: 0.4rem; font-size: 0.78rem; font-weight: 700; color: rgba(253, 230, 138, 0.85); max-width: 60ch; }
+.jv-focus-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: linear-gradient(120deg, #dc2626, #b91c1c);
+  padding: 0.6rem 1.15rem;
+  font-size: 0.85rem;
+  font-weight: 900;
+  color: #fff;
+  box-shadow: 0 14px 34px rgba(127, 29, 29, 0.4);
+  transition: transform 120ms ease, border-color 180ms ease, filter 180ms ease;
+}
+.jv-focus-cta:hover { border-color: rgba(255, 255, 255, 0.5); filter: brightness(1.08); }
+.jv-focus-cta:active { transform: scale(0.98); }
+.jv-focus-cta-muted { background: rgba(255, 255, 255, 0.06); border-style: dashed; color: rgba(255, 255, 255, 0.7); box-shadow: none; }
+.jv-focus-ghost {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.6rem 0.95rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.78);
+  transition: border-color 180ms ease, color 180ms ease;
+}
+.jv-focus-ghost:hover { border-color: rgba(255, 255, 255, 0.34); color: #fff; }
+.jv-focus-strip {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+  overflow-x: auto;
+  padding: 0.55rem 0.1rem 0.65rem;
+  scroll-snap-type: x proximity;
+  outline: none;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.jv-focus-strip::-webkit-scrollbar { display: none; }
+/* The strip itself is the focusable widget (roving tabindex); this ring is what a remote or a Tab key
+   lands on, and it is deliberately not hover-only. */
+.jv-focus-strip:focus-visible { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55); border-radius: 1.1rem; }
+.jv-focus-tile {
+  position: relative;
+  flex: 0 0 auto;
+  width: 4.4rem;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  border-radius: 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #0b0b10;
+  scroll-snap-align: center;
+  opacity: 0.7;
+  transition: opacity 180ms ease, transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+.jv-focus-tile:hover { opacity: 0.92; }
+.jv-focus-tile-on { opacity: 1; transform: translateY(-4px) scale(1.06); border-color: #fff; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8), 0 18px 40px rgba(0, 0, 0, 0.6); }
+.jv-focus-tile-progress { position: absolute; inset: auto 0 0 0; height: 3px; background: #ef4444; box-shadow: 0 0 10px rgba(239, 68, 68, 0.8); }
+
+/* Rail content shift: the rail is fixed, so the page pays for it — but only where the rail exists. */
+@media (min-width: 1024px) { .jv-rail-shift { padding-left: 78px; } }
+@media (min-width: 1280px) { .jv-rail-shift { padding-left: 188px; } }
+
+html.day-mode .jv-rail { background: rgba(250, 250, 250, 0.95); border-color: rgba(15, 23, 42, 0.1); }
+html.day-mode .jv-rail-item { color: rgba(15, 23, 42, 0.62); }
+html.day-mode .jv-rail-item:hover,
+html.day-mode .jv-rail-item-active { color: #0f172a; background: rgba(15, 23, 42, 0.06); border-color: rgba(15, 23, 42, 0.14); }
+html.day-mode .jv-focus { background: #f4f4f5; }
+html.day-mode .jv-focus-shade { background: linear-gradient(to right, rgba(244, 244, 245, 0.97) 0%, rgba(244, 244, 245, 0.8) 42%, rgba(244, 244, 245, 0.42) 74%, rgba(244, 244, 245, 0.7) 100%); }
+html.day-mode .jv-focus-title { color: #0b0b0d; }
+html.day-mode .jv-focus-meta,
+html.day-mode .jv-focus-eyebrow { color: rgba(11, 11, 13, 0.6); }
+html.day-mode .jv-focus-tile { background: #e4e4e7; border-color: rgba(15, 23, 42, 0.12); }
+html.day-mode .jv-focus-tile-on { border-color: #0b0b0d; box-shadow: 0 0 0 2px rgba(11, 11, 13, 0.85), 0 14px 30px rgba(15, 23, 42, 0.18); }
+
+@media (prefers-reduced-motion: reduce) {
+  .jv-focus-art { animation: none; }
+  .jv-focus-tile,
+  .jv-focus-tile-on { transition: none; transform: none; }
+  .jv-rail-item,
+  .jv-focus-cta { transition: none; }
+}
+.jv-focus-onair {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  max-width: 34ch;
+  min-height: 2.1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.45);
+  padding: 0.3rem 0.7rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(8px);
+  transition: border-color 180ms ease, color 180ms ease;
+}
+.jv-focus-onair:hover { border-color: rgba(248, 113, 113, 0.6); color: #fff; }
+.jv-focus-dot { width: 6px; height: 6px; border-radius: 999px; background: #ef4444; box-shadow: 0 0 10px rgba(239, 68, 68, 0.9); flex: 0 0 auto; }
+html.day-mode .jv-focus-onair { background: rgba(255, 255, 255, 0.8); border-color: rgba(15, 23, 42, 0.12); color: rgba(15, 23, 42, 0.72); }

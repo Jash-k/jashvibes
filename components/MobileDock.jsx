@@ -3,15 +3,11 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Icon from '@/components/Icons';
+import { NAV_ITEMS } from '@/components/navItems';
 
-const DOCK_ITEMS = [
-  { href: '/', label: 'Home', icon: 'home' },
-  { href: '/live', label: 'Live TV', icon: 'live' },
-  { href: '/music', label: 'Music', icon: 'music' },
-  { href: '/sports', label: 'Sports', icon: 'trophy' },
-  { href: '/classics', label: 'ReTro', icon: 'sparkle' },
-  { href: '/my-list', label: 'My List', icon: 'heart' },
-];
+// The list lives in `components/navItems.js`, shared with the homepage `RailNav`: two hardcoded copies
+// is how a section ends up reachable on the TV and missing from the phone.
+const DOCK_ITEMS = NAV_ITEMS;
 
 export default function MobileDock() {
   const pathname = usePathname() || '/';
