@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p ${PORT:-7860}",
-    "lint:player": "eslint --no-eslintrc -c eslint.player.config.cjs --ext .js,.jsx lib/player lib/liveEpg.js lib/watchStore.js components/player components/live app/api/live-epg app/live app/classics app/watch app/stremio app/stremio-watch app/sports app/player-lab lib/stremioShelf.js lib/sportsFeed.js lib/sportsFeedView.js app/api/sports tests",
+    "lint:player": "eslint --no-eslintrc -c eslint.player.config.cjs --ext .js,.jsx lib/player lib/liveEpg.js lib/watchStore.js components/player components/live app/api/live-epg app/live app/classics app/watch app/stremio app/stremio-watch app/sports app/player-lab lib/stremioShelf.js lib/sportsFeed.js lib/sportsFeedView.js app/api/sports lib/animeTamilFeed.js lib/animeTamilView.js components/anime app/anime/tamil app/api/anime tests",
     "test": "node --experimental-detect-module --no-warnings --experimental-loader=./tests/alias-loader.mjs --test tests/",
     "test:watch": "node --experimental-detect-module --no-warnings --experimental-loader=./tests/alias-loader.mjs --test --watch tests/"
   },

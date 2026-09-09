@@ -14,6 +14,8 @@ export const NAV_ITEMS = [
   { href: '/', label: 'Home', icon: 'home', accent: 'text-red-400', hint: 'Movies & series' },
   { href: '/live', label: 'Live', icon: 'live', accent: 'text-red-400', hint: 'Live TV and the guide' },
   { href: '/anime', label: 'Anime', emoji: '🌸', accent: 'text-fuchsia-300', hint: 'Animation catalogue' },
+  // `short` is what the phone dock prints — eight labels at 10 px will not fit the wider one.
+  { href: '/anime/tamil', label: 'Tamil anime', short: 'Tamil', emoji: '🎌', accent: 'text-sky-300', hint: 'Tamil dubs, read from the source' },
   { href: '/music', label: 'Music', icon: 'music', accent: 'text-emerald-300', hint: 'ராக வானம்' },
   { href: '/sports', label: 'Sports', icon: 'trophy', accent: 'text-amber-300', hint: 'Matches, scores, streams' },
   { href: '/classics', label: 'ReTro', icon: 'film', accent: 'text-amber-400', hint: 'Vintage Tamil cinema' },

@@ -42,7 +42,7 @@ export default function MobileDock() {
               ) : (
                 <Icon name={item.icon} className={`h-5 w-5 transition-transform duration-200 ${active ? 'scale-110' : ''}`} />
               )}
-              <span className="tracking-tight">{item.label}</span>
+              <span className="tracking-tight">{item.short || item.label}</span>
             </Link>
           );
         })}
