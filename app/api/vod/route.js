@@ -60,6 +60,9 @@ export async function GET(request) {
     const yearFrom = Number(searchParams.get('yearFrom') || 0);
     const yearTo = Number(searchParams.get('yearTo') || 0);
     const sort = searchParams.get('sort') || 'rating.desc';
+    // `undated=1` is the Decade Room's "no year" tab. Titles the scraper never matched to TMDB have
+    // no year at all, and a plain year window would drop them out of the archive entirely.
+    const undated = searchParams.get('undated') === '1';
 
     await dbConnect();
     await ensureVodTextIndexSafe();
@@ -78,13 +81,21 @@ export async function GET(request) {
       });
     }
 
-    const filter = {};
-    if (q) filter.$text = { $search: q };
-    if (source && source !== 'all') filter.sources = source;
-    if (genre && genre !== 'all') filter.genres = genre;
-    if (Number.isFinite(minRating) && minRating > 0) filter.rating = { ...(filter.rating || {}), $gte: minRating };
-    if (Number.isFinite(yearFrom) && yearFrom > 0) filter.year = { ...(filter.year || {}), $gte: yearFrom };
-    if (Number.isFinite(yearTo) && yearTo > 0) filter.year = { ...(filter.year || {}), $lte: yearTo };
+    // Everything except the year window. The ruler counts per decade against *this*, so switching
+    // decades shows real numbers for the other decades instead of zeroing out the one you left.
+    const shelfFilter = {};
+    if (q) shelfFilter.$text = { $search: q };
+    if (source && source !== 'all') shelfFilter.sources = source;
+    if (genre && genre !== 'all') shelfFilter.genres = genre;
+    if (Number.isFinite(minRating) && minRating > 0) shelfFilter.rating = { $gte: minRating };
+
+    const filter = { ...shelfFilter };
+    if (undated) {
+      filter.year = { $in: [null, 0] };
+    } else {
+      if (Number.isFinite(yearFrom) && yearFrom > 0) filter.year = { ...(filter.year || {}), $gte: yearFrom };
+      if (Number.isFinite(yearTo) && yearTo > 0) filter.year = { ...(filter.year || {}), $lte: yearTo };
+    }
 
     const total = await VodItem.countDocuments(filter);
     const docs = await VodItem.find(filter)
@@ -93,7 +104,11 @@ export async function GET(request) {
       .limit(limit)
       .lean();
 
-    const facets = await VodItem.aggregate([
+    // One pass for the decade histogram (over `shelfFilter`, so it is window-independent) alongside
+    // the facet lists. The collection is a few hundred documents, so this is not a second scan cost
+    // worth a cache; the page asks for it on the same request it already makes.
+    const [facets, yearRows] = await Promise.all([
+      VodItem.aggregate([
       { $group: {
         _id: null,
         minYear: { $min: '$year' },
@@ -101,6 +116,12 @@ export async function GET(request) {
         sources: { $addToSet: '$sources' },
         genres: { $addToSet: '$genres' },
       } },
+      ]),
+      VodItem.aggregate([
+        { $match: shelfFilter },
+        { $group: { _id: '$year', count: { $sum: 1 } } },
+        { $sort: { _id: 1 } },
+      ]),
     ]);
 
     const flatSources = [...new Set((facets[0]?.sources || []).flat().filter(Boolean))].sort();
@@ -114,11 +135,19 @@ export async function GET(request) {
       limit,
       hasMore: page * limit < total,
       needsSync: false,
+      undated: Boolean(undated),
+      // The whole shelf, filtered or not: the page uses these two to prove that decade buckets plus the
+      // no-year bucket add up to what the same query counted.
+      archiveTotal: totalDbCount,
+      filteredTotal: total,
       facets: {
         sources: flatSources,
         genres: flatGenres,
         minYear: facets[0]?.minYear || null,
         maxYear: facets[0]?.maxYear || null,
+        years: (yearRows || [])
+          .map((row) => ({ year: Number.isFinite(row?._id) ? row._id : null, count: Number(row?.count) || 0 }))
+          .filter((row) => row.count > 0),
       },
     }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
   } catch (error) {

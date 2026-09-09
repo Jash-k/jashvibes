@@ -183,6 +183,37 @@ For personal/educational use only. Host only sources you are authorized to acces
 ## v8.4.3
 - BrandLogo resilient fallback chain (logo.png -> logo-source.webp -> JV monogram) fixes invisible mini logo when /public/brand is missing from file-wise deploys. sw v59.
 
+## v8.10.0
+- **ReTro is now the Decade Room** (idea 3 from `docs/concepts/classics-redesign.html`). The ruler of decades is the
+  navigation: pick 1980s and the page becomes that decade as a spine of titles grouped by release year, oldest or
+  newest first. The old page was a grid of 24 rows behind a 6-field filter slab, so "the filter doesn't show all my
+  movies" was true in two ways: the default was `source: 'Aha'`, which hid every ErosNow title, and even the decade
+  chips only narrowed page 1 of a paged grid.
+- **A decade now reads to the end.** `loadAllPages` in `lib/classicsDecade.js` walks `/api/vod` at 60 rows a page
+  (the route's own ceiling) until it stops promising more, dedupes rows that shift between pages, and only then
+  hands the list to the component. The header sentence — `All 118 loaded — nothing from this decade is hidden behind
+  a page` — comes from `shelfStatus`, and it claims completeness only when the rows on screen equal the `total` the
+  same query reported. If a sync lands mid-walk the count moves, so the page says `16 still to fetch` and shows a
+  **Keep loading** button instead of lying. 25 pages is the stop-loss; the button raises it.
+- **Nothing is silently invisible.** Titles with no year (unmatched on TMDB) get their own **No year** tab, because
+  a year window drops them; decades with zero titles stay on the ruler, disabled and labelled `empty`, so an absence
+  is a fact and not a bug; and the **Everything** tab counts what the *current filters* allow, from the same
+  histogram the decade tabs use, so the ruler always adds up.
+- `/api/vod` gained what the ruler needs and nothing more: `facets.years` (a per-year count over the filter
+  *without* the year window, one `$group` in the same round trip), `undated=1` for the no-year tab, and
+  `archiveTotal` / `filteredTotal` for the completeness math. No new endpoint, no poll, no Mongo write.
+- One fetch per view, not two: the session cache (`jash:classics:v2`) restores decade, filters, rows and scroll
+  position and the fetch effect skips exactly that first run — the old page fetched on mount *and* again from the
+  filter effect.
+- Keyboard and remote first: the ruler is a `tablist` with arrow/Home/End and a roving tabindex, focus follows the
+  decade you chose, rows are plain links, and every state (loading, error, empty, first sync) has a retry or a way
+  out. Day mode has an explicit value for everything the page paints — checked by a test that parses the CSS and
+  fails if a painted class has no `html.day-mode` twin, with thumbnails the only exemption.
+- `npm test` is 166. `tests/classics-decade.test.js` (22) runs the real `loadAllPages` against a 412-title fixture
+  served over HTTP that mirrors the route's filtering and paging, and asserts that every decade tab's rows equal the
+  fixture slice for that decade, that decade counts plus the no-year bucket equal the shelf, and that no title lives
+  outside every tab.
+
 ## v8.9.2
 - **The hero stopped talking about live TV.** The banner printed a `Star Vijay HD · …` pill in its top-right corner
   because v8.8.0 wired an "on air now" chip into `RailFocus`, but the banner is a *movie or series* poster chosen
