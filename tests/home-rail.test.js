@@ -105,15 +105,20 @@ test('nothing moves the homepage by itself any more', () => {
   assert.ok(!/setInterval|setTimeout/.test(focus), 'the focus panel is state, not an animation loop');
 });
 
-test('a remote or a Tab key can aim it', () => {
+test('the banner is a poster, not a widget — no strip, no duplicate CTA', () => {
   const focus = read('../components/rail/RailFocus.jsx');
-  for (const key of ["'ArrowRight'", "'ArrowLeft'", "'Home'", "'End'"]) {
-    assert.ok(focus.includes(key), `${key} must move focus`);
+  const css = read('../app/globals.css');
+  for (const gone of ['role="listbox"', 'aria-activedescendant', 'tabIndex={focused ? 0 : -1}', 'scrollIntoView', 'jv-focus-strip', 'onStripKey']) {
+    assert.ok(!focus.includes(gone), `${gone} is deleted: a thumbnail rail inside the hero was a control inside a control`);
   }
-  assert.match(focus, /tabIndex=\{focused \? 0 : -1\}/, 'roving tabindex, so Tab leaves the strip instead of walking 14 tiles');
-  assert.match(focus, /aria-selected=\{focused\}/);
-  assert.match(focus, /scrollIntoView\?\.\(\{ block: 'nearest', inline: 'center'/, 'the focused tile is kept in view');
-  assert.match(focus, /role="listbox"[\s\S]*aria-activedescendant=/);
+  assert.ok(!css.includes('.jv-focus-strip'), 'and its CSS went with it');
+  assert.ok(!css.includes('.jv-focus-tile'), 'no orphan tile rules either');
+  assert.match(focus, /aria-label="Featured title"/);
+  assert.ok(!focus.includes('Details'), 'one primary action, not two links to the same page');
+  assert.match(focus, /slide\.progress > 0 \? `Resume · \$\{slide\.progress\}%` : 'Watch now'/);
+  const page = read('../app/page.js');
+  assert.match(page, /<RailFocus\s*\n?\s*slide=\{focusSlide\}/, 'one slide, chosen from history or the freshest scrape entry');
+  assert.ok(!page.includes('focusSlides'), 'no list left to aim');
 });
 
 test('deleting the old header orphaned nothing', () => {
@@ -175,15 +180,38 @@ test('the homepage never asks for guide data', () => {
   assert.ok(!/fetch\(/.test(lib), 'the store itself cannot reach the network');
 });
 
-test('the light theme and reduced motion were thought about', () => {
+test('day mode keeps the artwork readable — the exact bug that was reported', () => {
   const css = read('../app/globals.css');
-  for (const selector of ['.jv-rail', '.jv-rail-item-active', '.jv-focus', '.jv-focus-title', '.jv-focus-tile-on', '.jv-focus-onair']) {
-    assert.ok(css.includes(`html.day-mode ${selector}`), `${selector} needs a day-mode value or it is unreadable in the light theme`);
-  }
+  // The banner must not invert: a light wash over a dark poster is "the hero is not visible", and dark
+  // display type over it is "the title looks blurred".
+  assert.match(css, /html\.day-mode \.jv-focus \{ background: #06060a; \}/, 'day mode keeps the poster panel dark');
+  assert.match(css, /html\.day-mode \.jv-focus-title \{ color: #fff/, 'and the title white');
+  assert.ok(!/html\.day-mode \.jv-focus-title \{ color: #0b0b0d/.test(css), 'no dark-on-light title, ever');
+  assert.ok(!/html\.day-mode \.jv-focus \{ background: #f4f4f5/.test(css), 'no light slab behind it');
+  assert.ok(!css.includes('html.day-mode .jv-focus-onair'), 'the on-air chip stays dark glass over artwork');
+});
+
+test('the title is crisp, not glowing, and the art is actually visible', () => {
+  const css = read('../app/globals.css');
+  const title = css.slice(css.indexOf('.jv-focus-title {'), css.indexOf('.jv-focus-meta {'));
+  const shadow = title.match(/text-shadow:([^;]+);/);
+  assert.ok(shadow, 'the title needs some edge to survive bright artwork');
+  const blurs = [...shadow[1].matchAll(/(\d+(?:\.\d+)?)px/g)].map((m) => Number(m[1]));
+  const maxBlur = Math.max(...blurs);
+  assert.ok(maxBlur <= 16, `a ${maxBlur}px blur under display type is what read as blur; keep it tight`);
+  const art = css.slice(css.indexOf('.jv-focus-art {'), css.indexOf('.jv-focus-shade {'));
+  const opacity = Number(art.match(/opacity:\s*([\d.]+)/)[1]);
+  assert.ok(opacity >= 0.7, `art at ${opacity} is a texture, not a poster — the complaint was that it is invisible`);
+});
+
+test('motion is trimmed and the rows still walk', () => {
+  const css = read('../app/globals.css');
   const motion = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce) {\n  .jv-focus-art'));
   assert.match(motion, /\.jv-focus-art \{ animation: none; \}/);
-  assert.match(motion, /\.jv-focus-tile,[\s\S]{0,40}\.jv-focus-tile-on \{ transition: none; transform: none; \}/);
   const rowMotion = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce) {\n  .jv-row-more'));
   assert.match(rowMotion, /\.jv-row-more \{ transition: none; \}/);
   assert.match(css, /\.jv-row-strip \{[\s\S]*?scroll-snap-type: x proximity;/, 'a strip a thumb or a D-pad can walk');
+  for (const selector of ['.jv-rail', '.jv-rail-item-active']) {
+    assert.ok(css.includes(`html.day-mode ${selector}`), `${selector} is chrome, so it needs a day-mode value`);
+  }
 });

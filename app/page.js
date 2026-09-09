@@ -368,9 +368,9 @@ export default function LandingPage() {
 
   const featuredItems = useMemo(() => [...movies, ...series], [movies, series]);
 
-  // Rail OS: which title is under the ring is decided here, by the data, not by a timer. Unfinished
-  // items come first because they are the ones you actually press, then the current tab's list. An
-  // item with no TMDB match still gets a tile — hiding it would hide the reason to go match it.
+  // The banner shows the one title you are most likely to press: the last thing left half-watched,
+  // or the freshest scrape entry when nothing is open. Deliberately *not* a rotation — the deleted hero
+  // carousel advanced on a 50 ms interval, which a personal app nobody asked for.
   const libraryVersion = useLibraryVersion();
   // Read once, after mount, from localStorage: the homepage does not poll the guide, it remembers
   // /live. Read during render it would also disagree with the server HTML, which has no storage.
@@ -378,50 +378,40 @@ export default function LandingPage() {
   useEffect(() => {
     setLiveNow(readLiveNow());
   }, []);
-  const focusSlides = useMemo(() => {
-    const slides = [];
-    const seen = new Set();
-    for (const entry of getHistory().filter((item) => item?.href).slice(0, 3)) {
-      const key = entry.href;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      slides.push({
-        id: `resume-${entry.key || key}`,
-        title: entry.title || 'Untitled',
-        type: entry.type || 'movie',
-        href: entry.href,
-        infoHref: entry.href,
-        posterUrl: entry.posterUrl || entry.backdropUrl || '',
-        backdropUrl: entry.backdropUrl || entry.posterUrl || '',
+
+  const focusSlide = useMemo(() => {
+    const hasArt = (item) => Boolean(item?.backdropUrl || item?.posterUrl);
+    const left = getHistory().find((entry) => entry?.href && hasArt(entry));
+    if (left) {
+      return {
+        title: left.title || 'Untitled',
+        type: left.type || 'movie',
+        year: left.year || '',
+        href: left.href,
+        libraryHref: left.href,
+        posterUrl: left.posterUrl || left.backdropUrl || '',
+        backdropUrl: left.backdropUrl || left.posterUrl || '',
         chips: [],
-        progress: getProgressPercent(entry),
-        note: 'Where you left off',
-      });
+        progress: getProgressPercent(left),
+        note: '',
+      };
     }
-    for (const item of featuredItems) {
-      const backdrop = item.backdropUrl || item.posterUrl || '';
-      if (!backdrop) continue;
-      const href = watchHref(item);
-      const key = href || `${item.type}:${item.id || item.title}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const chip = item.type === 'series' ? null : itemQualityChip(item);
-      slides.push({
-        id: `${item.type}-${item.tmdbId || item.id || item.title}`,
-        title: item.title || 'Untitled',
-        year: item.year || '',
-        type: item.type || 'movie',
-        href,
-        infoHref: href,
-        posterUrl: item.posterUrl || backdrop,
-        backdropUrl: backdrop,
-        chips: chip?.label ? [chip.label] : [],
-        progress: 0,
-        note: href ? '' : 'No TMDB match yet — bind it once to unlock every stream server',
-      });
-    }
-    return slides.slice(0, 14);
-    // `libraryVersion` is the resume half of the list: getHistory() answers from a cache the store
+    const fresh = featuredItems.find(hasArt);
+    if (!fresh) return null;
+    const href = watchHref(fresh);
+    const chip = fresh.type === 'series' ? null : itemQualityChip(fresh);
+    return {
+      title: fresh.title || 'Untitled',
+      type: fresh.type || 'movie',
+      year: fresh.year || '',
+      href,
+      posterUrl: fresh.posterUrl || fresh.backdropUrl || '',
+      backdropUrl: fresh.backdropUrl || fresh.posterUrl || '',
+      chips: chip?.label ? [chip.label] : [],
+      progress: 0,
+      note: href ? '' : 'No TMDB match yet — bind it once to unlock every stream server',
+    };
+    // `libraryVersion` is the resume half of the banner: getHistory() answers from a cache the store
     // invalidates on its own, so the value is a stamp, not an input the body reads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [featuredItems, libraryVersion]);
@@ -570,7 +560,11 @@ export default function LandingPage() {
       <RailNav
         onOpenSearch={() => setPaletteOpen(true)}
       />
-      <RailFocus slides={focusSlides} eyebrow="Now on your shelf" onAir={liveNow} />
+      <RailFocus
+        slide={focusSlide}
+        eyebrow={focusSlide?.progress > 0 ? 'Where you left off' : 'Fresh from the scrape'}
+        onAir={liveNow}
+      />
 
       <section className="mx-auto flex w-full max-w-[1500px] flex-col gap-7 px-4 pb-20 pt-5 sm:px-6 sm:gap-9 lg:px-8">
         {scrapeStatus === 'error' && scrapeError ? (

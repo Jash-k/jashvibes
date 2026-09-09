@@ -1183,8 +1183,10 @@ html.day-mode .jv-glowcursor { display: none; } /* light theme keeps the reticle
 }
 @media (min-width: 1280px) { .jv-rail-label { display: block; } }
 
-/* The focused title. The art is absolutely positioned behind the copy and cross-fades on change, so
-   moving focus costs one paint — the old carousel paid a 50ms interval whether or not anyone looked. */
+/* The focused title. Artwork keeps its own light in BOTH themes: day mode's blankets repaint anything
+   carrying a Tailwind background or text utility class, and a light panel with a dark title over a dark
+   poster is exactly how "the hero is invisible and the title looks blurred" happens. So this is treated
+   as a poster, not as chrome. */
 .jv-focus { background: #06060a; }
 .jv-focus-art {
   position: absolute;
@@ -1192,40 +1194,44 @@ html.day-mode .jv-glowcursor { display: none; } /* light theme keeps the reticle
   height: 100%;
   width: 100%;
   object-fit: cover;
-  object-position: center 22%;
-  opacity: 0.55;
-  filter: saturate(0.95) contrast(1.05);
+  object-position: center 24%;
+  opacity: 0.72;
+  filter: saturate(1.04) contrast(1.06);
   animation: jv-focus-in 420ms ease both;
 }
+/* A left scrim for the copy and a light bottom fade for the buttons; the right side stays almost clear
+   so the poster is actually visible instead of being a texture behind a grey wash. */
 .jv-focus-shade {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(to right, rgba(6, 6, 10, 0.96) 0%, rgba(6, 6, 10, 0.78) 38%, rgba(6, 6, 10, 0.35) 70%, rgba(6, 6, 10, 0.62) 100%),
-    linear-gradient(to top, rgba(6, 6, 10, 0.98) 0%, rgba(6, 6, 10, 0.2) 55%, rgba(6, 6, 10, 0.72) 100%);
+    linear-gradient(to right, rgba(6, 6, 10, 0.97) 0%, rgba(6, 6, 10, 0.88) 30%, rgba(6, 6, 10, 0.52) 58%, rgba(6, 6, 10, 0.16) 88%, rgba(6, 6, 10, 0.34) 100%),
+    linear-gradient(to top, rgba(6, 6, 10, 0.86) 0%, rgba(6, 6, 10, 0.12) 46%, rgba(6, 6, 10, 0.5) 100%);
 }
-@keyframes jv-focus-in { from { opacity: 0; transform: scale(1.015); } to { opacity: 0.55; transform: none; } }
+@keyframes jv-focus-in { from { opacity: 0; transform: scale(1.02); } to { opacity: 0.72; transform: none; } }
 .jv-focus-eyebrow {
-  font-size: 0.62rem;
+  font-size: 0.66rem;
   font-weight: 900;
   letter-spacing: 0.3em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.62);
 }
 .jv-focus-title {
-  /* Over artwork in both themes: without a shadow the light-theme wash eats the letterforms, which is
-     the exact bug the old hero carried !important rules for. */
-  text-shadow: 0 2px 26px rgba(0, 0, 0, 0.85), 0 1px 8px rgba(0, 0, 0, 0.75);
+  /* A tight edge, not a bloom — a 26px blur under display type reads as a rendering fault. The scrim
+     behind it does the contrast work. */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.72), 0 2px 14px rgba(0, 0, 0, 0.45);
+  -webkit-font-smoothing: antialiased;
   margin-top: 0.35rem;
-  font-size: clamp(1.7rem, 5.4vw, 3.6rem);
+  font-size: clamp(1.9rem, 5.2vw, 3.9rem);
   line-height: 1.02;
   font-weight: 900;
   letter-spacing: -0.02em;
   color: #fff;
-  max-width: 22ch;
+  max-width: 20ch;
+  text-wrap: balance;
 }
-.jv-focus-meta { margin-top: 0.5rem; font-size: 0.8rem; font-weight: 700; color: rgba(255, 255, 255, 0.66); }
-.jv-focus-note { margin-top: 0.4rem; font-size: 0.78rem; font-weight: 700; color: rgba(253, 230, 138, 0.85); max-width: 60ch; }
+.jv-focus-meta { margin-top: 0.4rem; font-size: 0.82rem; font-weight: 700; color: rgba(255, 255, 255, 0.74); }
+.jv-focus-note { margin-top: 0.35rem; font-size: 0.8rem; font-weight: 800; color: #fcd34d; max-width: 56ch; }
 .jv-focus-cta {
   display: inline-flex;
   align-items: center;
@@ -1238,57 +1244,35 @@ html.day-mode .jv-glowcursor { display: none; } /* light theme keeps the reticle
   font-size: 0.85rem;
   font-weight: 900;
   color: #fff;
-  box-shadow: 0 14px 34px rgba(127, 29, 29, 0.4);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
   transition: transform 120ms ease, border-color 180ms ease, filter 180ms ease;
 }
 .jv-focus-cta:hover { border-color: rgba(255, 255, 255, 0.5); filter: brightness(1.08); }
 .jv-focus-cta:active { transform: scale(0.98); }
-.jv-focus-cta-muted { background: rgba(255, 255, 255, 0.06); border-style: dashed; color: rgba(255, 255, 255, 0.7); box-shadow: none; }
+.jv-focus-cta-muted { background: rgba(255, 255, 255, 0.06); border-style: dashed; color: rgba(255, 255, 255, 0.74); box-shadow: none; }
 .jv-focus-ghost {
   display: inline-flex;
   align-items: center;
   min-height: 2.9rem;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.06);
   padding: 0.6rem 0.95rem;
   font-size: 0.78rem;
   font-weight: 800;
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(255, 255, 255, 0.82);
   transition: border-color 180ms ease, color 180ms ease;
 }
 .jv-focus-ghost:hover { border-color: rgba(255, 255, 255, 0.34); color: #fff; }
-.jv-focus-strip {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.9rem;
-  overflow-x: auto;
-  padding: 0.55rem 0.1rem 0.65rem;
-  scroll-snap-type: x proximity;
-  outline: none;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.jv-focus-strip::-webkit-scrollbar { display: none; }
-/* The strip itself is the focusable widget (roving tabindex); this ring is what a remote or a Tab key
-   lands on, and it is deliberately not hover-only. */
-.jv-focus-strip:focus-visible { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55); border-radius: 1.1rem; }
-.jv-focus-tile {
-  position: relative;
-  flex: 0 0 auto;
-  width: 4.4rem;
-  aspect-ratio: 2 / 3;
-  overflow: hidden;
-  border-radius: 0.8rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: #0b0b10;
-  scroll-snap-align: center;
-  opacity: 0.7;
-  transition: opacity 180ms ease, transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
-}
-.jv-focus-tile:hover { opacity: 0.92; }
-.jv-focus-tile-on { opacity: 1; transform: translateY(-4px) scale(1.06); border-color: #fff; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8), 0 18px 40px rgba(0, 0, 0, 0.6); }
-.jv-focus-tile-progress { position: absolute; inset: auto 0 0 0; height: 3px; background: #ef4444; box-shadow: 0 0 10px rgba(239, 68, 68, 0.8); }
+
+/* The banner is the one surface that does NOT invert with the theme, so these exist to say so against
+   the day-mode blankets — a light-mode rule here is the bug that was reported, not a fix. */
+html.day-mode .jv-focus { background: #06060a; }
+html.day-mode .jv-focus-art { opacity: 0.72; }
+html.day-mode .jv-focus-eyebrow { color: rgba(255, 255, 255, 0.62); }
+html.day-mode .jv-focus-title { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.72), 0 2px 14px rgba(0, 0, 0, 0.45); }
+html.day-mode .jv-focus-meta { color: rgba(255, 255, 255, 0.74); }
+html.day-mode .jv-focus-note { color: #fcd34d; }
 
 /* Rail content shift: the rail is fixed, so the page pays for it — but only where the rail exists. */
 @media (min-width: 1024px) { .jv-rail-shift { padding-left: 78px; } }
@@ -1298,21 +1282,7 @@ html.day-mode .jv-rail { background: rgba(250, 250, 250, 0.95); border-color: rg
 html.day-mode .jv-rail-item { color: rgba(15, 23, 42, 0.62); }
 html.day-mode .jv-rail-item:hover,
 html.day-mode .jv-rail-item-active { color: #0f172a; background: rgba(15, 23, 42, 0.06); border-color: rgba(15, 23, 42, 0.14); }
-html.day-mode .jv-focus { background: #f4f4f5; }
-html.day-mode .jv-focus-shade { background: linear-gradient(to right, rgba(244, 244, 245, 0.97) 0%, rgba(244, 244, 245, 0.8) 42%, rgba(244, 244, 245, 0.42) 74%, rgba(244, 244, 245, 0.7) 100%); }
-html.day-mode .jv-focus-title { color: #0b0b0d; }
-html.day-mode .jv-focus-meta,
-html.day-mode .jv-focus-eyebrow { color: rgba(11, 11, 13, 0.6); }
-html.day-mode .jv-focus-tile { background: #e4e4e7; border-color: rgba(15, 23, 42, 0.12); }
-html.day-mode .jv-focus-tile-on { border-color: #0b0b0d; box-shadow: 0 0 0 2px rgba(11, 11, 13, 0.85), 0 14px 30px rgba(15, 23, 42, 0.18); }
 
-@media (prefers-reduced-motion: reduce) {
-  .jv-focus-art { animation: none; }
-  .jv-focus-tile,
-  .jv-focus-tile-on { transition: none; transform: none; }
-  .jv-rail-item,
-  .jv-focus-cta { transition: none; }
-}
 .jv-focus-onair {
   display: inline-flex;
   align-items: center;
@@ -1331,7 +1301,6 @@ html.day-mode .jv-focus-tile-on { border-color: #0b0b0d; box-shadow: 0 0 0 2px r
 }
 .jv-focus-onair:hover { border-color: rgba(248, 113, 113, 0.6); color: #fff; }
 .jv-focus-dot { width: 6px; height: 6px; border-radius: 999px; background: #ef4444; box-shadow: 0 0 10px rgba(239, 68, 68, 0.9); flex: 0 0 auto; }
-html.day-mode .jv-focus-onair { background: rgba(255, 255, 255, 0.8); border-color: rgba(15, 23, 42, 0.12); color: rgba(15, 23, 42, 0.72); }
 
 /* Catalogue rows (Rail OS): a strip per group, each with its own page counter. The horizontal snap is
    what makes a remote or a thumb able to walk it; no arrows, because a strip you can drag does not
@@ -1382,4 +1351,11 @@ html.day-mode .jv-row-more { border-color: rgba(15, 23, 42, 0.2); background: rg
 html.day-mode .jv-row-more:hover { border-color: rgba(15, 23, 42, 0.45); background: #fff; color: #0b0b0d; }
 @media (prefers-reduced-motion: reduce) {
   .jv-row-more { transition: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jv-focus-art { animation: none; }
+  .jv-rail-item,
+  .jv-focus-cta,
+  .jv-focus-ghost { transition: none; }
 }

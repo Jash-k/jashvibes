@@ -183,6 +183,24 @@ For personal/educational use only. Host only sources you are authorized to acces
 ## v8.4.3
 - BrandLogo resilient fallback chain (logo.png -> logo-source.webp -> JV monogram) fixes invisible mini logo when /public/brand is missing from file-wise deploys. sw v59.
 
+## v8.9.1
+- **Day mode washed the artwork out and the title looked blurred — same root cause.** The light theme repaints
+  anything carrying a Tailwind background or text utility, and my `html.day-mode .jv-focus` rule turned the banner
+  into a `#f4f4f5` slab with near-black type over a dark poster, so the art disappeared and the type had nothing
+  to sit on. The blur was a 26 px text shadow doing contrast work it was never meant to do. The banner is now
+  treated as artwork, not chrome: it keeps its own dark panel and white title in *both* themes (a poster's light
+  does not change when the app's chrome does), the art sits at 0.72 instead of 0.6, and the title carries a tight
+  2 px edge shadow over a real gradient shade layer. `npm test` guards the built CSS for the day-mode background,
+  the opacity and the largest shadow blur, so this cannot quietly come back.
+- **The small cards inside the hero are gone** — the strip, its roving tabindex and its arrow-key handling. A
+  thumbnail rail inside a banner is a control inside a control, and it doubled up with the two rows below, which
+  are now the only browser. The secondary `Details` button went with it: same href as *Watch now*, so it was
+  decoration — and it carried Tailwind text colours the day theme would have repainted anyway.
+- `RailFocus` takes one `slide` instead of a list. The homepage aims it at whatever you are half-watched into
+  (`Resume · 34%`), otherwise the freshest entry in the scrape, and the eyebrow says which of the two it is.
+- `npm test` is 149: two structural assertions that described the deleted strip were rewritten to the new
+  contract rather than dropped.
+
 ## v8.9.0
 - **Rail OS alone: the old header is deleted, not folded in.** Gone from `app/page.js`: the brand block (logo, `JaSH ViBeS` wordmark, "last update" line), the inline search field, the Sync button, the embed-provider pills, the `Latest Releases` card, the Movies|Series tab pair, the masonry grid + skeleton, and the Continue Watching / My List section — 935 lines of page down to 28 kB of source with no dead state left behind (`activeTab`, `updatedAt`, `syncStatus`, `sentinelRef` and the `currentItems`/`currentPaging` aliases are all removed, because a half-removed header is still a header). What the page renders is `RailNav` → `RailFocus` → two catalogue rows → the ⌘K palette.
 - **Two rows instead of a tab switcher, and it costs nothing extra.** The single `/api/tamilmv?page=1&limit=15` call already returns `movies` *and* `series`, so the tabs were hiding half of what had been downloaded. `CatalogRow` renders one horizontal snap strip per group with its own count read-out and its own **Load more**, wired to the per-group `?group=movies|series` paging the infinite-scroll sentinel used to walk — so the `IntersectionObserver` and its 700 px rootMargin are deleted, and a remote or a thumb can walk a row deliberately. Each row keeps the `🎯 Match` affordance because it reuses `MediaCard` inside a fixed-width tile (`.jv-row-tile`, 8.75rem → 10.5rem at `sm`).
