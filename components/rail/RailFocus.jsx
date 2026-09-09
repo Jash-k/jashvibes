@@ -11,12 +11,16 @@ import Link from 'next/link';
  * — no timer, no autoplay, nothing to pause — and it shows the thing you are most likely to press:
  * the last half-watched title, or the freshest one when there isn't one.
  *
+ * Nothing about live TV belongs here either: a "Star Vijay HD · …" pill on a movie poster is two
+ * products sharing one rectangle, and it read as a bug report even though it was a feature. The channel
+ * line lived on `/live`, where the guide actually knows it.
+ *
  * The banner is painted dark in *both* themes, which is a layout decision rather than a colour one:
  * day mode's blankets (`app/globals.css`) repaint anything carrying a Tailwind `bg-*`/`text-*` class, so
  * a light panel with a dark title over a dark poster is exactly the "hero is not visible and the title
  * looks blurred" report. Artwork keeps its own light.
  */
-export default function RailFocus({ slide = null, eyebrow = 'Now on your shelf', onAir = null }) {
+export default function RailFocus({ slide = null, eyebrow = 'Now on your shelf' }) {
   if (!slide) return null;
 
   const art = slide.backdropUrl || slide.posterUrl;
@@ -37,20 +41,7 @@ export default function RailFocus({ slide = null, eyebrow = 'Now on your shelf',
       <div className="jv-focus-shade" aria-hidden="true" />
 
       <div className="relative mx-auto flex w-full max-w-[1500px] flex-col gap-3.5 px-4 pb-8 pt-9 sm:px-6 lg:min-h-[44svh] lg:justify-end lg:px-8 lg:pb-10 lg:pt-16">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="jv-focus-eyebrow">{eyebrow}</p>
-          {onAir ? (
-            <Link href="/live" className="jv-focus-onair" title="Open Live TV">
-              <span className="jv-focus-dot" aria-hidden="true" />
-              <span className="min-w-0 truncate">
-                <span className="font-black text-white">{onAir.channel}</span>
-                {' · '}
-                {onAir.title}
-                {onAir.minutesLeft ? ` · ${onAir.minutesLeft} min left` : ''}
-              </span>
-            </Link>
-          ) : null}
-        </div>
+        <p className="jv-focus-eyebrow">{eyebrow}</p>
 
         <h2 className="jv-focus-title">{slide.title}</h2>
         {meta ? <p className="jv-focus-meta">{meta}</p> : null}

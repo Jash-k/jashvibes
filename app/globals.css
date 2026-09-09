@@ -1283,25 +1283,6 @@ html.day-mode .jv-rail-item { color: rgba(15, 23, 42, 0.62); }
 html.day-mode .jv-rail-item:hover,
 html.day-mode .jv-rail-item-active { color: #0f172a; background: rgba(15, 23, 42, 0.06); border-color: rgba(15, 23, 42, 0.14); }
 
-.jv-focus-onair {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  max-width: 34ch;
-  min-height: 2.1rem;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.45);
-  padding: 0.3rem 0.7rem;
-  font-size: 0.68rem;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(8px);
-  transition: border-color 180ms ease, color 180ms ease;
-}
-.jv-focus-onair:hover { border-color: rgba(248, 113, 113, 0.6); color: #fff; }
-.jv-focus-dot { width: 6px; height: 6px; border-radius: 999px; background: #ef4444; box-shadow: 0 0 10px rgba(239, 68, 68, 0.9); flex: 0 0 auto; }
-
 /* Catalogue rows (Rail OS): a strip per group, each with its own page counter. The horizontal snap is
    what makes a remote or a thumb able to walk it; no arrows, because a strip you can drag does not
    need a button on each side that only works on hover. */

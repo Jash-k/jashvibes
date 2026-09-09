@@ -1,68 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { LIVE_NOW_KEY, MAX_AGE_MS, readLiveNow, writeLiveNow } from '../lib/liveNow.js';
 
 /**
- * Rail OS: the homepage is a left rail (desktop/TV) plus one focused title you aim yourself.
- * These tests guard the two things that made the old layout wrong — a nav that existed twice, and a
- * hero that moved on its own — and the one thing that could quietly become expensive: the "on air"
- * line, which must stay a localStorage read and never grow a request.
+ * Rail OS: the homepage is a left rail (desktop/TV) plus one poster the catalogue decides to show.
+ * These tests guard the things that made the old layout wrong — a nav that existed twice, a hero that
+ * moved on its own, a thumbnail rail nested inside that hero, a channel line that did not belong to the
+ * title underneath it — and a light theme that repainted the artwork out from under the component.
  */
 
 const read = (rel) => fs.readFileSync(new URL(rel, import.meta.url), 'utf8');
-
-function fakeStorage(seed) {
-  const map = new Map(Object.entries(seed || {}));
-  return {
-    map,
-    getItem: (key) => (map.has(key) ? map.get(key) : null),
-    setItem: (key, value) => map.set(key, String(value)),
-    removeItem: (key) => map.delete(key),
-  };
-}
-
-test('the two-field summary round-trips', () => {
-  const storage = fakeStorage();
-  assert.equal(writeLiveNow({ channel: 'Colors HD', title: 'Bigg Boss 18', minutesLeft: 42.6 }, { localStorage: storage }), true);
-  const now = readLiveNow({ localStorage: storage });
-  assert.equal(now.channel, 'Colors HD');
-  assert.equal(now.title, 'Bigg Boss 18');
-  assert.equal(now.minutesLeft, 43, 'rounded, because it is printed as a promise');
-  assert.ok(now.age < 5000);
-});
-
-test('a half-truth is not written at all', () => {
-  const storage = fakeStorage();
-  assert.equal(writeLiveNow({ channel: 'Colors HD', title: '  ' }, { localStorage: storage }), false);
-  assert.equal(writeLiveNow({ channel: '', title: 'Something' }, { localStorage: storage }), false);
-  assert.equal(storage.map.size, 0, 'nothing lands in storage, so nothing can be read back as a lie');
-  assert.equal(readLiveNow({ localStorage: storage }), null);
-});
-
-test('anything older than the age rule is dropped, not shown dimmer', () => {
-  const stale = fakeStorage({
-    [LIVE_NOW_KEY]: JSON.stringify({ channel: 'Colors HD', title: 'Yesterday show', minutesLeft: 5, at: Date.now() - MAX_AGE_MS - 1000 }),
-  });
-  assert.equal(readLiveNow({ localStorage: stale }), null);
-  assert.equal(readLiveNow({ localStorage: fakeStorage({ [LIVE_NOW_KEY]: 'not json' }) }), null, 'a corrupt row must not throw on the homepage');
-  assert.equal(readLiveNow({ localStorage: fakeStorage({ [LIVE_NOW_KEY]: JSON.stringify({ channel: 'X' }) }) }), null);
-});
-
-test('with no storage there is nothing to say', () => {
-  // Node has no `window`, which is exactly the server render: no throw, no chip, no hydration fight.
-  assert.equal(readLiveNow(), null);
-  assert.equal(writeLiveNow({ channel: 'a', title: 'b', minutesLeft: 1 }), false);
-});
-
-test('the title is clipped, not allowed to break the strip', () => {
-  const storage = fakeStorage();
-  writeLiveNow({ channel: 'x'.repeat(80), title: 'y'.repeat(400), minutesLeft: -9 }, { localStorage: storage });
-  const now = readLiveNow({ localStorage: storage });
-  assert.equal(now.channel.length, 42);
-  assert.equal(now.title.length, 90);
-  assert.equal(now.minutesLeft, 0, 'a negative "minutes left" is a clock we should not print');
-});
 
 /* ------------------------------------------------------------------ one nav, two shells */
 
@@ -169,15 +116,19 @@ test('the watch link is built in one place', () => {
 
 /* ------------------------------------------------------------------ the "on air" line stays free */
 
-test('the homepage never asks for guide data', () => {
+test('live TV stays out of the hero', () => {
+  const focus = read('../components/rail/RailFocus.jsx');
   const page = read('../app/page.js');
   const live = read('../app/live/page.js');
-  assert.match(live, /writeLiveNow\(\{ channel: active\?\.name \|\| row\?\.name \|\| ''/  , '/live is the only writer');
-  assert.match(page, /setLiveNow\(readLiveNow\(\)\);/, 'the homepage reads once after mount');
-  assert.match(page, /const \[liveNow, setLiveNow\] = useState\(null\);/, 'not during render — the server has no storage');
-  assert.ok(!/live-epg|live-service/.test(page), 'and no new request from /');
-  const lib = read('../lib/liveNow.js');
-  assert.ok(!/fetch\(/.test(lib), 'the store itself cannot reach the network');
+  const css = read('../app/globals.css');
+  for (const gone of ['onAir', 'jv-focus-onair', 'jv-focus-dot', 'href="/live"']) {
+    assert.ok(!focus.includes(gone), `${gone} is deleted — a movie poster does not get a channel line`);
+  }
+  assert.ok(!page.includes('liveNow'), 'the homepage never reads guide state, so it can never print yesterday\'s "on air now"');
+  assert.ok(!live.includes('writeLiveNow'), 'and /live has no publisher left behind');
+  assert.ok(!fs.existsSync(new URL('../lib/liveNow.js', import.meta.url)), 'the storage contract went with its only reader');
+  assert.ok(!css.includes('.jv-focus-onair') && !css.includes('.jv-focus-dot'), 'no orphan rules under the seat');
+  assert.ok(!/const \[liveNow, setLiveNow\]/.test(page), 'no state, so nothing re-renders the banner after mount');
 });
 
 test('day mode keeps the artwork readable — the exact bug that was reported', () => {
@@ -188,7 +139,6 @@ test('day mode keeps the artwork readable — the exact bug that was reported', 
   assert.match(css, /html\.day-mode \.jv-focus-title \{ color: #fff/, 'and the title white');
   assert.ok(!/html\.day-mode \.jv-focus-title \{ color: #0b0b0d/.test(css), 'no dark-on-light title, ever');
   assert.ok(!/html\.day-mode \.jv-focus \{ background: #f4f4f5/.test(css), 'no light slab behind it');
-  assert.ok(!css.includes('html.day-mode .jv-focus-onair'), 'the on-air chip stays dark glass over artwork');
 });
 
 test('the title is crisp, not glowing, and the art is actually visible', () => {

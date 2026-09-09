@@ -9,7 +9,6 @@ import { releaseQualityChip, parseReleaseQuality, chipClassForTier, labelForTier
 import { getHistory, getProgressPercent, isFavoriteItem, makeWatchKey, toggleFavoriteItem, useLibraryVersion } from '@/lib/watchStore';
 import RailNav from '@/components/rail/RailNav';
 import RailFocus from '@/components/rail/RailFocus';
-import { readLiveNow } from '@/lib/liveNow';
 
 const PAGE_SIZE = 15;
 const HOME_CACHE_KEY = 'jash:home:v5';
@@ -372,12 +371,6 @@ export default function LandingPage() {
   // or the freshest scrape entry when nothing is open. Deliberately *not* a rotation — the deleted hero
   // carousel advanced on a 50 ms interval, which a personal app nobody asked for.
   const libraryVersion = useLibraryVersion();
-  // Read once, after mount, from localStorage: the homepage does not poll the guide, it remembers
-  // /live. Read during render it would also disagree with the server HTML, which has no storage.
-  const [liveNow, setLiveNow] = useState(null);
-  useEffect(() => {
-    setLiveNow(readLiveNow());
-  }, []);
 
   const focusSlide = useMemo(() => {
     const hasArt = (item) => Boolean(item?.backdropUrl || item?.posterUrl);
@@ -560,11 +553,7 @@ export default function LandingPage() {
       <RailNav
         onOpenSearch={() => setPaletteOpen(true)}
       />
-      <RailFocus
-        slide={focusSlide}
-        eyebrow={focusSlide?.progress > 0 ? 'Where you left off' : 'Fresh from the scrape'}
-        onAir={liveNow}
-      />
+      <RailFocus slide={focusSlide} eyebrow={focusSlide?.progress > 0 ? 'Where you left off' : 'Fresh from the scrape'} />
 
       <section className="mx-auto flex w-full max-w-[1500px] flex-col gap-7 px-4 pb-20 pt-5 sm:px-6 sm:gap-9 lg:px-8">
         {scrapeStatus === 'error' && scrapeError ? (
