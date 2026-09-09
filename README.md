@@ -183,6 +183,22 @@ For personal/educational use only. Host only sources you are authorized to acces
 ## v8.4.3
 - BrandLogo resilient fallback chain (logo.png -> logo-source.webp -> JV monogram) fixes invisible mini logo when /public/brand is missing from file-wise deploys. sw v59.
 
+## v8.10.1
+- **The decade numerals were missing — my bug, and now a test.** The page never stored the `facets` that came back with the rows, so `facets.years` stayed empty and the ruler could only ever print
+  `Everything`. `app/classics/page.js` now stores facets from the response, and there is a small first request — `readFacets`, one row at `limit=1` — whose only job is to buy the ruler: counts per decade,
+  the year span next to the heading, and which decade to open on. Two tests pin it: one that the page contains the store, one that `readFacets` returns a ruler from a page-1 payload.
+- **Rebuilt to the mock, not to the old page.** The nav rail is now mounted on this route (and the 188px left gap finally has something in it); the ruler is big numerals with an amber underline on the live
+  decade instead of filled pills; the chosen decade is written again behind the rows as a ghost at 5%; every row carries its year and source in the right gutter, the title in a bookish serif and the score
+  as a large amber figure; the year group headers, the search box, the source/genre/rating selects and the `jv-dec-tool` pills are deleted rather than restyled. The control surface is `RATING ↓`, `YEAR ↑`,
+  `SYNC` and a status chip — that is all.
+- **Initial load is no longer thirteen requests.** The page opens on the newest decade that has titles (one or two requests) instead of Everything, and the walk paints each page as it lands instead of
+  waiting for the end: the first 60 rows appear after request one, and the count ticks up underneath. Everything is still one tab away and still loads fully — it just isn't the front door. `loadAllPages`
+  now hands `items` to `onProgress` per page, which is the whole fix.
+- **This surface is dark in both themes.** Like the homepage banner, `html.day-mode .jv-dec-page` restates the near-black, and every text-bearing rule declares its own colour — because `html.day-mode main`
+  is an `!important` blanket and anything that inherits gets painted dark-on-dark. The day-mode test walks the stylesheet block and fails if a rule sets a font without a colour, or if the component reaches
+  for a Tailwind `bg-*`/`text-*` utility.
+- `npm test` is 168 (24 for the Decade Room, including the 490-title fixture over HTTP that asserts every decade tab's rows equal that decade's slice and that the buckets add up to the archive).
+
 ## v8.10.0
 - **ReTro is now the Decade Room** (idea 3 from `docs/concepts/classics-redesign.html`). The ruler of decades is the
   navigation: pick 1980s and the page becomes that decade as a spine of titles grouped by release year, oldest or
