@@ -41,8 +41,8 @@ const CACHE_KEY = 'jash:classics:v3';
 function Ruler({ decades, undated, everything, value, onChange }) {
   const tabs = [
     ...decades,
-    ...(undated ? [{ decade: 'undated', label: 'No year', count: undated, empty: false }] : []),
-    { decade: 'all', label: 'All', count: everything, empty: false },
+    ...(undated ? [{ decade: 'undated', label: 'No year', count: undated }] : []),
+    { decade: 'all', label: 'All', count: everything },
   ];
 
   return (
@@ -58,8 +58,7 @@ function Ruler({ decades, undated, everything, value, onChange }) {
             aria-selected={active}
             aria-controls="jv-dec-shelf"
             tabIndex={active ? 0 : -1}
-            disabled={Boolean(tab.empty)}
-            className={`jv-dec-tab${active ? ' jv-dec-tab-on' : ''}${tab.empty ? ' jv-dec-tab-empty' : ''}`}
+            className={`jv-dec-tab${active ? ' jv-dec-tab-on' : ''}`}
             onClick={() => onChange(tab.decade)}
             onKeyDown={(event) => {
               const keys = { ArrowRight: 1, ArrowLeft: -1, Home: -index, End: tabs.length - 1 - index };
@@ -67,13 +66,13 @@ function Ruler({ decades, undated, everything, value, onChange }) {
               if (step === undefined) return;
               event.preventDefault();
               const next = tabs[Math.min(tabs.length - 1, Math.max(0, index + step))];
-              if (!next || next.empty) return;
+              if (!next) return;
               onChange(next.decade);
               requestAnimationFrame(() => document.getElementById(`jv-dec-tab-${next.decade}`)?.focus());
             }}
           >
             <span className="jv-dec-tab-label">{tab.label}</span>
-            <span className="jv-dec-tab-count">{tab.empty ? 'empty' : tab.count}</span>
+            <span className="jv-dec-tab-count">{tab.count}</span>
           </button>
         );
       })}
@@ -420,7 +419,8 @@ export default function TamilClassicsPage() {
                 title={decade === 'all' ? 'Nothing here yet' : `Nothing from the ${decadeLabel(decade)} in this slice`}
                 action={<button type="button" className="jv-dec-chip jv-dec-chip-go" onClick={() => setDecade('all')}>Show the whole shelf</button>}
               >
-                The decade is real and this one is empty — that is the archive talking, not a page that stopped early.
+                Nothing came back for this slice, and a decade with no titles is not offered a tab — so
+                this is the archive being empty, not a page that stopped early.
                 {ruler.unaccounted ? ` ${ruler.unaccounted} title(s) the ruler cannot place; check the sync.` : ''}
               </Note>
             ) : null}

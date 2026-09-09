@@ -183,6 +183,16 @@ For personal/educational use only. Host only sources you are authorized to acces
 ## v8.4.3
 - BrandLogo resilient fallback chain (logo.png -> logo-source.webp -> JV monogram) fixes invisible mini logo when /public/brand is missing from file-wise deploys. sw v59.
 
+## v8.10.2
+- **The empty decade tabs are gone.** v8.10.0 filled every gap between the oldest and newest title with a zero so
+  "nothing here" would be visible — which on screen was a `1940s` you could not press, dimmed and labelled `empty`.
+  `buildDecades` now returns only decades that actually hold titles, and the `tab.empty` flag, its disabled state,
+  its `empty` caption and its CSS are deleted rather than restyled. The arrow-key walk no longer has to step over
+  dead tabs either.
+- Completeness did not get weaker: the ruler is still provable, because the decade counts plus the `No year` bucket
+  have to equal what the same query counted (`accounted` / `unaccounted`), and the test asserts the exact list of
+  decades for both a gappy histogram and the 490-title fixture.
+
 ## v8.10.1
 - **The decade numerals were missing — my bug, and now a test.** The page never stored the `facets` that came back with the rows, so `facets.years` stayed empty and the ruler could only ever print
   `Everything`. `app/classics/page.js` now stores facets from the response, and there is a small first request — `readFacets`, one row at `limit=1` — whose only job is to buy the ruler: counts per decade,
@@ -212,8 +222,7 @@ For personal/educational use only. Host only sources you are authorized to acces
   same query reported. If a sync lands mid-walk the count moves, so the page says `16 still to fetch` and shows a
   **Keep loading** button instead of lying. 25 pages is the stop-loss; the button raises it.
 - **Nothing is silently invisible.** Titles with no year (unmatched on TMDB) get their own **No year** tab, because
-  a year window drops them; decades with zero titles stay on the ruler, disabled and labelled `empty`, so an absence
-  is a fact and not a bug; and the **Everything** tab counts what the *current filters* allow, from the same
+  a year window drops them; _(v8.10.2: decades with zero titles are no longer offered at all — a tab you cannot press is not a fact, it is a bug.)_; and the **Everything** tab counts what the *current filters* allow, from the same
   histogram the decade tabs use, so the ruler always adds up.
 - `/api/vod` gained what the ruler needs and nothing more: `facets.years` (a per-year count over the filter
   *without* the year window, one `$group` in the same round trip), `undated=1` for the no-year tab, and

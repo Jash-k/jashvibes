@@ -47,7 +47,7 @@ test('a title with no usable year is never silently a decade', () => {
   }
 });
 
-test('the ruler counts every title, keeps real gaps, and shows an empty decade as empty', () => {
+test('the ruler counts every title, and a decade with no titles is not offered at all', () => {
   const years = [
     { year: 1930, count: 1 },
     { year: 1965, count: 3 },
@@ -60,12 +60,12 @@ test('the ruler counts every title, keeps real gaps, and shows an empty decade a
   ];
   const ruler = buildDecades({ years, minYear: 1930, maxYear: 1992 }, { filteredTotal: 176, archiveTotal: 176 });
 
-  assert.deepEqual(ruler.decades.map((d) => d.decade), [1930, 1940, 1950, 1960, 1970, 1980, 1990], 'ascending, oldest first, gaps filled');
-  assert.equal(ruler.decades[1].decade, 1940);
-  assert.equal(ruler.decades[1].count, 0, 'the 1940s and 1950s stay on the ruler with a real zero, so absence is visible');
-  assert.equal(ruler.decades[2].empty, true);
-  assert.equal(ruler.decades[5].count, 118, '1985 + 1987 belong to one decade');
-  assert.deepEqual(ruler.decades[5].years.map((y) => y.year), [1985, 1987], 'per-year detail inside the decade');
+  assert.deepEqual(ruler.decades.map((d) => d.decade), [1930, 1960, 1970, 1980, 1990], 'ascending, oldest first — no 1940s or 1950s tab, because there is nothing in them to show');
+  assert.ok(ruler.decades.every((d) => d.count > 0), 'every tab it returns is pressable');
+  assert.ok(!ruler.decades.some((d) => 'empty' in d), 'and no empty flag is carried around any more');
+  const eighties = ruler.decades.find((d) => d.decade === 1980);
+  assert.equal(eighties.count, 118, '1985 + 1987 belong to one decade');
+  assert.deepEqual(eighties.years.map((y) => y.year), [1985, 1987], 'per-year detail inside the decade');
   assert.equal(ruler.undated, 9, 'a missing year and year 0 are both "no year on record"');
   assert.equal(ruler.dated, 167);
   assert.equal(ruler.accounted, 176, 'dated + undated must equal what the shelf holds, or the view is lying');
@@ -262,7 +262,7 @@ test('one tiny request buys the whole ruler, and decides where the page lands', 
 
   assert.deepEqual(found.facets.years, years, 'the page stores what came back — this is the line that was missing when only Everything showed');
   assert.equal(found.total, 44);
-  assert.equal(found.ruler.decades.length, 7, '1930s through 1990s, gaps included');
+  assert.deepEqual(found.ruler.decades.map((d) => d.decade), [1930, 1990], 'only the two decades that hold titles — 1940s to 1980s are not on the ruler at all');
   assert.equal(found.ruler.accounted, 44);
   assert.equal(found.ruler.landing, 1990);
   assert.equal(found.needsSync, false);
@@ -409,8 +409,8 @@ test('over a 490-title archive, every decade tab shows every title in it', async
     assert.equal(found.ruler.undated, EXPECTED_UNDATED);
     assert.equal(found.ruler.minYear, 1930);
     assert.equal(found.ruler.maxYear, 2009);
-    assert.deepEqual(found.ruler.decades.map((d) => d.decade), [1930, 1940, 1950, 1960, 1970, 1980, 1990, 2000], 'no gaps in this span, and none invented');
-    assert.ok(found.ruler.decades.every((d) => d.count > 0), 'this fixture has something in every decade');
+    assert.deepEqual(found.ruler.decades.map((d) => d.decade), [1930, 1940, 1950, 1960, 1970, 1980, 1990, 2000], 'every decade the fixture actually fills, and nothing it does not');
+    assert.ok(found.ruler.decades.every((d) => d.count > 0), 'so every tab on the ruler is pressable');
 
     // Everything: the whole archive, in one walk.
     const everything = await loadAllPages({ fetchPage, decade: 'all', filters: { sort: 'year.asc' } });
@@ -532,16 +532,17 @@ test('the page is the mock: rail, big numerals, ghost decade, year in the gutter
   assert.ok(!/<select|<input/.test(page), 'no native selects and no search box — three chips are the whole control surface');
 });
 
-test('the ruler is the mock’s numerals, and it is keyboard-first', () => {
+test('the ruler is the mock numerals, and it is keyboard-first', () => {
   const page = read('../app/classics/page.js');
+  const css = read('../app/globals.css');
   assert.match(page, /role="tablist" aria-label="Decade"/);
   assert.match(page, /role="tab"/);
   assert.match(page, /tabIndex=\{active \? 0 : -1\}/, 'Tab leaves the ruler after one stop instead of walking 8 decades');
   assert.match(page, /ArrowRight: 1, ArrowLeft: -1, Home: -index, End: tabs\.length - 1 - index/);
-  assert.match(page, /disabled=\{Boolean\(tab\.empty\)\}/, 'an empty decade is shown and disabled, so the zero is not a bug you have to discover');
+  assert.ok(!page.includes('tab.empty') && !page.includes('jv-dec-tab-empty'), 'a decade with no titles never reaches the ruler, so there is nothing to disable or label empty');
+  assert.ok(!css.includes('.jv-dec-tab-empty'), 'and its CSS went with it');
   assert.match(page, /jv-dec-tab-\$\{next\.decade\}`\)\?\.focus\(\)/, 'focus follows the decade you chose');
   assert.match(page, /id="jv-dec-shelf"/);
-  const css = read('../app/globals.css');
   const ruler = css.slice(css.indexOf('.jv-dec-tab {'), css.indexOf('.jv-dec-tab-label {'));
   assert.match(ruler, /border-bottom: 2px solid transparent;/);
   assert.match(css, /\.jv-dec-tab-on \{ border-bottom-color: var\(--dec-amber/, 'the active decade gets the amber underline from the mock, not a filled pill');
