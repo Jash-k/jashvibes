@@ -1,11 +1,54 @@
 'use client';
 
 import Link from 'next/link';
-import BrandLogo from '@/components/BrandLogo';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import EmbedSiteLinks from '@/components/EmbedSiteLinks';
+import RailNav from '@/components/rail/RailNav';
+import { readSessionCache, writeSessionCache } from '@/lib/clientCache';
+import {
+  FILTER_FIELDS,
+  SELECTED_KEY,
+  SHELF_KEY,
+  SHELF_MAX_PAGES,
+  activeFilterCount,
+  buildRuler,
+  buildShelfQuery,
+  catalogKey,
+  catalogLabel,
+  defaultFilters,
+  emptyShelfEntry,
+  fetchCatalogPage,
+  getDefaultPins,
+  markShelfError,
+  markShelfLoading,
+  readCatalogOptions,
+  rowKey,
+  safeFilters,
+  shelfLine,
+  supportsExtra,
+} from '@/lib/stremioShelf';
 
-const SELECTED_CATALOGS_KEY = 'jash:stremio:selectedCatalogs:v2';
+/**
+ * Stremio — the Catalog Shelf, built from the picked mock (`docs/concepts/stremio-redesign.html`, idea 1).
+ *
+ * One tab per pinned catalog, one catalog of posters at a time. Everything the old page had around that —
+ * the addon hero card, the `<select>` + Add picker, the five-field filter form with Apply/Clear, the chip
+ * row whose click focused nothing, the horizontal rails with ‹ › arrows and a `More` button, the embed
+ * provider tabs — is gone, because the shelf replaces all of it. Counts on the tabs are what this device
+ * has loaded and `· more` means the addon answered `hasMore`; no number on this page is invented, because
+ * `/api/stremio/catalog` returns `{ items, count, hasMore }` and never a total.
+ *
+ * A filter is offered only when the focused catalog's `extraSupported` declares it, and a value carried
+ * over from another catalog is announced as `genre ignored here` instead of being sent and silently dropped.
+ * Switching tabs, filtering, clearing or `load more` costs exactly one request; a pinned catalog that you
+ * never opened costs zero.
+ *
+ * Dark in both themes, like the ReTro wall: this surface is posters, not chrome, and `html.day-mode main`
+ * repaints anything leaning on a Tailwind text/background utility. Every colour here is declared on its own
+ * class, and the rail and dock still follow the theme.
+ */
+
+const CACHE_TTL = 30 * 60 * 1000;
 
 async function readJsonResponse(response, fallbackMessage = 'Request failed') {
   const contentType = response.headers.get('content-type') || '';
@@ -19,350 +62,521 @@ async function readJsonResponse(response, fallbackMessage = 'Request failed') {
   return response.json();
 }
 
-function catalogKey(catalog = {}) {
-  return `${catalog.type || 'movie'}:${catalog.id || ''}`;
+function tabId(key) {
+  return `jv-st-tab-${String(key).replace(/[^a-z0-9]/gi, '-')}`;
 }
 
-function catalogLabel(catalog = {}) {
-  const typeLabel = catalog.type === 'series' ? 'Series' : 'Movies';
-  return `${catalog.name || catalog.id || 'Catalog'} ${typeLabel}`;
-}
-
-function normalizeCatalog(catalog = {}) {
-  const extraSupported = Array.isArray(catalog.extraSupported) && catalog.extraSupported.length
-    ? catalog.extraSupported
-    : (catalog.extra || []).map((item) => item?.name).filter(Boolean);
-  return {
-    id: catalog.id || '',
-    type: catalog.type === 'series' ? 'series' : 'movie',
-    name: catalog.name || catalog.id || 'Catalog',
-    extraSupported,
-  };
-}
-
-function safeCatalogState(value = {}) {
-  return {
-    items: Array.isArray(value.items) ? value.items : [],
-    skip: Number(value.skip || 0),
-    hasMore: Boolean(value.hasMore),
-    loading: Boolean(value.loading),
-    error: value.error || '',
-    catalogName: value.catalogName || '',
-  };
-}
-
-function StremioCard({ item }) {
+function Ruler({ tabs, value, pinnedCount, onChange, onOpenCatalogs }) {
   return (
-    <Link
-      href={`/stremio-watch/${item.type}/${encodeURIComponent(item.id)}?source=catalog`}
-      className="group w-36 shrink-0 snap-start overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 shadow-xl shadow-black/30 transition hover:-translate-y-1 hover:border-fuchsia-400/50 sm:w-44 sm:rounded-3xl lg:w-48"
-    >
-      <div className="relative aspect-[2/3] bg-zinc-900">
-        {item.posterUrl ? <img src={item.posterUrl} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" /> : <div className="grid h-full place-items-center p-4 text-center text-sm font-black text-zinc-300">{item.title}</div>}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
-        <div className="absolute left-2 top-2 rounded-full bg-fuchsia-500 px-2 py-1 text-[9px] font-black uppercase text-black">{item.type === 'series' ? 'Series' : 'Movie'}</div>
-        {item.releaseInfo ? <div className="absolute right-2 top-2 rounded-full bg-black/75 px-2 py-1 text-[9px] font-black text-white">{item.releaseInfo}</div> : null}
-      </div>
-      <div className="space-y-1.5 p-2.5 sm:p-3">
-        <h3 className="line-clamp-2 min-h-9 text-xs font-black leading-4 text-white sm:text-sm sm:leading-5">{item.title}</h3>
-        <p className="truncate text-[10px] font-semibold text-zinc-500">{item.rating ? `IMDb ${item.rating}` : (item.genres || [])[0] || item.type}</p>
-      </div>
+    <div className="jv-st-ruler" role="tablist" aria-label="Catalog">
+      {tabs.map((tab, index) => {
+        const active = tab.key === value;
+        return (
+          <button
+            key={tab.key}
+            type="button"
+            role="tab"
+            id={tabId(tab.key)}
+            aria-selected={active}
+            aria-controls="jv-st-shelf"
+            tabIndex={active ? 0 : -1}
+            className={`jv-st-tab${active ? ' jv-st-tab-on' : ''}`}
+            onClick={() => onChange(tab.key)}
+            onKeyDown={(event) => {
+              const keys = { ArrowRight: 1, ArrowLeft: -1, Home: -index, End: tabs.length - 1 - index };
+              const step = keys[event.key];
+              if (step === undefined) return;
+              event.preventDefault();
+              const next = tabs[Math.min(tabs.length - 1, Math.max(0, index + step))];
+              if (!next) return;
+              onChange(next.key);
+              requestAnimationFrame(() => document.getElementById(tabId(next.key))?.focus());
+            }}
+          >
+            <span className="jv-st-tab-label">{tab.label}</span>
+            <span className="jv-st-tab-count">{tab.count}{tab.more ? ' · more' : ''}</span>
+          </button>
+        );
+      })}
+      <button type="button" className="jv-st-tab jv-st-tab-add" onClick={onOpenCatalogs}>
+        <span className="jv-st-tab-label">{pinnedCount ? '+ catalogs' : 'pin a catalog'}</span>
+      </button>
+    </div>
+  );
+}
+
+function ShelfCard({ item }) {
+  const href = `/stremio-watch/${item.type}/${encodeURIComponent(item.id)}?source=catalog`;
+  const year = String(item.releaseInfo || item.year || '').slice(0, 4);
+  const score = Number(item.rating) ? Number(item.rating).toFixed(1) : '';
+
+  return (
+    <Link href={href} className="jv-st-card" title={item.synopsis || item.title}>
+      {item.posterUrl ? (
+        <img className="jv-st-art" src={item.posterUrl} alt="" aria-hidden="true" loading="lazy" decoding="async" />
+      ) : (
+        <span className="jv-st-art jv-st-art-none" aria-hidden="true">{String(item.title || '??').trim().slice(0, 2).toUpperCase()}</span>
+      )}
+      {score ? <span className="jv-st-score">{score}</span> : null}
+      <span className="jv-st-lab">
+        <span className="jv-st-name">{item.title}</span>
+        <span className="jv-st-sub">{year || '—'} · {item.type === 'series' ? 'series' : 'movie'}</span>
+      </span>
     </Link>
   );
 }
 
-function HorizontalCatalogRow({ catalog, state, onMore }) {
-  const rowRef = useRef(null);
-  const scroll = (direction) => {
-    const node = rowRef.current;
-    if (!node) return;
-    node.scrollBy({ left: direction * Math.max(260, node.clientWidth * 0.86), behavior: 'smooth' });
-  };
+function FilterStrip({ catalog, filters, ignored, onOpenSheet }) {
+  const missing = FILTER_FIELDS
+    .filter((field) => !supportsExtra(catalog, field.id).supported && supportsExtra(catalog, field.id).declared)
+    .map((field) => `no ${field.id === 'language' ? 'language' : field.id === 'sort' ? 'sorting' : field.id} here`);
+  const canSearch = supportsExtra(catalog, 'search').supported;
+  const unknown = !supportsExtra(catalog, 'search').declared;
+  const used = activeFilterCount(filters);
 
   return (
-    <section className="min-w-0 overflow-hidden rounded-[2rem] border border-fuchsia-400/15 bg-white/[0.035] p-3 sm:p-5">
-      <div className="mb-3 flex items-end justify-between gap-3 px-1">
-        <div className="min-w-0">
-          <h2 className="truncate text-xl font-black text-white sm:text-3xl">{catalogLabel(catalog)}</h2>
-          <p className="mt-1 text-xs font-semibold text-zinc-500">{state.catalogName || catalog.name} • {state.items.length} loaded</p>
-        </div>
-        {state.hasMore ? <button type="button" onClick={onMore} disabled={state.loading} className="shrink-0 rounded-full border border-fuchsia-300/30 bg-fuchsia-500/10 px-4 py-2 text-xs font-black text-fuchsia-100 disabled:opacity-60">More</button> : null}
-      </div>
-      {state.error ? <div className="mb-3 rounded-2xl border border-red-500/30 bg-red-950/20 p-3 text-sm text-red-200">{state.error}</div> : null}
-      <div className="relative min-w-0 max-w-full overflow-hidden">
-        <button type="button" onClick={() => scroll(-1)} className="absolute left-1 top-1/2 z-20 hidden h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-fuchsia-300/35 bg-black/85 text-2xl font-black text-fuchsia-100 shadow-xl backdrop-blur transition hover:bg-fuchsia-300 hover:text-black sm:grid" aria-label="Scroll left">‹</button>
-        <div ref={rowRef} className="flex min-w-0 snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain scroll-smooth pb-2 touch-pan-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:px-11">
-          {state.items.map((item) => <StremioCard key={`${item.type}-${item.id}`} item={item} />)}
-          {state.loading ? Array.from({ length: 6 }).map((_, index) => <div key={index} className="w-36 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 sm:w-44 sm:rounded-3xl lg:w-48"><div className="aspect-[2/3] animate-pulse bg-zinc-900" /><div className="space-y-2 p-3"><div className="h-4 animate-pulse rounded bg-zinc-800" /><div className="h-3 w-2/3 animate-pulse rounded bg-zinc-900" /></div></div>) : null}
-        </div>
-        <button type="button" onClick={() => scroll(1)} className="absolute right-1 top-1/2 z-20 hidden h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-fuchsia-300/35 bg-black/85 text-2xl font-black text-fuchsia-100 shadow-xl backdrop-blur transition hover:bg-fuchsia-300 hover:text-black sm:grid" aria-label="Scroll right">›</button>
-      </div>
-      {!state.loading && !state.items.length && !state.error ? <p className="rounded-2xl border border-white/10 bg-black/25 p-5 text-center text-sm text-zinc-400">No items loaded in this catalog.</p> : null}
-    </section>
+    <div className="jv-st-filters">
+      {FILTER_FIELDS.filter((field) => supportsExtra(catalog, field.id).supported).map((field) => (
+        <button key={field.id} type="button" className="jv-st-fchip" onClick={() => onOpenSheet(field.id)}>
+          <span className="jv-st-fchip-key">{field.label}</span>
+          <span className="jv-st-fchip-val">{filters[field.id] || field.none}</span>
+        </button>
+      ))}
+      {canSearch ? (
+        <button type="button" className="jv-st-fchip" onClick={() => onOpenSheet('search')}>
+          <span className="jv-st-fchip-key">Search</span>
+          <span className="jv-st-fchip-val">{filters.search || '—'}</span>
+        </button>
+      ) : null}
+      {ignored.length ? <span className="jv-st-fnote" aria-live="polite">{ignored.join(' + ')} ignored here</span> : null}
+      {!ignored.length && missing.length ? <span className="jv-st-fnote">{missing.join(' · ')}</span> : null}
+      {unknown ? <span className="jv-st-fnote">this catalog declares no extras, so it is read in the order your addon returns</span> : null}
+      {used ? <span className="jv-st-fnote jv-st-fnote-on">{used} filter{used === 1 ? '' : 's'} on this catalog</span> : null}
+    </div>
   );
 }
 
-function getDefaultCatalogs(options = [], tamilCatalogs = {}) {
-  const defaults = [];
-  const movie = options.find((item) => item.type === 'movie' && item.id === tamilCatalogs.movie)
-    || options.find((item) => item.type === 'movie' && String(item.name || '').toLowerCase().includes('tamil'))
-    || options.find((item) => item.type === 'movie');
-  const series = options.find((item) => item.type === 'series' && item.id === tamilCatalogs.series)
-    || options.find((item) => item.type === 'series' && String(item.name || '').toLowerCase().includes('tamil'))
-    || options.find((item) => item.type === 'series');
-  if (movie) defaults.push(movie);
-  if (series && catalogKey(series) !== catalogKey(movie)) defaults.push(series);
-  return defaults;
+function CatalogSheet({ options, pinned, shelf, addonName, onClose, onToggle }) {
+  const pinnedKeys = new Set(pinned.map(catalogKey));
+  return (
+    <div className="jv-st-scrim" role="dialog" aria-modal="true" aria-label="Catalogs in this addon" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <div className="jv-st-sheet">
+        <div className="jv-st-sheet-top">
+          <h2 className="jv-st-sheet-title">Catalogs</h2>
+          <span className="jv-st-sheet-sub">{addonName} · {options.length} in the manifest</span>
+          <button type="button" className="jv-st-x" onClick={onClose}>Close</button>
+        </div>
+        <p className="jv-st-sheet-note">Pinned catalogs get a tab. Pinning fetches nothing — a tab reads its first page the moment you press it.</p>
+        <ul className="jv-st-pins">
+          {options.map((catalog) => {
+            const key = catalogKey(catalog);
+            const entry = shelf[key] || emptyShelfEntry();
+            const on = pinnedKeys.has(key);
+            return (
+              <li key={key} className={`jv-st-pin${on ? ' jv-st-pin-on' : ''}`}>
+                <button type="button" className="jv-st-pin-main" aria-pressed={on} onClick={() => onToggle(catalog)}>
+                  <span className="jv-st-pin-name">{catalogLabel(catalog)}</span>
+                  <span className="jv-st-pin-meta">
+                    {catalog.type === 'series' ? 'series' : 'movie'} · {catalog.id} · {catalog.extraSupported.length ? `accepts ${catalog.extraSupported.join(', ')}` : 'declares no extras'}
+                  </span>
+                </button>
+                <span className="jv-st-pin-side">
+                  <span className="jv-st-pin-count">{entry.items.length} loaded</span>
+                  <span className="jv-st-pin-state">{on ? 'pinned' : 'pin'}</span>
+                </span>
+              </li>
+            );
+          })}
+          {!options.length ? <li className="jv-st-sheet-note">The manifest listed no movie or series catalogs, so there is nothing to pin.</li> : null}
+        </ul>
+        {/* The one link /embed-browser has anywhere in the app. It is a destination, not chrome, so it
+            moved into this sheet rather than being deleted with the hero card the shelf replaced. */}
+        <div className="jv-st-embeds">
+          <EmbedSiteLinks />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FilterSheet({ catalog, filters, field, onClose, onApply, onClear }) {
+  const searchRef = useRef(null);
+  const [draft, setDraft] = useState(filters.search || '');
+  const [next, setNext] = useState(() => safeFilters(filters));
+
+  useEffect(() => {
+    setNext(safeFilters(filters));
+    setDraft(filters.search || '');
+  }, [filters]);
+
+  useEffect(() => {
+    if (field === 'search') requestAnimationFrame(() => searchRef.current?.focus());
+  }, [field]);
+
+  const set = (id, value) => setNext((current) => ({
+    ...current,
+    [id]: current[id] === value && id !== 'sort' ? '' : value,
+  }));
+
+  const usable = FILTER_FIELDS.filter((entry) => supportsExtra(catalog, entry.id).supported);
+  const skipped = FILTER_FIELDS.filter((entry) => !supportsExtra(catalog, entry.id).supported && supportsExtra(catalog, entry.id).declared);
+
+  return (
+    <div className="jv-st-scrim" role="dialog" aria-modal="true" aria-label="Filters for this catalog" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <div className="jv-st-sheet jv-st-sheet-filters">
+        <div className="jv-st-sheet-top">
+          <h2 className="jv-st-sheet-title">{catalogLabel(catalog || {})} · filters</h2>
+          <button type="button" className="jv-st-x" onClick={onClose}>Close</button>
+        </div>
+        {usable.map((entry) => (
+          <div key={entry.id} className="jv-st-field">
+            <p className="jv-st-field-label">{entry.label}</p>
+            <div className="jv-st-options">
+              {entry.id !== 'sort' ? (
+                <button type="button" className={`jv-st-opt${!next[entry.id] ? ' jv-st-opt-on' : ''}`} onClick={() => set(entry.id, '')}>{entry.none}</button>
+              ) : null}
+              {entry.options.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={next[entry.id] === option.value}
+                  className={`jv-st-opt${next[entry.id] === option.value ? ' jv-st-opt-on' : ''}`}
+                  onClick={() => set(entry.id, option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+        {supportsExtra(catalog, 'search').supported ? (
+          <div className="jv-st-field">
+            <p className="jv-st-field-label">Search</p>
+            <form
+              className="jv-st-search"
+              onSubmit={(event) => { event.preventDefault(); onApply({ ...next, search: draft.trim() }); }}
+            >
+              <input
+                ref={searchRef}
+                className="jv-st-input"
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder="title, an actor, anything this catalog indexes"
+                aria-label="Search this catalog"
+              />
+              <button type="submit" className="jv-st-go">Go</button>
+            </form>
+          </div>
+        ) : null}
+        {!supportsExtra(catalog, 'search').declared ? (
+          <p className="jv-st-unsupported">This catalog declares no extras, so there is nothing here to set — it is read in the order your addon returns.</p>
+        ) : null}
+        {skipped.length ? (
+          <p className="jv-st-unsupported">
+            {skipped.map((entry) => entry.label).join(', ')}: this catalog does not declare {skipped.length === 1 ? 'it' : 'them'}, so nothing is offered.
+          </p>
+        ) : null}
+        <div className="jv-st-sheet-foot">
+          <button type="button" className="jv-st-go" onClick={() => onApply(next)}>Apply</button>
+          <button type="button" className="jv-st-quiet" onClick={onClear}>Clear</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function StremioPage() {
   const [manifest, setManifest] = useState(null);
-  const [catalogOptions, setCatalogOptions] = useState([]);
-  const [selectedCatalogs, setSelectedCatalogs] = useState([]);
+  const [options, setOptions] = useState([]);
+  const [pinned, setPinned] = useState([]);
   const [activeKey, setActiveKey] = useState('');
-  const [pickerValue, setPickerValue] = useState('');
-  const [searchDraft, setSearchDraft] = useState('');
-  const [appliedSearch, setAppliedSearch] = useState('');
-  const [languageFilter, setLanguageFilter] = useState('');
-  const [sortFilter, setSortFilter] = useState('Latest Added');
-  const [genreFilter, setGenreFilter] = useState('');
-  const [catalogState, setCatalogState] = useState({});
+  const [shelf, setShelf] = useState({});
+  const [filtersByCatalog, setFiltersByCatalog] = useState({});
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
+  const [sheet, setSheet] = useState('');
+  const [sheetField, setSheetField] = useState('');
+  const [nonce, setNonce] = useState(0);
+  const requestsRef = useRef({});
+  const filtersRef = useRef({});
+  const shelfRef = useRef({});
+  const mountedRef = useRef(true);
 
-  const activeCatalog = useMemo(() => selectedCatalogs.find((catalog) => catalogKey(catalog) === activeKey) || selectedCatalogs[0] || null, [selectedCatalogs, activeKey]);
+  const activeCatalog = useMemo(
+    () => pinned.find((catalog) => catalogKey(catalog) === activeKey) || pinned[0] || null,
+    [pinned, activeKey],
+  );
+  const activeCatalogKey = activeCatalog ? catalogKey(activeCatalog) : '';
+  const filters = useMemo(
+    () => safeFilters(filtersByCatalog[activeCatalogKey] || defaultFilters()),
+    [filtersByCatalog, activeCatalogKey],
+  );
+  const tabs = useMemo(() => buildRuler({ pinned, shelf }), [pinned, shelf]);
+  const activeTab = tabs.find((tab) => tab.key === activeCatalogKey) || null;
+  const activeEntry = shelf[activeCatalogKey] || null;
+  const ignored = useMemo(() => (activeCatalog
+    ? buildShelfQuery({ catalog: activeCatalog, skip: 0, filters }).ignored
+    : []), [activeCatalog, filters]);
+  const line = useMemo(() => shelfLine({ tab: activeTab, loading: Boolean(activeEntry?.loading), ignored }), [activeTab, activeEntry, ignored]);
 
-  const loadCatalog = useCallback(async (catalog, append = false, filtersOverride = null) => {
+  useEffect(() => { filtersRef.current = filtersByCatalog; }, [filtersByCatalog]);
+  useEffect(() => { shelfRef.current = shelf; }, [shelf]);
+
+  const fetchPage = useCallback(async (query) => {
+    const response = await fetch(`/api/stremio/catalog?${query}`, { cache: 'no-store' });
+    const data = await readJsonResponse(response, 'Stremio request failed');
+    if (!response.ok || data?.error) throw new Error(data?.error || 'Catalog failed');
+    return data;
+  }, []);
+
+  // One call in, one catalog page out. `requestsRef` is what makes a stale answer harmless: pressing two
+  // tabs quickly means the first reply arrives after the second request exists, and it must not paint.
+  const run = useCallback(async (catalog, { append = false } = {}) => {
     if (!catalog?.id) return;
-    const filters = filtersOverride || { search: appliedSearch, language: languageFilter, sort: sortFilter, genre: genreFilter };
     const key = catalogKey(catalog);
-    const current = safeCatalogState(catalogState[key]);
-    const currentItems = current.items;
-    const skip = append ? currentItems.length : 0;
+    const id = (requestsRef.current[key] || 0) + 1;
+    requestsRef.current[key] = id;
+    setShelf((state) => ({ ...state, [key]: markShelfLoading(state[key] || emptyShelfEntry()) }));
     try {
-      setCatalogState((state) => ({ ...state, [key]: { ...safeCatalogState(state[key]), loading: true, error: '' } }));
-      const params = new URLSearchParams({ source: 'catalog', type: catalog.type, catalog: catalog.id, skip: String(skip) });
-      if (filters.search) params.set('search', filters.search);
-      if (filters.language) params.set('language', filters.language);
-      if (filters.sort) params.set('sort', filters.sort);
-      if (filters.genre) params.set('genre', filters.genre);
-      const response = await fetch(`/api/stremio/catalog?${params.toString()}`, { cache: 'no-store' });
-      const data = await readJsonResponse(response, 'Stremio request failed');
-      if (!response.ok) throw new Error(data?.error || 'Catalog failed');
-      setCatalogState((state) => {
-        const previous = state[key]?.items || [];
-        const nextItems = append ? [...previous, ...(data.items || [])] : (data.items || []);
-        const seen = new Set();
-        const deduped = nextItems.filter((item) => {
-          const itemKey = `${item.type}:${item.id}`;
-          if (seen.has(itemKey)) return false;
-          seen.add(itemKey);
-          return true;
-        });
-        return {
-          ...state,
-          [key]: {
-            items: deduped,
-            skip: skip + (data.count || 0),
-            hasMore: Boolean(data.hasMore),
-            loading: false,
-            error: '',
-            catalogName: data.catalogName,
-          },
-        };
+      const { entry } = await fetchCatalogPage({
+        fetchPage,
+        catalog,
+        filters: safeFilters(filtersRef.current[key]),
+        append,
+        current: shelfRef.current[key] || null,
       });
+      if (!mountedRef.current || requestsRef.current[key] !== id) return;
+      setShelf((state) => ({ ...state, [key]: entry }));
     } catch (err) {
-      setCatalogState((state) => ({ ...state, [key]: { ...(state[key] || {}), loading: false, error: err.message || 'Catalog failed' } }));
+      if (err?.name === 'AbortError' || !mountedRef.current || requestsRef.current[key] !== id) return;
+      setShelf((state) => ({ ...state, [key]: markShelfError(state[key], err?.message || 'Catalog failed') }));
     }
-  }, [catalogState, appliedSearch, languageFilter, sortFilter, genreFilter]);
+  }, [fetchPage]);
 
+  // The manifest is the only thing read on arrival. Its answer decides the tabs; the first tab's page
+  // follows from there, so nothing else on the addon gets touched until you press it.
   useEffect(() => {
+    let cancelled = false;
     async function loadManifest() {
+      setStatus('loading');
+      setError('');
       try {
-        setStatus('loading');
-        setError('');
         const response = await fetch('/api/stremio/manifest?source=catalog', { cache: 'no-store' });
         const data = await readJsonResponse(response, 'Stremio request failed');
         if (!response.ok || !data.ok) throw new Error(data?.error || 'Stremio manifest failed');
-        const options = (data.manifest?.catalogs || [])
-          .filter((catalog) => catalog.type === 'movie' || catalog.type === 'series')
-          .map(normalizeCatalog)
-          .filter((catalog) => catalog.id);
-        const uniqueOptions = [];
-        const seen = new Set();
-        for (const option of options) {
-          const key = catalogKey(option);
-          if (!seen.has(key)) {
-            seen.add(key);
-            uniqueOptions.push(option);
-          }
+        if (cancelled) return;
+        const list = readCatalogOptions(data.manifest?.catalogs || []);
+        let savedPins = [];
+        try {
+          const raw = JSON.parse(window.localStorage.getItem(SELECTED_KEY) || '[]');
+          if (Array.isArray(raw)) savedPins = raw.map((key) => list.find((item) => catalogKey(item) === key)).filter(Boolean);
+        } catch { /* a corrupt key just means "nothing pinned yet" */ }
+        const prefs = readSessionCache(SHELF_KEY, CACHE_TTL) || {};
+        const chosen = savedPins.length ? savedPins : getDefaultPins(list, data.tamilCatalogs || {});
+        setManifest(data.manifest || null);
+        setOptions(list);
+        setPinned(chosen);
+        const wanted = chosen.find((catalog) => catalogKey(catalog) === prefs.activeKey) || chosen[0];
+        if (wanted) setActiveKey(catalogKey(wanted));
+        if (prefs.filters && typeof prefs.filters === 'object') {
+          const restored = {};
+          for (const [key, value] of Object.entries(prefs.filters)) restored[key] = safeFilters(value);
+          setFiltersByCatalog(restored);
         }
-
-        const savedKeys = JSON.parse(window.localStorage.getItem(SELECTED_CATALOGS_KEY) || '[]');
-        const saved = Array.isArray(savedKeys)
-          ? savedKeys.map((key) => uniqueOptions.find((option) => catalogKey(option) === key)).filter(Boolean)
-          : [];
-        const defaults = saved.length ? saved : getDefaultCatalogs(uniqueOptions, data.tamilCatalogs || {});
-
-        setManifest(data.manifest);
-        setCatalogOptions(uniqueOptions);
-        setSelectedCatalogs(defaults);
-        setActiveKey(defaults[0] ? catalogKey(defaults[0]) : '');
-        setPickerValue(uniqueOptions[0] ? catalogKey(uniqueOptions[0]) : '');
         setStatus('ready');
       } catch (err) {
-        setError(err.message || 'Stremio is not configured');
+        if (cancelled) return;
+        setError(err?.message || 'Stremio is not configured');
         setStatus('error');
       }
     }
     loadManifest();
-  }, []);
+    return () => { cancelled = true; };
+  }, [nonce]);
+
+  // One page per tab, and only when that tab is what you are looking at.
+  useEffect(() => {
+    if (status !== 'ready' || !activeCatalog) return;
+    const entry = shelf[activeCatalogKey];
+    if (entry && (entry.fetched || entry.loading)) return;
+    run(activeCatalog);
+  }, [status, activeCatalog, activeCatalogKey, shelf, run]);
 
   useEffect(() => {
-    if (!selectedCatalogs.length) return;
-    for (const catalog of selectedCatalogs) {
-      const state = safeCatalogState(catalogState[catalogKey(catalog)]);
-      if (!state.items.length && !state.loading && !state.error) loadCatalog(catalog, false);
-    }
-  }, [selectedCatalogs, catalogState, loadCatalog]);
+    if (!pinned.length) return;
+    try { window.localStorage.setItem(SELECTED_KEY, JSON.stringify(pinned.map(catalogKey))); } catch { /* private mode */ }
+  }, [pinned]);
 
   useEffect(() => {
-    if (!selectedCatalogs.length) return;
-    try { window.localStorage.setItem(SELECTED_CATALOGS_KEY, JSON.stringify(selectedCatalogs.map(catalogKey))); } catch {}
-  }, [selectedCatalogs]);
+    if (!activeCatalogKey) return;
+    writeSessionCache(SHELF_KEY, { activeKey: activeCatalogKey, filters: filtersByCatalog });
+  }, [activeCatalogKey, filtersByCatalog]);
 
-  function addSelectedCatalog() {
-    const option = catalogOptions.find((catalog) => catalogKey(catalog) === pickerValue);
-    if (!option) return;
-    setSelectedCatalogs((current) => {
-      if (current.some((catalog) => catalogKey(catalog) === catalogKey(option))) return current;
-      return [...current, option];
+  useEffect(() => {
+    const onKey = (event) => { if (event.key === 'Escape' && sheet) setSheet(''); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [sheet]);
+
+  useEffect(() => () => { mountedRef.current = false; }, []);
+
+  function togglePin(catalog) {
+    const key = catalogKey(catalog);
+    setPinned((current) => {
+      if (current.some((item) => catalogKey(item) === key)) {
+        const next = current.filter((item) => catalogKey(item) !== key);
+        if (activeKey === key) setActiveKey(next[0] ? catalogKey(next[0]) : '');
+        return next;
+      }
+      setActiveKey(key);
+      return [...current, catalog];
     });
-    setActiveKey(catalogKey(option));
   }
 
-  function removeSelectedCatalog(key) {
-    setSelectedCatalogs((current) => {
-      const next = current.filter((catalog) => catalogKey(catalog) !== key);
-      if (activeKey === key) setActiveKey(next[0] ? catalogKey(next[0]) : '');
-      return next;
-    });
+  function applyFilters(next) {
+    if (!activeCatalog) return;
+    const clean = safeFilters(next);
+    setFiltersByCatalog((current) => ({ ...current, [activeCatalogKey]: clean }));
+    setShelf((state) => ({ ...state, [activeCatalogKey]: emptyShelfEntry() }));
+    setSheet('');
+    run(activeCatalog);
   }
 
-  function applyFilters(event) {
-    event?.preventDefault?.();
-    const nextFilters = { search: searchDraft.trim(), language: languageFilter, sort: sortFilter, genre: genreFilter };
-    setAppliedSearch(nextFilters.search);
-    selectedCatalogs.forEach((catalog) => loadCatalog(catalog, false, nextFilters));
+  function reloadActive() {
+    if (!activeCatalog) return;
+    setShelf((state) => ({ ...state, [activeCatalogKey]: emptyShelfEntry() }));
+    run(activeCatalog);
   }
 
-  function clearFilters() {
-    const nextFilters = { search: '', language: '', sort: 'Latest Added', genre: '' };
-    setSearchDraft('');
-    setAppliedSearch('');
-    setLanguageFilter('');
-    setSortFilter('Latest Added');
-    setGenreFilter('');
-    selectedCatalogs.forEach((catalog) => loadCatalog(catalog, false, nextFilters));
-  }
+  const addonName = manifest?.name || 'no addon name';
+  const loaded = activeEntry?.items?.length || 0;
+  const reading = Boolean(activeEntry?.loading);
+  const capped = (activeEntry?.pages || 0) >= SHELF_MAX_PAGES;
+  const showGrid = Boolean(activeCatalog) && loaded > 0 && !error && status === 'ready';
 
   return (
-    <main className="min-h-dvh overflow-x-hidden bg-[radial-gradient(circle_at_12%_0%,rgba(217,70,239,0.20),transparent_30%),linear-gradient(180deg,#080014,#050505_55%,#090014)] pb-10 text-zinc-100">
-      <header className="hidden sm:block sticky top-0 z-50 border-b border-fuchsia-400/10 bg-[#080008]/92 px-4 py-1.5 backdrop-blur-xl sm:py-2">
-        <div className="mx-auto grid max-w-7xl grid-cols-[1fr_auto_1fr] items-center gap-2">
-          <Link href="/" className="justify-self-start rounded-full border border-white/10 px-2.5 py-1.5 text-[11px] font-bold text-zinc-300 transition hover:border-fuchsia-400/40 hover:text-white">← Home</Link>
-          <div className="flex items-center justify-center gap-2 text-center">
-            <BrandLogo size="mini" />
-            <p className="text-[9px] font-black uppercase tracking-[0.26em] text-fuchsia-300 sm:text-[10px] sm:tracking-[0.32em]">Stremio</p>
-          </div>
-          <span className="justify-self-end" />
-        </div>
-      </header>
-
-      <section className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-        <div className="rounded-[2rem] border border-fuchsia-400/20 bg-white/[0.04] p-5 shadow-2xl shadow-fuchsia-950/20 sm:p-7">
-          <p className="text-xs font-black uppercase tracking-[0.35em] text-fuchsia-300/80">Authorized Addon</p>
-          <h1 className="mt-3 text-3xl font-black text-white sm:text-5xl">Catalogs</h1>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">Choose which catalogs from your manifest should appear. Click a catalog button to lazy-load posters for that catalog.</p>
-          {manifest?.name ? <p className="mt-3 text-xs font-bold text-zinc-500">Addon: {manifest.name} • {manifest.version}</p> : null}
-          <EmbedSiteLinks />
-
-          <div className="mt-5 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-            <select value={pickerValue} onChange={(event) => setPickerValue(event.target.value)} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm font-bold text-white outline-none focus:border-fuchsia-300">
-              {catalogOptions.map((catalog) => <option key={catalogKey(catalog)} value={catalogKey(catalog)}>{catalogLabel(catalog)}</option>)}
-            </select>
-            <button type="button" onClick={addSelectedCatalog} className="rounded-2xl border border-fuchsia-300/30 bg-fuchsia-500/10 px-5 py-3 text-sm font-black text-fuchsia-100 hover:border-fuchsia-300/70">Add</button>
-          </div>
-
-          <form onSubmit={applyFilters} className="mt-4 grid gap-2 rounded-3xl border border-white/10 bg-black/25 p-3 sm:grid-cols-2 lg:grid-cols-5">
-            <label className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500 lg:col-span-2">
-              Search title
-              <input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Movie / series name..." className="mt-1 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm font-bold normal-case tracking-normal text-white outline-none placeholder:text-zinc-600 focus:border-fuchsia-300" />
-            </label>
-            <label className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">
-              Language
-              <select value={languageFilter} onChange={(event) => setLanguageFilter(event.target.value)} className="mt-1 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm font-bold normal-case tracking-normal text-white outline-none focus:border-fuchsia-300">
-                <option value="">All languages</option>
-                {['Tamil', 'Telugu', 'Hindi', 'Malayalam', 'Kannada', 'English', 'Multi'].map((item) => <option key={item} value={item}>{item}</option>)}
-              </select>
-            </label>
-            <label className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">
-              Sort / date
-              <select value={sortFilter} onChange={(event) => setSortFilter(event.target.value)} className="mt-1 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm font-bold normal-case tracking-normal text-white outline-none focus:border-fuchsia-300">
-                <option value="Latest Added">Uploaded date</option>
-                <option value="Year: Newest">Release date newest</option>
-                <option value="Year: Oldest">Release date oldest</option>
-                <option value="Highest Rated">IMDb rating</option>
-                <option value="Title: A-Z">Title A-Z</option>
-              </select>
-            </label>
-            <label className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">
-              Genre
-              <select value={genreFilter} onChange={(event) => setGenreFilter(event.target.value)} className="mt-1 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm font-bold normal-case tracking-normal text-white outline-none focus:border-fuchsia-300">
-                <option value="">All genres</option>
-                {['Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Drama', 'Family', 'Fantasy', 'Horror', 'Romance', 'Sci-Fi', 'Sport', 'Thriller'].map((item) => <option key={item} value={item}>{item}</option>)}
-              </select>
-            </label>
-            <div className="grid grid-cols-2 gap-2 sm:col-span-2 lg:col-span-5">
-              <button type="submit" className="rounded-2xl bg-fuchsia-500 px-4 py-3 text-sm font-black text-black transition hover:bg-fuchsia-300">Apply filters</button>
-              <button type="button" onClick={clearFilters} className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-black text-zinc-200 transition hover:border-fuchsia-300/50">Clear</button>
+    <>
+      <RailNav />
+      <main className="jv-st-page jv-rail-shift">
+        <div className="jv-st">
+          <header className="jv-st-top">
+            <button type="button" className="jv-st-burger" onClick={() => setSheet('catalogs')} title="Pin or unpin catalogs" aria-label="Catalogs">
+              <span className="jv-st-burger-bars" aria-hidden="true" />
+            </button>
+            <h1 className="jv-st-heading">Stremio<span className="jv-st-heading-addon">· {addonName}</span></h1>
+            <div className="jv-st-top-side">
+              <span className="jv-st-pinchip">{pinned.length} catalog{pinned.length === 1 ? '' : 's'} pinned</span>
+              <button type="button" className="jv-st-mobfilters" onClick={() => { setSheetField(''); setSheet('filters'); }}>
+                Filters{activeFilterCount(filters) ? ` · ${activeFilterCount(filters)}` : ''}
+              </button>
             </div>
-          </form>
+          </header>
 
-          <div className="mt-4 flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {selectedCatalogs.map((catalog) => {
-              const key = catalogKey(catalog);
-              const active = key === activeKey;
-              return (
-                <div key={key} className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 transition ${active ? 'border-fuchsia-300 bg-fuchsia-500/20 text-fuchsia-50' : 'border-white/10 bg-white/[0.04] text-zinc-300'}`}>
-                  <button type="button" onClick={() => setActiveKey(key)} className="px-2 py-1 text-xs font-black">{catalogLabel(catalog)}</button>
-                  <button type="button" onClick={() => removeSelectedCatalog(key)} className="grid h-6 w-6 place-items-center rounded-full text-xs font-black text-zinc-400 hover:bg-black/30 hover:text-white" title="Remove catalog">×</button>
+          {tabs.length ? (
+            <Ruler
+              tabs={tabs}
+              value={activeCatalogKey}
+              pinnedCount={pinned.length}
+              onChange={setActiveKey}
+              onOpenCatalogs={() => setSheet('catalogs')}
+            />
+          ) : null}
+
+          {activeCatalog && status === 'ready' ? (
+            <div className="jv-st-strip">
+              <FilterStrip
+                catalog={activeCatalog}
+                filters={filters}
+                ignored={ignored}
+                onOpenSheet={(fieldId) => { setSheetField(fieldId); setSheet('filters'); }}
+              />
+              <button type="button" className="jv-st-reload" onClick={reloadActive} title="Read this catalog again from its first page">reload</button>
+            </div>
+          ) : null}
+
+          <section
+            className="jv-st-body"
+            id="jv-st-shelf"
+            role="tabpanel"
+            aria-live="polite"
+            aria-labelledby={activeTab ? tabId(activeTab.key) : undefined}
+          >
+            {status === 'loading' || (reading && !loaded) ? (
+              <div className="jv-st-skel" aria-hidden="true">{Array.from({ length: 8 }).map((_, index) => <span key={index} />)}</div>
+            ) : null}
+
+            {status === 'error' ? (
+              <div className="jv-st-note jv-st-note-error">
+                <p className="jv-st-note-title">The addon did not answer</p>
+                <p className="jv-st-note-body">{error} Set <code>STREMIO</code> to your addon manifest URL if this is a fresh deploy.</p>
+                <div className="jv-st-note-actions"><button type="button" className="jv-st-go" onClick={() => setNonce((value) => value + 1)}>Try again</button></div>
+              </div>
+            ) : null}
+
+            {status === 'ready' && !pinned.length ? (
+              <div className="jv-st-note jv-st-note-muted">
+                <p className="jv-st-note-title">Nothing pinned</p>
+                <p className="jv-st-note-body">This manifest listed {options.length} movie or series catalog{options.length === 1 ? '' : 's'}. Pin one and it gets a tab.</p>
+                <div className="jv-st-note-actions"><button type="button" className="jv-st-go" onClick={() => setSheet('catalogs')}>Open catalogs</button></div>
+              </div>
+            ) : null}
+
+            {status === 'ready' && activeCatalog && !reading && !loaded && activeEntry?.error ? (
+              <div className="jv-st-note jv-st-note-error">
+                <p className="jv-st-note-title">{catalogLabel(activeCatalog)}</p>
+                <p className="jv-st-note-body">{activeEntry.error}</p>
+                <div className="jv-st-note-actions"><button type="button" className="jv-st-go" onClick={reloadActive}>Try again</button></div>
+              </div>
+            ) : null}
+
+            {status === 'ready' && activeCatalog && !reading && !loaded && !activeEntry?.error ? (
+              <div className="jv-st-note jv-st-note-muted">
+                <p className="jv-st-note-title">{catalogLabel(activeCatalog)}</p>
+                <p className="jv-st-note-body">{line.text}. An empty catalog is the addon answering with nothing — it is not this page failing to look.</p>
+                <div className="jv-st-note-actions"><button type="button" className="jv-st-go" onClick={reloadActive}>Read it again</button></div>
+              </div>
+            ) : null}
+
+            {showGrid ? (
+              <>
+                <div className="jv-st-grid">
+                  {(activeEntry?.items || []).map((item) => <ShelfCard key={rowKey(item)} item={item} />)}
+                  {activeEntry?.hasMore && !capped ? (
+                    <button type="button" className="jv-st-more" disabled={reading} onClick={() => run(activeCatalog, { append: true })}>
+                      {reading ? 'reading…' : 'load more'}
+                    </button>
+                  ) : null}
+                  {capped && activeEntry?.hasMore ? (
+                    <p className="jv-st-more jv-st-more-stop">{SHELF_MAX_PAGES} pages read · press reload to start again</p>
+                  ) : null}
                 </div>
-              );
-            })}
-          </div>
+                <p className="jv-st-caption">{line.text}</p>
+              </>
+            ) : null}
+          </section>
         </div>
+      </main>
 
-        {status === 'error' ? <div className="rounded-3xl border border-red-500/30 bg-red-950/20 p-5 text-red-200">{error}<p className="mt-2 text-xs text-zinc-500">Set STREMIO/STREMIO_HOME/STREMIO_CATALOG to your addon manifest URL.</p></div> : null}
-        {status === 'loading' ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-8 text-center text-zinc-400">Loading Stremio addon...</div> : null}
-
-        {selectedCatalogs.length ? (
-          <div className="space-y-5">
-            {selectedCatalogs.map((catalog) => {
-              const key = catalogKey(catalog);
-              const state = safeCatalogState(catalogState[key]);
-              return (
-                <HorizontalCatalogRow
-                  key={key}
-                  catalog={catalog}
-                  state={state}
-                  onMore={() => loadCatalog(catalog, true)}
-                />
-              );
-            })}
-          </div>
-        ) : status === 'ready' ? <div className="rounded-3xl border border-white/10 bg-black/25 p-5 text-center text-sm text-zinc-400">Select catalogs from the dropdown above.</div> : null}
-      </section>
-    </main>
+      {sheet === 'catalogs' ? (
+        <CatalogSheet
+          options={options}
+          pinned={pinned}
+          shelf={shelf}
+          addonName={addonName}
+          onClose={() => setSheet('')}
+          onToggle={togglePin}
+        />
+      ) : null}
+      {sheet === 'filters' ? (
+        <FilterSheet
+          catalog={activeCatalog}
+          filters={filters}
+          field={sheetField}
+          onClose={() => setSheet('')}
+          onApply={applyFilters}
+          onClear={() => applyFilters(defaultFilters())}
+        />
+      ) : null}
+    </>
   );
 }

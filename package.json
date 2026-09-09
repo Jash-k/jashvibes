@@ -1,12 +1,12 @@
 {
   "name": "jashvibes",
-  "version": "8.10.2",
+  "version": "8.11.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p ${PORT:-7860}",
-    "lint:player": "eslint --no-eslintrc -c eslint.player.config.cjs --ext .js,.jsx lib/player lib/liveEpg.js lib/watchStore.js components/player components/live app/api/live-epg app/live app/classics app/watch app/stremio-watch app/sports app/player-lab tests",
+    "lint:player": "eslint --no-eslintrc -c eslint.player.config.cjs --ext .js,.jsx lib/player lib/liveEpg.js lib/watchStore.js components/player components/live app/api/live-epg app/live app/classics app/watch app/stremio app/stremio-watch app/sports app/player-lab lib/stremioShelf.js tests",
     "test": "node --experimental-detect-module --no-warnings --experimental-loader=./tests/alias-loader.mjs --test tests/",
     "test:watch": "node --experimental-detect-module --no-warnings --experimental-loader=./tests/alias-loader.mjs --test --watch tests/"
   },

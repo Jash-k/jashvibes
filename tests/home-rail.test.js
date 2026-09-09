@@ -76,7 +76,7 @@ test('deleting the old header orphaned nothing', () => {
   // thing that was not a destination — the env-configured embed providers — was moved rather than
   // dropped, because /embed-browser had no other link to it anywhere in the app.
   assert.match(links, /\/embed-browser\?site=/);
-  assert.match(stremio, /<EmbedSiteLinks \/>/, 'next to the addon it belongs to');
+  assert.match(stremio, /<EmbedSiteLinks \/>/, 'still on /stremio, where the addon lives — now inside the catalogs sheet the shelf opened');
   assert.match(links, /fetch\('\/api\/embed-sites'/, 'the fetch moved with it');
   assert.ok(!page.includes('embed-sites'), 'and the homepage no longer makes that request at all');
   const focus = read('../components/rail/RailFocus.jsx');

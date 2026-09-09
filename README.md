@@ -183,6 +183,34 @@ For personal/educational use only. Host only sources you are authorized to acces
 ## v8.4.3
 - BrandLogo resilient fallback chain (logo.png -> logo-source.webp -> JV monogram) fixes invisible mini logo when /public/brand is missing from file-wise deploys. sw v59.
 
+## v8.11.0
+- **/stremio is the Catalog Shelf**, built from idea 1 of `docs/concepts/stremio-redesign.html` (six mockups, each with
+  desktop + mobile side by side: `docs/concepts/stremio-idea-*.png`). One tab per pinned catalog across the top, fuchsia
+  underline on the one you are in, that catalog's filters as chips under it, and a poster grid whose last cell is
+  `load more`. The rail is mounted on the page; phones keep the dock.
+- **The old chrome is deleted, not hidden**: the "Authorized Addon / Catalogs" hero card, the `<select>` + Add picker,
+  the five-field filter form with Apply/Clear, the chip row with `×` remove whose click focused nothing
+  (`activeCatalog` was computed and never rendered), the horizontal rails with `‹ ›` arrows and a `More` button,
+  `MasonryGrid`, `BrandLogo`, the `← Home` chip. `EmbedSiteLinks` is the one exception — /embed-browser has no other
+  link anywhere, so it moved into the catalogs sheet (`.jv-st-embeds`) instead of being dropped with the card.
+- **Filters cannot lie any more.** `/api/stremio/catalog` returns `{ items, count, hasMore }` with no total, and a Stremio
+  catalog only honours the extras in its own `extraSupported`. The old page sent `search`/`genre`/`language`/`sort` to
+  every catalog, so a catalog that ignored one showed an unfiltered list under chips claiming otherwise. New rule, in
+  `lib/stremioShelf.js`: `buildShelfQuery` sends an extra only when the catalog declares it (aliases `search|query`,
+  `sort|order`, `language|lang`, `genre|genres`) and returns the refusals, which the chip strip prints as
+  `genre ignored here`. Filters are stored per catalog, so "Highest Rated" on one tab cannot silently describe another.
+- **One press, one request.** Arrival reads the manifest and then page 1 of the focused catalog only — the old mount
+  looped over every pinned catalog. `load more` appends one page at `skip = items.length`, dedupes across skip
+  boundaries by `type:id`, stops at 40 pages and says so, and a failed reload keeps the rows already on screen.
+- Tab counts are what this device loaded (`25 · more`), never a promised total. Pinned catalogs stay in
+  `jash:stremio:selectedCatalogs:v2` (an existing shelf survives the change); focused tab + filters in
+  `jash:stremio:shelf:v1`. Nothing here writes to Mongo, polls, or fetches per render.
+- Dark surface in both themes: every `.jv-st*` rule that sets a size also sets its own colour (`html.day-mode main`
+  paints `color:#102018 !important`), no `!important` anywhere on the surface, focus rings on every control for the TV
+  wrapper, a reduced-motion block, and 104 px of bottom padding on phones so the dock never sits on the last row.
+- `lint:player` now covers `app/stremio` and `lib/stremioShelf.js` (it watched `app/stremio-watch` only). 199/199 tests,
+  build ✓ `/stremio` 9.91 kB / 116 kB, `next start` smoke 200 on /stremio, /classics, /live, /. sw v73.
+
 ## v8.10.2
 - **The empty decade tabs are gone.** v8.10.0 filled every gap between the oldest and newest title with a zero so
   "nothing here" would be visible — which on screen was a `1940s` you could not press, dimmed and labelled `empty`.
