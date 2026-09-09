@@ -1,0 +1,479 @@
+{
+ "data": {
+  "Matchdetail": {
+   "Match": {
+    "Livecoverage": "yes",
+    "Id": "262347",
+    "Code": "auwinw06282026262347",
+    "League": "womens_international",
+    "League_Id": "10",
+    "Number": "Match 30",
+    "Type": "T20",
+    "Date": "6/28/2026",
+    "Time": "14:30",
+    "Revised_time_utc": "",
+    "Offset": "+01:00",
+    "Group": "A",
+    "Coverage_level_id": "8",
+    "Coverage_level": "Live Scorecard, Ball-by-Ball and Commentary",
+    "Match_ordinal": "30",
+    "Daynight": "yes",
+    "Comp_type_id": "13",
+    "End_date": "6/28/2026",
+    "End_time": "17:43",
+    "Upcoming": false,
+    "Live": false,
+    "Recent": true,
+    "StartDate": "6/28/2026T13:30+00:00",
+    "is_provisional_date": false,
+    "is_provisional_time": false,
+    "match_in_progress": true,
+    "is_rescheduled": false,
+    "first_ball_bowled": true
+   },
+   "Series": {
+    "Id": "12672",
+    "Name": "ICC Women's T20 World Cup, 2026",
+    "Series_short_display_name": "ICC WT20 World Cup, 2026",
+    "Series_start_date": "6/12/2026",
+    "Series_end_date": "7/5/2026",
+    "Series_end_date_ist": "7/6/2026",
+    "Series_end_date_gmt": "7/5/2026",
+    "Series_start_date_ist": "6/12/2026",
+    "Series_start_date_gmt": "6/12/2026",
+    "Series_type": "Tournament",
+    "Status": "",
+    "Tour": "9293",
+    "Tour_Name": "ICC Women's T20 World Cup, 2026",
+    "Has_standings": "true",
+    "Calendar_file_name": "calendar_new_womens_international",
+    "Streaming_platform": [
+     {
+      "Channel_name": "JioHotstar"
+     }
+    ],
+    "Broadcasting_platform": [
+     {
+      "Channel_name": "Star Sports"
+     }
+    ],
+    "is_provisional_date": false,
+    "Series_match_count": 33,
+    "Series_completed": false
+   },
+   "Venue": {
+    "Id": "89",
+    "Name": "Lord's Cricket Ground, London",
+    "Country": "England",
+    "City": "London",
+    "Latitude": "51.529986",
+    "Longitude": "-0.172223",
+    "Venue_Weather": {
+     "Weather_Id": "16",
+     "Weather": "Clouds",
+     "Description": "broken clouds",
+     "Humidity": "49%",
+     "Temperature": "23.95C",
+     "Visibility": "10000 meter",
+     "Wind_Speed": "3.13 meter/sec",
+     "Rain": ""
+    },
+    "Pitch_Detail": {
+     "Pitch_Suited_For_Id": "1",
+     "Pitch_Suited_For": "Batting friendly",
+     "Pitch_Surface_Id": "3",
+     "Pitch_Surface": "Dry"
+    },
+    "Neutralvenue": "true"
+   },
+   "Tosswonby": "1126",
+   "Toss_elected_to": "bat",
+   "Status": "Match Ended",
+   "Match_display_status": "Result",
+   "Player_Match": "Ellyse Perry",
+   "Result": "Australia beat India by 6 wickets",
+   "Winmargin": "6 wickets",
+   "Equation": "Australia beat India by 6 wickets",
+   "Winningteam": "1119",
+   "Required_Runrate": ""
+  },
+  "Innings": [
+   {
+    "Number": "First",
+    "Battingteam": "1126",
+    "Bowlingteam": "1119",
+    "Total": "170",
+    "Wickets": "4",
+    "Overs": "20.0",
+    "Runrate": "8.50",
+    "Byes": "0",
+    "Legbyes": "0",
+    "Wides": "3",
+    "Noballs": "0",
+    "Penalty": "0",
+    "StatusId": 4,
+    "Batsmen": [
+     {
+      "Batsman": "63992",
+      "Runs": "38",
+      "Balls": "37",
+      "Fours": "6",
+      "Sixes": "0",
+      "Dots": "17",
+      "Strikerate": "102.70",
+      "Dismissal": "run out",
+      "Howout": "run out (Lucy Hamilton / Georgia Wareham)",
+      "Howout_short": "run out (L Hamilton / G Wareham)",
+      "DismissalId": "ro",
+      "wicket_url": "https://www.icc-cricket.com/tournaments/womens-t20-worldcup-2026/videos/smriti-mandhana-wicket-australia-vs-india-x8650"
+     },
+     {
+      "Batsman": "70772",
+      "Runs": "34",
+      "Balls": "26",
+      "Fours": "3",
+      "Sixes": "2",
+      "Dots": "11",
+      "Strikerate": "130.76",
+      "Dismissal": "bowled",
+      "Howout": "b Sophie Molineux",
+      "Howout_short": "b S Molineux",
+      "DismissalId": "b",
+      "wicket_url": "https://www.icc-cricket.com/tournaments/womens-t20-worldcup-2026/videos/shafali-verma-wicket-australia-vs-india-x3922"
+     },
+     {
+      "Batsman": "68442",
+      "Runs": "34",
+      "Balls": "28",
+      "Fours": "1",
+      "Sixes": "1",
+      "Dots": "6",
+      "Strikerate": "121.42",
+      "Dismissal": "retired out",
+      "Howout": "retired out",
+      "Howout_short": "retired out",
+      "DismissalId": "rto"
+     }
+    ],
+    "Bowlers": [
+     {
+      "Bowler": "100376",
+      "Overs": "3",
+      "Maidens": "0",
+      "Runs": "17",
+      "Wickets": "0",
+      "Economyrate": "5.66",
+      "Wides": "0",
+      "Noballs": "0"
+     },
+     {
+      "Bowler": "19948",
+      "Overs": "3",
+      "Maidens": "0",
+      "Runs": "24",
+      "Wickets": "0",
+      "Economyrate": "8.00",
+      "Wides": "0",
+      "Noballs": "0"
+     }
+    ],
+    "FallofWickets": [
+     {
+      "Batsman": "70772",
+      "Score": "66",
+      "Overs": "9.1",
+      "Wicket_No": 1,
+      "Review_status_id": 0,
+      "Ball_number": "55"
+     },
+     {
+      "Batsman": "63992",
+      "Score": "83",
+      "Overs": "11.3",
+      "Wicket_No": 2,
+      "Review_status_id": 3,
+      "Ball_number": "69"
+     }
+    ],
+    "Partnerships": [
+     {
+      "Runs": "66",
+      "Balls": "55",
+      "ExtraRuns": "2",
+      "Batsmen": [
+       {
+        "Batsman": "63992",
+        "Runs": "30",
+        "Balls": "29"
+       },
+       {
+        "Batsman": "70772",
+        "Runs": "34",
+        "Balls": "26"
+       }
+      ],
+      "ForWicket": 1
+     },
+     {
+      "Runs": "17",
+      "Balls": "14",
+      "ExtraRuns": "1",
+      "Batsmen": [
+       {
+        "Batsman": "63992",
+        "Runs": "8",
+        "Balls": "8"
+       },
+       {
+        "Batsman": "68442",
+        "Runs": "8",
+        "Balls": "6"
+       }
+      ],
+      "ForWicket": 2
+     }
+    ],
+    "PowerPlayDetails": [
+     {
+      "Name": "PP1",
+      "Overs": "1-6",
+      "Runs": "43",
+      "Wickets": "0"
+     }
+    ]
+   },
+   {
+    "Number": "Second",
+    "Battingteam": "1119",
+    "Bowlingteam": "1126",
+    "Total": "172",
+    "Wickets": "4",
+    "Overs": "19.0",
+    "Runrate": "9.05",
+    "Byes": "0",
+    "Legbyes": "3",
+    "Wides": "4",
+    "Noballs": "2",
+    "Penalty": "0",
+    "StatusId": 4,
+    "Batsmen": [
+     {
+      "Batsman": "75001",
+      "Runs": "4",
+      "Balls": "2",
+      "Fours": "1",
+      "Sixes": "0",
+      "Dots": "1",
+      "Strikerate": "200",
+      "Dismissal": "lbw",
+      "Howout": "lbw b Renuka Singh Thakur",
+      "Howout_short": "lbw b Singh Thakur",
+      "DismissalId": "lbw",
+      "wicket_url": "https://www.icc-cricket.com/tournaments/womens-t20-worldcup-2026/videos/georgia-voll-wicket-australia-vs-india"
+     },
+     {
+      "Batsman": "64853",
+      "Runs": "22",
+      "Balls": "20",
+      "Fours": "2",
+      "Sixes": "0",
+      "Dots": "6",
+      "Strikerate": "110",
+      "Dismissal": "caught",
+      "Howout": "c Radha Yadav b Deepti Sharma",
+      "Howout_short": "c R Yadav b D Sharma",
+      "DismissalId": "ct",
+      "wicket_url": "https://www.icc-cricket.com/tournaments/womens-t20-worldcup-2026/videos/beth-mooney-wicket-australia-vs-india-x1775"
+     },
+     {
+      "Batsman": "71357",
+      "Runs": "24",
+      "Balls": "25",
+      "Fours": "2",
+      "Sixes": "1",
+      "Dots": "15",
+      "Strikerate": "96",
+      "Dismissal": "caught",
+      "Howout": "c Smriti Mandhana b Sree Charani",
+      "Howout_short": "c S Mandhana b S Charani",
+      "DismissalId": "ct",
+      "wicket_url": "https://www.icc-cricket.com/tournaments/womens-t20-worldcup-2026/videos/phoebe-litchfield-wicket-australia-vs-india"
+     }
+    ],
+    "Bowlers": [
+     {
+      "Bowler": "70714",
+      "Overs": "4",
+      "Maidens": "0",
+      "Runs": "41",
+      "Wickets": "1",
+      "Economyrate": "10.25",
+      "Wides": "2",
+      "Noballs": "1"
+     },
+     {
+      "Bowler": "84330",
+      "Overs": "1",
+      "Maidens": "0",
+      "Runs": "12",
+      "Wickets": "0",
+      "Economyrate": "12.00",
+      "Wides": "0",
+      "Noballs": "0"
+     }
+    ],
+    "FallofWickets": [
+     {
+      "Batsman": "75001",
+      "Score": "4",
+      "Overs": "0.2",
+      "Wicket_No": 1,
+      "Review_status_id": 0,
+      "Ball_number": "2"
+     },
+     {
+      "Batsman": "71357",
+      "Score": "54",
+      "Overs": "7",
+      "Wicket_No": 2,
+      "Review_status_id": 0,
+      "Ball_number": "42"
+     }
+    ],
+    "Partnerships": [
+     {
+      "Runs": "4",
+      "Balls": "2",
+      "ExtraRuns": "0",
+      "Batsmen": [
+       {
+        "Batsman": "75001",
+        "Runs": "4",
+        "Balls": "2"
+       },
+       {
+        "Batsman": "64853",
+        "Runs": "0",
+        "Balls": "0"
+       }
+      ],
+      "ForWicket": 1
+     },
+     {
+      "Runs": "50",
+      "Balls": "40",
+      "ExtraRuns": "7",
+      "Batsmen": [
+       {
+        "Batsman": "71357",
+        "Runs": "24",
+        "Balls": "25"
+       },
+       {
+        "Batsman": "64853",
+        "Runs": "19",
+        "Balls": "15"
+       }
+      ],
+      "ForWicket": 2
+     }
+    ],
+    "PowerPlayDetails": [
+     {
+      "Name": "PP1",
+      "Overs": "1-6",
+      "Runs": "49",
+      "Wickets": "1"
+     }
+    ]
+   }
+  ],
+  "Teams": {
+   "1119": {
+    "Name_Full": "Australia",
+    "Name_Short": "AUS",
+    "Players": {
+     "64853": {
+      "Name_Full": "Beth Mooney",
+      "Name_Short": "B Mooney"
+     },
+     "75001": {
+      "Name_Full": "Georgia Voll",
+      "Name_Short": "G Voll"
+     },
+     "71357": {
+      "Name_Full": "Phoebe Litchfield",
+      "Name_Short": "P Litchfield"
+     },
+     "19948": {
+      "Name_Full": "Kim Garth",
+      "Name_Short": "K Garth"
+     },
+     "100376": {
+      "Name_Full": "Lucy Hamilton",
+      "Name_Short": "L Hamilton"
+     }
+    }
+   },
+   "1126": {
+    "Name_Full": "India",
+    "Name_Short": "IND",
+    "Players": {
+     "63992": {
+      "Name_Full": "Smriti Mandhana",
+      "Name_Short": "S Mandhana"
+     },
+     "70772": {
+      "Name_Full": "Shafali Verma",
+      "Name_Short": "S Verma"
+     },
+     "68442": {
+      "Name_Full": "Jemimah Rodrigues",
+      "Name_Short": "J Rodrigues"
+     },
+     "84330": {
+      "Name_Full": "Kranti Gaud",
+      "Name_Short": "K Gaud"
+     },
+     "70714": {
+      "Name_Full": "Renuka Singh Thakur",
+      "Name_Short": "Singh Thakur"
+     }
+    }
+   }
+  },
+  "Notes": {
+   "1": [
+    "Drinks: India Women 43/0 in 6.0 overs",
+    "Mandatory Power play (1-6): India Women 43/0",
+    "India Women 50/0 in 7.0 overs"
+   ],
+   "2": [
+    "Referral 1 (0.2 ovs): IND-W against G Voll (LBW) Successful (AUS-W: 2, IND-W: 2)",
+    "Drinks: Australia Women 49/1 in 6.0 overs",
+    "Mandatory Power play (1-6): Australia Women 49/1"
+   ]
+  },
+  "other_info": {
+   "match_center": "https://www.icc-cricket.com/tournaments/womens-t20-worldcup-2026/matches/262347/australia-vs-india",
+   "watch_live": "https://www.icc-cricket.com/tournaments/womens-t20-worldcup-2026/videos/wt20-australia-v-india",
+   "high_light": "https://www.icc-cricket.com/tournaments/womens-t20-worldcup-2026/videos/australia-dash-india-s-semi-final-hopes-with-a-commanding-win-at-lord-s-match-highlights-women-s-t20wc-2026",
+   "blacklisted_countries": "",
+   "whitelisted_countries": "AF,AX,AL,AS,AD,AI,AQ,AM,AT,AZ,BD,BY,BE,BT,BA,BV,IO,BN,BG,KH,CN,CX,CK,HR,CY,CZ,DK,EE,FO,FJ,FI,FR,PF,TF,GE,DE,GR,GL,GU,GG,HM,VA,HK,HU,IS,ID,IT,JP,KZ,KI,KG,LA,LV,LI,LT,LU,MO,MK,MY,MV,MT,MH,FM,MD,MC,MN,ME,MM,NR,NP,NL,NC,NU,NF,MP,NO,KP,KR,PW,PG,PH,PN,PL,PT,XK,RO,RU,WS,SM,RS,SG,SK,SI,SB,ES,SJ,SE,CH,TW,TJ,TH,TL,TK,TO,TN,TR,TM,TV,UA,UZ,VU,VN,WF,CC",
+   "ticket_link": ""
+  },
+  "Matchequation": {
+   "Team1_id": 1119,
+   "Team2_id": 1126,
+   "Team1_name": "Australia",
+   "Team2_Name": "India",
+   "Wickets": 6,
+   "Raw_eq_type": 13,
+   "Equation": "Australia beat India by 6 wickets",
+   "Eq_type": "match_ended"
+  }
+ },
+ "meta": {
+  "source": "assets-icc.sportz.io game/scorecard (trimmed to the rows the hub reads), captured 2026-09-09"
+ }
+}

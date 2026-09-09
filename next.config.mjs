@@ -14,10 +14,26 @@ const securityHeaders = [
 
 const apiSecurityHeaders = securityHeaders.filter((h) => h.key !== 'X-Robots-Tag');
 
+/*
+ * The sports board used to be three surfaces (/match-center, /match/live and a standalone /sports/player).
+ * The Single Feed design replaced all three with one rail tab at /sports, and the old pages are deleted —
+ * these redirect the URLs people have bookmarked or that are still inside a service worker's cache.
+ * Not permanent on purpose: a 301 gets pinned by the browser for months and cannot be walked back.
+ */
+const SPORTS_REDIRECTS = [
+  { source: '/match-center/:path*', destination: '/sports', permanent: false },
+  { source: '/match/live', destination: '/sports', permanent: false },
+  { source: '/match/:path*', destination: '/sports', permanent: false },
+  { source: '/sports/player/:path*', destination: '/sports', permanent: false },
+];
+
 const nextConfig = {
   reactStrictMode: true,
   // Do not advertise the framework in response headers.
   poweredByHeader: false,
+  async redirects() {
+    return SPORTS_REDIRECTS;
+  },
   async headers() {
     return [
       {

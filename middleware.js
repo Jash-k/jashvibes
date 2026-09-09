@@ -36,8 +36,8 @@ const RATE_RULES = [
   { prefix: '/api/resolve', limit: 60, windowMs: 60 * 1000 },
   { prefix: '/api/v2/stream', limit: 60, windowMs: 60 * 1000 },
   { prefix: '/api/search', limit: 60, windowMs: 60 * 1000 },
-  { prefix: '/api/match-resolve', limit: 60, windowMs: 60 * 1000 },
-  { prefix: '/api/sports/dynamic', limit: 60, windowMs: 60 * 1000 },
+  { prefix: '/api/sports/hub', limit: 40, windowMs: 60 * 1000 },
+  { prefix: '/api/sports/feed', limit: 90, windowMs: 60 * 1000 },
   { prefix: '/api/stremio/stream', limit: 90, windowMs: 60 * 1000 },
 ];
 

@@ -1,0 +1,75 @@
+{
+ "data": {
+  "Commentary": [
+   {
+    "Id": "138",
+    "UID": 20138,
+    "Isball": false,
+    "Commentary": "It's semifinal time!  The Group Stage of the ICC Women's T20 World Cup comes to a thrilling conclusion, with Australia Women maintaining their unbeaten run and knocking India Women out of the tournament. Now, the focus shifts to the knockout stage, where every game is do or die. Australia Women will be back in action in the first semifinal against West Indies on Tuesday, 30th June, at 1.30 pm GMT. The second semifinal sees hosts England Women take on South Africa Women on Thursday, 2nd July, at 5.30 pm GMT. Both matches will be played at the iconic The Oval in London, and you can join us early for all the build-up and live coverage. Until then, it's goodbye and take care!",
+    "Timestamp": "2026-06-28T17:16:20+00:00"
+   },
+   {
+    "Id": "137",
+    "UID": 20137,
+    "Isball": false,
+    "Commentary": "The victorious skipper of Australia Women - Sophie Molineux says there was momentum at both ends during the first innings. She notes that her bowlers used the short boundary down the slope and the wind to their advantage, and credits them for applying good cricketing awareness throughout the game. She adds that the team stayed committed to the contest regardless of how the Powerplay unfolded. Molineux also mentions that Ellyse Perry felt 170 was a chaseable target, and backed that belief with her performance, going out confidently to pursue the total alongside Ashleigh Gardner.",
+    "Timestamp": "2026-06-28T17:17:23+00:00"
+   },
+   {
+    "Id": "136",
+    "UID": 20136,
+    "Isball": false,
+    "Commentary": "The captain for India Women - Harmanpreet Kaur feels India Women posted a competitive total, although she believes they are a little short while batting before the strong finish in the final overs lifted the score. She says they were looking for runs, but just could not get it. Reflecting on the tournament, Harmanpreet admits India did not perform well enough against the stronger teams and believes the side have to produce its best cricket in such matches. She also feels dropped catches prove costly and says the team did not play to its usual standards. Looking ahead, she believes the group needs to reflect deeply and rethink several aspects to improve going forward.",
+    "Timestamp": "2026-06-28T17:05:16+00:00"
+   },
+   {
+    "Over": "18.6",
+    "Id": "129",
+    "UID": 20129,
+    "Runs": "4",
+    "ZAD": "6,256,5",
+    "Isball": true,
+    "Bowler_Name": "Sree Charani",
+    "Batsman_Name": "Georgia Wareham",
+    "Batsman_Runs": "4",
+    "Bowler_Conceded_Runs": "4",
+    "Ball_Speed": "88.5kph",
+    "Ball_Number": "114",
+    "Over_No": "19",
+    "Ball": "6",
+    "Commentary": "FOUR! Georgia Wareham hits the winning blow! Flighted delivery on the full on off. Wareham shimmies down and hammers it past the bowler through mid off for a thumping boundary. Australia Women win by 6 wickets with an over to spare. With this loss, India Women are out of the race for the semis. Australia Women have taken South African Women along with them to the top four.",
+    "Timestamp": "2026-06-28T16:43:33+00:00",
+    "Score": "172/4",
+    "This_Over": "1,1,0,0(W),0,4,"
+   },
+   {
+    "Over": "18.5",
+    "Id": "128",
+    "UID": 20128,
+    "Runs": "0",
+    "ZAD": "6,243,3",
+    "Isball": true,
+    "Bowler_Name": "Sree Charani",
+    "Batsman_Name": "Georgia Wareham",
+    "Batsman_Runs": "0",
+    "Bowler_Conceded_Runs": "0",
+    "Ball_Speed": "85.3kph",
+    "Ball_Number": "113",
+    "Over_No": "19",
+    "Ball": "5",
+    "Commentary": "Flighted full, just outside off. Wareham squeezes it to the point fielder.",
+    "Timestamp": "2026-06-28T16:42:58+00:00",
+    "Score": "168/4",
+    "This_Over": "1,1,0,0(W),0,"
+   }
+  ],
+  "InningNo": "2",
+  "BattingTeam": "Australia",
+  "BowlingTeam": "India",
+  "GameCode": "auwinw06282026262347",
+  "MatchId": "262347"
+ },
+ "meta": {
+  "source": "assets-icc.sportz.io game/commentary (one page), captured 2026-09-09"
+ }
+}
