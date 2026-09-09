@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Icon from '@/components/Icons';
-import { NAV_ITEMS } from '@/components/navItems';
+import { NAV_ITEMS, isNavItemActive } from '@/components/navItems';
 
 // The list lives in `components/navItems.js`, shared with the homepage `RailNav`: two hardcoded copies
 // is how a section ends up reachable on the TV and missing from the phone.
@@ -17,13 +17,16 @@ export default function MobileDock() {
       aria-label="Main navigation"
       className="mobile-dock fixed inset-x-0 bottom-0 z-[60] border-t border-white/10 bg-[#06040b]/92 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_35px_rgba(0,0,0,0.8)] backdrop-blur-2xl lg:hidden"
     >
-      <div className="mx-auto grid max-w-lg grid-cols-6">
+      {/* Seven labels in a 6-column grid was the obvious trap when the list grew: the last one wraps
+          off-screen. The template is derived from the list, so adding a destination cannot break a row. */}
+      <div className="mx-auto grid max-w-2xl" style={{ gridTemplateColumns: `repeat(${NAV_ITEMS.length}, minmax(0, 1fr))` }}>
         {DOCK_ITEMS.map((item) => {
-          const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
+          const active = isNavItemActive(item, pathname);
           return (
             <Link
               key={item.href}
               href={item.href}
+              onClick={item.hard ? (event) => { event.preventDefault(); window.location.assign(item.href); } : undefined}
               aria-current={active ? 'page' : undefined}
               className={`relative flex flex-col items-center gap-1 py-2.5 text-[10px] font-bold transition duration-200 active:scale-90 ${
                 active
@@ -34,7 +37,11 @@ export default function MobileDock() {
               {active ? (
                 <span className="absolute top-0 h-0.5 w-8 rounded-full bg-gradient-to-r from-amber-400 via-rose-500 to-purple-500 shadow-[0_0_10px_rgba(244,63,94,0.8)]" />
               ) : null}
-              <Icon name={item.icon} className={`h-5 w-5 transition-transform duration-200 ${active ? 'scale-110' : ''}`} />
+              {item.emoji ? (
+                <span className={`text-[17px] leading-none transition-transform duration-200 ${active ? 'scale-110' : ''}`} aria-hidden="true">{item.emoji}</span>
+              ) : (
+                <Icon name={item.icon} className={`h-5 w-5 transition-transform duration-200 ${active ? 'scale-110' : ''}`} />
+              )}
               <span className="tracking-tight">{item.label}</span>
             </Link>
           );

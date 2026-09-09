@@ -1,12 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import LibraryRows from '@/components/LibraryRows';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import CommandPalette from '@/components/CommandPalette';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 import Icon from '@/components/Icons';
-import MasonryGrid from '@/components/MasonryGrid';
 import { releaseQualityChip, parseReleaseQuality, chipClassForTier, labelForTier } from '@/lib/quality';
 import { getHistory, getProgressPercent, isFavoriteItem, makeWatchKey, toggleFavoriteItem, useLibraryVersion } from '@/lib/watchStore';
 import RailNav from '@/components/rail/RailNav';
@@ -15,180 +13,6 @@ import { readLiveNow } from '@/lib/liveNow';
 
 const PAGE_SIZE = 15;
 const HOME_CACHE_KEY = 'jash:home:v5';
-
-function formatDateTime(value) {
-  if (!value) return 'Not updated yet';
-  try {
-    return new Date(value).toLocaleString();
-  } catch {
-    return 'Not updated yet';
-  }
-}
-
-function SearchBox({ onOpenPalette }) {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState([]);
-  const [status, setStatus] = useState('idle');
-  const [error, setError] = useState('');
-  const trimmed = query.trim();
-
-  useEffect(() => {
-    if (!trimmed) {
-      setResults([]);
-      setError('');
-      setStatus('idle');
-      return;
-    }
-
-    const controller = new AbortController();
-    const timeout = setTimeout(async () => {
-      try {
-        setStatus('loading');
-        const response = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`, {
-          signal: controller.signal,
-          cache: 'no-store',
-        });
-        const contentType = response.headers.get('content-type') || '';
-        if (!contentType.includes('application/json')) {
-          throw new Error('Server is still starting. Please wait a few seconds and search again.');
-        }
-
-        const data = await response.json();
-        if (!response.ok) throw new Error(data?.error || data?.warning || 'Search failed');
-        setResults(data.results || []);
-        setError(data.warning || '');
-        setStatus('ready');
-      } catch (error) {
-        if (error.name === 'AbortError') return;
-        setResults([]);
-        setError(error.message || 'Search failed');
-        setStatus('error');
-      }
-    }, 220);
-
-    return () => {
-      clearTimeout(timeout);
-      controller.abort();
-    };
-  }, [trimmed]);
-
-  return (
-    <div className="relative w-full lg:max-w-md">
-      <label htmlFor="tmdb-search" className="sr-only">Search TMDB</label>
-      <div className="relative">
-        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500">⌕</span>
-        <input
-          id="tmdb-search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search TMDB titles... (Press ⌘K)"
-          enterKeyHint="search"
-          autoComplete="off"
-          className="w-full rounded-2xl border border-white/10 bg-black/70 py-3.5 pl-10 pr-14 text-base font-semibold text-white outline-none backdrop-blur placeholder:text-zinc-500 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 sm:text-sm"
-        />
-        <button
-          type="button"
-          onClick={() => onOpenPalette?.(true)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg border border-white/15 bg-white/5 px-2 py-1 text-[10px] font-bold text-zinc-400 hover:border-amber-400/50 hover:text-white"
-          title="Open Universal Search (⌘K)"
-        >
-          ⌘K
-        </button>
-      </div>
-
-      {trimmed ? (
-        <div className="absolute right-0 z-50 mt-3 max-h-[min(70vh,34rem)] w-full overscroll-contain overflow-y-auto rounded-3xl border border-white/10 bg-zinc-950/95 p-2 shadow-2xl shadow-black/60 backdrop-blur">
-          {status === 'loading' ? (
-            <div className="p-4 text-sm text-zinc-400">Searching TMDB...</div>
-          ) : null}
-
-          {status === 'error' ? (
-            <div className="p-4 text-sm leading-6 text-red-300">
-              {error || 'Search failed. Try again.'}
-              <span className="mt-1 block text-xs text-zinc-500">Check that TMDB or TMDB_TOKEN is set, then redeploy.</span>
-            </div>
-          ) : null}
-
-          {status === 'ready' && error ? (
-            <div className="mb-2 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-3 text-xs leading-5 text-yellow-100">
-              TMDB search fallback: {error}
-            </div>
-          ) : null}
-
-          {status === 'ready' && results.length === 0 ? (
-            <div className="p-4 text-sm text-zinc-400">No TMDB titles found.</div>
-          ) : null}
-
-          {results
-            // Without a tmdbId there is nothing for /watch to resolve, so a row for it would be a
-            // broken link — and `watchHref` is now the only place a watch link is built.
-            .filter((item) => item?.tmdbId)
-            .map((item) => (
-            <Link
-              key={`${item.type}-${item.tmdbId}`}
-              href={watchHref(item)}
-              className="flex gap-3 rounded-2xl p-2 transition hover:bg-white/[0.06]"
-              onClick={() => setQuery('')}
-            >
-              <div className="h-20 w-14 shrink-0 overflow-hidden rounded-xl bg-zinc-900">
-                {item.posterUrl ? (
-                  <img src={item.posterUrl} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
-                ) : null}
-              </div>
-              <div className="min-w-0 py-1">
-                <p className="line-clamp-2 text-sm font-black text-white">{item.title}</p>
-                <p className="mt-1 text-xs font-bold uppercase tracking-wider text-red-400">
-                  {item.type === 'series' ? 'Series' : 'Movie'} {item.releaseDate ? `• ${String(item.releaseDate).slice(0, 4)}` : ''}
-                </p>
-                {item.synopsis ? (
-                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-zinc-500">{item.synopsis}</p>
-                ) : null}
-              </div>
-            </Link>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function CleanEmbedButtons() {
-  const [sites, setSites] = useState([]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadSites() {
-      try {
-        const response = await fetch('/api/embed-sites', { cache: 'no-store' });
-        const data = await response.json();
-        if (!cancelled) setSites(data.sites || []);
-      } catch {
-        if (!cancelled) setSites([]);
-      }
-    }
-
-    loadSites();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return (
-    <>
-      {sites.map((site) => (
-        <Link
-          key={site.id}
-          href={`/embed-browser?site=${encodeURIComponent(site.id)}`}
-          className="rounded-full border border-orange-500/25 bg-orange-500/10 px-4 py-2 text-sm font-black text-orange-100 transition hover:border-orange-400/70 hover:bg-orange-500/20"
-          title={site.url}
-        >
-          {site.label}
-        </Link>
-      ))}
-    </>
-  );
-}
 
 function qualitySourceText(item) {
   return item?.rawTitle || item?.parsedSource || item?.title || item?.synopsis || '';
@@ -459,40 +283,6 @@ function MediaCard({ item, onItemMatched, delay = 0 }) {
   );
 }
 
-function MediaGrid({ items, onItemMatched }) {
-  if (!items?.length) {
-    return (
-      <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-10 text-center text-zinc-400">
-        No titles found.
-      </div>
-    );
-  }
-
-  return (
-    <MasonryGrid gap={14} minItemWidth={155}>
-      {items.map((item) => (
-        <MediaCard key={`${item.type}-${item.tmdbId || item.id || item.title}`} item={item} onItemMatched={onItemMatched} />
-      ))}
-    </MasonryGrid>
-  );
-}
-
-function LoadingGrid() {
-  return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-      {Array.from({ length: 12 }).map((_, index) => (
-        <div key={index} className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 sm:rounded-3xl">
-          <div className="aspect-[2/3] animate-pulse bg-zinc-900" />
-          <div className="space-y-2 p-3 sm:space-y-3 sm:p-4">
-            <div className="h-4 animate-pulse rounded bg-zinc-800" />
-            <div className="h-3 w-2/3 animate-pulse rounded bg-zinc-900" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function mergeUnique(existing, next) {
   const seen = new Set(existing.map((item) => `${item.tmdbId || ''}:${item.id || ''}:${item.title || ''}`));
   const merged = [...existing];
@@ -506,38 +296,75 @@ function mergeUnique(existing, next) {
   return merged;
 }
 
-function TabButton({ active, children, count, onClick }) {
+function RowStatus({ tone, children }) {
+  if (!children) return null;
+  const cls = tone === 'error'
+    ? 'rounded-2xl border border-red-500/30 bg-red-950/20 p-3.5 text-sm text-red-200'
+    : 'text-sm text-zinc-500';
+  return <p className={cls}>{children}</p>;
+}
+
+/**
+ * A catalogue row: one horizontal strip, its own page counter, its own "Load more".
+ *
+ * Two of these replace the Movies|Series tab pair. The tab switcher was a lie about the data — the
+ * single `/api/tamilmv?page=1` call already returns *both* groups, so the tabs only hid half of what
+ * had been downloaded. A row per group shows both and keeps the paging honest: `loadMore('movies')`
+ * and `loadMore('series')` are the same per-group endpoint the sentinel used to walk.
+ */
+function CatalogRow({ id, label, items = [], info, status, error, onMore, onItemMatched, debug }) {
+  const total = Number(info?.total) || 0;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-2xl border px-4 py-3 text-left transition active:scale-[0.99] sm:px-5 ${
-        active
-          ? 'border-transparent bg-[linear-gradient(115deg,#f59e0b,#dc2626_50%,#a855f7)] text-white shadow-lg shadow-red-950/30'
-          : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-white/25 hover:text-white'
-      }`}
-    >
-      <span className="block text-[10px] font-black uppercase tracking-[0.22em] opacity-75 sm:text-xs sm:tracking-[0.25em]">{children}</span>
-      <span className="mt-1 block text-xl font-black sm:text-2xl">{count}</span>
-    </button>
+    <section aria-labelledby={`row-${id}`} className="jv-row">
+      <div className="mb-2.5 flex flex-wrap items-end justify-between gap-x-3 gap-y-1.5">
+        <div className="flex items-baseline gap-2">
+          <h2 id={`row-${id}`} className="text-lg font-black tracking-tight text-white sm:text-2xl">{label}</h2>
+          <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-zinc-400">
+            {items.length}{total ? ` / ${total}` : ''}
+          </span>
+          {debug ? <QualityDebugLine items={items} /> : null}
+        </div>
+        <span className="hidden text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500 sm:inline">
+          {info?.hasMore ? `${Math.max(0, total - items.length)} more in the scrape` : 'end of the loaded list'}
+        </span>
+      </div>
+
+      {status === 'loading' && !items.length ? <RowStatus tone="muted">Loading {label.toLowerCase()}…</RowStatus> : null}
+      {error && !items.length ? <RowStatus tone="error">{error}</RowStatus> : null}
+
+      {items.length ? (
+        <div className="jv-row-strip" role="list">
+          {items.map((item) => (
+            <div key={`${item.type}-${item.tmdbId || item.id || item.title}`} className="jv-row-tile" role="listitem">
+              <MediaCard item={item} onItemMatched={onItemMatched} />
+            </div>
+          ))}
+          {info?.hasMore ? (
+            <button
+              type="button"
+              onClick={onMore}
+              disabled={Boolean(info?.loading)}
+              className="jv-row-more"
+            >
+              {info?.loading ? 'Loading…' : `Load more ${label.toLowerCase()}`}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
 export default function LandingPage() {
   const [movies, setMovies] = useState([]);
   const [series, setSeries] = useState([]);
-  const [activeTab, setActiveTab] = useState('movies');
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [updatedAt, setUpdatedAt] = useState(null);
   const [scrapeStatus, setScrapeStatus] = useState('loading');
   const [scrapeError, setScrapeError] = useState('');
-  const [syncStatus, setSyncStatus] = useState('idle');
   const [paging, setPaging] = useState({
     movies: { page: 1, hasMore: false, loading: false, total: 0 },
     series: { page: 1, hasMore: false, loading: false, total: 0 },
   });
-
-  const sentinelRef = useRef(null);
 
   const featuredItems = useMemo(() => [...movies, ...series], [movies, series]);
 
@@ -604,8 +431,6 @@ export default function LandingPage() {
     if (cached?.movies?.length || cached?.series?.length) {
       setMovies(cached.movies || []);
       setSeries(cached.series || []);
-      setActiveTab(cached.activeTab || 'movies');
-      setUpdatedAt(cached.updatedAt || null);
       setPaging(cached.paging || {
         movies: { page: 1, hasMore: false, loading: false, total: 0 },
         series: { page: 1, hasMore: false, loading: false, total: 0 },
@@ -625,7 +450,6 @@ export default function LandingPage() {
 
         setMovies(data.movies || []);
         setSeries(data.series || []);
-        setUpdatedAt(data.updatedAt || data.refreshedAt || null);
         setPaging({
           movies: {
             page: data.pagination?.movies?.page || 1,
@@ -654,12 +478,10 @@ export default function LandingPage() {
     writeSessionCache(HOME_CACHE_KEY, {
       movies,
       series,
-      activeTab,
-      updatedAt,
       paging,
       scrapeStatus,
     });
-  }, [movies, series, activeTab, updatedAt, paging, scrapeStatus]);
+  }, [movies, series, paging, scrapeStatus]);
 
   useEffect(() => {
     const onScroll = () => saveScroll(HOME_CACHE_KEY);
@@ -707,72 +529,16 @@ export default function LandingPage() {
     }
   }, [paging, scrapeStatus]);
 
-  const syncLatestReleases = useCallback(async () => {
-    if (syncStatus === 'syncing') return;
-    try {
-      setSyncStatus('syncing');
-      setScrapeError('');
-      const response = await fetch(`/api/tamilmv?sync=1&manual=1&page=1&limit=${PAGE_SIZE}`, { cache: 'no-store' });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.error || 'Sync failed');
-      setMovies(data.movies || []);
-      setSeries(data.series || []);
-      setUpdatedAt(data.updatedAt || data.refreshedAt || null);
-      setPaging({
-        movies: {
-          page: data.pagination?.movies?.page || 1,
-          hasMore: Boolean(data.pagination?.movies?.hasMore),
-          loading: false,
-          total: data.pagination?.movies?.total || data.movies?.length || 0,
-        },
-        series: {
-          page: data.pagination?.series?.page || 1,
-          hasMore: Boolean(data.pagination?.series?.hasMore),
-          loading: false,
-          total: data.pagination?.series?.total || data.series?.length || 0,
-        },
-      });
-      setScrapeStatus('ready');
-      setSyncStatus('ready');
-      window.setTimeout(() => setSyncStatus('idle'), 1600);
-    } catch (error) {
-      setScrapeError(error.message || 'Sync failed');
-      setScrapeStatus('error');
-      setSyncStatus('error');
-      window.setTimeout(() => setSyncStatus('idle'), 2200);
-    }
-  }, [syncStatus]);
-
-  useEffect(() => {
-    const node = sentinelRef.current;
-    if (!node) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (!entries[0]?.isIntersecting) return;
-        if (scrapeStatus === 'ready') loadMore(activeTab);
-      },
-      { rootMargin: '700px 0px' },
-    );
-
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [activeTab, loadMore, scrapeStatus]);
-
-  // The "Quick Filter Rail" (4K / Tamil / High rated) is removed by request. It re-filtered whatever
-  // had been loaded so far, which made a page of the catalog look empty when the next page simply had
-  // not arrived yet — tabs and search are the honest filters, because both go to the provider.
-  const currentItems = activeTab === 'movies' ? movies : series;
+  // Two rows replaced the Movies|Series tabs, and the "Quick Filter Rail" (4K / Tamil / High rated)
+  // stays deleted by request: it re-filtered only what had loaded so far, so a page boundary could make
+  // the catalogue look empty. A row per group cannot lie that way — both groups are shown, each paging
+  // its own endpoint. Searching is still the one honest filter, because it goes to the provider.
   const [debugQuality, setDebugQuality] = useState(false);
   useEffect(() => {
     try {
       setDebugQuality(new URLSearchParams(window.location.search).has('debugq'));
     } catch { /* SSR / odd environments */ }
   }, []);
-  const currentPaging = paging[activeTab];
-  const currentStatus = scrapeStatus;
-  const currentError = scrapeError;
-
   // A Match dialog success swaps the matched poster's metadata in-place:
   // it becomes a normal /watch/{type}/{tmdbId} card immediately.
   const handleItemMatched = useCallback((prevItem, matched) => {
@@ -802,143 +568,35 @@ export default function LandingPage() {
   return (
     <main className="jv-rail-shift min-h-dvh overflow-x-hidden bg-[#050505] text-zinc-100">
       <RailNav
-        onOpenSearch={() => {
-          const node = document.getElementById('tmdb-search');
-          node?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
-          node?.focus?.({ preventScroll: true });
-        }}
+        onOpenSearch={() => setPaletteOpen(true)}
       />
-      <section className="relative overflow-visible border-b border-white/10">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_16%_0%,_rgba(220,38,38,0.24),_transparent_36%),radial-gradient(circle_at_88%_18%,_rgba(234,179,8,0.1),_transparent_30%),linear-gradient(to_bottom,_rgba(0,0,0,0),_#050505)]" />
-        {/* Rail OS keeps the brand line, the search field and the embed utilities in one slim bar. The
-            old header spent 12rem on a wordmark and six ghost buttons that the rail now owns — on a
-            phone that pushed the first actual title below the fold. */}
-        <div className="relative mx-auto flex w-full max-w-[1500px] flex-col gap-3 px-4 py-3.5 sm:px-6 lg:flex-row lg:items-center lg:gap-5 lg:px-8">
-          <div className="flex shrink-0 items-center gap-3">
-            <img
-              src="/brand/logo.png"
-              alt="JaSH ViBeS logo"
-              className="h-10 w-10 rounded-full object-contain drop-shadow-[0_0_18px_rgba(217,70,239,0.4)] sm:h-11 sm:w-11"
-              loading="eager"
-              decoding="async"
-              width="44"
-              height="44"
-            />
-            <div className="min-w-0">
-              <h1 className="jash-vibes-logo text-2xl leading-none tracking-tight sm:text-[26px]">JaSH ViBeS</h1>
-              <p className="mt-1 truncate text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">
-                {formatDateTime(updatedAt)}
-              </p>
-            </div>
-          </div>
-
-          <div className="w-full lg:max-w-md">
-            <SearchBox onOpenPalette={setPaletteOpen} />
-          </div>
-
-          {/* Utilities, not destinations — so they sit in the bar rather than the rail, and on a phone
-              they are still reachable: the six nav targets live in the bottom dock, these do not.
-              Stremio reloads the document on purpose: a manifest change has to drop the old config. */}
-          <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
-            <a
-              href="/stremio?home=1"
-              onClick={(event) => { event.preventDefault(); window.location.assign('/stremio?home=1'); }}
-              className="jv-btn-ghost"
-              title="Stremio addon sources"
-            >
-              <span className="text-fuchsia-300"><Icon name="sparkle" className="h-4 w-4" /></span> Stremio
-            </a>
-            <CleanEmbedButtons />
-          </div>
-        </div>
-      </section>
-
       <RailFocus slides={focusSlides} eyebrow="Now on your shelf" onAir={liveNow} />
 
-      <LibraryRows />
-
-      <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
-        <div className="mb-6 rounded-2xl border border-white/10 bg-zinc-950/70 p-4 shadow-2xl shadow-black/20 sm:mb-8 sm:rounded-3xl sm:p-5">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <div className="flex flex-wrap items-center gap-3">
-                <h2 className="text-2xl font-extrabold text-white">Latest Releases</h2>
-                <button
-                  type="button"
-                  onClick={syncLatestReleases}
-                  disabled={syncStatus === 'syncing'}
-                  className="rounded-full border border-yellow-400/25 bg-yellow-400/10 px-3 py-1.5 text-xs font-black text-yellow-100 transition hover:border-yellow-300 hover:bg-yellow-400/20 disabled:cursor-wait disabled:opacity-60"
-                >
-                  {syncStatus === 'syncing' ? 'Syncing…' : syncStatus === 'ready' ? 'Synced' : 'Sync'}
-                </button>
-              </div>
-              <p className="mt-2 text-sm leading-6 text-zinc-400">
-                Fresh movies and series. Last update: {formatDateTime(updatedAt)}. Posters without a TMDB match show a 🎯 Match button — bind them once to unlock every stream server.
-              </p>
-            </div>
-
-            <div className="sticky top-16 z-30 -mx-1 grid grid-cols-2 gap-2 rounded-3xl border border-white/10 bg-[#050505]/90 p-1.5 backdrop-blur sm:static sm:mx-0 sm:min-w-96 sm:gap-3 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
-              <TabButton active={activeTab === 'movies'} count={movies.length} onClick={() => setActiveTab('movies')}>
-                Movies
-              </TabButton>
-              <TabButton active={activeTab === 'series'} count={series.length} onClick={() => setActiveTab('series')}>
-                Series
-              </TabButton>
-            </div>
-          </div>
-
-
-          {currentStatus === 'loading' ? (
-            <p className="mt-4 text-sm text-zinc-500">Loading latest scraped titles...</p>
-          ) : null}
-          {currentStatus === 'error' ? (
-            <p className="mt-4 rounded-2xl border border-red-500/30 bg-red-950/20 p-4 text-sm text-red-200">
-              {currentError}
-            </p>
-          ) : null}
-        </div>
-
-        {currentStatus === 'loading' ? <LoadingGrid /> : null}
-
-        {currentStatus === 'ready' ? (
-          <section className="scroll-mt-8">
-            <div className="mb-4 flex items-end justify-between gap-3 sm:mb-5 sm:gap-4">
-              <div>
-                <p className="jv-shimmer-text text-[10px] font-black uppercase tracking-[0.22em] sm:text-xs sm:tracking-[0.28em]">
-                  {activeTab === 'movies' ? 'Movies' : 'Series'}
-                </p>
-                <h2 className="mt-1 text-2xl font-extrabold text-white sm:mt-2 sm:text-3xl">
-                  {activeTab === 'movies' ? 'Movies' : 'Series'}
-                </h2>
-              </div>
-              <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs font-bold text-zinc-400 sm:px-3 sm:text-sm">
-                {currentItems.length}{currentPaging.total ? ` / ${currentPaging.total}` : ''} loaded
-              </span>
-              {debugQuality ? <QualityDebugLine items={currentItems} /> : null}
-            </div>
-
-            <MediaGrid items={currentItems} onItemMatched={handleItemMatched} />
-
-            <div ref={sentinelRef} className="mt-10 flex min-h-24 items-center justify-center">
-              {currentPaging.loading ? (
-                <div className="flex w-full items-center justify-center gap-3 rounded-full border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-bold text-zinc-300 sm:w-auto">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-red-500" />
-                  Loading more {activeTab}...
-                </div>
-              ) : currentPaging.hasMore ? (
-                <button
-                  type="button"
-                  onClick={() => loadMore(activeTab)}
-                  className="w-full rounded-full border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-bold text-white transition hover:border-red-500 hover:bg-red-500/10 sm:w-auto"
-                >
-                  Load more {activeTab}
-                </button>
-              ) : (
-                <p className="text-sm text-zinc-500">No more {activeTab} in the catalog.</p>
-              )}
-            </div>
-          </section>
+      <section className="mx-auto flex w-full max-w-[1500px] flex-col gap-7 px-4 pb-20 pt-5 sm:px-6 sm:gap-9 lg:px-8">
+        {scrapeStatus === 'error' && scrapeError ? (
+          <RowStatus tone="error">{scrapeError}</RowStatus>
         ) : null}
+        <CatalogRow
+          id="movies"
+          label="Movies"
+          items={movies}
+          info={paging.movies}
+          status={scrapeStatus}
+          error={scrapeError}
+          debug={debugQuality}
+          onMore={() => loadMore('movies')}
+          onItemMatched={handleItemMatched}
+        />
+        <CatalogRow
+          id="series"
+          label="Series"
+          items={series}
+          info={paging.series}
+          status={scrapeStatus}
+          error={scrapeError}
+          onMore={() => loadMore('series')}
+          onItemMatched={handleItemMatched}
+        />
       </section>
 
       <CommandPalette open={paletteOpen} onClose={setPaletteOpen} />

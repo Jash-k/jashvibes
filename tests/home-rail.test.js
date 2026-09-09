@@ -68,12 +68,16 @@ test('the title is clipped, not allowed to break the strip', () => {
 
 test('the nav exists once and is rendered per breakpoint', () => {
   const shared = read('../components/navItems.js');
-  for (const href of ['/', '/live', '/music', '/sports', '/classics', '/my-list']) {
+  for (const href of ['/', '/live', '/anime', '/music', '/sports', '/classics', '/stremio?home=1']) {
     assert.ok(shared.includes(`href: '${href}'`), `NAV_ITEMS must carry ${href}`);
   }
+  assert.ok(!shared.includes("href: '/my-list'"), 'My List is not a destination on this page any more');
+  assert.match(shared, /label: 'Anime', emoji: '🌸'/, 'the anime entry point is an emoji, per the brief');
+  assert.match(shared, /label: 'Stremio'[\s\S]*?hard: true/, 'Stremio hard-navigates so a changed manifest is not cached');
+  assert.match(shared, /export function isNavItemActive/, 'one active-state rule for both shells');
   const dock = read('../components/MobileDock.jsx');
   const rail = read('../components/rail/RailNav.jsx');
-  assert.match(dock, /import \{ NAV_ITEMS \} from '@\/components\/navItems'/);
+  assert.match(dock, /import \{ NAV_ITEMS[^}]*\} from '@\/components\/navItems'/);
   assert.ok(!/const DOCK_ITEMS = \[\n\s*\{ href:/.test(dock), 'the bottom bar may not keep its own copy of the list');
   assert.match(rail, /NAV_ITEMS\.map\(\(item\) => \{/);
   assert.match(rail, /className="jv-rail fixed[^"]*hidden[^"]*lg:flex/);
@@ -112,14 +116,42 @@ test('a remote or a Tab key can aim it', () => {
   assert.match(focus, /role="listbox"[\s\S]*aria-activedescendant=/);
 });
 
-test('nothing the old header carried is orphaned by the rail', () => {
+test('deleting the old header orphaned nothing', () => {
   const page = read('../app/page.js');
-  // The rail owns the six destinations on lg+, the dock owns them below it. Utilities that live nowhere
-  // else — Stremio and the dynamic embed-provider buttons — have to stay in a cluster both devices show.
-  assert.match(page, /\/stremio\?home=1/);
-  assert.match(page, /<CleanEmbedButtons \/>/);
-  assert.match(page, /window\.location\.assign\('\/stremio\?home=1'\)/, 'the hard reload that drops a stale manifest config');
-  assert.ok(!/footer=\{\(\s*<a[\s\S]{0,240}stremio/.test(page), 'and not twice, which is how a rail grows a second Stremio');
+  const stremio = read('../app/stremio/page.js');
+  const links = read('../components/EmbedSiteLinks.jsx');
+  // Every destination the deleted ghost-button row carried is now in the shared nav list, and the one
+  // thing that was not a destination — the env-configured embed providers — was moved rather than
+  // dropped, because /embed-browser had no other link to it anywhere in the app.
+  assert.match(links, /\/embed-browser\?site=/);
+  assert.match(stremio, /<EmbedSiteLinks \/>/, 'next to the addon it belongs to');
+  assert.match(links, /fetch\('\/api\/embed-sites'/, 'the fetch moved with it');
+  assert.ok(!page.includes('embed-sites'), 'and the homepage no longer makes that request at all');
+  const focus = read('../components/rail/RailFocus.jsx');
+  assert.match(focus, /\/my-list\?tab=history/, 'the library is still one tap away from a half-watched title');
+});
+
+test('the page is the new layout only — no header remnants, and search is the palette', () => {
+  const page = read('../app/page.js');
+  for (const gone of ['SearchBox', 'CleanEmbedButtons', 'LibraryRows', 'TabButton', 'MediaGrid', 'LoadingGrid', 'jv-btn-ghost', 'syncLatestReleases']) {
+    assert.ok(!page.includes(gone), `${gone} is deleted, not hidden — a half-removed header is still a header`);
+  }
+  assert.match(page, /<CommandPalette open=\{paletteOpen\} onClose=\{setPaletteOpen\} \/>/, 'the ⌘K palette stays mounted');
+  assert.match(page, /onOpenSearch=\{\(\) => setPaletteOpen\(true\)\}/, 'the rail opens it, since there is no field to focus');
+  assert.ok(!/getElementById\('tmdb-search'\)/.test(page), 'and nothing reaches for a search input that no longer exists');
+});
+
+test('two rows, each paging its own group', () => {
+  const page = read('../app/page.js');
+  const movies = page.match(/<CatalogRow[\s\S]*?id="movies"[\s\S]*?\/>/);
+  const series = page.match(/<CatalogRow[\s\S]*?id="series"[\s\S]*?\/>/);
+  assert.ok(movies && series, 'one row per group');
+  assert.match(movies[0], /items=\{movies\}/);
+  assert.match(movies[0], /info=\{paging\.movies\}/);
+  assert.match(movies[0], /onMore=\{\(\) => loadMore\('movies'\)\}/);
+  assert.match(series[0], /onMore=\{\(\) => loadMore\('series'\)\}/);
+  assert.ok(!/activeTab/.test(page), 'no tab state left behind to confuse a reader');
+  assert.ok(!/IntersectionObserver/.test(page), 'per-row Load more replaces the sentinel that auto-paged the active tab');
 });
 
 test('the watch link is built in one place', () => {
@@ -148,7 +180,10 @@ test('the light theme and reduced motion were thought about', () => {
   for (const selector of ['.jv-rail', '.jv-rail-item-active', '.jv-focus', '.jv-focus-title', '.jv-focus-tile-on', '.jv-focus-onair']) {
     assert.ok(css.includes(`html.day-mode ${selector}`), `${selector} needs a day-mode value or it is unreadable in the light theme`);
   }
-  const motion = css.slice(css.lastIndexOf('@media (prefers-reduced-motion: reduce)'));
+  const motion = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce) {\n  .jv-focus-art'));
   assert.match(motion, /\.jv-focus-art \{ animation: none; \}/);
-  assert.match(motion, /\.jv-focus-tile,\n?\s*\.jv-focus-tile-on \{ transition: none; transform: none; \}/);
+  assert.match(motion, /\.jv-focus-tile,[\s\S]{0,40}\.jv-focus-tile-on \{ transition: none; transform: none; \}/);
+  const rowMotion = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce) {\n  .jv-row-more'));
+  assert.match(rowMotion, /\.jv-row-more \{ transition: none; \}/);
+  assert.match(css, /\.jv-row-strip \{[\s\S]*?scroll-snap-type: x proximity;/, 'a strip a thumb or a D-pad can walk');
 });

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Icon from '@/components/Icons';
-import { NAV_ITEMS } from '@/components/navItems';
+import { NAV_ITEMS, isNavItemActive } from '@/components/navItems';
 
 /**
  * RailNav — the desktop/TV half of the homepage navigation.
@@ -14,7 +14,7 @@ import { NAV_ITEMS } from '@/components/navItems';
  * `MobileDock` is already the bottom tab bar for the same six destinations, so a phone never gets two
  * navs and this never gets a hidden duplicate list.
  */
-export default function RailNav({ onOpenSearch, footer = null }) {
+export default function RailNav({ onOpenSearch }) {
   const pathname = usePathname() || '/';
 
   return (
@@ -39,17 +39,22 @@ export default function RailNav({ onOpenSearch, footer = null }) {
 
       <ul className="jv-rail-list flex flex-1 flex-col gap-1.5 px-2 xl:gap-2 xl:px-2.5">
         {NAV_ITEMS.map((item) => {
-          const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
+          const active = isNavItemActive(item, pathname);
           return (
             <li key={item.href}>
               <Link
                 href={item.href}
+                onClick={item.hard ? (event) => { event.preventDefault(); window.location.assign(item.href); } : undefined}
                 aria-current={active ? 'page' : undefined}
                 title={`${item.label} — ${item.hint}`}
                 className={`jv-rail-item${active ? ' jv-rail-item-active' : ''}`}
               >
                 <span className={`grid h-8 w-8 place-items-center rounded-xl border border-white/10 bg-white/[0.04] ${item.accent || ''}`}>
-                  <Icon name={item.icon} className="h-[18px] w-[18px]" />
+                  {item.emoji ? (
+                    <span className="text-[17px] leading-none" aria-hidden="true">{item.emoji}</span>
+                  ) : (
+                    <Icon name={item.icon} className="h-[18px] w-[18px]" />
+                  )}
                 </span>
                 <span className="jv-rail-label">{item.label}</span>
                 {active ? <span className="jv-rail-bar" aria-hidden="true" /> : null}
@@ -68,7 +73,6 @@ export default function RailNav({ onOpenSearch, footer = null }) {
             <span className="jv-rail-label">Search</span>
           </button>
         ) : null}
-        {footer}
       </div>
     </nav>
   );

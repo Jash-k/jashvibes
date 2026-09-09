@@ -1332,3 +1332,54 @@ html.day-mode .jv-focus-tile-on { border-color: #0b0b0d; box-shadow: 0 0 0 2px r
 .jv-focus-onair:hover { border-color: rgba(248, 113, 113, 0.6); color: #fff; }
 .jv-focus-dot { width: 6px; height: 6px; border-radius: 999px; background: #ef4444; box-shadow: 0 0 10px rgba(239, 68, 68, 0.9); flex: 0 0 auto; }
 html.day-mode .jv-focus-onair { background: rgba(255, 255, 255, 0.8); border-color: rgba(15, 23, 42, 0.12); color: rgba(15, 23, 42, 0.72); }
+
+/* Catalogue rows (Rail OS): a strip per group, each with its own page counter. The horizontal snap is
+   what makes a remote or a thumb able to walk it; no arrows, because a strip you can drag does not
+   need a button on each side that only works on hover. */
+.jv-row {
+  min-width: 0;
+}
+.jv-row-strip {
+  display: flex;
+  align-items: stretch;
+  gap: 0.65rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  padding: 0.15rem 0.1rem 0.85rem;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.jv-row-strip::-webkit-scrollbar { display: none; }
+.jv-row-tile {
+  flex: 0 0 auto;
+  width: 8.75rem;
+  scroll-snap-align: start;
+}
+.jv-row-more {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 8.75rem;
+  min-height: 13rem;
+  border-radius: 1.4rem;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.75rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.72);
+  transition: border-color 180ms ease, background 180ms ease, color 180ms ease;
+}
+.jv-row-more:hover { border-color: rgba(255, 255, 255, 0.42); background: rgba(255, 255, 255, 0.07); color: #fff; }
+.jv-row-more:disabled { opacity: 0.6; cursor: wait; }
+@media (min-width: 640px) {
+  .jv-row-tile,
+  .jv-row-more { width: 10.5rem; }
+  .jv-row-more { min-height: 15.5rem; }
+}
+html.day-mode .jv-row-more { border-color: rgba(15, 23, 42, 0.2); background: rgba(15, 23, 42, 0.03); color: rgba(15, 23, 42, 0.7); }
+html.day-mode .jv-row-more:hover { border-color: rgba(15, 23, 42, 0.45); background: #fff; color: #0b0b0d; }
+@media (prefers-reduced-motion: reduce) {
+  .jv-row-more { transition: none; }
+}

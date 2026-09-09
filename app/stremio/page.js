@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import EmbedSiteLinks from '@/components/EmbedSiteLinks';
 
 const SELECTED_CATALOGS_KEY = 'jash:stremio:selectedCatalogs:v2';
 
@@ -284,6 +285,7 @@ export default function StremioPage() {
           <h1 className="mt-3 text-3xl font-black text-white sm:text-5xl">Catalogs</h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">Choose which catalogs from your manifest should appear. Click a catalog button to lazy-load posters for that catalog.</p>
           {manifest?.name ? <p className="mt-3 text-xs font-bold text-zinc-500">Addon: {manifest.name} • {manifest.version}</p> : null}
+          <EmbedSiteLinks />
 
           <div className="mt-5 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
             <select value={pickerValue} onChange={(event) => setPickerValue(event.target.value)} className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm font-bold text-white outline-none focus:border-fuchsia-300">

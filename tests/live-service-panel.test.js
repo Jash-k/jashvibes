@@ -64,6 +64,7 @@ test('the homepage has no client-side filter rail', () => {
   assert.ok(!home.includes('filterMode'), 'filter state is gone, not hidden');
   assert.ok(!home.includes('{/* Quick Filter Rail */}'), 'the rail markup is deleted, not hidden behind a flag');
   assert.ok(!home.includes('setFilterMode'), 'no leftover setter for a filter nobody can reach');
-  assert.match(home, /const currentItems = activeTab === 'movies' \? movies : series;/, 'tabs feed the grid directly');
-  assert.match(home, /<TabButton active=\{activeTab === 'movies'\}/, 'the tabs that remain are the real filters');
+  assert.match(home, /items=\{movies\}/, 'a row per group shows both, so a page boundary cannot look empty');
+  assert.match(home, /onMore=\{\(\) => loadMore\('movies'\)\}/, 'and each row pages its own group from the provider');
+  assert.ok(!home.includes('TabButton'), 'the tab switcher is deleted: it only hid half of what was already loaded');
 });
