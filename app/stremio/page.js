@@ -18,9 +18,11 @@ import {
   defaultFilters,
   emptyShelfEntry,
   fetchCatalogPage,
+  filterOptions,
   getDefaultPins,
   markShelfError,
   markShelfLoading,
+  optionLabel,
   readCatalogOptions,
   rowKey,
   safeFilters,
@@ -139,7 +141,7 @@ function FilterStrip({ catalog, filters, ignored, onOpenSheet }) {
       {FILTER_FIELDS.filter((field) => supportsExtra(catalog, field.id).supported).map((field) => (
         <button key={field.id} type="button" className="jv-st-fchip" onClick={() => onOpenSheet(field.id)}>
           <span className="jv-st-fchip-key">{field.label}</span>
-          <span className="jv-st-fchip-val">{filters[field.id] || field.none}</span>
+          <span className="jv-st-fchip-val">{optionLabel(catalog, field.id, filters[field.id], field.options) || field.none}</span>
         </button>
       ))}
       {canSearch ? (
@@ -218,7 +220,9 @@ function FilterSheet({ catalog, filters, field, onClose, onApply, onClear }) {
     [id]: current[id] === value && id !== 'sort' ? '' : value,
   }));
 
-  const usable = FILTER_FIELDS.filter((entry) => supportsExtra(catalog, entry.id).supported);
+  const usable = FILTER_FIELDS
+    .filter((entry) => supportsExtra(catalog, entry.id).supported)
+    .map((entry) => ({ ...entry, options: filterOptions(catalog, entry.id, entry.options) }));
   const skipped = FILTER_FIELDS.filter((entry) => !supportsExtra(catalog, entry.id).supported && supportsExtra(catalog, entry.id).declared);
 
   return (
@@ -331,7 +335,7 @@ export default function StremioPage() {
 
   // One call in, one catalog page out. `requestsRef` is what makes a stale answer harmless: pressing two
   // tabs quickly means the first reply arrives after the second request exists, and it must not paint.
-  const run = useCallback(async (catalog, { append = false } = {}) => {
+  const run = useCallback(async (catalog, { append = false, filters: chosen } = {}) => {
     if (!catalog?.id) return;
     const key = catalogKey(catalog);
     const id = (requestsRef.current[key] || 0) + 1;
@@ -341,7 +345,7 @@ export default function StremioPage() {
       const { entry } = await fetchCatalogPage({
         fetchPage,
         catalog,
-        filters: safeFilters(filtersRef.current[key]),
+        filters: safeFilters(chosen || filtersRef.current[key]),
         append,
         current: shelfRef.current[key] || null,
       });
@@ -439,7 +443,9 @@ export default function StremioPage() {
     setFiltersByCatalog((current) => ({ ...current, [activeCatalogKey]: clean }));
     setShelf((state) => ({ ...state, [activeCatalogKey]: emptyShelfEntry() }));
     setSheet('');
-    run(activeCatalog);
+    // Passed in, not read back from state: this handler and the fetch share one render, so the ref the
+    // effect keeps in step is still the previous filters here.
+    run(activeCatalog, { filters: clean });
   }
 
   function reloadActive() {

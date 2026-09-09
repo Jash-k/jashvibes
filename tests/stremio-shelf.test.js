@@ -12,10 +12,12 @@ import {
   defaultFilters,
   emptyShelfEntry,
   fetchCatalogPage,
+  filterOptions,
   getDefaultPins,
   markShelfError,
   mergeItems,
   normalizeCatalog,
+  optionLabel,
   readCatalogOptions,
   reduceShelfPage,
   rowKey,
@@ -311,6 +313,27 @@ test('one press reads one page, and the URL on the wire is the URL the shelf cla
   }
 });
 
+test('a filter that was just chosen reaches the addon on that same request', async () => {
+  const { server, port, seen } = await startFixture();
+  try {
+    const fetchPage = makeFetchPage(port, seen);
+    const catalog = readCatalogOptions(MANIFEST.catalogs)[0];
+    await fetchCatalogPage({
+      fetchPage,
+      catalog,
+      filters: safeFilters({ sort: 'Highest Rated', language: 'Tamil', genre: 'Crime', search: 'vikram' }),
+      current: emptyShelfEntry(),
+    });
+    const params = new URLSearchParams(seen[0]);
+    assert.equal(params.get('genre'), 'Crime', 'the wire carries what Apply was given - not what state held a render earlier');
+    assert.equal(params.get('sort'), 'Highest Rated');
+    assert.equal(params.get('search'), 'vikram');
+    assert.equal(seen.length, 1, 'and one Apply is one request, not a refetch once the state settles');
+  } finally {
+    server.close();
+  }
+});
+
 test('walking the catalog by pressing load more ends with every title once, and knows it is at the end', async () => {
   const { server, port, seen } = await startFixture();
   try {
@@ -512,7 +535,7 @@ test('the old chrome is deleted, not restyled', () => {
 
 test('the sheet offers only what this catalog accepts, and says why the rest is absent', () => {
   const page = read('../app/stremio/page.js');
-  assert.match(page, /usable = FILTER_FIELDS\.filter\(\(entry\) => supportsExtra\(catalog, entry\.id\)\.supported\)/);
+  assert.match(page, /usable = FILTER_FIELDS\n\s*\.filter\(\(entry\) => supportsExtra\(catalog, entry\.id\)\.supported\)\n\s*\.map\(\(entry\) => \(\{ \.\.\.entry, options: filterOptions\(catalog, entry\.id, entry\.options\) \}\)\)/, 'the sheet offers the options this catalog declares');
   assert.match(page, /does not declare/);
   assert.match(page, /declares no extras/);
   assert.match(page, /ignored\.length \? <span className="jv-st-fnote"/, 'the strip prints the refusal next to the chips');
@@ -542,6 +565,64 @@ test('the shelf stays dark in day mode and declares every colour it uses', () =>
     .map((entry) => entry[1].trim().replace(/\s+/g, ' '));
   assert.ok(texty.length >= 25, `expected the shelf to style its own text in at least 25 rules, saw ${texty.length}`);
   assert.equal(missing.join(' | '), '', 'rules that set a size but no colour inherit the day-mode blanket');
+});
+
+/* ------------------------------------------------------------------ the two things that broke on a real screen */
+
+test('a declared extra options list becomes the filter, so the value sent is one the addon knows', () => {
+  const catalog = normalizeCatalog({
+    id: 'global',
+    type: 'movie',
+    name: 'Global',
+    extraSupported: [
+      'skip',
+      { name: 'genre', value: { options: [{ value: 'action', label: 'Action & Adventure' }, { value: 'comedy' }, 'documentary'] } },
+      { name: 'language', options: [{ value: 'ta', label: 'Tamil' }] },
+    ],
+  });
+  assert.deepEqual(Object.keys(catalog.extraOptions), ['genre', 'language']);
+  assert.deepEqual(filterOptions(catalog, 'genre', [{ value: 'Action', label: 'Action' }]), [
+    { value: 'action', label: 'Action & Adventure' },
+    { value: 'comedy', label: 'comedy' },
+    { value: 'documentary', label: 'documentary' },
+  ], 'the app list must not override what the addon declared, and a bare string still gets a usable label');
+  assert.deepEqual(filterOptions(catalog, 'language', []), [{ value: 'ta', label: 'Tamil' }]);
+  assert.deepEqual(filterOptions(catalog, 'sort', [{ value: 'Latest Added', label: 'Latest Added' }]), [
+    { value: 'Latest Added', label: 'Latest Added' },
+  ], 'no declaration falls back to the app list, it does not become an empty sheet');
+  assert.equal(optionLabel(catalog, 'genre', 'action', []), 'Action & Adventure', 'chips show the label, the wire carries the value');
+  assert.equal(optionLabel(catalog, 'genre', 'horror', []), 'horror', 'a value nobody labelled is shown as itself, never dropped');
+  assert.equal(optionLabel(catalog, 'genre', '', []), '');
+  const { query } = buildShelfQuery({ catalog, skip: 0, filters: { sort: '', language: 'ta', genre: 'action', search: '' } });
+  const params = new URLSearchParams(query);
+  assert.equal(params.get('genre'), 'action', 'the addon\'s own value, not our guess');
+  assert.equal(params.get('language'), 'ta');
+});
+
+test('the shelf never pads its own left edge, because that is the rail\'s clearance', () => {
+  const css = read('../app/globals.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  const page = css.slice(css.indexOf('.jv-st-page {'), css.indexOf('}', css.indexOf('.jv-st-page {')));
+  for (const bad of ['padding', 'margin']) {
+    assert.ok(!page.includes(bad), '.jv-st-page must not declare ' + bad + ' — a padding shorthand here overrode the 188px left clearance .jv-rail-shift puts on the same element, and the ruler plus the first poster column slid under the rail');
+  }
+  assert.match(css, /@media \(min-width: 1024px\) \{ \.jv-rail-shift \{ padding-left: 78px; \} \}/, 'the clearance itself is untouched');
+  assert.match(css, /@media \(min-width: 1280px\) \{ \.jv-rail-shift \{ padding-left: 188px; \} \}/);
+  assert.match(css, /\.jv-st \{[\s\S]{0,140}?padding:/, 'the gutters live on the inner wrapper, like .jv-dec');
+  assert.match(css, /\.jv-st-top \{[^}]*padding-right: 46px/, 'and the header leaves room for the fixed day/night toggle');
+  assert.match(css, /@media \(max-width: 1023px\) \{[\s\S]{0,80}?\.jv-st \{ padding-bottom: 104px/);
+});
+
+test('pressing Apply fetches with the filters just chosen, not with the ones still in the ref', () => {
+  const page = read('../app/stremio/page.js')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  assert.match(page, /const run = useCallback\(async \(catalog, \{ append = false, filters: chosen \} = \{\}\) =>/, 'run must take the filters for this fetch');
+  assert.match(page, /filters: safeFilters\(chosen \|\| filtersRef\.current\[key\]\)/);
+  assert.match(page, /run\(activeCatalog, \{ filters: clean \}\)/, 'and the apply handler must hand them over');
+  assert.ok(!/setFiltersByCatalog\(\(current\) => \(\{ \.\.\.current, \[activeCatalogKey\]: clean \}\)\);\n[\s\S]{0,120}?run\(activeCatalog\);/
+    .test(page), 'a bare run() after setting state reads the previous filters — that is how Apply appeared to do nothing');
+  assert.match(page, /options: filterOptions\(catalog, entry\.id, entry\.options\)/, 'the sheet offers the addon\'s own options');
+  assert.match(page, /optionLabel\(catalog, field\.id, filters\[field\.id\], field\.options\)/, 'and the chip reads back the label for the value on the wire');
 });
 
 test('nothing on the page is a control that controls nothing', () => {

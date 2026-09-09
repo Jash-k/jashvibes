@@ -182,6 +182,32 @@ For personal/educational use only. Host only sources you are authorized to acces
 
 ## v8.4.3
 - BrandLogo resilient fallback chain (logo.png -> logo-source.webp -> JV monogram) fixes invisible mini logo when /public/brand is missing from file-wise deploys. sw v59.
+## v8.11.1 — Catalog Shelf: the rail was eating the page, and Apply sent stale filters
+
+Two fixes on `/stremio`, both found on the real screen rather than in the test suite.
+
+**Nothing hides behind the left rail any more.** `.jv-st-page` carried its own `padding` shorthand, and
+because it sits later in `globals.css` than `.jv-rail-shift` at the same specificity, it overrode the
+78/188 px of left clearance the rail needs — the ruler, the `SORT`/`LANG` chips and the first poster column
+were being drawn underneath the opaque rail. `.jv-st-page` now declares no padding at all (measured with headless
+Chrome against the built CSS: `padding-left` is 188 px at ≥1280, 78 px at ≥1024, 0 on mobile where the rail is a
+dock), and the gutters moved to the inner `.jv-st`, the way `.jv-dec-page` / `.jv-dec` already do. The header also
+keeps 46 px of right-hand room so the fixed day/night toggle cannot sit on top of `N catalogs pinned`, and the
+dock clearance follows to `.jv-st`.
+
+**Filters do what they say.** Pressing `Apply` set the filters in state and then fetched — from a ref that a
+`useEffect` only syncs after the render, so the request that went out carried the *previous* filters while the chip
+already showed the new one. `run()` now takes the filters for that fetch (`run(catalog, { filters })`) and the ref
+is only a fallback for reloads; the first Apply after picking a genre or language is no longer a page behind.
+On top of that, the option lists are the addon's: a manifest that declares `extraSupported: [{ name: "genre",
+value: { options: [...] } }]` now drives both what gets sent and what the chip reads back (`filterOptions` /
+`optionLabel` in `lib/stremioShelf.js`), with the app's own list used only when a catalog declares nothing — so a
+catalog that writes `action` no longer gets our guess of `Action` and answers with an empty page.
+
+Regression guards: 4 new tests in `tests/stremio-shelf.test.js` (203 total, all passing) — one that fails if
+`.jv-st-page` ever declares padding or margin again, one that fails if the apply handler goes back to a bare
+`run()`, one that a manifest-declared option list has to satisfy, and one that reads the query the catalog
+server actually received and requires the filter to be on it.
 
 ## v8.11.0
 - **/stremio is the Catalog Shelf**, built from idea 1 of `docs/concepts/stremio-redesign.html` (six mockups, each with

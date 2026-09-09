@@ -1491,15 +1491,22 @@ html.day-mode .jv-dec-page {
   min-height: 100dvh;
   background: var(--st-bg);
   color: var(--st-ink);
-  padding: 14px clamp(14px, 3vw, 34px) 34px;
+  /* No padding here on purpose. The rail clearance is `.jv-rail-shift`'s `padding-left` on this same
+     element (78px at lg, 188px at xl); any horizontal padding declared on `.jv-st-page` — including a
+     `padding` shorthand — wins by source order and slides the whole shelf under the rail. The gutters
+     therefore live on the inner `.jv-st`, exactly like `.jv-dec-page` / `.jv-dec`. */
 }
 
 html.day-mode .jv-st-page { background: var(--st-bg); color: var(--st-ink); }
 
-.jv-st { max-width: 1680px; margin: 0 auto; }
+.jv-st {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 14px clamp(14px, 2.6vw, 30px) 34px;
+}
 
 /* ---- top bar ---------------------------------------------------------- */
-.jv-st-top { display: flex; align-items: center; gap: 11px; padding-bottom: 12px; }
+.jv-st-top { display: flex; align-items: center; gap: 11px; padding-bottom: 12px; padding-right: 46px; } /* room for the fixed day/night toggle */
 
 .jv-st-burger {
   flex: 0 0 auto;
@@ -1946,7 +1953,7 @@ html.day-mode .jv-st-page { background: var(--st-bg); color: var(--st-ink); }
 }
 
 @media (max-width: 1023px) {
-  .jv-st-page { padding-bottom: 104px; }
+  .jv-st { padding-bottom: 104px; } /* the dock is fixed; the last row must clear it */
   .jv-st-mobfilters {
     display: inline-flex;
     align-items: center;
