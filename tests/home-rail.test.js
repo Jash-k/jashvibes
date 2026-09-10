@@ -15,11 +15,12 @@ const read = (rel) => fs.readFileSync(new URL(rel, import.meta.url), 'utf8');
 
 test('the nav exists once and is rendered per breakpoint', () => {
   const shared = read('../components/navItems.js');
-  for (const href of ['/', '/live', '/anime', '/music', '/sports', '/classics', '/stremio?home=1']) {
+  for (const href of ['/', '/live', '/anime/tamil', '/music', '/sports', '/classics', '/stremio?home=1']) {
     assert.ok(shared.includes(`href: '${href}'`), `NAV_ITEMS must carry ${href}`);
   }
   assert.ok(!shared.includes("href: '/my-list'"), 'My List is not a destination on this page any more');
-  assert.match(shared, /label: 'Anime', emoji: '🌸'/, 'the anime entry point is an emoji, per the brief');
+  assert.match(shared, /label: 'Tamil anime', short: 'Tamil', emoji:/, 'the anime entry point is an emoji, per the brief — and it is the Tamil one now');
+  assert.ok(!shared.includes("href: '/anime',"), 'the TMDB anime section was deleted, not hidden behind the same glyph');
   assert.match(shared, /label: 'Stremio'[\s\S]*?hard: true/, 'Stremio hard-navigates so a changed manifest is not cached');
   assert.match(shared, /export function isNavItemActive/, 'one active-state rule for both shells');
   const dock = read('../components/MobileDock.jsx');
@@ -164,4 +165,16 @@ test('motion is trimmed and the rows still walk', () => {
   for (const selector of ['.jv-rail', '.jv-rail-item-active']) {
     assert.ok(css.includes(`html.day-mode ${selector}`), `${selector} is chrome, so it needs a day-mode value`);
   }
+});
+
+test('the nav lights exactly one entry, and a child route lights its own', async () => {
+  const { NAV_ITEMS, isNavItemActive } = await import('@/components/navItems.js');
+  const lit = (path) => NAV_ITEMS.filter((item) => isNavItemActive(item, path)).map((item) => item.href);
+  assert.deepEqual(lit('/anime/tamil'), ['/anime/tamil'], 'the Tamil entry, and not Anime as well');
+  assert.deepEqual(lit('/anime/tamil/source'), ['/anime/tamil'], 'the framed source page is still that section');
+  assert.deepEqual(lit('/anime'), [], 'no entry owns the deleted section; next.config redirects it instead');
+  assert.deepEqual(lit('/'), ['/']);
+  assert.deepEqual(lit('/sports'), ['/sports']);
+  assert.deepEqual(lit('/animekit'), [], 'a sibling that merely starts with the same letters is not a child');
+  assert.deepEqual(lit('/stremio?home=1'.split('?')[0]), ['/stremio?home=1'], 'the query in an href is not part of the path match');
 });

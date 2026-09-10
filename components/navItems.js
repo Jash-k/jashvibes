@@ -13,9 +13,10 @@
 export const NAV_ITEMS = [
   { href: '/', label: 'Home', icon: 'home', accent: 'text-red-400', hint: 'Movies & series' },
   { href: '/live', label: 'Live', icon: 'live', accent: 'text-red-400', hint: 'Live TV and the guide' },
-  { href: '/anime', label: 'Anime', emoji: '🌸', accent: 'text-fuchsia-300', hint: 'Animation catalogue' },
-  // `short` is what the phone dock prints — eight labels at 10 px will not fit the wider one.
-  { href: '/anime/tamil', label: 'Tamil anime', short: 'Tamil', emoji: '🎌', accent: 'text-sky-300', hint: 'Tamil dubs, read from the source' },
+  // `short` is what the phone dock prints — a wide label at 10 px will not fit a row of seven.
+  // `/anime` used to sit above this one as a TMDB animation catalogue; the section is deleted and the old
+  // URL redirects here, so this is the only anime entry in the app.
+  { href: '/anime/tamil', label: 'Tamil anime', short: 'Tamil', emoji: '🏴‍☠️', accent: 'text-sky-300', hint: 'Tamil dubs, read from the source' },
   { href: '/music', label: 'Music', icon: 'music', accent: 'text-emerald-300', hint: 'ராக வானம்' },
   { href: '/sports', label: 'Sports', icon: 'trophy', accent: 'text-amber-300', hint: 'Matches, scores, streams' },
   { href: '/classics', label: 'ReTro', icon: 'film', accent: 'text-amber-400', hint: 'Vintage Tamil cinema' },
@@ -25,9 +26,16 @@ export const NAV_ITEMS = [
 ];
 
 /** Both shells need the same answer to "is this where I am". */
-export function isNavItemActive(item, pathname = '/') {
+export function isNavItemActive(item, pathname = '/', items = NAV_ITEMS) {
   const path = String(pathname || '/');
+  const owns = (href) => {
+    const base = String(href || '').split('?')[0];
+    // A section owns its own sub-paths and nothing else: `/anime/tamil` must win for `/anime/tamil/source`,
+    // and a route that merely starts with the same letters (`/animearchives`) is not a child of it.
+    return base === '/' ? path === '/' : (path === base || path.startsWith(`${base}/`));
+  };
   const target = String(item?.href || '').split('?')[0];
-  if (target === '/') return path === '/';
-  return path.startsWith(target);
+  if (!owns(target)) return false;
+  // The deepest matching entry wins, so a child route highlights its own tab.
+  return !items.some((other) => other !== item && owns(other?.href) && String(other?.href || '').length > target.length);
 }

@@ -1,9 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import RailNav from '@/components/rail/RailNav';
 import JashPlayer from '@/components/player/JashPlayer';
 import { createDirectPolicy } from '@/lib/player/policy/stream';
+import { MAX_PROBES, preFlightNote, verifyFromBrowser } from '@/lib/animeTamilProbe';
 import {
   episodeLabel,
   summaryLine,
@@ -132,11 +134,16 @@ export default function AnimeTamil() {
   const [playState, setPlayState] = useState('idle');
   const [playing, setPlaying] = useState(null);
   const [playingIndex, setPlayingIndex] = useState(0);
+  // What the browser's own pre-flight had to say before the player was mounted. A row the server could
+  // fetch and this tab cannot is the exact complaint this answers, so it is said out loud, not swallowed.
+  const [checkingNote, setCheckingNote] = useState('');
   const requestRef = useRef(0);
   // Which addresses this episode has already failed on — the ladder below walks it once each.
   const triedRef = useRef([]);
   const playStateRef = useRef('idle');
   playStateRef.current = playState;
+  // Pre-flight takes seconds, and a sheet closed in the middle of it must not start a player behind the user.
+  const playTicketRef = useRef(0);
 
   useEffect(() => {
     const stored = readStored();
@@ -272,6 +279,7 @@ export default function AnimeTamil() {
     setEpisodePath('');
     setPlaying(null);
     setPlayState('idle');
+    setCheckingNote('');
     setTitleState('idle');
     rememberInUrl('', '');
   }, [rememberInUrl]);
@@ -283,6 +291,7 @@ export default function AnimeTamil() {
     setEpisodePath('');
     setPlaying(null);
     setPlayState('idle');
+    setCheckingNote('');
     setTitleState('loading');
     rememberInUrl(item.path, '');
     try {
@@ -320,11 +329,19 @@ export default function AnimeTamil() {
   }, [open, closeSheet]);
 
   // `openTitle` reaches the play path before this callback is rebuilt; the ref keeps one render in step.
+  /** The in-app source view for whatever the sheet is showing: the episode if one is loaded, else the title. */
+  const sourceHref = useCallback((wanted = '') => {
+    const target = wanted || episode?.path || open?.path || '';
+    return target ? `/anime/tamil/source?u=${encodeURIComponent(target)}` : '';
+  }, [episode, open]);
+  const rawHref = useCallback((wanted = '') => wanted || episode?.open || open?.href || '', [episode, open]);
+
   const playEpisodeRef = useRef(null);
 
   const playEpisode = useCallback(async (row, owner = null) => {
     if (!row?.path) return;
     const parent = owner || open;
+    let slowRow = null;
     setEpisodePath(row.path);
     rememberInUrl(parent?.path, row.path);
     setPlayState('loading');
@@ -340,16 +357,40 @@ export default function AnimeTamil() {
         setPlayState('empty');
         return;
       }
-      setPlayingIndex(0);
-      triedRef.current = [lineup[0].url];
+      // The server proved the address from its own machine. Ask the tab as well, in ladder order, before a
+      // player is mounted — a black rectangle under a “playable” label is the one thing this page may not do.
+      const ticket = playTicketRef.current + 1;
+      playTicketRef.current = ticket;
+      setPlayState('checking');
+      setCheckingNote('');
+      const verdicts = [];
+      let picked = null;
+      for (const [index, entry2] of lineup.slice(0, MAX_PROBES).entries()) {
+        const verdict = await verifyFromBrowser(entry2.url, { kind: entry2.kind });
+        if (playTicketRef.current !== ticket) return;
+        if (verdict.ok) {
+          picked = { row: entry2, index };
+          break;
+        }
+        verdicts.push({ label: entry2.label, ok: verdict.ok, why: verdict.why });
+        if (verdict.ok === null && !slowRow) slowRow = { row: entry2, index };
+      }
+      if (playTicketRef.current !== ticket) return;
+      // A timeout is not a refusal, so a slow row still beats a row the browser was told no to.
+      const chosen = picked || slowRow || { row: lineup[0], index: 0 };
+      slowRow = null;
+      const note = preFlightNote(verdicts, chosen.index === 0 ? '' : chosen.row.label);
+      setCheckingNote(note);
+      triedRef.current = [chosen.row.url];
+      setPlayingIndex(chosen.index);
       setPlaying({
-        key: `${row.path}::${lineup[0].url}`,
+        key: `${row.path}::${chosen.row.url}`,
         watchKey: watchKeyFor(row.path),
         entry: libraryRowFor(parent, row),
         title: `${parent?.title || entry?.title || 'Episode'}`,
-        subtitle: `${lineup[0].label} · resolved by this app, played in JashPlayer`,
+        subtitle: `${chosen.row.label} · resolved by this app, fetched by this browser, played in JashPlayer`,
         poster: entry?.playable?.[0]?.poster || parent?.poster || '',
-        ...lineup[0],
+        ...chosen.row,
       });
       setPlayState('ready');
     } catch (err) {
@@ -369,6 +410,7 @@ export default function AnimeTamil() {
    */
   const stepToNextSource = useCallback((message) => {
     setError(message || 'this address did not play');
+    setCheckingNote('');
     const remaining = lineup.filter((entry) => entry.url && !triedRef.current.includes(entry.url));
     if (!remaining.length) {
       setPlayState('failed');
@@ -382,6 +424,7 @@ export default function AnimeTamil() {
       key: `${episodePath}::${next.url}`,
       url: next.url,
       label: next.label,
+      kind: next.kind,
       subtitle: `${next.label} · after a failed address, this app moved to the next one`,
     }));
     setPlayState('ready');
@@ -521,8 +564,11 @@ export default function AnimeTamil() {
               </div>
               <div className="jv-an-sheet-side">
                 {open.poster ? <img src={open.poster} alt="" loading="lazy" /> : null}
-                <a className="jv-an-btn is-quiet" href={open.href} target="_blank" rel="noopener noreferrer">
-                  open on PirateXPlay <span aria-hidden="true">↗</span>
+                {sourceHref() ? (
+                  <Link className="jv-an-btn" href={sourceHref()}>watch it in app</Link>
+                ) : null}
+                <a className="jv-an-btn is-quiet" href={rawHref()} target="_blank" rel="noopener noreferrer">
+                  open raw <span aria-hidden="true">↗</span>
                 </a>
               </div>
             </header>
@@ -534,12 +580,19 @@ export default function AnimeTamil() {
             {titleState === 'empty' ? <p className="jv-an-note is-warn">This title carries no episode list on the source, so there is nothing here to play.</p> : null}
 
             {playState === 'failed' ? (
+              <>
               <p className="jv-an-note is-warn">
-                Every address this episode offered was tried and none played ({error}). The rows below say
-                what each host reported; {open?.href ? (
-                  <a className="jv-an-linkbtn" href={open.href} target="_blank" rel="noopener noreferrer">the source itself can play it ↗</a>
-                ) : null}
+                Every address this episode offered was tried and none played ({error}). The rows below say what
+                each host reported — and their own page plays it, because nothing here is a promise about the
+                route between your browser and that CDN.
               </p>
+              <div className="jv-an-fallback">
+                {sourceHref() ? <Link className="jv-an-btn is-major" href={sourceHref()}>open their page in app</Link> : null}
+                <a className="jv-an-btn is-quiet" href={rawHref()} target="_blank" rel="noopener noreferrer">
+                  open it raw <span aria-hidden="true">↗</span>
+                </a>
+              </div>
+              </>
             ) : null}
 
             {playing ? (
@@ -548,8 +601,8 @@ export default function AnimeTamil() {
                 <JashPlayer
                   key={playing.key}
                   className="jv-an-player-el"
-                  source={{ url: playing.url, kind: 'hls', label: playing.label, crossOrigin: 'anonymous' }}
-                  playbackPolicy={createDirectPolicy(playing.url, { streamType: 'hls' })}
+                  source={{ url: playing.url, kind: playing.kind || 'auto', label: playing.label, crossOrigin: 'anonymous' }}
+                  playbackPolicy={createDirectPolicy(playing.url, { kind: playing.kind || undefined })}
                   display={{ title: playing.title, subtitle: playing.subtitle, poster: playing.poster || undefined, aspect: 'fill' }}
                   library={{ watchKey: playing.watchKey, entry: playing.entry }}
                   lineup={{
@@ -559,14 +612,17 @@ export default function AnimeTamil() {
                       const next = lineup[index];
                       if (!next) return;
                       triedRef.current = [...new Set([...triedRef.current, next.url])];
+                      // A source chosen by hand is not a fallback any more, so the pre-flight warning is stale.
+                      setCheckingNote('');
                       setPlayingIndex(index);
-                      setPlaying({ ...playing, key: `${episodePath}::${next.url}`, url: next.url, label: next.label, subtitle: `${next.label} · resolved by this app, played in JashPlayer` });
+                      setPlaying({ ...playing, key: `${episodePath}::${next.url}`, url: next.url, label: next.label, kind: next.kind, subtitle: `${next.label} · resolved by this app, fetched by this browser, played in JashPlayer` });
                     },
                   }}
                   on={{ onError: (info) => stepToNextSource(info?.message) }}
                 />
               </div>
               {playing.warn ? <p className="jv-an-note is-warn">{playing.warn}</p> : null}
+              {checkingNote ? <p className="jv-an-note is-warn">{checkingNote}</p> : null}
               </>
             ) : null}
 
@@ -587,7 +643,7 @@ export default function AnimeTamil() {
                           <span className="jv-an-ep-tag">{episodeTag(row) || row.id}</span>
                           <span className="jv-an-ep-title">{episodeLabel(row)}</span>
                         </span>
-                        <span className="jv-an-ep-go">{playState === 'loading' && episodePath === row.path ? 'reading…' : 'play'}</span>
+                        <span className="jv-an-ep-go">{episodePath === row.path && (playState === 'loading' || playState === 'checking') ? (playState === 'checking' ? 'checking…' : 'reading…') : 'play'}</span>
                       </button>
                     </li>
                   ))}
@@ -613,6 +669,7 @@ export default function AnimeTamil() {
                   {episode?.playable?.length ? <em>{episode.playable.length} playable</em> : <em>none playable</em>}
                 </h3>
                 {playState === 'loading' ? <p className="jv-an-note">Asking each server for a fetchable address…</p> : null}
+                {playState === 'checking' ? <p className="jv-an-note">Checking from this browser that the address can actually be fetched…</p> : null}
                 {!lineup.length && playState !== 'loading' ? (
                   <p className="jv-an-note is-warn">
                     {playState === 'error'
@@ -650,10 +707,13 @@ export default function AnimeTamil() {
                   ))}
                 </ul>
                 <p className="jv-an-note">
-                  Nothing on this page is framed: a row is offered only when the manifest itself can be read and
-                  played. {episode?.open ? (
-                    <a className="jv-an-linkbtn" href={episode.open} target="_blank" rel="noopener noreferrer">watch it on the source ↗</a>
-                  ) : null}
+                  A row is offered to the player only when its manifest and first segment answer a
+                  cross-origin read from here; the rest are listed with what they said. When nothing you can
+                  reach plays, {sourceHref(episode?.path) ? (
+                    <Link className="jv-an-linkbtn" href={sourceHref(episode?.path)}>their page, in app, with the ads cut out</Link>
+                  ) : (
+                    <a className="jv-an-linkbtn" href={rawHref(episode?.open)} target="_blank" rel="noopener noreferrer">the source itself can play it ↗</a>
+                  )}
                 </p>
               </section>
             ) : null}

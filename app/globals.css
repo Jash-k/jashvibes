@@ -2375,6 +2375,7 @@ a.jv-an-btn { display: inline-flex; align-items: center; gap: 6px; text-decorati
 .jv-an-more { display: flex; justify-content: center; padding: 18px 0 4px; }
 .jv-an-note { margin: 8px 0; font-size: 12px; line-height: 1.55; color: var(--an-dim); }
 .jv-an-note.is-warn { color: var(--an-warn); }
+.jv-an-note a { color: var(--an-accent); text-underline-offset: 2px; }
 .jv-an-note code { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 11px; color: var(--an-accent); }
 .jv-an-linkbtn { background: none; border: 0; padding: 0; color: var(--an-accent); font: inherit; font-weight: 800; cursor: pointer; text-decoration: underline; }
 .jv-an-about { margin-top: 26px; padding: 13px 14px 14px; border: 1px solid var(--an-line-soft); border-radius: 14px; background: var(--an-panel); }
@@ -2401,7 +2402,12 @@ a.jv-an-btn { display: inline-flex; align-items: center; gap: 6px; text-decorati
 .jv-an-sheet-side img { width: 84px; border-radius: 10px; border: 1px solid var(--an-line); }
 .jv-an-sheet-syn { margin: 0; font-size: 12px; line-height: 1.6; color: var(--an-dim); }
 
-.jv-an-player { position: relative; border-radius: 14px; overflow: hidden; background: #000; aspect-ratio: 16 / 9; }
+/* `flex: 0 0 auto` is load-bearing, not decoration. The sheet body is a column flex container with a
+   definite height, and a block child whose size comes only from `aspect-ratio` resolves its automatic main
+   size to 0 there — measured: 615 × 0 with a playing 1280×720 video inside it, which is what "click play and
+   nothing happens" actually was. Opting out of flex sizing lets the ratio apply (615 × 345), and the floor
+   means the box can never be invisible again. */
+.jv-an-player { position: relative; flex: 0 0 auto; min-height: 120px; border-radius: 14px; overflow: hidden; background: #000; aspect-ratio: 16 / 9; }
 .jv-an-player-el { position: absolute; inset: 0; }
 
 .jv-an-season { margin-top: 4px; }
@@ -2435,7 +2441,39 @@ a.jv-an-btn { display: inline-flex; align-items: center; gap: 6px; text-decorati
 .jv-an-src.is-ok .jv-an-src-state { color: var(--an-ok); }
 .jv-an-src.is-no .jv-an-src-state { color: var(--an-warn); }
 
+/* ------------------------------------------------------------------------- *
+ * The source view: our toolbar, their page inside a frame
+ * ------------------------------------------------------------------------- */
+
+.jv-an-source .jv-an { padding-bottom: 18px; }
+.jv-an-src-wrap { display: grid; gap: 12px; }
+.jv-an-src-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+  padding: 10px 0 14px; border-bottom: 1px solid var(--an-line-soft);
+}
+.jv-an-src-title { margin: 0; display: grid; gap: 3px; min-width: 0; flex: 1 1 260px; color: var(--an-ink); }
+.jv-an-src-title strong { font-size: 15px; font-weight: 900; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--an-ink); }
+.jv-an-src-note { font-size: 11px; color: var(--an-faint); }
+.jv-an-src-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.jv-an-src-tools .jv-an-btn:disabled { cursor: not-allowed; opacity: .45; }
+
+.jv-an-src-frame {
+  position: relative; width: 100%;
+  /* A frame with no height is a blank box, which is the whole reason this page gets measured:
+     100vh minus the toolbar, with a floor so a short window still shows a page and not a strip. */
+  height: clamp(460px, calc(100dvh - 190px), 1200px);
+  border: 1px solid var(--an-line); border-radius: 16px; overflow: hidden;
+  background: var(--an-panel);
+}
+.jv-an-src-frame iframe { display: block; width: 100%; height: 100%; border: 0; background: #0b0b10; }
+.jv-an-fallback { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 2px 0 10px; }
+.jv-an-btn.is-major {
+  background: var(--an-accent); border-color: var(--an-accent); color: #06131c; font-weight: 900;
+}
+html.day-mode .jv-an-page .jv-an-btn.is-major { color: #fffdfa; }
+.jv-an-src { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--an-faint); }
+
 @media (prefers-reduced-motion: reduce) {
-  .jv-an-card, .jv-an-btn, .jv-an-chip, .jv-an-ep, .jv-an-src { transition: none; }
+  .jv-an-card, .jv-an-btn, .jv-an-chip, .jv-an-ep, .jv-an-src, .jv-an-src-frame { transition: none; }
   .jv-an-card:hover { transform: none; }
 }

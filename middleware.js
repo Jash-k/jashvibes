@@ -37,6 +37,8 @@ const RATE_RULES = [
   { prefix: '/api/v2/stream', limit: 60, windowMs: 60 * 1000 },
   { prefix: '/api/search', limit: 60, windowMs: 60 * 1000 },
   { prefix: '/api/anime/tamil/play', limit: 30, windowMs: 60 * 1000 },
+  // The framed source page: one upstream document per hit, so it is the tightest of the three.
+  { prefix: '/api/anime/tamil/page', limit: 20, windowMs: 60 * 1000 },
   { prefix: '/api/anime/tamil', limit: 60, windowMs: 60 * 1000 },
   { prefix: '/api/sports/hub', limit: 40, windowMs: 60 * 1000 },
   { prefix: '/api/sports/feed', limit: 90, windowMs: 60 * 1000 },

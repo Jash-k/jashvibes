@@ -12,6 +12,8 @@ app_port: 7860
 
 Tamil-first private streaming hub — movies, series, live TV, music, sports and classics in one Next.js app.
 
+> **v8.14.0** — there is one anime destination now, and *playable* means your browser, not the server. `/anime` is deleted (`app/anime/page.js`, `app/api/anime/route.js`, `lib/animeCatalog.js`, its test) — `🏴‍️ Tamil anime` is the only anime entry in rail, dock and home, and `/anime` answers `307 → /anime/tamil` because that URL lives in bookmarks and caches. Then the honest part: a row is verified **by the tab that will watch it** — `lib/animeTamilProbe.js` fetches manifest → variant → one segment chunk with `mode: 'cors'`, no cookies, no `Range`, and reads `#EXTM3U`, before a player is mounted; a row that answers too slowly is *unknown*, kept as fallback and labelled “did not answer in time”, never called dead. `source.kind` now travels from the feed (`playKindFor`) to the engine instead of the hardcoded `'hls'` that outranked the player's own detection. And the bug the whole complaint was about: `.jv-an-player` lived in a column-flex sheet body with no height but `aspect-ratio: 16 / 9`, which resolves to **0 px** there — it played 1280×720 inside an invisible box, measured `615 × 0`. `flex: 0 0 auto` + `min-height: 120px` (615 × 345 desktop, 362 × 203 phone). Verified in headless Chrome against the live source, twice: clean run (`checking…` → playing, clock moving, no notes) and with the Vidmoly edge refused in-page, where the ladder stepped to TurboVid and said which host was skipped; also with `--autoplay-policy=user-gesture-required`, where the engine boots muted and plays. 311/311 tests, lint clean.
+
 > **v8.13.0** — `/anime/tamil` is Tamil anime read as a **pipeline, not an embed**. `lib/animeTamilFeed.js` walks `piratexplay.cc/language/tamil` page by page (24 cards a page, 13 pages, **298 titles** — the first `ul.post-lst` grid only, because the two widget grids on that page are not the list), turns a `/series/…` page into its seasons and every `/episode/…` row, then resolves the servers on that episode — a host is playable only when its page publishes a fetchable `.m3u8` **and** the CDN answers `access-control-allow-origin: *`, so the browser fetches the video and this app carries no media bytes. Vidmoly qualifies, TurboVid resolves but is offered second (its segments sit on Google Drive without that header), the site's own JS-built player and its dead `short.icu` language map are listed *with the reason* next to an "open on PirateXPlay" link — never a dead player. Card → sheet with the episode list → play, filters and search work over what loaded, `Read all 13 pages` walks the taxonomy once (and stops on an empty page, not on the site's hint), the rail gets one new tab (the dock prints `Tamil`) and the page mounts `<RailNav />` itself, the player's own ladder moves to the next resolved address when one dies, and a watched episode lands in Continue Watching with its title and `S1 · E1` so `?t=…&ep=…` reopens it mid-play. Both themes measured control by control: day mode flips the block's `--an-*` variables rather than fighting the blanket. Nothing scheduled, nothing in MongoDB: 6 h for the list and titles, 30 min per episode, 30 s for a failure.
 
 > **v8.12.0** — Sports is one board now. `/sports` reads **one merged feed** (BCCI + ICC schedules and the published FanCode dump, server-cached 20s while something is live, 5 minutes when it is not) and opens **one hub with four tabs** — Live Score (ball-by-ball folded per over, only when commentary exists), Video (only streams the source actually hands us, played by JashPlayer; anything expired or unresolvable says so and links to FanCode instead of faking a player), Match Info, Scorecard (batting, bowling, extras, follow-on, partnerships, powerplays, innings toggle). Unstarted matches show a countdown ("Starts in 2h 15m"), the rail tab is **one** "Sports" entry, and `Refresh` re-reads on demand. Deleted rather than restyled: `/match-center/*`, `/match/live`, `/sports/player`, `SportsMatchCenter.jsx` and nine sports API routes nothing called; the old URLs redirect to `/sports`.
@@ -33,7 +35,7 @@ Tamil-first private streaming hub — movies, series, live TV, music, sports and
 - **Unified player (JashPlayer)** — one engine for /watch, /live, /classics, /stremio-watch and /sports: Shaka for HLS/DASH (native HLS on Safari when no headers are needed), double-tap seek ±10s (stacks), vertical swipe = volume (right) / brightness (left), horizontal swipe = scrub, long-press = 2× speed, one settings sheet (quality inline) holding audio/subtitles/sources/speed/freeze/A-B loop/PiP/AirPlay/ambient/stats/lock, external `.srt/.vtt` import with delay + size, PiP (Android + iOS), AirPlay, wake-lock, A-B loop, freeze frame, canvas snapshot, wheel volume / shift-wheel speed, stats overlay, 37-command shortcut map, live-vs-DVR detection and an auto-retry ladder that ends in a specific, actionable error card. See `docs/PLAYER.md`.
 - **Live TV** — Jio (ClearKey/Shaka), Sony Ten/Sports Jio re-stream source, M3U sources, manual 6-catalog admin panel (Live Service). New default sources self-seed with a one-time background sync; only the curated Tamil cricket feeds auto-publish, everything else needs manual mapping. The panel has a 7th tab, **Guide (EPG)**: feed age, how much of the lineup resolves to the XMLTV feed, a refresh button, and a per-channel binding picker. `/live` itself shows what is on now, how far through it is, what comes next and today's blocks — on desktop beside the channel rail, on a phone folded into the strip next to the video.
 - **Music (ராக வானம்)** — JioSaavn search, charts, albums, artists, playlists, Spotify import.
-- **Tamil anime (`/anime/tamil`)** — the `/language/tamil` catalogue of piratexplay.cc, scraped into this app's own cards, episode sheet and player: `lib/animeTamilFeed.js` reads the list, a title's seasons/episodes and the servers on an episode, and keeps only hosts whose HLS a browser can fetch on its own (no iframe, no proxy, no cookies). `ANIME_TAMIL_BASE_URL` is the one knob when the source moves domain.
+- **Tamil anime (`/anime/tamil`)** — the `/language/tamil` catalogue of piratexplay.cc, scraped into this app's own cards, episode sheet and player: `lib/animeTamilFeed.js` reads the list, a title's seasons/episodes and the servers on an episode, and keeps only hosts whose HLS a browser can *prove* it can fetch — from the server *and* from the tab, manifest → variant → first segment, CORS header required (`lib/animeTamilProbe.js`). No media is proxied and no cookies are sent anywhere. `/anime` (the old TMDB animation catalogue) is deleted: `🏴‍☠️ Tamil anime` is the app's only anime entry. `/anime/tamil/source` is the one framed surface: a copy of their page, served by this origin with their ad scripts removed, for the episodes nothing resolves on. `ANIME_TAMIL_BASE_URL` is the one knob when the source moves domain.
 
 - **Sports** — one board (`/sports`) and one hub per match (`/sports/hub/{source}/{id}`). `lib/sportsFeed.js` fetches the BCCI live/upcoming/recent feeds, the ICC schedule and the FanCode dump, normalises them into one card shape and merges duplicates (unions of streams and links, best source wins), so a match is listed once with every way to watch it. `lib/sportsFeedView.js` decides what is *printable*: a tab exists only when the payload behind it has content, and an unavailable stream is stated as unavailable. The live-TV channel list (`/api/sports/channels`) still feeds the hub's fallback player. Nothing polls in the background — the feed is read once per visit, on tab focus when a match is live, and on `Refresh` (free-tier friendly).
 - **Classics** — VOD M3U catalogs with TMDB matching.
@@ -187,10 +189,151 @@ For personal/educational use only. Host only sources you are authorized to acces
 
 ## v8.4.3
 - BrandLogo resilient fallback chain (logo.png -> logo-source.webp -> JV monogram) fixes invisible mini logo when /public/brand is missing from file-wise deploys. sw v59.
+## v8.14.0 — one anime destination, and “playable” means *this* browser can fetch it
+
+Two changes, both answers to the same complaint from the same screen: `/anime` (the TMDB animation catalogue) is
+removed so `🏴‍☠️ Tamil anime` is the only anime entry, and playback is fixed by asking the browser instead of only the server.
+
+**The section is deleted, not hidden.** `app/anime/page.js`, `app/api/anime/route.js`, `lib/animeCatalog.js` and
+`tests/anime-catalog.test.js` are gone; `NAV_ITEMS` loses its `/anime` entry (seven items, one of them anime);
+`isNavItemActive` no longer has a parent section to fight with, and the rule that “the deepest match wins” stays
+because `/anime/tamil/source` still needs to light the Tamil tab. `next.config.mjs` adds
+`{ source: '/anime', destination: '/anime/tamil', permanent: false }` beside the sports redirects — the URL lives in
+bookmarks and in a service worker's cache, and a 301 would pin the redirect for months. Verified in the browser:
+`/anime` → `path: '/anime/tamil'` with 24 cards, `lit: [🏴‍☠️ Tamil anime]`, `count: 7`.
+
+**A row is only playable if *this tab* can fetch it.** `probeStream` proved the stream from the container, which is
+not the machine with the screen: a Vidmoly token is minted for whoever asked for the page, and on another network the
+same address can be refused — a “playable” row, a black player, nothing said. So `lib/animeTamilProbe.js` runs the
+same walk in the sheet before a player is mounted: `fetch(manifest, { mode:'cors', credentials:'omit' })`, expect
+`#EXTM3U`, follow the variant, then one chunk of the first segment. It answers in **three** states, not two —
+`ok:true`, `ok:false` with a reason, and `ok:null` for “too slow to say anything”, because a phone on 3G timing out is
+not evidence that a CDN refuses you, and treating it as such would disable working rows. Rows are tried in ladder
+order up to `MAX_PROBES` (3); the first that answers wins, a `null` is kept as a fallback ahead of any refusal, and
+the note under the player names what was skipped. `Range` is deliberately *not* sent: it would need a preflight, and
+a preflight refusal says nothing about the stream. The episode row reads `reading…` → `checking…` → `play`, so the
+seconds are accounted for on screen.
+
+**And the player was invisible, which is what “won't play” actually was.** The sheet's body is
+`display: flex; flex-direction: column` with a definite height, and `.jv-an-player` had no height of its own — only
+`aspect-ratio: 16 / 9`. In that container a block child sized purely by its ratio resolves its automatic main size
+to **0 px**, so the stream attached, decoded and advanced (measured: `readyState 4`, clock moving, `1280x720`) inside
+a 615 × 0 box. Every earlier check of this page asked the *video element* whether it was playing and never asked the
+*box* how tall it was, so the suite stayed green while the screen showed nothing. `flex: 0 0 auto` opts the box out of
+flex sizing and the ratio applies again; `min-height: 120px` is a floor so “invisible” is no longer a state the layout
+can reach. Measured in the browser after the change: desktop `615 × 345`, phone `362 × 203` (still 16:9, above the
+floor), video filling the box, and the frame is in view with a picture in the screenshot. What each candidate was
+worth, measured on the live page: `as-shipped` 0 px · `align-self: flex-start` 0 px *and* 0 wide ·
+`min-height` alone 306 px (a box, but not the right shape) · `flex: 0 0 auto` 345 px ✓ · both 345 px ✓.
+`tests/anime-tamil.test.js` now asserts the rule keeps `flex: 0 0 auto` and the floor, with a comment naming the
+collapse — the next person to “tidy” that declaration will get a red test, not a black rectangle. The sports board
+was checked for the same pattern and is clean: `.jv-sp-player` sets `width: 100%` inside a `display: grid` wrapper,
+which does not collapse.
+
+**`source.kind` is the row's kind, never a guess.** JashPlayer lets an explicit `source.kind` outrank its own URL
+detection (`usePlaybackEngine.js: const kind = source.kind && source.kind !== 'auto' ? source.kind : detectKind(url)`),
+and the sheet was hardcoding `'hls'` — a progressive file marked HLS is exactly the spinner-with-no-picture. The feed
+now answers `kind` from the probe (`playKindFor`, `via: 'progressive'` → `direct`), `playerLineup` carries it and labels
+the row `HLS` or `Direct file` in the menu instead of always `HLS`, and the policy is built with the same word. Every
+host rule today returns a manifest, so this is mostly the door being locked for the next rule — and the test that
+asserts `via: 'progressive'` is what caught me writing `'media'` in three places at once.
+
+Measured on *Daemons of the Shadow Realm* S1 · E18 — the episode that started this — in headless Chrome against the
+live source:
+- untouched — browser fetched `master.m3u8` → `index-v1-a1.m3u8` → `seg-1-v1-a1.ts` itself, then `playing: true`,
+  1280×720, `t 6.4 s`, host `gate-1-an.vmnow.online`, notes `[]`, console errors `[]`;
+- with the Vidmoly edge refused in the page — the ladder moved on and the sheet said so:
+  `your browser could not use every address: Vidmoly — this browser was not allowed to fetch it (CORS or network);
+  TurboVid is being tried.`, TurboVid's own host note printed beside it, and the player ended up playing anyway when
+  hls.js (XHR, not fetch) reached the same host — which is why a refusal in the pre-flight downgrades a row rather
+  than deleting it, and why a hand-picked source clears the note (a stale warning over a working player is a lie).
+
+`setCheckingNote('')` appears five times on purpose — on open, on close, before the loop, on a manual pick, on a
+failover — and a test counts them. Tests: `tests/anime-tamil.test.js` 66 → **76** (the probe's three states, the shape
+of the request it makes, `firstUriOfPlaylist`, `preFlightNote`, `playKindFor`, that nothing is mounted before the
+verdict, that the ticket drops a dismissed sheet, and that the deleted section stays deleted), `tests/home-rail.test.js`
+updated for one anime entry and for `/anime` lighting *nothing*, `npm test` **310/310**, `npm run lint:player` clean,
+`next build` ✓ with `/anime/tamil` 10.8 kB / 160 kB and no `/anime` route in the manifest.
+
+## v8.13.1 — a row that says “playable” now plays, and the source link became a page in this app
+
+Round 23’s answer to “embed or pipeline” still stands — the pipeline. What changed is that two claims turned out
+to be lies on the user’s own screen: a row labelled playable that did not start, and a link out to the source that
+was supposed to be the honest escape hatch. Both are fixed by measuring instead of asserting, and the escape hatch
+is now a page of this app.
+
+**Playability is fetched, not promised.** `resolveServer` used to hand back the first manifest a host page mentioned
+and mark the row `playable`. Now `probeStream` does what the browser will do: fetch the manifest, follow it one
+level (a master → the variant whose line is picked by `firstUri`), fetch the **first segment**, and require
+`access-control-allow-origin` on it — because a playlist with no segments, or segments a cross-origin `fetch` cannot
+read, is exactly the row that leaves a player sitting at 0:00. `probeRange` records status/CORS per hop. A row is
+`playable` **only** when that check passed (`proven: 'hls'` or `'media'`), the failed ones stay listed with their
+reason, and `episode.needsSourceView` tells the page when nothing survived. `streamWarning`/`SOURCE_PRIORITY` are
+unchanged, so Vidmoly still leads and TurboVid is still offered-but-not-fooled.
+
+**One host page is several CDNs, so all of them are enumerated.** `collectEdges` reads up to `EDGE_PROBES` (3) copies
+of a host page, keeps up to `MAX_EDGES` (3) *distinct origins*, and labels them `Edge 1 (HLS)` / `Edge 2 (HLS)` —
+`dedupeStreams` composes the row label from the host and the stream, so a single-edge row stays a clean `Vidmoly`
+and “Vidmoly · Vidmoly” is not information. This is what the round-23 note about `box-1449-v10.vmbox.space` should
+have said: the same host on a different episode answers from `gate-1-an.vmnow.online`. Measured on the row that
+started this — *Daemons of the Shadow Realm* S1 · E18 (TMDB 260463), the exact episode the user clicked — after the
+change: `playing: true`, `readyState 4`, 1280×720, `duration 1420.1`, clock at 8.33 s, `err 0`, host
+`gate-1-an.vmnow.online`, and the sheet’s menu reads `Vidmoly playable · HLS`, `TurboVid playable · HLS`, plus four
+rows that say what they are (`the address is built by that host’s script…`, `its rotator offers no resolvable host`).
+
+> **The bug that would have shipped the opposite fix.** The first version of `probeStream` reached for a segment with
+> `/([^\s]+)[^\s]*\.ts/` — capture *before* the suffix — so it fetched `…/seg-1-v1-a1`, got a 404, and would have
+> marked **every Vidmoly row unplayable** while the code read as “verified”. These CDNs mix `seg-1.ts` with
+> extension-less `seg-1-v1-a1`, so playlists are now read line by line (`firstUri`), preferring a suffix only as a
+> hint. The thing that caught it was a test stub that answers `.m3u8` and `.ts` the way a CDN does; a stub that
+> returned 404 for everything would have passed.
+
+**“watch it on the source” is now `/anime/tamil/source?u=…`, an in-app page with their ads removed.** A third-party
+page cannot be stripped from the outside, so the document has to come from this origin: `app/api/anime/tamil/page/route.js`
+fetches *HTML only* (never media — `MAX_PAGE_BYTES` 900 000 and a `content-length` refusal), `sanitizeSourcePage`
+removes ad-host `<script src>`, ad/tracker `<iframe>`s, inline `document.write`/`window.open`/`top.location` scripts,
+`meta refresh` and `onbeforeunload`, rewrites same-site links to go back through the proxy, marks off-site links
+`target=_blank` + `data-jash-offsite`, injects `<base href>` so their art still resolves, hides their header/footer/ad
+slots with one stylesheet, and stubs `window.open` in place so a click cannot spawn a tab. Measured on that same
+episode page: `x-jash-dropped: 16`, 0 ad scripts, 0 `window.open`, 0 `document.write`, 0 meta refreshes, 142 links
+rewritten, 1 off-site, the player `<iframe>` kept. The response is `text/html` from **this** origin with
+`content-security-policy: sandbox allow-scripts allow-forms allow-pointer-lock; default-src 'none'; …; frame-ancestors 'self'`
+and `x-frame-options: SAMEORIGIN`, so their scripts run in an opaque origin — verified in the browser:
+`iframe.contentDocument === null`, no access to `localStorage`, and their webfonts fail CORS (page falls back to
+system fonts). It is cached 10 min (`TTL_PAGE`) and rate-limited 20/min like the rest, and the toolbar carries
+`← back to the list`, `back one page`, `reload this page` (which sends `force=1`) and `open raw ↗`. `openPath(…, { kind: 'page' })`
+is the SSRF guard, so `?u=` is a path on the configured site or the page falls back to `/language/tamil`.
+
+**Two things only the browser could tell me.** (1) `next.config.mjs` puts `X-Frame-Options: DENY` on every `/api/*`
+response *after* the route builds its own headers — so the frame was a black box while every test stayed green. The
+blanket rule now skips that one path and restates the other headers for it. (2) `contentWindow.history.back()` on a
+frame that has never navigated walks the **joint** session history: “back one page” threw the app’s own page away. The
+button is disabled until the frame reports a second page, and there is no app-level fallthrough any more. Both are
+asserted against the files, and re-checked by clicking them (`← back to the list` → `/anime/tamil?q=Daemon`, 24 cards;
+`back one page` → stays put; `open raw` → a second tab on their origin, the app page unmoved).
+
+**The nav picks one entry, and the Tamil one has a flag.** `/anime/tamil` and `/anime/tamil/source` were lighting
+*both* `Anime` and `Tamil anime`, because `isNavItemActive` was `path.startsWith(href)`; the deepest match now wins
+(and `/animekit` is not a child of `/anime`). `/anime/tamil` carries `🏴‍☠️`, `🌸` stays on `/anime`, and the phone dock
+prints `Tamil` with the same glyph. Verified: the rail and the dock each report exactly one `aria-current` entry on
+both pages.
+
+**What is still not true, said plainly.** Anything that loads *inside* their own player frame is their document, not
+ours — that part keeps whatever it ships; the note under the frame says so. The pipeline remains the primary path:
+the frame exists for the case where nothing resolved, and the sheet leads with it (`open their page in app`) only when
+`needsSourceView` is set. Tests: `tests/anime-tamil.test.js` 48 → 66 (the sanitizer’s counters and rewrites,
+`collectEdges` origin-collapsing, `probeStream` with and without CORS, `firstUri` on extension-less segments, the page
+route’s headers and refusals, the rate rule, the glyph swap, the rail mount, and the two browser-found bugs above),
+`npm test` 306, `npm run lint:player` 0 errors, `next build` ✓ with `/anime/tamil` 9.56 kB / 159 kB and
+`/anime/tamil/source` 4.75 kB / 110 kB. Everything in the paragraphs above was measured in headless Chrome at
+1440×900 and 390×844, day and night, against the live source.
+
 ## v8.13.0 — Tamil anime: the source read as a pipeline, not framed
 
 One new destination, `/anime/tamil`, for the content of `piratexplay.cc/language/tamil`. The requirement
-was a *clear pipeline*, so the site is read as data and the player is this app's own — `git grep -c '<iframe' components/anime` is 0.
+was a *clear pipeline*, so the site is read as data and the player is this app's own. **Corrected by v8.13.1:**
+that is still how the catalogue and playback work, but `components/anime` now contains one `<iframe>` — the framed
+fallback view of a *sanitized copy served by this app*, never their live document.
 
 **Four reads, one per tap.** `lib/animeTamilFeed.js`
 1. `/language/tamil[/page/N]` → `parseListing`: the **first** `ul.post-lst` grid only. A taxonomy page carries three — the list, then two `widget_list_movies_series-*` sections whose dozen cards change between loads (measured on pages 1, 2 and 70). Reading all three inflates page 1 from 24 titles to 36 and makes a full walk never end: 824 cards over 60 pages, twelve of them new each time. A card is `h2.entry-title`, the TMDB art in `figure img`, `span.vote` for the rating and `a.lnk-blk` for the target; the trailing number of the slug **is the TMDB id**, which is why posters are re-requested at the size the card paints (`/t/p/w342/`) instead of hotlinking the site's own 500 px copies.
@@ -210,7 +353,7 @@ Resume is `library={{ watchKey, entry }}` — the entry matters, because a `watc
 
 **Both themes, measured rather than hoped.** `html.day-mode main { color:#102018 !important }` outranks any inherited colour, so every text rule in the block names its own. Day mode is then a matter of *values*: the whole block reads `--an-bg/--an-panel/--an-ink/--an-line/--an-accent`, so `html.day-mode .jv-an-page` redefines the variables instead of overriding rules one by one — otherwise the blanket `html.day-mode input { … !important }` paints a white search field on a board that stayed dark. Measured in both themes with the alpha stack composited: every control lands between 5.3 and 18.0 contrast, and the smallest text in the block is 11 px.
 
-**The rail is rendered, not just cleared for.** `.jv-rail-shift` on `<main>` reserves 188 px at ≥1280 for a nav that each page mounts itself — `/anime/tamil` had the gutter and no `<RailNav />`, which no unit test saw because it only checked the class was present. `document.elementFromPoint(60, 420)` is now `A.jv-rail-item`, `Anime` and `Tamil anime` both light up, the rail navigates out and `history.back()` returns, and the test asserts the mount site, not the class.
+**The rail is rendered, not just cleared for.** `.jv-rail-shift` on `<main>` reserves 188 px at ≥1280 for a nav that each page mounts itself — `/anime/tamil` had the gutter and no `<RailNav />`, which no unit test saw because it only checked the class was present. `document.elementFromPoint(60, 420)` is now `A.jv-rail-item`, the rail navigates out and `history.back()` returns, and the test asserts the mount site, not the class. *(One correction from v8.13.1: “`Anime` and `Tamil anime` both light up” was the bug, not the goal — the deepest matching nav entry wins now.)*
 
 Bundle `/anime/tamil` 9.21 kB / 158 kB first load (static shell, data fetched by the client). `npm test` 287, `tests/anime-tamil.test.js` 48 against captured bytes (`tests/fixtures/piratexplay-{listing,series,episode}.html`, `vidmoly-player.html`), `npm run lint:player` clean, `next build` ✓, and every number above measured in headless Chrome at 1440×900 and 390×844 with the token in both the cookie and `localStorage`.
 
@@ -361,7 +504,7 @@ server actually received and requires the filter to be on it.
 - **Two rows instead of a tab switcher, and it costs nothing extra.** The single `/api/tamilmv?page=1&limit=15` call already returns `movies` *and* `series`, so the tabs were hiding half of what had been downloaded. `CatalogRow` renders one horizontal snap strip per group with its own count read-out and its own **Load more**, wired to the per-group `?group=movies|series` paging the infinite-scroll sentinel used to walk — so the `IntersectionObserver` and its 700 px rootMargin are deleted, and a remote or a thumb can walk a row deliberately. Each row keeps the `🎯 Match` affordance because it reuses `MediaCard` inside a fixed-width tile (`.jv-row-tile`, 8.75rem → 10.5rem at `sm`).
 - **Search is the palette.** There is no field on `/` any more, so the rail's Search button calls `setPaletteOpen(true)`; `CommandPalette` already binds ⌘K/Ctrl+K globally and hits the same `/api/search`. The row read-out ("N more in the scrape") is a `<span>`, not a dead link — an anchor to `/?row=movies` that only re-rendered the same page was the alternative, and it is the kind of thing a redesign leaves behind.
 - **Nav: seven destinations, one list.** `components/navItems.js` is Home · Live · **Anime (🌸)** · Music · Sports · ReTro · **Stremio**, with `My List` deliberately absent (the library is where you go to *resume*, and the focus panel links `/my-list?tab=history` whenever something is half-watched). `MobileDock` derives `gridTemplateColumns` from the array — seven labels in a hardcoded `grid-cols-6` would have wrapped the last one off-screen — both shells render `item.emoji` when present, `isNavItemActive()` is the single active-state rule, and Stremio keeps `hard: true` (a document reload, because a soft route change keeps a stale addon manifest alive).
-- **`/anime` is a real destination, not a filter over what loaded.** The daily scrape carries no genres, so `lib/animeCatalog.js` asks TMDB `discover/{movie|tv}` for `with_genres=16` + `with_original_language=ja` (that language clause is what makes "anime" mean Japanese animation rather than every cartoon in the index), `sort_by=popularity.desc`, clamped to 10 pages. Cached in `globalThis.__jashAnimeCatalog` for 30 minutes with single-flight de-dupe and stale-while-error, nothing in MongoDB, so a restart just refetches; `GET /api/anime` answers **200 `{ok:false}`** when TMDB misbehaves, so the page shows "listing unavailable · Retry" rather than a red screen or a 5xx. The page makes one request per toggle or page, aborts the previous one, and its Retry bumps a `nonce` — setting `type` to the value it already has makes React bail out and the effect would never re-run. Bundle: `/anime` 3.1 kB / 109 kB.
+- **`/anime` is a real destination, not a filter over what loaded.** The daily scrape carries no genres, so `lib/animeCatalog.js` asks TMDB `discover/{movie|tv}` for `with_genres=16` + `with_original_language=ja` (that language clause is what makes "anime" mean Japanese animation rather than every cartoon in the index), `sort_by=popularity.desc`, clamped to 10 pages. Cached in `globalThis.__jashAnimeCatalog` for 30 minutes with single-flight de-dupe and stale-while-error, nothing in MongoDB, so a restart just refetches; `GET /api/anime` answers **200 `{ok:false}`** when TMDB misbehaves, so the page shows "listing unavailable · Retry" rather than a red screen or a 5xx. The page makes one request per toggle or page, aborts the previous one, and its Retry bumps a `nonce` — setting `type` to the value it already has makes React bail out and the effect would never re-run. Bundle: `/anime` 3.1 kB / 109 kB. *(v8.14.0: this section is deleted — `app/anime/page.js`, `app/api/anime/route.js`, `lib/animeCatalog.js` and their test file are gone, and `/anime` redirects to `/anime/tamil`.)*
 - **`/embed-browser` was not orphaned by deleting the pills.** Those buttons were the only link to that page anywhere in the app, so they moved rather than vanished: `components/EmbedSiteLinks.jsx` now renders under the addon header on `/stremio`, where "which sources can I play" is the question being asked. Side effect worth having: the homepage no longer fetches `/api/embed-sites` at all (it did on every visit, for buttons almost nobody pressed). `/` is 13.2 kB / **119 kB** first load, down from 173 kB.
 - **No manual-sync UI anywhere now**, by request. The catalogue still refreshes hourly via `GET /api/cron/tamilmv`; to force it, `GET /api/tamilmv?sync=1&manual=1` (session cookie or `?token=`). A pre-existing `activeCatalog` unused-var in `app/stremio/page.js` was left alone — that path is not in `lint:player` scope and touching it is not this change's business.
 - Tests: `tests/home-rail.test.js` (15, rewritten for the new contract: nothing orphaned by the deleted header, palette-only search, two rows each paging their own group, strip CSS + day-mode + reduced motion), new `tests/anime-catalog.test.js` (5: discover params, page clamping, item shape, settle-with-no-key, route degradation), and `tests/live-service-panel.test.js`'s "no client-side filter rail" test now asserts rows-per-group instead of tabs. `npm test` 147, `npm run lint:player` clean plus an explicit eslint pass over `app/page.js`, `app/anime/page.js`, `app/api/anime/route.js`, `lib/animeCatalog.js`, `components/EmbedSiteLinks.jsx`, `app/stremio/page.js`, `components/navItems.js`, `components/MobileDock.jsx`, `components/rail/`, `next build` ✓, and `next start` smoke: `/`, `/anime`, `/stremio`, `/live`, `/my-list` all 200 with no server errors. The built home chunk carries no `embed-sites`, no `Latest Releases`, no `tmdb-search` and exactly one "Load more" per row; 🌸 ships as `\uD83C\uDF38` in `navItems`. sw v67.

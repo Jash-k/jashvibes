@@ -27,18 +27,32 @@ const SPORTS_REDIRECTS = [
   { source: '/sports/player/:path*', destination: '/sports', permanent: false },
 ];
 
+/*
+ * `/anime` was a TMDB animation catalogue. The section is gone — Tamil anime at `/anime/tamil` is the
+ * anime destination now — and the old URL redirects rather than 404ing, because it sits in people's
+ * bookmarks and in a service worker's cache. Not permanent on purpose: a 301 gets pinned for months.
+ */
+const ANIME_REDIRECT = [{ source: '/anime', destination: '/anime/tamil', permanent: false }];
+
 const nextConfig = {
   reactStrictMode: true,
   // Do not advertise the framework in response headers.
   poweredByHeader: false,
   async redirects() {
-    return SPORTS_REDIRECTS;
+    return [...SPORTS_REDIRECTS, ...ANIME_REDIRECT];
   },
   async headers() {
     return [
       {
-        source: '/api/:path*',
+        // Every API response is unframmable except the one page proxy, which exists to be framed by
+        // /anime/tamil/source. `X-Frame-Options` here would beat the SAMEORIGIN the route sets, because
+        // config headers are applied after the response, so that path is skipped and restated below.
+        source: '/api/((?!anime/tamil/page).*)',
         headers: apiSecurityHeaders,
+      },
+      {
+        source: '/api/anime/tamil/page',
+        headers: apiSecurityHeaders.filter((h) => h.key !== 'X-Frame-Options'),
       },
       {
         source: '/((?!api/).*)',
