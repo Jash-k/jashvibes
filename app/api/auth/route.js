@@ -62,6 +62,19 @@ function clearSessionCookie(response) {
   return response;
 }
 
+/**
+ * GET /api/auth — "is the session in my cookie still valid?". The unlock screen calls this on every page load,
+ * so it cannot share the 12-per-5-minutes budget that protects the *password* POST: six reloads on a phone used
+ * to lock the owner out of their own app for the rest of the window. No password is accepted here, so there is
+ * nothing to brute force, and the answer is one boolean.
+ */
+export async function GET(request) {
+  const token = request.cookies.get(SESSION_COOKIE)?.value || '';
+  const valid = await isValidAccessToken(token);
+  if (!valid) return NextResponse.json({ success: false, error: 'No active session' }, { status: 401 });
+  return NextResponse.json({ success: true });
+}
+
 export async function POST(request) {
   try {
     const configuredPassword = getConfiguredPassword();

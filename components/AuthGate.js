@@ -101,19 +101,23 @@ export default function AuthGate({ children }) {
 
     async function verifySavedAccess() {
       try {
-        const { response, data } = await fetchJsonWithRetry('/api/auth', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ token: savedToken }),
-        }, 1);
+        // The HttpOnly cookie is the real session, so ask about it first: one unlimited GET instead of a
+        // POST against the endpoint the brute-force limiter guards.
+        let response = await fetch('/api/auth', { method: 'GET', cache: 'no-store' });
+        let data = response.ok ? { success: true } : {};
+        if (!response.ok) {
+          ({ response, data } = await fetchJsonWithRetry('/api/auth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: savedToken }),
+          }, 1));
+        }
 
         if (!response.ok || !data.success) {
           throw new Error('Saved access expired');
         }
 
-        window.localStorage.setItem(STORAGE_KEY, data.token);
+        if (data.token) window.localStorage.setItem(STORAGE_KEY, data.token);
         setStatus('unlocked');
       } catch {
         window.localStorage.removeItem(STORAGE_KEY);

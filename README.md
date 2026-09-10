@@ -12,6 +12,8 @@ app_port: 7860
 
 Tamil-first private streaming hub — movies, series, live TV, music, sports and classics in one Next.js app.
 
+> **v8.15.0** — the music section is **rebuilt, not restyled**: chosen from six Light Curtains boards (`docs/concepts/music/31-curtains.png`), the old magenta UI is deleted and `--mu-*` owns the theme in both day and night. `Albums · Artists · Playlists` is now a real tab strip that asks its own endpoint (it used to be `view` state plus stacked sections), the lyric line you're on is lit by a column of light and tapping any timed line seeks to it, pocket mode and the wake-lock listening mode came across intact, and `/api/auth` grew a cookie-only `GET` so reloading no longer spends the brute-force budget. 334 tests, verified in a browser at 1440 and 390 in both themes.
+
 > **v8.14.0** — there is one anime destination now, and *playable* means your browser, not the server. `/anime` is deleted (`app/anime/page.js`, `app/api/anime/route.js`, `lib/animeCatalog.js`, its test) — `🏴‍️ Tamil anime` is the only anime entry in rail, dock and home, and `/anime` answers `307 → /anime/tamil` because that URL lives in bookmarks and caches. Then the honest part: a row is verified **by the tab that will watch it** — `lib/animeTamilProbe.js` fetches manifest → variant → one segment chunk with `mode: 'cors'`, no cookies, no `Range`, and reads `#EXTM3U`, before a player is mounted; a row that answers too slowly is *unknown*, kept as fallback and labelled “did not answer in time”, never called dead. `source.kind` now travels from the feed (`playKindFor`) to the engine instead of the hardcoded `'hls'` that outranked the player's own detection. And the bug the whole complaint was about: `.jv-an-player` lived in a column-flex sheet body with no height but `aspect-ratio: 16 / 9`, which resolves to **0 px** there — it played 1280×720 inside an invisible box, measured `615 × 0`. `flex: 0 0 auto` + `min-height: 120px` (615 × 345 desktop, 362 × 203 phone). Verified in headless Chrome against the live source, twice: clean run (`checking…` → playing, clock moving, no notes) and with the Vidmoly edge refused in-page, where the ladder stepped to TurboVid and said which host was skipped; also with `--autoplay-policy=user-gesture-required`, where the engine boots muted and plays. 311/311 tests, lint clean.
 
 > **v8.13.0** — `/anime/tamil` is Tamil anime read as a **pipeline, not an embed**. `lib/animeTamilFeed.js` walks `piratexplay.cc/language/tamil` page by page (24 cards a page, 13 pages, **298 titles** — the first `ul.post-lst` grid only, because the two widget grids on that page are not the list), turns a `/series/…` page into its seasons and every `/episode/…` row, then resolves the servers on that episode — a host is playable only when its page publishes a fetchable `.m3u8` **and** the CDN answers `access-control-allow-origin: *`, so the browser fetches the video and this app carries no media bytes. Vidmoly qualifies, TurboVid resolves but is offered second (its segments sit on Google Drive without that header), the site's own JS-built player and its dead `short.icu` language map are listed *with the reason* next to an "open on PirateXPlay" link — never a dead player. Card → sheet with the episode list → play, filters and search work over what loaded, `Read all 13 pages` walks the taxonomy once (and stops on an empty page, not on the site's hint), the rail gets one new tab (the dock prints `Tamil`) and the page mounts `<RailNav />` itself, the player's own ladder moves to the next resolved address when one dies, and a watched episode lands in Continue Watching with its title and `S1 · E1` so `?t=…&ep=…` reopens it mid-play. Both themes measured control by control: day mode flips the block's `--an-*` variables rather than fighting the blanket. Nothing scheduled, nothing in MongoDB: 6 h for the list and titles, 30 min per episode, 30 s for a failure.
@@ -34,7 +36,7 @@ Tamil-first private streaming hub — movies, series, live TV, music, sports and
 - **▶ Continue Watching & ❤ My List** — automatic watch history with playback-position resume (direct streams), favorites, per-title server memory. Stored in `localStorage` — no account, no DB cost.
 - **Unified player (JashPlayer)** — one engine for /watch, /live, /classics, /stremio-watch and /sports: Shaka for HLS/DASH (native HLS on Safari when no headers are needed), double-tap seek ±10s (stacks), vertical swipe = volume (right) / brightness (left), horizontal swipe = scrub, long-press = 2× speed, one settings sheet (quality inline) holding audio/subtitles/sources/speed/freeze/A-B loop/PiP/AirPlay/ambient/stats/lock, external `.srt/.vtt` import with delay + size, PiP (Android + iOS), AirPlay, wake-lock, A-B loop, freeze frame, canvas snapshot, wheel volume / shift-wheel speed, stats overlay, 37-command shortcut map, live-vs-DVR detection and an auto-retry ladder that ends in a specific, actionable error card. See `docs/PLAYER.md`.
 - **Live TV** — Jio (ClearKey/Shaka), Sony Ten/Sports Jio re-stream source, M3U sources, manual 6-catalog admin panel (Live Service). New default sources self-seed with a one-time background sync; only the curated Tamil cricket feeds auto-publish, everything else needs manual mapping. The panel has a 7th tab, **Guide (EPG)**: feed age, how much of the lineup resolves to the XMLTV feed, a refresh button, and a per-channel binding picker. `/live` itself shows what is on now, how far through it is, what comes next and today's blocks — on desktop beside the channel rail, on a phone folded into the strip next to the video.
-- **Music (ராக வானம்)** — JioSaavn search, charts, albums, artists, playlists, Spotify import.
+- **Music (ராக வானம்)** — the **Light Curtains** section (`components/music/MusicCurtains.jsx` + `Curtains.jsx`): Albums · Artists · Playlists tabs that fetch their own facet, a now-playing panel whose progress is a column of light in the background, a synced-lyrics panel whose current line carries the same light, one transport row, a drag-to-dismiss mini capsule, and the existing lock mode (pocket mode with the hold ring, plus listening mode's wake lock). Search, Spotify import and the song controls are still here, in new markup. No `backdrop-filter` outside two panels.
 - **Tamil anime (`/anime/tamil`)** — the `/language/tamil` catalogue of piratexplay.cc, scraped into this app's own cards, episode sheet and player: `lib/animeTamilFeed.js` reads the list, a title's seasons/episodes and the servers on an episode, and keeps only hosts whose HLS a browser can *prove* it can fetch — from the server *and* from the tab, manifest → variant → first segment, CORS header required (`lib/animeTamilProbe.js`). No media is proxied and no cookies are sent anywhere. `/anime` (the old TMDB animation catalogue) is deleted: `🏴‍☠️ Tamil anime` is the app's only anime entry. `/anime/tamil/source` is the one framed surface: a copy of their page, served by this origin with their ad scripts removed, for the episodes nothing resolves on. `ANIME_TAMIL_BASE_URL` is the one knob when the source moves domain.
 
 - **Sports** — one board (`/sports`) and one hub per match (`/sports/hub/{source}/{id}`). `lib/sportsFeed.js` fetches the BCCI live/upcoming/recent feeds, the ICC schedule and the FanCode dump, normalises them into one card shape and merges duplicates (unions of streams and links, best source wins), so a match is listed once with every way to watch it. `lib/sportsFeedView.js` decides what is *printable*: a tab exists only when the payload behind it has content, and an unavailable stream is stated as unavailable. The live-TV channel list (`/api/sports/channels`) still feeds the hub's fallback player. Nothing polls in the background — the feed is read once per visit, on tab focus when a match is live, and on `Refresh` (free-tier friendly).
@@ -189,6 +191,60 @@ For personal/educational use only. Host only sources you are authorized to acces
 
 ## v8.4.3
 - BrandLogo resilient fallback chain (logo.png -> logo-source.webp -> JV monogram) fixes invisible mini logo when /public/brand is missing from file-wise deploys. sw v59.
+## v8.15.0 — music: Light Curtains, a complete replacement rather than a new coat
+
+The brief was a redesign picked from generated concepts, with two rules that decided the architecture: **do not merge
+with the old UI**, and keep the **existing lock mode**. Both were honoured literally.
+
+**Deleted, not hidden.** `app/music/page.js` was a 1697-line client page whose render used `palette-music-magenta`,
+its own sticky aside, and eight local components (`VinylArt`, `SectionHeader`, `HorizontalRow`, `TrackTile`,
+`AlbumTile`, `ArtistTile`, `PlaylistTile`, `TrackList`, plus `IconButton`/`SidebarButton`). All of that markup is gone;
+`.palette-music-magenta`'s two rule blocks were deleted with it (the palettes `/live` and `/classics` still use are
+untouched, and a test fails if one goes missing). The page file is now four lines that render
+`components/music/MusicCurtains.jsx`, which composes primitives from `components/music/Curtains.jsx` and one class
+family, `.jv-mu-*`. The pure logic — quality ladder, LRC parsing, queue dedupe, artist splitting — moved to
+`lib/musicCore.js` and grew the model the design needs (`muTabs`, `muLyricRows`, `muQualityChips`, `muCurtainVars`,
+`muLockView`), so the promises are unit-testable without a browser.
+
+**The tabs.** `Albums 12 · Artists 14 · Playlists 9` as a `role="tablist"` strip with `aria-selected`, and clicking one
+**fetches that facet from its own endpoint** (`/api/music/albums|artists|playlists`) instead of re-showing the
+`/home` summary: the source returned 0 albums in `home.releases` while the albums endpoint has data, and a tab that
+advertises `0` because the *summary* was empty is the app lying about its own library. An empty facet still says so
+plainly and offers `retry`, so a tab is never a dead end. Search, Favorites and Recent are chips beside the tabs —
+they are views, not facets, and they don't get to look like one.
+
+**The curtains.** The field is three CSS shafts and one bead; `--mu-pos` is set from `currentTime / duration`
+(measured: 11.87 % rail at t 3.73 s of 30 s, background bead 19.1 % at t 5.74 s), so the decoration and the progress
+readout are the same number. In the lyrics panel **exactly one** node draws the column of light, behind the current
+line (`light: 1` measured with three rows) — never one per line, which is why a 400-line file costs the same as a
+three-line one. Rows carry `data-state="past|current|future"`; `muLyricRows` marks a row tappable only when the file
+had timestamps, and tapping seeks (measured: 8.3 s → 4.2 s).
+
+**Blur and contrast, budgeted.** `backdrop-filter` exists on `.jv-mu-panel[data-mu-blur]` and the open lyrics panel
+and nowhere else — measured 1 surface with lyrics closed, 2 with them open — with a flat `rgba()` panel behind
+`@supports not (backdrop-filter…)`. Colours were picked so the *tokens* hold the line: against the composited panel,
+`--mu-ink-dim` is 7.24:1 at night and 5.98:1 in day mode, `--mu-ink` 17.57:1 / 18.35:1; `prefers-reduced-motion`
+freezes the shafts but keeps the bead, because progress is information.
+
+**Lock mode, kept.** Pocket mode is a full-screen veil whose ring is a `conic-gradient` fed by the real hold
+progress (measured 54 % at 0.7 s of the 1.3 s hold; releasing early keeps the veil, and it swallows clicks to the
+transport row underneath). Listening mode keeps `navigator.wakeLock` with the honest status line in a floating bar
+(here: “Wake Lock blocked by browser/battery settings, touch lock is active”, with hold 1.5 s to leave), and the
+0.9 s pre-end auto-advance that lets a locked phone continue the queue is untouched.
+
+**One fix found on the way.** `/api/auth` was rate limited at 12 requests per 5 minutes for brute-force protection —
+and the unlock screen verified its saved token through that same endpoint on *every* load, so six reloads on a phone
+locked the owner out of their own app. `GET /api/auth` now answers from the HttpOnly cookie alone (no password, no
+body), the limiter counts POSTs only, and AuthGate tries the GET first. `tests/auth-session-check.test.js` pins all
+three halves.
+
+**Verified in a browser**, at 1440×900 and 390×844, night and day: tiles 42, every panel with non-zero height, no
+horizontal overflow, `elementFromPoint(60, 420)` is the rail, tabs and facets load, the collection panel reports the
+upstream's failure in words, the mini capsule appears on scroll (560×54) and dismisses on ✕, quality switching marks
+the current encode and restarts the file — which the footer says out loud instead of pretending otherwise. The music
+upstream (`saavnapi.onrender.com`) answers 404 from this sandbox, so playback was driven through the app's own code
+path with a stubbed song response and a 30-second tone; on your deploy the same path runs against the real thing.
+
 ## v8.14.0 — one anime destination, and “playable” means *this* browser can fetch it
 
 Two changes, both answers to the same complaint from the same screen: `/anime` (the TMDB animation catalogue) is

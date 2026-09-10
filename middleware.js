@@ -31,7 +31,9 @@ const SELF_TOKENIZED_PREFIXES = ['/api/cron/tamilmv'];
 
 const RATE_RULES = [
   // Brute-force protection for the password endpoint.
-  { prefix: '/api/auth', limit: 12, windowMs: 5 * 60 * 1000 },
+  // Only POSTs carry a password; the GET the unlock screen makes on every load is unlimited and answers a
+  // boolean about the cookie. Counting those was locking the owner out after a few reloads.
+  { prefix: '/api/auth', limit: 12, windowMs: 5 * 60 * 1000, methods: ['POST'] },
   // Expensive upstream-calling routes.
   { prefix: '/api/resolve', limit: 60, windowMs: 60 * 1000 },
   { prefix: '/api/v2/stream', limit: 60, windowMs: 60 * 1000 },
@@ -107,6 +109,7 @@ export async function middleware(request) {
 
   for (const rule of RATE_RULES) {
     if (pathname.startsWith(rule.prefix)) {
+      if (rule.methods && !rule.methods.includes(request.method)) continue;
       const { limited, retryAfter } = hitRateLimit(`${rule.prefix}:${getClientIp(request)}`, rule.limit, rule.windowMs);
       if (limited) {
         return NextResponse.json(

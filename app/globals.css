@@ -120,11 +120,6 @@ html.day-mode .day-night-toggle {
   --palette-accent-2: #7c3aed;
 }
 
-.palette-music-magenta {
-  --palette-accent: #f0abfc;
-  --palette-accent-2: #d946ef;
-}
-
 html.day-mode .palette-deepsea {
   background: linear-gradient(180deg, #e0f7ff 0%, #eefcff 45%, #f8fafc 100%) !important;
   color: #073642 !important;
@@ -138,11 +133,6 @@ html.day-mode .palette-nordic {
 html.day-mode .palette-cybergrape {
   background: linear-gradient(180deg, #f3e8ff 0%, #faf5ff 45%, #fff7ed 100%) !important;
   color: #24113d !important;
-}
-
-html.day-mode .palette-music-magenta {
-  background: linear-gradient(180deg, #fff1fb 0%, #fff7fd 45%, #fdf2f8 100%) !important;
-  color: #3b0a31 !important;
 }
 
 html.day-mode [class*="bg-zinc-950"],
@@ -2476,4 +2466,274 @@ html.day-mode .jv-an-page .jv-an-btn.is-major { color: #fffdfa; }
 @media (prefers-reduced-motion: reduce) {
   .jv-an-card, .jv-an-btn, .jv-an-chip, .jv-an-ep, .jv-an-src, .jv-an-src-frame { transition: none; }
   .jv-an-card:hover { transform: none; }
+}
+
+
+/* Contrast is a property of the tokens, not of each rule. Measured against the composited panel colour
+ * (glass over bg), which is harder than the bare background: night #93a0bf on #0c1117 = 7.24:1, day
+ * #5b6376 on #fcffff = 5.98:1 for `--mu-ink-dim`; `--mu-ink` is 17.57:1 and 18.35:1. That is why
+ * `--mu-ink-dim` is the only muted text this section may use, and why the tests pin the values.
+ */
+.jv-mu {
+  --mu-bg: #07070d;
+  --mu-ink: #f4f6ff;
+  --mu-ink-dim: #93a0bf;
+  --mu-line: rgba(147, 160, 191, 0.24);
+  --mu-glass: rgba(16, 18, 32, 0.58);
+  --mu-glass-2: rgba(9, 10, 20, 0.72);
+  --mu-accent: #7ad0ff;
+  --mu-accent-2: #b39cff;
+  --mu-warn: #ffb86b;
+  --mu-curtain-a: #2ee6c0;
+  --mu-curtain-b: #6aa8ff;
+  --mu-curtain-c: #c77dff;
+  position: relative;
+  min-height: 100dvh;
+  overflow-x: clip;
+  background: var(--mu-bg);
+  color: var(--mu-ink);
+  padding-bottom: 132px;
+  isolation: isolate;
+}
+html.day-mode .jv-mu {
+  --mu-bg: #f2f3f8;
+  --mu-ink: #101322;
+  --mu-ink-dim: #5b6376;
+  --mu-line: rgba(16, 19, 34, 0.16);
+  --mu-glass: rgba(255, 255, 255, 0.74);
+  --mu-glass-2: rgba(255, 255, 255, 0.88);
+  --mu-accent: #0b6a92;
+  --mu-accent-2: #6a4fb8;
+  --mu-warn: #a4560d;
+  --mu-curtain-a: rgba(46, 230, 192, 0.5);
+  --mu-curtain-b: rgba(106, 168, 255, 0.5);
+  --mu-curtain-c: rgba(199, 125, 255, 0.45);
+}
+
+/* The curtain field. One animated element per shaft, nothing per lyric line, so a long queue costs the same
+   as a short one; the bead is the only node that moves with playback. */
+.jv-mu-field { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.jv-mu-shaft {
+  position: absolute; top: -18%; bottom: -18%; width: min(38vw, 620px);
+  filter: blur(46px); opacity: 0.55; mix-blend-mode: screen;
+  animation: jv-mu-drift 26s ease-in-out infinite alternate;
+}
+html.day-mode .jv-mu-shaft { opacity: 0.34; mix-blend-mode: multiply; filter: blur(64px); }
+.jv-mu-shaft-a { left: -6%; background: linear-gradient(180deg, transparent, var(--mu-curtain-a) 38%, transparent 88%); }
+.jv-mu-shaft-b { left: 26%; background: linear-gradient(180deg, transparent, var(--mu-curtain-b) 52%, transparent 96%); animation-duration: 31s; animation-direction: alternate-reverse; }
+.jv-mu-shaft-c { right: -4%; background: linear-gradient(180deg, transparent, var(--mu-curtain-c) 44%, transparent 92%); animation-duration: 37s; }
+.jv-mu-field[data-dim="true"] .jv-mu-shaft { opacity: 0.9; filter: blur(30px); }
+.jv-mu-bead {
+  position: absolute; top: 0; bottom: 0; width: 2px; left: calc(var(--mu-pos, 0) * 100%);
+  background: linear-gradient(180deg, transparent, var(--mu-accent), transparent); opacity: 0.85;
+}
+@keyframes jv-mu-drift { from { transform: translate3d(-3%, -2%, 0) skewX(-2deg); } to { transform: translate3d(4%, 3%, 0) skewX(3deg); } }
+
+.jv-mu-inner { position: relative; z-index: 1; width: min(100% - 32px, 1180px); margin: 0 auto; display: grid; gap: 16px; padding-top: 18px; }
+
+.jv-mu-mast { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px; }
+.jv-mu-eyebrow { margin: 0; font-size: 12px; letter-spacing: 0.26em; text-transform: uppercase; color: var(--mu-accent); }
+.jv-mu-h1 { margin: 2px 0 0; font-size: clamp(28px, 5vw, 46px); line-height: 1.05; letter-spacing: -0.02em; }
+.jv-mu-mast-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.jv-mu-search { position: relative; display: block; }
+.jv-mu-search input {
+  width: min(46vw, 320px); padding: 10px 12px; border-radius: 999px; border: 1px solid var(--mu-line);
+  background: var(--mu-glass-2); color: var(--mu-ink); font: inherit; font-size: 13px;
+}
+.jv-mu-search input::placeholder { color: var(--mu-ink-dim); }
+.jv-mu-search input:focus-visible { outline: 2px solid var(--mu-accent); outline-offset: 2px; }
+
+/* ── tabs: the three facets get the tab strip; search/favorites/recent stay chips so a facet never hides ── */
+.jv-mu-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; }
+.jv-mu-tab {
+  display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 999px;
+  border: 1px solid var(--mu-line); background: transparent; color: var(--mu-ink-dim);
+  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; transition: color 0.16s, border-color 0.16s, background 0.16s;
+}
+.jv-mu-tab:hover { color: var(--mu-ink); border-color: var(--mu-accent); }
+.jv-mu-tab.is-on { color: var(--mu-bg); background: var(--mu-accent); border-color: var(--mu-accent); }
+html.day-mode .jv-mu-tab.is-on { color: #fbfcff; }
+.jv-mu-tab-count { font-variant-numeric: tabular-nums; opacity: 0.8; font-weight: 800; }
+.jv-mu-tabs-tail { display: inline-flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.jv-mu-chip {
+  padding: 8px 11px; border-radius: 999px; border: 1px solid var(--mu-line); background: transparent;
+  color: var(--mu-ink-dim); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+  text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: color 0.16s, border-color 0.16s;
+}
+.jv-mu-chip:hover { color: var(--mu-ink); border-color: var(--mu-accent); }
+.jv-mu-chip.is-on { color: var(--mu-accent); border-color: var(--mu-accent); }
+.jv-mu-chip:focus-visible, .jv-mu-tab:focus-visible, .jv-mu-btn:focus-visible, .jv-mu-tile:focus-visible,
+.jv-mu-row-main:focus-visible, .jv-mu-line-btn:focus-visible, .jv-mu-mini button:focus-visible { outline: 2px solid var(--mu-accent); outline-offset: 2px; }
+
+/* ── panels. Exactly two surfaces in the section are frosted; the rest are flat, on purpose. ── */
+.jv-mu-panel { border: 1px solid var(--mu-line); border-radius: 20px; background: var(--mu-glass); padding: 16px; }
+.jv-mu-panel[data-mu-blur], .jv-mu-lyrics.is-open { backdrop-filter: blur(18px) saturate(1.15); }
+.jv-mu-panel-playing { display: grid; gap: 14px; }
+.jv-mu-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.jv-mu-title { margin: 0; font-size: 20px; letter-spacing: -0.01em; }
+.jv-mu-note { margin: 3px 0 0; font-size: 12px; color: var(--mu-ink-dim); }
+.jv-mu-head-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.jv-mu-note-line { margin: 0; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--mu-line); font-size: 12.5px; color: var(--mu-ink-dim); background: var(--mu-glass-2); }
+.jv-mu-note-line.is-error { color: var(--mu-warn); border-color: rgba(255, 184, 107, 0.4); }
+
+.jv-mu-playing { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+.jv-mu-playing-art { position: relative; width: min(320px, 100%); aspect-ratio: 1; border-radius: 18px; overflow: hidden; border: 1px solid var(--mu-line); box-shadow: 0 24px 60px -30px var(--mu-curtain-b); }
+.jv-mu-playing-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.jv-mu-playing-art-empty { display: grid; place-items: center; width: 100%; height: 100%; font-size: 48px; color: var(--mu-ink-dim); background: var(--mu-glass-2); }
+.jv-mu-playing-meta { min-width: 0; display: grid; gap: 6px; align-content: start; }
+.jv-mu-playing-album { margin: 0; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--mu-ink-dim); }
+.jv-mu-playing-title { margin: 0; font-size: clamp(20px, 3.4vw, 28px); line-height: 1.15; letter-spacing: -0.01em; }
+.jv-mu-playing-artist { margin: 0; font-size: 13.5px; color: var(--mu-ink-dim); display: flex; flex-wrap: wrap; gap: 6px; }
+.jv-mu-artist { border: 0; background: none; padding: 0; font: inherit; color: var(--mu-accent); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.jv-mu-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.jv-mu-qchip { padding: 6px 10px; border-radius: 999px; border: 1px solid var(--mu-line); background: transparent; color: var(--mu-ink-dim); font: inherit; font-size: 11.5px; font-weight: 800; cursor: pointer; }
+.jv-mu-qchip.is-on { color: var(--mu-accent); border-color: var(--mu-accent); }
+.jv-mu-rail { position: relative; height: 4px; border-radius: 999px; background: var(--mu-line); margin-top: 10px; overflow: visible; }
+.jv-mu-rail-fill { position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(90deg, var(--mu-accent), var(--mu-accent-2)); transform-origin: left center; }
+.jv-mu-rail-bead { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--mu-ink); box-shadow: 0 0 0 4px var(--mu-glass); }
+.jv-mu-time { display: flex; justify-content: space-between; margin: 6px 0 0; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--mu-ink-dim); }
+.jv-mu-side { display: grid; gap: 6px; align-content: start; border-left: 1px solid var(--mu-line); padding-left: 14px; }
+.jv-mu-side-label { margin: 0; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--mu-ink-dim); }
+.jv-mu-side-queue { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.jv-mu-side-row { width: 100%; text-align: left; border: 0; background: none; color: var(--mu-ink-dim); font: inherit; font-size: 13px; padding: 5px 6px; border-radius: 8px; cursor: pointer; }
+.jv-mu-side-row:hover { color: var(--mu-ink); background: var(--mu-glass-2); }
+.jv-mu-side-row.is-on { color: var(--mu-accent); }
+.jv-mu-side-row span { opacity: 0.6; margin-right: 6px; font-variant-numeric: tabular-nums; }
+.jv-mu-side-note { margin: 4px 0 0; font-size: 11.5px; color: var(--mu-ink-dim); }
+
+/* ── transport: one row of buttons, none of them inside another ── */
+.jv-mu-transport { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 12px; border-top: 1px solid var(--mu-line); }
+.jv-mu-btn {
+  width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%;
+  border: 1px solid var(--mu-line); background: var(--mu-glass-2); color: var(--mu-ink); font-size: 15px; cursor: pointer;
+  transition: border-color 0.16s, color 0.16s;
+}
+.jv-mu-btn:hover { border-color: var(--mu-accent); }
+.jv-mu-btn.is-on { color: var(--mu-accent); border-color: var(--mu-accent); }
+.jv-mu-btn-play { width: 54px; height: 54px; font-size: 19px; background: var(--mu-accent); color: var(--mu-bg); border-color: var(--mu-accent); }
+html.day-mode .jv-mu-btn-play { color: #fbfcff; }
+.jv-mu-btn-mini { width: 36px; height: 36px; font-size: 13px; }
+.jv-mu-btn-vol { width: 36px; height: 36px; font-size: 13px; border: 0; background: none; }
+.jv-mu-vol { display: inline-flex; align-items: center; gap: 6px; }
+.jv-mu-vol input[type="range"] { width: 96px; accent-color: var(--mu-accent); }
+.jv-mu-transport-time { margin-left: auto; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--mu-ink-dim); }
+.jv-mu-transport-tail { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+
+/* ── tiles and rows ── */
+.jv-mu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 12px; }
+.jv-mu-tile { display: grid; gap: 8px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.jv-mu-tile-art { position: relative; aspect-ratio: 1; border-radius: 14px; overflow: hidden; border: 1px solid var(--mu-line); background: var(--mu-glass-2); }
+.jv-mu-tile-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.jv-mu-tile-fallback { display: grid; place-items: center; height: 100%; font-size: 22px; font-weight: 800; color: var(--mu-ink-dim); text-transform: uppercase; }
+.jv-mu-tile:hover .jv-mu-tile-art { border-color: var(--mu-accent); }
+.jv-mu-tile.is-on .jv-mu-tile-art { border-color: var(--mu-accent); box-shadow: 0 0 0 2px var(--mu-accent); }
+.jv-mu-tile-body { display: grid; gap: 2px; }
+.jv-mu-tile-title { font-size: 13.5px; font-weight: 700; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.jv-mu-tile-sub { font-size: 11.5px; color: var(--mu-ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jv-mu-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.jv-mu-row { display: flex; align-items: stretch; border-radius: 12px; }
+.jv-mu-row:hover { background: var(--mu-glass-2); }
+.jv-mu-row.is-on { background: var(--mu-glass-2); box-shadow: inset 2px 0 0 var(--mu-accent); }
+.jv-mu-row-main { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.jv-mu-row-index { width: 22px; flex: none; font-size: 12px; color: var(--mu-ink-dim); font-variant-numeric: tabular-nums; }
+.jv-mu-row-pulse { display: block; width: 8px; height: 8px; border-radius: 50%; background: var(--mu-accent); animation: jv-mu-pulse 1.6s ease-in-out infinite; }
+@keyframes jv-mu-pulse { 50% { opacity: 0.35; transform: scale(0.7); } }
+.jv-mu-row-art { width: 34px; height: 34px; flex: none; border-radius: 8px; overflow: hidden; background: var(--mu-glass); }
+.jv-mu-row-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.jv-mu-row-body { min-width: 0; display: grid; gap: 1px; }
+.jv-mu-row-title { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jv-mu-row-artist { font-size: 11.5px; color: var(--mu-ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jv-mu-row-time { margin-left: auto; font-size: 11.5px; color: var(--mu-ink-dim); font-variant-numeric: tabular-nums; }
+.jv-mu-row-tools { display: inline-flex; align-items: center; }
+.jv-mu-row-fav { width: 38px; align-self: center; border: 0; background: none; color: var(--mu-ink-dim); font-size: 15px; cursor: pointer; border-radius: 10px; padding: 6px 0; }
+.jv-mu-row-fav.is-on { color: var(--mu-warn); }
+.jv-mu-crud, .jv-mu-import { display: grid; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--mu-line); }
+.jv-mu-crud-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.jv-mu-input { flex: 1 1 200px; min-width: 0; padding: 9px 11px; border-radius: 12px; border: 1px solid var(--mu-line); background: var(--mu-glass-2); color: var(--mu-ink); font: inherit; font-size: 13px; }
+.jv-mu-textarea { resize: vertical; }
+.jv-mu-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.jv-mu-audio { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+/* ── lyrics: the column of light is one node on the current line, never one per line ── */
+.jv-mu-lyrics { position: relative; border: 1px solid var(--mu-line); border-radius: 20px; background: var(--mu-glass); padding: 14px 16px; max-height: min(46vh, 460px); overflow: hidden; display: grid; gap: 10px; }
+.jv-mu-lyrics.is-open { max-height: min(68vh, 720px); }
+.jv-mu-lyrics-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.jv-mu-lyrics-head h3 { margin: 0; font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--mu-ink-dim); }
+.jv-mu-lyrics-tools { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.jv-mu-mini-toggle { padding: 6px 9px; border-radius: 999px; border: 1px solid var(--mu-line); background: none; color: var(--mu-ink-dim); font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer; }
+.jv-mu-mini-toggle.is-on { color: var(--mu-accent); border-color: var(--mu-accent); }
+.jv-mu-lyrics-status, .jv-mu-lyrics-empty { margin: 0; font-size: 12px; color: var(--mu-ink-dim); }
+.jv-mu-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; overflow: auto; max-height: inherit; }
+.jv-mu-line { position: relative; border-radius: 10px; }
+.jv-mu-line-light { position: absolute; inset: -6px -12px; border-radius: 14px; background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--mu-accent) 34%, transparent) 26%, transparent); pointer-events: none; }
+.jv-mu-line-btn, .jv-mu-line-plain { position: relative; display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 10px; width: 100%; align-items: baseline; padding: 7px 4px; border: 0; background: none; color: var(--mu-ink-dim); font: inherit; text-align: left; cursor: pointer; border-radius: 10px; }
+.jv-mu-line-plain { cursor: default; }
+.jv-mu-line-time { font-size: 11px; font-variant-numeric: tabular-nums; opacity: 0.7; }
+.jv-mu-line-text { font-size: 15px; line-height: 1.55; }
+.jv-mu-line[data-state="past"] .jv-mu-line-text { opacity: 0.6; }
+.jv-mu-line[data-state="current"] .jv-mu-line-text { color: var(--mu-ink); font-size: 18px; font-weight: 700; }
+.jv-mu-lines.is-blur .jv-mu-line:not([data-state="current"]) { filter: blur(0.5px); opacity: 0.7; }
+.jv-mu-line[hidden] { display: none; }
+
+/* ── mini capsule: a control surface, never a second player ── */
+.jv-mu-mini {
+  position: fixed; z-index: 70; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; width: min(560px, calc(100vw - 24px)); padding: 8px 10px;
+  border-radius: 999px; border: 1px solid var(--mu-line); background: var(--mu-glass-2);
+  box-shadow: 0 18px 50px -24px rgba(0, 0, 0, 0.7); touch-action: pan-y;
+}
+.jv-mu-mini-art { width: 34px; height: 34px; flex: none; border-radius: 50%; overflow: hidden; border: 0; padding: 0; background: var(--mu-glass); color: var(--mu-ink); cursor: pointer; display: grid; place-items: center; }
+.jv-mu-mini-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.jv-mu-mini-body { min-width: 0; flex: 1 1 auto; display: grid; gap: 4px; }
+.jv-mu-mini-title { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jv-mu-mini-rail { display: block; height: 2px; border-radius: 999px; background: var(--mu-line); overflow: hidden; }
+.jv-mu-mini-rail span { display: block; height: 100%; background: var(--mu-accent); transform-origin: left center; }
+.jv-mu-mini-x { width: 30px; height: 30px; flex: none; border-radius: 50%; border: 1px solid var(--mu-line); background: none; color: var(--mu-ink-dim); cursor: pointer; font-size: 12px; }
+
+/* ── lock surfaces: pocket mode veil and the listening-mode bar ── */
+.jv-mu-veil { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: rgba(4, 5, 10, 0.86); color: var(--mu-ink); isolation: isolate; }
+.jv-mu-veil-inner { position: relative; z-index: 1; display: grid; justify-items: center; gap: 8px; text-align: center; padding: 24px; }
+.jv-mu-hold { width: 132px; height: 132px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; display: grid; place-items: center; }
+.jv-mu-hold-hole { width: 54px; height: 54px; border-radius: 50%; background: #04050a; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
+.jv-mu-veil-title { margin: 6px 0 0; font-size: 18px; letter-spacing: 0.02em; }
+.jv-mu-veil-hint { margin: 0; font-size: 13px; color: var(--mu-ink-dim); }
+.jv-mu-veil-status, .jv-mu-veil-next { margin: 0; font-size: 12px; color: var(--mu-ink-dim); }
+.jv-mu-veil-exit { margin-top: 6px; }
+.jv-mu-listenbar { position: fixed; z-index: 66; top: 10px; left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 999px; border: 1px solid var(--mu-line); background: var(--mu-glass-2); font-size: 12px; color: var(--mu-ink-dim); }
+.jv-mu-listenbar-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mu-accent); animation: jv-mu-pulse 2.4s ease-in-out infinite; }
+.jv-mu-foot { padding: 8px 2px 0; font-size: 11.5px; color: var(--mu-ink-dim); }
+.jv-mu-foot p { margin: 0; max-width: 62ch; }
+
+@media (min-width: 900px) {
+  .jv-mu-playing { grid-template-columns: minmax(0, 320px) minmax(0, 1fr) minmax(0, 15rem); }
+  .jv-mu-side { border-left: 1px solid var(--mu-line); }
+}
+@media (max-width: 899px) {
+  .jv-mu-inner { width: min(100% - 24px, 1180px); gap: 12px; }
+  .jv-mu-lyrics { max-height: 40vh; }
+  .jv-mu-lyrics.is-open { max-height: 62vh; }
+  .jv-mu-transport-time { width: 100%; margin-left: 0; order: 5; }
+  .jv-mu-search input { width: min(70vw, 320px); }
+}
+@media (max-width: 560px) {
+  .jv-mu { padding-bottom: 108px; }
+  .jv-mu-panel { padding: 12px; border-radius: 16px; }
+  .jv-mu-tabs { gap: 6px; }
+  .jv-mu-tabs-tail { width: 100%; margin-left: 0; }
+  .jv-mu-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; }
+  .jv-mu-playing-art { width: min(240px, 62vw); }
+  .jv-mu-line-btn, .jv-mu-line-plain { grid-template-columns: 40px minmax(0, 1fr); }
+  .jv-mu-line[data-state="current"] .jv-mu-line-text { font-size: 16px; }
+  .jv-mu-mini { bottom: calc(74px + env(safe-area-inset-bottom)); }
+}
+/* No blur engine (older Safari, some in-app browsers): the same layout with a solid panel instead.
+   The design does not lose structure to a missing effect. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .jv-mu-panel, .jv-mu-lyrics { background: var(--mu-glass-2); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jv-mu-shaft, .jv-mu-row-pulse, .jv-mu-listenbar-dot { animation: none; }
+  .jv-mu-tab, .jv-mu-btn, .jv-mu-tile-art, .jv-mu-mini { transition: none; }
+  /* The shafts freeze, the bead still reports position: the curtain is decoration, progress is not. */
 }
