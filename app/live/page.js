@@ -4,7 +4,7 @@ import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
 import { useCallback, startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import JashPlayer from '@/components/player/JashPlayer';
-import { DayStrip, GuideNowLine, GuideStatus, ProgrammeCard, SourceBadges, useLiveGuide } from '@/components/live/LiveGuide';
+import { DayStrip, GuideNowLine, GuideStatus, ProgrammeCard, SourceBadges, showProgress, useLiveGuide } from '@/components/live/LiveGuide';
 import { createLiveTvPolicy, isPocketChannel } from '@/lib/player/policy/liveTv';
 import PlayerIncidents from '@/components/player/PlayerIncidents';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
@@ -265,6 +265,39 @@ export default function LiveTVPage() {
       return channel;
     });
   }, []);
+  // The in-player guide and its tuning callback. The policy object is frozen on purpose: `policy`
+  // is an engine-memo dependency, so a fresh literal every render would restart playback.
+  const shellPolicy = useMemo(() => ({ ambient: false }), []);
+  const browserItems = useMemo(
+    () =>
+      (channels || []).map((channel) => {
+        const row = guide.get(channel.id);
+        const show = row?.now || row?.lastEnded || null;
+        return {
+          id: channel.id,
+          name: channel.name,
+          logo: channel.logo,
+          catalogs: getChannelCatalogIds(channel),
+          nowTitle: show?.title || '',
+          progress: row?.now ? showProgress(row.now, guide.at) : show ? 1 : 0,
+        };
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [channels, guide.rows, guide.at],
+  );
+  const pickBrowserItem = useCallback(
+    (item) => {
+      const channel = (channels || []).find((row) => String(row?.id) === String(item?.id));
+      if (channel) selectChannel(channel);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [channels],
+  );
+  const liveBrowser = useMemo(
+    () => ({ items: browserItems, catalogs: catalogOptions, category, activeId: active?.id || '', onPick: pickBrowserItem, onCategory: setCategory }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [browserItems, catalogOptions, category, active?.id, pickBrowserItem],
+  );
 
   const navigateChannel = useCallback((direction) => {
     const list = filteredChannels.length ? filteredChannels : channels;
@@ -345,7 +378,7 @@ export default function LiveTVPage() {
           </div>
           <div className="flex items-center justify-center gap-2 text-center">
             <BrandLogo size="mini" />
-            <p className="text-[9px] font-black uppercase tracking-[0.26em] text-red-500 sm:text-[10px] sm:tracking-[0.32em]">Tamil Live TV</p>
+            <p className="text-[9px] font-black uppercase tracking-[0.26em] text-red-500 sm:text-[10px] sm:tracking-[0.32em]">Tamil Live TV <span className="ml-1 rounded bg-white/10 px-1 py-px align-middle normal-case tracking-normal text-zinc-500">K5</span></p>
           </div>
           <button
             type="button"
@@ -384,6 +417,8 @@ export default function LiveTVPage() {
                   // cleanly) but `persist: false` keeps live TV out of Continue Watching: a simulcast
                   // has nothing to resume, and it used to store an "Untitled" row for it.
                   library={{ watchKey: `live:${active.id}`, persist: false }}
+                  policy={shellPolicy}
+                  liveBrowser={liveBrowser}
                   onPrev={() => navigateChannel(-1)}
                   onNext={() => navigateChannel(1)}
                 />

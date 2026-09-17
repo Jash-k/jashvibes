@@ -27,6 +27,7 @@ import { buildHeaderFilter, createDirectPolicy } from '@/lib/player/policy/strea
 import { fmtTime, warnForSource } from '@/lib/player/labels';
 import { readSeekWindow } from '@/lib/player/kind';
 import { Icon, PATHS } from './PlayerIcons';
+import { ChannelDrawer } from './PlayerBrowser';
 import {
   AudioMenu,
   ContextMenu,
@@ -86,6 +87,7 @@ export function JashPlayer(props) {
     http = null,
     library = {},
     lineup = {},
+    liveBrowser = null,
     display = {},
     marks = null,
     on = {},
@@ -231,6 +233,7 @@ export function JashPlayer(props) {
   const pulseTimerRef = useRef(0);
   const busyRef = useRef(false);
   const [visible, setVisible] = useState(true);
+  const [browserOpen, setBrowserOpen] = useState(false);
   const [menu, setMenu] = useState(null);
   const [contextMenu, setContextMenu] = useState(null);
   const [locked, setLocked] = useState(false);
@@ -294,7 +297,7 @@ export function JashPlayer(props) {
   const { canAirPlay, showAirPlay } = useAirPlay(videoEl);
   useWakeLock(playing);
 
-  const ambientActive = Boolean(prefs.ambient) && playing && !isFullscreen && !compact;
+  const ambientActive = policy.ambient !== false && Boolean(prefs.ambient) && playing && !isFullscreen && !compact;
   useEffect(() => {
     if (!ambientActive) return undefined;
     document.documentElement.classList.add('jv-theater');
@@ -339,6 +342,7 @@ export function JashPlayer(props) {
   const controlsAreBusy =
     !playing ||
     Boolean(menu) ||
+    browserOpen ||
     Boolean(contextMenu) ||
     scrubValue !== null ||
     jog !== null ||
@@ -630,10 +634,14 @@ export function JashPlayer(props) {
           engine.startOver();
           break;
         case 'closeMenus':
-          if (contextMenu) setContextMenu(null);
+          if (browserOpen) setBrowserOpen(false);
+          else if (contextMenu) setContextMenu(null);
           else if (menu) setMenu(null);
           else if (locked) setLocked(false);
           else if (isFullscreen) toggleFullscreen(wrapRef.current);
+          break;
+        case 'toggleBrowser':
+          if (liveBrowser) setBrowserOpen((value) => !value);
           break;
         case 'prevItem':
           onPrev?.();
@@ -650,7 +658,9 @@ export function JashPlayer(props) {
       abLoop.a,
       abLoop.b,
       applyAbLoop,
+      browserOpen,
       canSeek,
+      liveBrowser,
       contextMenu,
       engine,
       flash,
@@ -1299,6 +1309,19 @@ export function JashPlayer(props) {
                 <Icon d={isFullscreen ? PATHS.fsExit : PATHS.fs} className="h-5 w-5" />
               </button>
             ) : null}
+            {liveBrowser ? (
+              <button
+                type="button"
+                data-jash-command="toggleBrowser"
+                onClick={() => runCommand('toggleBrowser')}
+                aria-label="Channels"
+                aria-pressed={browserOpen}
+                title="Channels (G)"
+                className={`grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95 ${browserOpen ? 'bg-white/10' : ''}`}
+              >
+                <Icon d={PATHS.grid} className="h-5 w-5" />
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -1418,6 +1441,23 @@ export function JashPlayer(props) {
       {menu === 'shortcuts' ? <ShortcutList commands={commandList} coarse={coarse} onClose={() => setMenu(null)} /> : null}
 
       {contextMenu ? <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextItems} onClose={() => setContextMenu(null)} /> : null}
+
+      {liveBrowser ? (
+        <ChannelDrawer
+          open={browserOpen}
+          items={liveBrowser.items || []}
+          catalogs={liveBrowser.catalogs || []}
+          category={liveBrowser.category || 'all'}
+          onCategory={liveBrowser.onCategory}
+          activeId={liveBrowser.activeId || ''}
+          onPick={(item, info) => {
+            liveBrowser.onPick?.(item);
+            wake();
+            if (info?.via === 'keyboard') setBrowserOpen(false);
+          }}
+          onClose={() => setBrowserOpen(false)}
+        />
+      ) : null}
 
       {engine.subtitleCss ? <style>{`/* jashvibes subtitle style */${engine.subtitleCss}`}</style> : null}
 

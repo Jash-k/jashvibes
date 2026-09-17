@@ -71,7 +71,17 @@ function DayNightToggle() {
     let initial = 'night';
     try {
       const saved = window.localStorage.getItem('jash_theme_mode');
-      initial = saved === 'day' || saved === 'night' ? saved : 'night';
+      const sealed = window.localStorage.getItem('jash_theme_sealed');
+      if (!sealed) {
+        /* One-time migration: builds before K3 auto-saved the OS scheme, so a stored 'day' was
+           never a human choice — TV browsers reported light and woke up white. Seal night; an
+           explicit tap on the toggle re-seals whatever the human picks. */
+        window.localStorage.setItem('jash_theme_mode', 'night');
+        window.localStorage.setItem('jash_theme_sealed', '1');
+        initial = 'night';
+      } else {
+        initial = saved === 'day' ? 'day' : 'night';
+      }
     } catch {}
     setMode(initial);
     document.documentElement.classList.toggle('day-mode', initial === 'day');
@@ -81,7 +91,7 @@ function DayNightToggle() {
   function toggleMode() {
     const next = mode === 'day' ? 'night' : 'day';
     setMode(next);
-    try { window.localStorage.setItem('jash_theme_mode', next); } catch {}
+    try { window.localStorage.setItem('jash_theme_mode', next); window.localStorage.setItem('jash_theme_sealed', '1'); } catch {}
     document.documentElement.classList.toggle('day-mode', next === 'day');
     syncThemeColor(next);
   }

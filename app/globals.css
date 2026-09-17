@@ -2051,6 +2051,9 @@ html.day-mode .jv-st-page { background: var(--st-bg); color: var(--st-ink); }
 html.day-mode .jv-lv-tune { background: #ffffff; border-color: rgba(16, 19, 34, 0.14); }
 html.day-mode .jv-lv-tune:hover { border-color: rgba(16, 19, 34, 0.3); }
 html.day-mode .jv-lv-fav { background: rgba(255, 255, 255, 0.9); border-color: rgba(16, 19, 34, 0.14); }
+/* The ambient portal must dim, never white-veil: the day blanket turns every bg-black layer
+   white, and this one covers the video. Placed before the sports block so no section slice changes. */
+html.day-mode [data-dvp="ambient"] { background-color: rgba(0, 0, 0, 0.75) !important; }
 
 /* ============================================================================
    Sports — the Single Feed (`components/sports/SportsFeed.js`)
