@@ -57,6 +57,8 @@ The password gate is no longer cosmetic — **`middleware.js` authenticates ever
 | `?token=<accessToken>` query | manual | external tools/cron needing access |
 
 - **Exempt:** `/api/auth` (login; rate-limited 12/5 min/IP), `/api/health` (probes), `/api/cron/tamilmv` (own `CRON` secret).
+- **Tokens are revocable:** set `SESSION_EPOCH` (any string) to invalidate every issued cookie, header and `?token=` link at once — no password change needed. `SESSION_TTL_DAYS` (default 180) sizes the cookie lifetime.
+- **No hidden passwords:** the Live TV panel password (`LIVE_TV_PASS`) has no default; unset means only `PASS` unlocks the app.
 - **Rate limits** on expensive routes (`/api/resolve`, `/api/search`, `/api/v2/stream`, `/api/sports/hub` 40/min, `/api/sports/feed` 90/min, `/api/stremio/stream`).
 - **Fail-closed admin routes:** `/api/seed`, `/api/debug-scrapers`, `/api/vod/sync`, `/api/tamilmv?refresh=1` all require a valid session even when their optional tokens are unset.
 - Security headers (`X-Content-Type-Options`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, `X-Frame-Options: DENY` for APIs), no `X-Powered-By`.
@@ -79,7 +81,7 @@ PASS=choose_a_strong_private_password
 Common optional ones:
 
 ```env
-LIVE_TV_PASS=tv2010                                  # Live TV service panel password (default tv2010); also works at the main unlock
+LIVE_TV_PASS=choose_a_panel_password                  # Live TV service panel password; also works at the main unlock. No default — unset disables the panel password.
 PROVIDERS=stremio,mirchi,vidlink,videasy,vidzee,vidrock      # embed priority order
 TAMILMV=https://www.1tamilmv.report/                 # current scraper domain
 # Manual poster-to-TMDB matches persist in MongoDB (title_matches collection)

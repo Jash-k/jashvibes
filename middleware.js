@@ -78,7 +78,16 @@ function hitRateLimit(key, limit, windowMs) {
   };
 }
 
-// Edge-runtime-safe SHA-256 (must match lib/serverAuth.js exactly).
+// Edge-runtime-safe SHA-256. The seed formula (password + optional
+// SESSION_EPOCH) MUST match lib/serverAuth.js exactly — the middleware cannot
+// import it (edge runtime), so the two are kept in sync by hand and by
+// tests/auth-token-rotation.test.js.
+function sessionSeed(password) {
+  const epoch = String(process.env.SESSION_EPOCH || process.env.SESSION_SECRET || '').trim();
+  const base = `jash-theatre:${password}`;
+  return epoch ? `${base}:${epoch}` : base;
+}
+
 async function sha256Hex(text) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -128,7 +137,7 @@ export async function middleware(request) {
   // When no password is configured the app is intentionally open (dev mode).
   if (!password) return NextResponse.next();
 
-  const expected = await sha256Hex(`jash-theatre:${password}`);
+  const expected = await sha256Hex(sessionSeed(password));
   const presented =
     request.cookies.get(SESSION_COOKIE)?.value ||
     request.headers.get('x-jash-token') ||

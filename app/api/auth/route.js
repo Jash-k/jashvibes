@@ -24,11 +24,16 @@ function safeEqual(a, b) {
 /**
  * Secondary unlock password for the Live TV service panel. Curation/demo
  * deployments use a friendlier password than the owner PASS. Overridable via
- * LIVE_TV_PASS (or TV_PASS); defaults to 'tv2010'. A successful login issues
- * the same session token as the main password, so middleware is unaffected.
+ * LIVE_TV_PASS (or TV_PASS).
+ *
+ * Security: there is deliberately NO default. The old fallback ('tv2010') was
+ * documented in the README, so any deployment that never set the env var was
+ * effectively public — and a panel login issues the same session token as the
+ * main password. With nothing configured, the panel password path is simply
+ * disabled and only PASS unlocks the app.
  */
 function getTvPanelPassword() {
-  return process.env.LIVE_TV_PASS || process.env.TV_PASS || 'tv2010';
+  return String(process.env.LIVE_TV_PASS || process.env.TV_PASS || '').trim();
 }
 
 /**
@@ -108,8 +113,11 @@ export async function POST(request) {
     }
 
     const tvPanelPassword = getTvPanelPassword();
+    // The panel path participates only when a panel password is actually
+    // configured — an unset env var must never widen the front door.
     const passwordOk = Boolean(password) &&
-      (safeEqual(password, configuredPassword) || safeEqual(password, tvPanelPassword));
+      (safeEqual(password, configuredPassword) ||
+        (Boolean(tvPanelPassword) && safeEqual(password, tvPanelPassword)));
 
     if (!passwordOk) {
       return NextResponse.json(
