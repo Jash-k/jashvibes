@@ -1,21 +1,26 @@
 'use client';
 
 /**
- * Sports — the Single Feed (round 19, idea 6 of `docs/concepts/sports-redesign.html`).
+ * Sports — the On Air Grid (round 22, idea 3 of `docs/concepts/sports-live-redesign.html`).
  *
- * One vertical column of the same card, two type sizes, one accent, no tabs: live now, starting today, later,
- * finished. Pressing a card opens its hub in place — Watch, Scorecard, Match, About — and the hub is the whole
- * point of the page, so it is fetched per card and cached for the visit rather than hidden behind a route you
- * have to navigate to. The aside holds the things that are not matches: which channels can actually play, and
- * which replays this app can resolve.
+ * The page names THE thing to watch. A resolver (`lib/sportsLive.js`) ranks every playable
+ * live source — the FanCode dump's fresh signed match feeds, then a match's own published
+ * stream, then the standing FanCode/Willow channels, then the live-TV catalog's sports
+ * channels — and the winner is the hero: one card, one pre-focused WATCH LIVE button, one
+ * press to the stage. Everything else is a quiet grid below: also-live matches (each with
+ * its own ▶), channels with their honest readiness label, today's fixtures with countdowns,
+ * results, replays.
  *
- * What this replaced, and did not carry over: the channel grid with one hardcoded Willow iframe, the
- * `Live Feeds / Match Hub` tab pair, `Featured Live Match →` (it linked at `/match/live`, a route with no page),
- * `/match-center/<base64 of the score>`, the FanCode dump being fetched by the browser, and `text-[8px]`.
+ * Kept from the Single Feed (v8.12.0) because it is the part that was right: the hub and
+ * its four content-decided tabs (Live Score · Video · Info · Scorecard), the merged feed
+ * and its truth rules, the readiness labels, the deep-linkable `/sports/hub/{source}/{id}`,
+ * and the visible-only polling with backoff. The center stage grew up: watching is now the
+ * default state of the page, not a tab inside a card.
  *
- * Rules this page keeps: nothing is printed that a feed did not say; a group with no matches in it is not
- * rendered; an empty panel names the feed that was empty; a slept backend says `waking`, never spins forever;
- * and the horizontal gutters live on `.jv-sp`, never on the element that carries `jv-rail-shift` (v8.11.1).
+ * Rules this page keeps: nothing is printed that a feed did not say; an empty panel names
+ * the feed that was empty; a stale dump quarantines its "LIVE" rows; a channel without a
+ * key is listed and never offered; and the horizontal gutters live on `.jv-sp`, never on
+ * the element that carries `jv-rail-shift` (v8.11.1).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -23,14 +28,13 @@ import Link from 'next/link';
 import RailNav from '@/components/rail/RailNav';
 import JashPlayer from '@/components/player/JashPlayerLazy';
 import { createLiveTvPolicy } from '@/lib/player/policy/liveTv';
+import { heroNote, otherLiveEntries, pickHeroSource, rankPlayableSources } from '@/lib/sportsLive';
 import {
   channelCounts,
   channelLine,
   channelReadiness,
   countdownLine,
-  dotLabel,
   feedLine,
-  groupFeed,
   hubTabLabel,
   hubTabs,
   panelNote,
@@ -97,38 +101,7 @@ function useAsyncJson() {
   return { ...state, load };
 }
 
-/* ------------------------------------------------------------------ the card */
-
-function MatchHead({ item, open, onToggle, now }) {
-  const chip = stateChip(item);
-  return (
-    <button
-      type="button"
-      className="jv-sp-head"
-      onClick={onToggle}
-      aria-expanded={open}
-      title={`${item.home || item.homeCode} v ${item.away || item.awayCode} — ${open ? 'close' : 'open'} the hub`}
-    >
-      <span className={`jv-sp-state is-${item.state}`} aria-hidden="true">
-        <i />
-        <small>{dotLabel(item, now) || chip.label}</small>
-      </span>
-      <span className="jv-sp-which">
-        <b>{[item.home, item.away].filter(Boolean).join(' v ') || item.competition || 'Fixture'}</b>
-        <p>
-          {statusLine(item)}
-          {item.venue ? ` · ${item.venue}` : ''} · <span className="jv-sp-src">{sourceLine(item)}</span> · {timeLabel(item, now)}
-        </p>
-      </span>
-      <span className="jv-sp-side">
-        {item.has?.watch || item.stream ? <span className="jv-sp-tag is-play">stream</span> : null}
-        {item.state === 'soon' ? <span className="jv-sp-tag is-soon">{countdownLine(item, now)}</span> : null}
-        {item.state === 'live' && item.staleFeed ? <span className="jv-sp-tag is-qua" title="This feed is too old to trust — the match is quarantined, not live">unverified</span> : <span className={`jv-sp-tag is-${chip.tone}`}>{chip.label}</span>}
-        <span className="jv-sp-caret" aria-hidden="true">{open ? '▴' : '▾'}</span>
-      </span>
-    </button>
-  );
-}
+/* ------------------------------------------------------------------ the hub's panels (kept) */
 
 /** The score itself: the two lines, the feed's own sentence, and the clock or the countdown. */
 function LiveScore({ item, hub, now }) {
@@ -283,6 +256,9 @@ function VideoPanel({ item, hub, channels, playing, onPickChannel, onResolveVide
                   source: `${sourceLine(item)} · ${variant.label}`,
                   extra: { cookie: variant.cookie, referer: variant.referer, userAgent: variant.userAgent },
                   expiresAt: variant.expiresAt,
+                  variantId: variant.id || '',
+                  matchSource: item.source,
+                  matchId: String(item.id),
                   via: /\.m3u8/i.test(variant.url) ? 'HLS' : 'direct',
                   note: variant.cookie ? 'the token this feed published travels through the live proxy' : 'plays direct',
                 })}
@@ -488,7 +464,7 @@ function Scorecard({ panel, activeIndex, onInnings }) {
           <p className="jv-sp-mini">Partnerships</p>
           <ul>
             {active.partnerships.map((row, index) => (
-              <li key={`${index}-${row.runs}`}><b>{row.runs}{row.balls ? ` (${row.balls}b)` : ''}</b><span>{[row.who, row.wicket && `${row.wicket} wkt`].filter(Boolean).join(' · ') || '—'}</span></li>
+              <li key={`${index}-${row.runs}`}><b>{row.runs}{row.balls ? ` (${row.balls}b)` : ''}</b><span>{[row.who, row.wicket && `${row.wicket} wkt`].filter(Boolean).join(' · ')}</span></li>
             ))}
           </ul>
         </div>
@@ -541,31 +517,7 @@ function Hub({ item, panel, loading, error, onReload, channels, onPickChannel, p
   );
 }
 
-/* ------------------------------------------------------------------ aside + sheet */
-
-function ChannelsBox({ channels, counts, onPlay }) {
-  if (!channels.length) {
-    return <p className="jv-sp-note">no sports channels answered · /api/sports/channels returned an empty list</p>;
-  }
-  return (
-    <ul className="jv-sp-chans">
-      {channels.map((channel) => {
-        const readiness = channelReadiness(channel);
-        const playable = readiness.state === 'ready' || readiness.state === 'key' || readiness.state === 'proxy';
-        return (
-          <li key={channel.id}>
-            <button type="button" disabled={!playable} onClick={() => playable && onPlay(channel)}>
-              <b>{channel.name}</b>
-              <span>{channelLine(channel)}</span>
-            </button>
-            <em className={`is-${readiness.state}`} title={readiness.note}>{readiness.label}</em>
-          </li>
-        );
-      })}
-      <li className="jv-sp-count">{counts.ready} can play here · {counts.blocked} cannot</li>
-    </ul>
-  );
-}
+/* ------------------------------------------------------------------ grid bits */
 
 function ReplaysBox({ items, onPlay, resolving }) {
   const replays = items.filter((item) => item.state === 'done' && (item.stream || item.videoId));
@@ -675,6 +627,7 @@ export default function SportsFeed({ initialOpen = null } = {}) {
   const lastHubPoll = useRef({ key: '', at: 0 });
   const fetchHubRef = useRef(null);
   const hubsRef = useRef({});
+  const swapTimersRef = useRef([]);
 
   const load = useCallback((force = false) => {
     lastFetch.current = Date.now();
@@ -766,9 +719,35 @@ export default function SportsFeed({ initialOpen = null } = {}) {
     }, ...items];
   }, [items, initialOpen]);
 
-  /* `open` is passed as the pin so a match reached by URL is on the board even when its group is capped. */
-  const groups = useMemo(() => groupFeed(list, { now, pin: open }), [list, now, open]);
   const channelList = useMemo(() => channels.data?.channels || [], [channels.data]);
+  const chanCounts = useMemo(() => channelCounts(channelList, now), [channelList, now]);
+
+  /* ---- the On Air resolver: one ranked list of everything that can play right now ---- */
+  const liveItems = useMemo(() => items.filter((item) => item.state === 'live' && !item.staleFeed), [items]);
+  const ranked = useMemo(() => rankPlayableSources({ items: liveItems, channels: channelList, now }), [liveItems, channelList, now]);
+  const hero = useMemo(() => pickHeroSource(ranked), [ranked]);
+  const heroIsMatch = Boolean(hero?.match);
+  const heroFeeds = useMemo(
+    () => (heroIsMatch ? ranked.filter((entry) => entry.kind === 'variant' && entry.match.source === hero.match.source && String(entry.match.id) === String(hero.match.id)) : []),
+    [ranked, hero, heroIsMatch],
+  );
+  /* Also-live cards: one per live match that is not the hero's own. Each carries its best playable entry. */
+  const alsoLive = useMemo(() => {
+    const others = otherLiveEntries(ranked, hero);
+    return liveItems
+      .filter((item) => !heroIsMatch || !(item.source === hero.match.source && String(item.id) === String(hero.match.id)))
+      .map((item) => ({ item, entry: others.find((entry) => entry.match && entry.match.source === item.source && String(entry.match.id) === String(item.id)) || null }));
+  }, [ranked, hero, heroIsMatch, liveItems]);
+  const channelEntries = useMemo(() => ranked.filter((entry) => entry.kind === 'channel'), [ranked]);
+  const channelEntryById = useMemo(() => new Map(channelEntries.map((entry) => [entry.key, entry])), [channelEntries]);
+  const upcoming = useMemo(() => items.filter((item) => item.state === 'soon').slice(0, 8), [items]);
+  const finished = useMemo(() => items.filter((item) => item.state === 'done').slice(0, 6), [items]);
+  /* The waiting-room hero: when nothing can play, the next fixture is still the headline — with its
+     countdown and its hub, and never a fake play button. */
+  const nextUp = useMemo(
+    () => [...upcoming].sort((a, b) => (Number(a.startAt) || Infinity) - (Number(b.startAt) || Infinity))[0] || upcoming[0] || null,
+    [upcoming],
+  );
 
   const fetchHub = useCallback(async (item, force = false) => {
     const key = `${item.source}:${item.id}`;
@@ -846,6 +825,67 @@ export default function SportsFeed({ initialOpen = null } = {}) {
   }, [open, fetchHub]);
   fetchHubRef.current = fetchHub;
 
+  /* The hero's hub button: the resolver entry only carries the match coordinates, so the toggle
+     gets the real feed item when the board has one (it owns `stream`, which decides whether
+     opening the hub may stop playback). */
+  const toggleMatch = useCallback((match) => {
+    const item = (itemsRef.current || []).find((entry) => entry.source === match.source && String(entry.id) === String(match.id));
+    toggle(item || match);
+  }, [toggle]);
+
+  /* ---- watch: the one path to the stage. The resolver entry carries everything the policy ladder needs. ---- */
+  const watch = useCallback((entry) => {
+    if (!entry?.url) return;
+    setPlaying({
+      key: entry.match ? `${entry.match.source}:${entry.match.id}` : 'channel',
+      url: entry.url,
+      label: entry.label,
+      source: entry.badge || 'sports',
+      extra: entry.extra || {},
+      via: entry.kind === 'channel' ? (entry.readiness?.label || 'channel') : (entry.kind === 'variant' ? 'HLS · match feed' : 'stream'),
+      expiresAt: entry.expiresAt || '',
+      variantId: entry.variantId || '',
+      matchSource: entry.match?.source || '',
+      matchId: entry.match ? String(entry.match.id) : '',
+      poster: entry.match?.poster || '',
+    });
+  }, []);
+
+  /*
+   * Token hot-swap: a FanCode match feed's signed URL dies at `cookie_valid`. Two scheduled
+   * refreshes (5 minutes and 45 seconds before expiry) re-read the feed once and swap the URL
+   * in place — the player remounts on the live edge, which is where a live viewer already is.
+   * Two reads per session, nothing periodic: the free tier never notices.
+   */
+  useEffect(() => {
+    swapTimersRef.current.forEach((timer) => clearTimeout(timer));
+    swapTimersRef.current = [];
+    if (!playing?.url || !playing.expiresAt || !playing.variantId) return undefined;
+    const expiresAt = Date.parse(playing.expiresAt);
+    if (!Number.isFinite(expiresAt)) return undefined;
+    const swap = async () => {
+      const [data] = await load(true) || [];
+      const item = (data?.items || []).find((entry) => entry.state === 'live' && entry.source === playing.matchSource && String(entry.id) === String(playing.matchId));
+      if (!item) return;
+      const variants = Array.isArray(item.variants) ? item.variants : [];
+      const fresh = variants.find((variant) => variant.id === playing.variantId && variant.url && !variant.unavailable)
+        || variants.find((variant) => variant.url && !variant.unavailable);
+      if (fresh?.url && fresh.url !== playing.url) {
+        setPlaying((current) => (current?.variantId === playing.variantId
+          ? { ...current, url: fresh.url, expiresAt: fresh.expiresAt || '', via: 'token refreshed · back on the live edge' }
+          : current));
+      }
+    };
+    swapTimersRef.current = [
+      setTimeout(() => { swap().catch(() => {}); }, Math.max(5_000, expiresAt - Date.now() - 5 * 60_000)),
+      setTimeout(() => { swap().catch(() => {}); }, Math.max(8_000, expiresAt - Date.now() - 45_000)),
+    ];
+    return () => {
+      swapTimersRef.current.forEach((timer) => clearTimeout(timer));
+      swapTimersRef.current = [];
+    };
+  }, [playing?.url, playing?.expiresAt, playing?.variantId, playing?.matchSource, playing?.matchId, load]);
+
   const staleLive = useMemo(() => {
     const count = feed.data?.counts?.unverified || 0;
     if (!count) return '';
@@ -860,12 +900,44 @@ export default function SportsFeed({ initialOpen = null } = {}) {
   }, [feed.data?.generatedAt, feed.data?.cachedAt, feed.status, now]);
 
   const counts = feed.data?.counts || { live: 0, soon: 0, done: 0, tbc: 0 };
-  const chanCounts = useMemo(() => channelCounts(channelList, now), [channelList, now]);
-  const firstGroup = groups[0];
-  /* The open card's key at render scope, so the center stage can mount its hub. Named `key` on purpose:
+  /* The open card's key at render scope, so the hub zone can mount its hub. Named `key` on purpose:
      the hub test pins the literal `playing={playing?.key === key ? playing : null}`. */
   const key = open || '';
   const openItem = key ? list.find((entry) => `${entry.source}:${entry.id}` === key) || null : null;
+
+  const gridCard = (item, { entry = null, showHub = true } = {}) => {
+    const chip = stateChip(item);
+    const itemKey = `${item.source}:${item.id}`;
+    const isOpen = open === itemKey;
+    return (
+      <article key={itemKey} className={`jv-sg-card is-${item.state}${isOpen ? ' is-open' : ''}`}>
+        <div className="jv-sg-card-top">
+          <span className={`jv-sg-tag is-${chip.tone}`}>{item.state === 'live' ? '● LIVE' : chip.label}</span>
+          <span className="jv-sg-src">{sourceLine(item)}</span>
+        </div>
+        <h3 className="jv-sg-card-who">{[item.homeCode || item.home, item.awayCode || item.away].filter(Boolean).join(' v ') || item.competition || 'Fixture'}</h3>
+        <p className="jv-sg-card-line">
+          {item.state === 'soon' ? countdownLine(item, now) : statusLine(item) || timeLabel(item, now)}
+        </p>
+        <div className="jv-sg-card-actions">
+          <button
+            type="button"
+            className="jv-sg-play"
+            disabled={!entry}
+            onClick={() => watch({ ...entry, match: entry?.match || { source: item.source, id: item.id, poster: item.poster || '' } })}
+            title={entry ? `Watch ${entry.label}` : 'no playable stream on this feed'}
+          >
+            ▶ Watch
+          </button>
+          {showHub ? (
+            <button type="button" className="jv-sg-hubbtn" onClick={() => toggle(item)}>
+              {isOpen ? 'close hub' : 'hub'}
+            </button>
+          ) : null}
+        </div>
+      </article>
+    );
+  };
 
   return (
     <>
@@ -878,7 +950,7 @@ export default function SportsFeed({ initialOpen = null } = {}) {
             </button>
             <div className="jv-sp-who">
               <p className="jv-sp-kicker">Sports · {new Date(now).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })} · IST</p>
-              <h1 className="jv-sp-h1">All of it, one feed</h1>
+              <h1 className="jv-sp-h1">On Air</h1>
             </div>
             <div className="jv-sp-mast-side">
               <span className="jv-sp-updated">{updatedLabel}{autoRefresh && counts.live ? ' · auto' : ''}</span>
@@ -907,113 +979,220 @@ export default function SportsFeed({ initialOpen = null } = {}) {
           {!feed.data && feed.status === 'loading' ? (
             <div className="jv-sp-skels" aria-hidden="true">{[0, 1, 2, 3].map((row) => <span className="jv-sp-skel" key={row} />)}</div>
           ) : null}
-          {feed.data && !groups.length ? <p className="jv-sp-banner is-soft">nothing on any feed right now · {feed.data.sources?.filter((source) => !source.ok).length || 0} of {feed.data.sources?.length || 0} feeds unavailable</p> : null}
 
-          <div className="jv-sp-cols">
-            <div className="jv-sp-feed">
-              {groups.map((group) => (
-                <section key={group.id} className="jv-sp-group">
-                  <p className="jv-sp-rule">
-                    {group.label}
-                    <em>{group.count}{group.truncated ? ` · showing ${group.items.length}` : ''}</em>
-                    <hr />
-                  </p>
-                  <div className="jv-sp-cards">
-                    {group.items.map((item) => {
-                      const key = `${item.source}:${item.id}`;
-                      const isOpen = open === key;
-                      return (
-                        <article key={key} className={`jv-sp-card is-${item.state}${isOpen ? ' is-open' : ''}`}>
-                          <MatchHead item={item} open={isOpen} onToggle={() => toggle(item)} now={now} />
-                        </article>
-                      );
-                    })}
-                  </div>
-                </section>
-              ))}
-              {!groups.length && feed.status !== 'loading' && !firstGroup ? null : null}
-            </div>
-
-            <div className="jv-sp-stage">
-              {openItem ? (
-                <Hub
-                  key={key}
-                  item={openItem}
-                  panel={hubs[key]}
-                  loading={Boolean(hubs[key]?.loading)}
-                  error={hubs[key]?.error || ''}
-                  channels={channelList}
-                  playing={playing?.key === key ? playing : null}
-                  initialTab={tab === 'live' ? undefined : tab}
-                  onPickTab={(next) => {
-                    setTab(next);
-                    if (typeof window !== 'undefined') {
-                      window.history.replaceState(null, '', `/sports/hub/${openItem.source}/${openItem.id}${next && next !== 'live' ? `?tab=${next}` : ''}`);
-                    }
-                  }}
-                  onPickChannel={(state) => setPlaying({ key, ...state })}
-                  onReload={() => fetchHub(openItem, true)}
-                  onResolveVideo={(video) => resolveVideo({ ...video, key })}
-                  resolving={resolving}
+          {/* ---------- the stage: watching replaces the hero, one press, no navigation ---------- */}
+          {playing?.url ? (
+            <section className="jv-sg-stage" aria-label="Now watching">
+              <div className="jv-sg-stage-video">
+                <JashPlayer
+                  key={playing.url}
+                  className="jv-sg-player"
+                  source={{ url: playing.url, kind: 'auto', label: playing.label }}
+                  playbackPolicy={createLiveTvPolicy(streamChannel({ url: playing.url, label: playing.label, source: playing.source, extra: playing.extra }))}
+                  live
+                  display={{ title: playing.label, subtitle: `${playing.source} · ${playing.via || 'direct'}`, aspect: 'fill', poster: playing.poster || undefined }}
                 />
-              ) : (
-                <div className="jv-sp-stage-empty">
-                  <p className="jv-sp-stage-empty-kicker">Match hub</p>
-                  <p>Pick a match on the left — live score, video, match info and the full scorecard open here.</p>
+              </div>
+              <div className="jv-sg-stage-bar">
+                <span className="jv-sg-tag is-live"><i aria-hidden="true" /> LIVE</span>
+                <b className="jv-sg-stage-who">{playing.label}</b>
+                <span className="jv-sg-stage-note">{playing.via || 'direct'}{playing.expiresAt ? ` · token until ${new Date(playing.expiresAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : ''}</span>
+                <button type="button" className="jv-sg-stop" onClick={() => setPlaying(null)}>stop</button>
+              </div>
+            </section>
+          ) : hero ? (
+            /* ---------- the hero: the resolver's pick, one pre-focused button ---------- */
+            <section className="jv-sg-herozone">
+              <article className={`jv-sg-hero${heroIsMatch ? ' is-match' : ' is-channel'}`}>
+                <div className="jv-sg-hero-art" aria-hidden="true">
+                  <span className="jv-sg-hero-live"><i />ON AIR</span>
                 </div>
-              )}
-            </div>
-
-            <aside className="jv-sp-aside">
-              <section className="jv-sp-box">
-                <h4>Channels <em>{chanCounts.ready} ready · {chanCounts.blocked} not</em></h4>
-                {channels.status === 'loading' && !channelList.length ? <p className="jv-sp-note">asking the live-TV catalog…</p> : null}
-                {channels.error ? <p className="jv-sp-note is-warn">channels failed: {channels.error}</p> : null}
-                <ChannelsBox channels={channelList} counts={chanCounts} onPlay={(channel) => {
-                  setOpen('');
-                  setPlaying({ key: 'channel', url: channel.url, label: channel.name, source: channel.source || 'channel', extra: { keyId: channel.keyId, key: channel.key, licenseKey: channel.licenseKey, cookie: channel.cookie, referer: channel.referer, userAgent: channel.userAgent }, via: channelReadiness(channel).label });
-                }} />
-                {playing?.key === 'channel' ? (
-                  <div className="jv-sp-player-wrap">
-                    <JashPlayer
-                      key={playing.url}
-                      className="jv-sp-player"
-                      source={{ url: playing.url, kind: 'auto', label: playing.label }}
-                      playbackPolicy={createLiveTvPolicy(streamChannel({ url: playing.url, label: playing.label, source: playing.source, extra: playing.extra }))}
-                      live
-                      display={{ title: playing.label, subtitle: `${playing.source} · ${playing.via || 'direct'}`, aspect: 'fill' }}
-                    />
-                    <button type="button" className="jv-sp-stop" onClick={() => setPlaying(null)}>stop</button>
+                <div className="jv-sg-hero-body">
+                  <p className="jv-sg-kicker">
+                    {heroIsMatch
+                      ? [hero.match.matchOrder, hero.match.competition].filter(Boolean).join(' · ') || 'Live match'
+                      : 'Live channel'}
+                  </p>
+                  <h2 className="jv-sg-hero-who">{heroIsMatch ? hero.match.label : hero.label}</h2>
+                  {heroIsMatch ? (
+                    <p className="jv-sg-hero-line">
+                      {statusLine(hero.match) || [hero.match.scoreHome, hero.match.scoreAway].filter(Boolean).join(' v ')}
+                      {hero.match.venue ? ` · ${hero.match.venue}` : ''}
+                    </p>
+                  ) : (
+                    <p className="jv-sg-hero-line">{channelLineLabel(hero)}</p>
+                  )}
+                  <p className="jv-sg-hero-note">{heroNote(hero)}</p>
+                  <div className="jv-sg-hero-actions">
+                    <button
+                      type="button"
+                      className="jv-sg-watch"
+                      autoFocus={heroIsMatch}
+                      onClick={() => watch(hero)}
+                      aria-label={`Watch live: ${hero.label}`}
+                    >
+                      ▶ WATCH LIVE
+                    </button>
+                    {heroIsMatch ? (
+                      <button type="button" className="jv-sg-ghost" onClick={() => toggleMatch(hero.match)}>
+                        Match hub
+                      </button>
+                    ) : null}
                   </div>
-                ) : null}
-              </section>
+                  {heroFeeds.length > 1 ? (
+                    <p className="jv-sg-feeds">
+                      {heroFeeds.length} feeds on this match:
+                      {heroFeeds.map((entry) => (
+                        <button key={entry.key} type="button" className={`jv-sg-feedchip${entry.key === hero.key ? ' on' : ''}`} onClick={() => watch(entry)}>
+                          {entry.langLabel || 'feed'}
+                        </button>
+                      ))}
+                    </p>
+                  ) : null}
+                </div>
+              </article>
+            </section>
+          ) : nextUp ? (
+            /* ---------- nothing can play: the next fixture is the headline, with a countdown ---------- */
+            <section className="jv-sg-herozone">
+              <article className="jv-sg-hero is-waiting">
+                <div className="jv-sg-hero-body">
+                  <p className="jv-sg-kicker">Nothing is on air yet · next fixture</p>
+                  <h2 className="jv-sg-hero-who">{[nextUp.homeCode || nextUp.home, nextUp.awayCode || nextUp.away].filter(Boolean).join(' v ') || nextUp.competition}</h2>
+                  <p className="jv-sg-hero-line">{countdownLine(nextUp, now)} · {timeLabel(nextUp, now)}</p>
+                  <div className="jv-sg-hero-actions">
+                    <button type="button" className="jv-sg-ghost" onClick={() => toggle(nextUp)}>Match hub</button>
+                  </div>
+                </div>
+              </article>
+            </section>
+          ) : null}
 
-              <ReplaysBox items={list} resolving={resolving} onPlay={(wanted) => {
-                if (wanted.url) { setPlaying({ key: 'channel', ...wanted }); return; }
-                resolveVideo({ id: wanted.videoId, title: wanted.label, source: 'ICC', key: 'channel' });
-              }} />
+          {/* ---------- the hub, opened in place under the hero (deep links land here too) ---------- */}
+          {openItem ? (
+            <section className="jv-sg-hubzone">
+              <Hub
+                key={key}
+                item={openItem}
+                panel={hubs[key]}
+                loading={Boolean(hubs[key]?.loading)}
+                error={hubs[key]?.error || ''}
+                channels={channelList}
+                playing={playing?.key === key ? playing : null}
+                initialTab={tab === 'live' ? undefined : tab}
+                onPickTab={(next) => {
+                  setTab(next);
+                  if (typeof window !== 'undefined') {
+                    window.history.replaceState(null, '', `/sports/hub/${openItem.source}/${openItem.id}${next && next !== 'live' ? `?tab=${next}` : ''}`);
+                  }
+                }}
+                onPickChannel={(state) => setPlaying({ key, ...state })}
+                onReload={() => fetchHub(openItem, true)}
+                onResolveVideo={(video) => resolveVideo({ ...video, key })}
+                resolving={resolving}
+              />
+            </section>
+          ) : null}
 
-              <section className="jv-sp-box">
-                <h4>About this board <em>no cron, no Mongo</em></h4>
-                <p className="jv-sp-note">
-                  One request per open match, one per reload, and one when this tab becomes visible again if a match
-                  was live and the last read is older than {REFRESH_FLOOR_MS / 1000} s. Nothing else asks the
-                  upstreams anything.
-                </p>
-                <ul className="jv-sp-sources">
-                  {(feed.data?.sources || []).map((source) => (
-                    <li key={source.id} className={source.ok ? 'ok' : 'no'}>
-                      <b>{source.id}</b>
-                      <span>{source.ok ? source.note || 'answered' : source.note}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            </aside>
-          </div>
+          {/* ---------- the grid: also live · channels · today · results · replays ---------- */}
+          {alsoLive.length ? (
+            <section className="jv-sg-section" aria-labelledby="jv-sg-also">
+              <p className="jv-sp-rule" id="jv-sg-also">Also live <em>{alsoLive.length}</em><hr /></p>
+              <div className="jv-sg-grid">
+                {alsoLive.map(({ item, entry }) => gridCard(item, { entry }))}
+              </div>
+            </section>
+          ) : null}
+
+          <section className="jv-sg-section" aria-labelledby="jv-sg-chans">
+            <p className="jv-sp-rule" id="jv-sg-chans">
+              Channels
+              <em>{chanCounts.ready} ready · {chanCounts.blocked} not</em>
+              <hr />
+            </p>
+            {channels.status === 'loading' && !channelList.length ? <p className="jv-sp-note">asking the live-TV catalog…</p> : null}
+            {channels.error ? <p className="jv-sp-note is-warn">channels failed: {channels.error}</p> : null}
+            <div className="jv-sg-grid">
+              {channelList.map((channel) => {
+                const readiness = channelReadiness(channel, now);
+                const playable = readiness.state === 'ready' || readiness.state === 'key' || readiness.state === 'proxy';
+                const entry = channelEntryById.get(`channel:${channel.id}`);
+                return (
+                  <article key={channel.id} className={`jv-sg-card is-channel${playable ? '' : ' is-blocked'}`}>
+                    <div className="jv-sg-card-top">
+                      <span className={`jv-sg-tag is-${readiness.state}`} title={readiness.note}>{readiness.label}</span>
+                      <span className="jv-sg-src">{channelLine(channel)}</span>
+                    </div>
+                    <h3 className="jv-sg-card-who">{channel.name}</h3>
+                    <div className="jv-sg-card-actions">
+                      <button
+                        type="button"
+                        className="jv-sg-play"
+                        disabled={!playable || !entry}
+                        onClick={() => entry && watch(entry)}
+                        title={readiness.note}
+                      >
+                        ▶ Watch
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+              {!channelList.length && channels.status !== 'loading' ? (
+                <p className="jv-sp-note">no sports channels answered · add SPORTS_FANCODE_URL or SPORTS_WILLOW_URL, or let the live-TV catalog carry one</p>
+              ) : null}
+            </div>
+          </section>
+
+          {upcoming.length ? (
+            <section className="jv-sg-section" aria-labelledby="jv-sg-today">
+              <p className="jv-sp-rule" id="jv-sg-today">Today <em>{items.filter((item) => item.state === 'soon').length}</em><hr /></p>
+              <div className="jv-sg-grid">
+                {upcoming.map((item) => gridCard(item, { entry: null, showHub: true }))}
+              </div>
+            </section>
+          ) : null}
+
+          {finished.length ? (
+            <section className="jv-sg-section" aria-labelledby="jv-sg-done">
+              <p className="jv-sp-rule" id="jv-sg-done">Finished <em>{items.filter((item) => item.state === 'done').length}</em><hr /></p>
+              <div className="jv-sg-grid">
+                {finished.map((item) => gridCard(item, { entry: null }))}
+              </div>
+            </section>
+          ) : null}
+
+          <section className="jv-sg-section">
+            <ReplaysBox items={list} resolving={resolving} onPlay={(wanted) => {
+              if (wanted.url) { setPlaying({ key: 'channel', ...wanted }); return; }
+              resolveVideo({ id: wanted.videoId, title: wanted.label, source: 'ICC', key: 'channel' });
+            }} />
+          </section>
+
+          <footer className="jv-sg-about">
+            <p className="jv-sp-note">
+              One request per open match, one per reload, and one when this tab becomes visible again if a match
+              was live and the last read is older than {REFRESH_FLOOR_MS / 1000} s. A playing token is refreshed
+              twice as it nears expiry. Nothing else asks the upstreams anything.
+            </p>
+            <ul className="jv-sp-sources">
+              {(feed.data?.sources || []).map((source) => (
+                <li key={source.id} className={source.ok ? 'ok' : 'no'}>
+                  <b>{source.id}</b>
+                  <span>{source.ok ? source.note || 'answered' : source.note}</span>
+                </li>
+              ))}
+            </ul>
+          </footer>
         </div>
       </main>
       <SourcesSheet open={sheet} onClose={() => setSheet(false)} channels={channelList} sources={feed.data?.sources} onReload={() => load(true)} />
     </>
   );
+}
+
+/** The hero's channel line: source · format · language, straight off the channel object. */
+function channelLineLabel(entry) {
+  const readiness = entry.readiness || {};
+  return [entry.badge, readiness.label].filter(Boolean).join(' · ');
 }

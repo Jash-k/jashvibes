@@ -1,0 +1,95 @@
+<html><body><script>dow.molyReferer || (typeof $.cookie === 'function' ? $.cookie('ref_url') : "") || "https://piratexplay.cc/";
+  </script>
+
+  <script>
+    function molyvastsc(cname, cvalue) {
+      var d = new Date();
+      d.setTime(d.getTime() + (1 * 1 * 1 * 1000));
+      var expires = "expires=" + d.toUTCString();
+      document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/";
+    }
+
+    function molyvastgc(cname) {
+      var name = cname + "=";
+      var decodedCookie = decodeURIComponent(document.cookie);
+      var ca = decodedCookie.split(';');
+      for (var i = 0; i < ca.length; i++) {
+        var c = ca[i];
+        while (c.charAt(0) == ' ') {
+          c = c.substring(1);
+        }
+        if (c.indexOf(name) == 0) {
+          return c.substring(name.length, c.length);
+        }
+      }
+      return "";
+    }
+
+    jwplayer.defaults = {
+      "plugins": {
+        "ping": {},
+        "": {}
+      }
+    };
+
+
+    var skipTime = 0;
+    var skipStart = 0;
+    var showSkipButton = false;
+    var isFullscreen = false;
+
+
+    var player = jwplayer("vplayer");
+    var baseTracks = [
+        {
+          file: '/api/v1/slides?length=2750&url=https%3A%2F%2Fbox-1449-v10.vmbox.space%2Fi%2F04%2F01902%2Fohe1lchzz4ag_p.jpg',
+          kind: 'thumbnails'
+        },
+        {
+          file: 'https://srt.vidmoly.me/srt/01902/ohe1lchzz4ag_English.vtt',
+          label: 'English',
+          kind: 'captions',
+          "default": true
+        }
+    ];
+    var playerInstance = player.setup({
+      sources: [{ file: 'https://box-1449-v10.vmbox.space/hls2/04/01902/ohe1lchzz4ag_n/master.m3u8?t=I44uK66COVae1t3zkrs4AXcLYDqM44-kkk_TlClz19s=&s=1788979237&e=43200&v=&i=0.4&sp=0&asn=0' }],
+      image: "https://box-1449-v10.vmbox.space/i/04/01902/ohe1lchzz4ag.jpg",
+      bitrate: "2160000",
+      label: "720p HD",
+      width: "100%",
+      height: "100%",
+      cast: {},
+      rewind: true,
+      stretching: "uniform",
+      duration: "2750",
+      preload: 'auto',
+      bufferPercent: '5090',
+      defaultBandwidthEstimate: "250000",
+      androidhls: "true",
+      hlshtml: "true",
+      primary: "html5",
+      playbackRateControls: "false",
+      playbackRates: [0.25, 0.5, 1, 1.5, 2.0],
+      startparam: "start",
+      "skin": {
+        "name": "alaska"
+      },
+      tracks: baseTracks
+    });
+
+
+    // Align seek with thumbnail buckets so preview image and playback time stay consistent.
+    var thumbTrackUrl = '/api/v1/slides?length=2750&url=https%3A%2F%2Fbox-1449-v10.vmbox.space%2Fi%2F04%2F01902%2Fohe1lchzz4ag_p.jpg';
+    var thumbIntervalSec = 0;
+    var ignoreNextSnapSeek = false;
+
+    function parseVttTimestampToSec(ts) {
+      if (!ts) return NaN;
+      var m = String(ts).trim().match(/^(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/);
+      if (!m) return NaN;
+      var h = parseInt(m[1], 10) || 0;
+      var mm = parseInt(m[2], 10) || 0;
+      var s = parseInt(m[3], 10) || 0;
+      var ms = parseInt((m[4] || '0').padEnd(3, '0'), 10) || 0;
+      return h * 3600 + mm * 60 + s </script></body></html>
