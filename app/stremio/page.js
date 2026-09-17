@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import EmbedSiteLinks from '@/components/EmbedSiteLinks';
 import RailNav from '@/components/rail/RailNav';
 import { readSessionCache, writeSessionCache } from '@/lib/clientCache';
+import { POSTER_SIZES_ATTR, tmdbImageSrcSet } from '@/lib/tmdbPoster';
 import {
   FILTER_FIELDS,
   SELECTED_KEY,
@@ -115,7 +116,16 @@ function ShelfCard({ item }) {
   return (
     <Link href={href} className="jv-st-card" title={item.synopsis || item.title}>
       {item.posterUrl ? (
-        <img className="jv-st-art" src={item.posterUrl} alt="" aria-hidden="true" loading="lazy" decoding="async" />
+        <img
+          className="jv-st-art"
+          src={item.posterUrl}
+          srcSet={tmdbImageSrcSet(item.posterUrl) || undefined}
+          sizes={tmdbImageSrcSet(item.posterUrl) ? POSTER_SIZES_ATTR : undefined}
+          alt=""
+          aria-hidden="true"
+          loading="lazy"
+          decoding="async"
+        />
       ) : (
         <span className="jv-st-art jv-st-art-none" aria-hidden="true">{String(item.title || '??').trim().slice(0, 2).toUpperCase()}</span>
       )}

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import RailNav from '@/components/rail/RailNav';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
+import { POSTER_SIZES_ATTR, tmdbImageSrcSet } from '@/lib/tmdbPoster';
 import {
   DECADE_MAX_PAGES,
   DECADE_PAGE_LIMIT,
@@ -88,7 +89,16 @@ function TitleRow({ item }) {
   return (
     <Link href={`/classics/${item.id}`} className="jv-dec-row">
       {item.posterUrl ? (
-        <img className="jv-dec-art" src={item.posterUrl} alt="" aria-hidden="true" loading="lazy" decoding="async" />
+        <img
+          className="jv-dec-art"
+          src={item.posterUrl}
+          srcSet={tmdbImageSrcSet(item.posterUrl) || undefined}
+          sizes={tmdbImageSrcSet(item.posterUrl) ? POSTER_SIZES_ATTR : undefined}
+          alt=""
+          aria-hidden="true"
+          loading="lazy"
+          decoding="async"
+        />
       ) : (
         <span className="jv-dec-art jv-dec-art-none" aria-hidden="true">{String(item.title || '??').slice(0, 2).toUpperCase()}</span>
       )}

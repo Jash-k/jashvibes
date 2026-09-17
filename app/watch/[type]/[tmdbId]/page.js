@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { chipClassForTier, labelForTier } from '@/lib/quality';
-import JashPlayer from '@/components/player/JashPlayer';
+import JashPlayer from '@/components/player/JashPlayerLazy';
 import Icon from '@/components/Icons';
 import {
   getHistoryEntry,
@@ -18,6 +18,7 @@ import {
 } from '@/lib/watchStore';
 import { buildSourceList, fmtTime, parseUrlSourceLabel } from '@/lib/player/labels';
 import { detectKind, isDirectFileUrl } from '@/lib/player/kind';
+import { tmdbImageSrcSet } from '@/lib/tmdbPoster';
 
 function isDirectPlayerType(type = '', url = '') {
   // 'direct' = resolved direct file streams (Stremio/Telegram/mirchi). Their
@@ -762,6 +763,8 @@ export default function WatchByTMDBPage() {
                       {ep.stillUrl ? (
                         <img
                           src={ep.stillUrl}
+                          srcSet={tmdbImageSrcSet(ep.stillUrl, ['w300', 'w780']) || undefined}
+                          sizes={tmdbImageSrcSet(ep.stillUrl, ['w300', 'w780']) ? '420px' : undefined}
                           alt=""
                           className="h-full w-full object-cover transition duration-300 group-hover/ep:scale-105"
                           loading="lazy"

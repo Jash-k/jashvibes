@@ -9,6 +9,7 @@ import {
   removeHistoryEntry,
   useLibraryVersion,
 } from '@/lib/watchStore';
+import { POSTER_ROW_SIZES_ATTR, tmdbImageSrcSet } from '@/lib/tmdbPoster';
 
 function itemBadge(item) {
   if (item.type === 'series') {
@@ -34,6 +35,8 @@ export function LibraryCard({ item, showProgress = false, onRemove }) {
           {item.posterUrl ? (
             <img
               src={item.posterUrl}
+              srcSet={tmdbImageSrcSet(item.posterUrl, ['w185', 'w342']) || undefined}
+              sizes={tmdbImageSrcSet(item.posterUrl, ['w185', 'w342']) ? POSTER_ROW_SIZES_ATTR : undefined}
               alt={`${item.title} poster`}
               className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
               loading="lazy"

@@ -1,9 +1,10 @@
 'use client';
 
 import BrandLogo from '@/components/BrandLogo';
-import JashPlayer from '@/components/player/JashPlayer';
+import JashPlayer from '@/components/player/JashPlayerLazy';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
+import { tmdbImageSrcSet } from '@/lib/tmdbPoster';
 
 async function readJsonResponse(response, fallbackMessage = 'Request failed') {
   const contentType = response.headers.get('content-type') || '';
@@ -337,7 +338,15 @@ export default function StremioPlayerPage() {
         </div>
 
         <aside className="rounded-3xl border border-white/10 bg-zinc-950/80 p-4">
-          {item?.posterUrl ? <img src={item.posterUrl} alt="" className="mx-auto max-h-[28rem] rounded-2xl object-cover" /> : null}
+          {item?.posterUrl ? (
+            <img
+              src={item.posterUrl}
+              srcSet={tmdbImageSrcSet(item.posterUrl, ['w342', 'w500', 'w780']) || undefined}
+              sizes={tmdbImageSrcSet(item.posterUrl, ['w342', 'w500', 'w780']) ? '320px' : undefined}
+              alt=""
+              className="mx-auto max-h-[28rem] rounded-2xl object-cover"
+            />
+          ) : null}
           <div className="mt-4 flex flex-wrap gap-2">
             {item?.rating ? <span className="rounded-full bg-yellow-500/10 px-3 py-1 text-xs font-bold text-yellow-100">IMDb {item.rating}</span> : null}
             {(item?.genres || []).map((genre) => <span key={genre} className="rounded-full bg-fuchsia-500/10 px-3 py-1 text-xs font-bold text-fuchsia-100">{genre}</span>)}

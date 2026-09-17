@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { tmdbImageSrcSet } from '@/lib/tmdbPoster';
 import Icon from '@/components/Icons';
 
 export default function CommandPalette({ open, onClose }) {
@@ -195,7 +196,13 @@ export default function CommandPalette({ open, onClose }) {
                   >
                     <div className="h-16 w-11 shrink-0 overflow-hidden rounded-xl bg-zinc-900">
                       {item.posterUrl ? (
-                        <img src={item.posterUrl} alt="" className="h-full w-full object-cover" />
+                        <img
+                          src={item.posterUrl}
+                          srcSet={tmdbImageSrcSet(item.posterUrl, ['w92', 'w185']) || undefined}
+                          sizes={tmdbImageSrcSet(item.posterUrl, ['w92', 'w185']) ? '44px' : undefined}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
                       ) : (
                         <div className="grid h-full place-items-center text-xs text-zinc-600">🎬</div>
                       )}

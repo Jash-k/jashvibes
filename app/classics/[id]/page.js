@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
-import JashPlayer from '@/components/player/JashPlayer';
+import JashPlayer from '@/components/player/JashPlayerLazy';
 import { createStreamPolicy } from '@/lib/player/policy/stream';
+import { tmdbImageSrcSet } from '@/lib/tmdbPoster';
 
 export default function ClassicPlayerPage() {
   const params = useParams();
@@ -139,7 +140,13 @@ export default function ClassicPlayerPage() {
 
             <aside className="rounded-3xl border border-white/10 bg-zinc-950/80 p-5">
               {item.posterUrl ? (
-                <img src={item.posterUrl} alt="" className="mx-auto max-h-[28rem] rounded-2xl object-cover shadow-2xl shadow-black" />
+                <img
+                  src={item.posterUrl}
+                  srcSet={tmdbImageSrcSet(item.posterUrl, ['w342', 'w500', 'w780']) || undefined}
+                  sizes={tmdbImageSrcSet(item.posterUrl, ['w342', 'w500', 'w780']) ? '320px' : undefined}
+                  alt=""
+                  className="mx-auto max-h-[28rem] rounded-2xl object-cover shadow-2xl shadow-black"
+                />
               ) : null}
               <div className="mt-4 space-y-3">
                 <p className="text-[10px] font-black uppercase tracking-wider text-amber-400">Sources & Genres</p>

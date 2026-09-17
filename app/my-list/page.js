@@ -14,6 +14,7 @@ import {
   removeHistoryEntry,
   useLibraryVersion,
 } from '@/lib/watchStore';
+import { tmdbImageSrcSet } from '@/lib/tmdbPoster';
 
 function TabButton({ active, children, count, onClick }) {
   return (
@@ -137,7 +138,13 @@ export default function MyListPage() {
                   <div className="flex items-center gap-4">
                     <div className="h-20 w-14 shrink-0 overflow-hidden rounded-2xl bg-zinc-900 shadow-md">
                       {history[0].posterUrl ? (
-                        <img src={history[0].posterUrl} alt="" className="h-full w-full object-cover" />
+                        <img
+                          src={history[0].posterUrl}
+                          srcSet={tmdbImageSrcSet(history[0].posterUrl, ['w92', 'w185']) || undefined}
+                          sizes={tmdbImageSrcSet(history[0].posterUrl, ['w92', 'w185']) ? '56px' : undefined}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
                       ) : null}
                     </div>
                     <div>

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import CommandPalette from '@/components/CommandPalette';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
+import { POSTER_SIZES_ATTR, tmdbImageSrcSet } from '@/lib/tmdbPoster';
 import Icon from '@/components/Icons';
 import { releaseQualityChip, parseReleaseQuality, chipClassForTier, labelForTier } from '@/lib/quality';
 import { getHistory, getProgressPercent, isFavoriteItem, makeWatchKey, toggleFavoriteItem, useLibraryVersion } from '@/lib/watchStore';
@@ -170,6 +171,8 @@ function MediaCard({ item, onItemMatched, delay = 0 }) {
           {item.posterUrl ? (
             <img
               src={item.posterUrl}
+              srcSet={tmdbImageSrcSet(item.posterUrl) || undefined}
+              sizes={tmdbImageSrcSet(item.posterUrl) ? POSTER_SIZES_ATTR : undefined}
               alt={`${item.title} poster`}
               className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
               loading="lazy"
