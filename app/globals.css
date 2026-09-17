@@ -1928,6 +1928,122 @@ html.day-mode .jv-st-page { background: var(--st-bg); color: var(--st-ink); }
 }
 
 /* ============================================================================
+   Live TV — Broadcast Wall (`app/live/page.js`)
+   The page never scrolls: the section is exactly the viewport minus the header
+   (sm+) and the 72 px mobile dock (<lg), and only the wall (plus the left pane
+   on short desktop windows) scrolls inside its own box. Desktop gets a dense
+   logo wall, mobile a 3-column grid, TV (>=1700 px) oversized tiles and focus.
+   ========================================================================= */
+.jv-lv-section {
+  height: calc(100dvh - 76px - env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
+}
+@media (min-width: 640px) {
+  .jv-lv-section {
+    height: calc(100dvh - var(--live-header-h, 84px) - 76px - env(safe-area-inset-bottom, 0px));
+  }
+}
+@media (min-width: 1024px) {
+  .jv-lv-section {
+    height: calc(100dvh - var(--live-header-h, 84px) - 2.5rem);
+  }
+  .jv-lv-left {
+    max-height: 100%;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    padding-bottom: 4px;
+  }
+}
+.jv-lv-wallcol {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.jv-lv-wall {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-content: start;
+  padding: 2px;
+}
+@media (min-width: 640px) {
+  .jv-lv-wall { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .jv-lv-wall { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
+}
+@media (min-width: 1700px) {
+  .jv-lv-wall { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 12px; }
+}
+.jv-lv-wallnote { grid-column: 1 / -1; }
+.jv-lv-tile { position: relative; min-width: 0; }
+.jv-lv-tune {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.jv-lv-tune:hover { border-color: rgba(255, 255, 255, 0.3); }
+.jv-lv-tune img { max-width: 82%; max-height: 82%; object-fit: contain; }
+.jv-lv-tune-none { font-size: 12px; font-weight: 900; color: #71717a; }
+.jv-lv-tile.is-active .jv-lv-tune {
+  border-color: rgba(239, 68, 68, 0.9);
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.7), 0 8px 24px -12px rgba(239, 68, 68, 0.55);
+}
+.jv-lv-tune:focus-visible { outline: 2px solid #f87171; outline-offset: 2px; }
+@media (min-width: 1700px) {
+  .jv-lv-tune { border-radius: 18px; }
+  .jv-lv-tune:focus-visible { outline-width: 3px; box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.35); }
+}
+/* The pinned per-row guide line stays mounted (tests + data), but a wall tile is a logo:
+   the show text is hidden and only the progress hairline survives, pinned to the tile foot. */
+.jv-lv-tile-epg { position: absolute; inset: auto 0 0 0; pointer-events: none; }
+.jv-lv-tile-epg p { display: none; }
+.jv-lv-tile-epg > div { margin: 0; min-width: 0; }
+.jv-lv-tile-epg > div > div {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 6px;
+  width: auto;
+  height: 2px;
+  margin: 0;
+}
+.jv-lv-fav {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  height: 24px;
+  width: 24px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.55);
+  color: #71717a;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.jv-lv-fav:hover { border-color: rgba(250, 204, 21, 0.4); color: #fde68a; }
+.jv-lv-fav.is-fav { border-color: rgba(250, 204, 21, 0.5); background: rgba(113, 63, 18, 0.5); color: #fcd34d; }
+html.day-mode .jv-lv-tune { background: #ffffff; border-color: rgba(16, 19, 34, 0.14); }
+html.day-mode .jv-lv-tune:hover { border-color: rgba(16, 19, 34, 0.3); }
+html.day-mode .jv-lv-fav { background: rgba(255, 255, 255, 0.9); border-color: rgba(16, 19, 34, 0.14); }
+
+/* ============================================================================
    Sports — the Single Feed (`components/sports/SportsFeed.js`)
    Dark by design and dark in day mode, amber accent, one type scale, 11 px floor,
    tabular figures on every number. No `!important` anywhere in this block: it owns

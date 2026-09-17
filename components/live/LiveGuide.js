@@ -153,7 +153,7 @@ export function SourceBadges({ channel, row }) {
       {channel?.keyId && channel?.key ? <span className="rounded-full border border-blue-500/20 bg-blue-500/15 px-1.5 py-0.5 text-[9px] font-black text-blue-200">DRM</span> : null}
       {row && row.matched ? (
         <span
-          className={`h-1.5 w-1.5 rounded-full ${row.via === 'name' || row.via === 'prefix' ? 'bg-emerald-400' : 'bg-purple-300'}`}
+          className={`h-1.5 w-1.5 rounded-full ${row.via === 'name' || row.via === 'prefix' ? 'bg-emerald-400' : 'bg-red-400'}`}
           title={row.via === 'tvgId' ? `Guide linked by tvg-id ${row.epgId}` : `Guide matched by name → ${row.epgName || row.epgId}`}
         />
       ) : (
@@ -180,10 +180,10 @@ export function GuideNowLine({ row, at = Date.now(), className = '' }) {
     <div className={`min-w-0 ${className}`}>
       <p className="truncate text-[11.5px] font-bold text-zinc-200">
         {show.title}
-        {row.now && row.nowMinutesLeft ? <span className="ml-1.5 font-black text-purple-300">{row.nowMinutesLeft}m left</span> : null}
+        {row.now && row.nowMinutesLeft ? <span className="ml-1.5 font-black text-red-300">{row.nowMinutesLeft}m left</span> : null}
       </p>
       <div className="mt-1 h-[3px] w-full overflow-hidden rounded-full bg-white/10">
-        <div className="h-full rounded-full bg-gradient-to-r from-fuchsia-500 to-purple-400 transition-[width] duration-1000" style={{ width: `${Math.round(progress * 100)}%` }} />
+        <div className="h-full rounded-full bg-gradient-to-r from-red-600 to-red-400 transition-[width] duration-1000" style={{ width: `${Math.round(progress * 100)}%` }} />
       </div>
       <p className="mt-1 truncate text-[10px] font-semibold text-zinc-500">
         {fmtHour(show.from)}–{fmtHour(show.to)}
@@ -202,7 +202,7 @@ export function ProgrammeCard({ row, channel, compact = false, onOpenPanel, at =
     <div className={`rounded-2xl border border-white/10 bg-zinc-950/85 shadow-[0_16px_40px_-24px_rgba(0,0,0,.9)] ${compact ? 'p-2.5' : 'p-3 sm:p-4'} ${className}`}>
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[10px] font-black uppercase tracking-[0.18em] text-purple-300/80">
+          <p className="truncate text-[10px] font-black uppercase tracking-[0.18em] text-red-300/80">
             {row?.matched ? (row.now ? 'On air now' : 'Last shown') : 'Guide'}
           </p>
           {show ? (
@@ -216,7 +216,7 @@ export function ProgrammeCard({ row, channel, compact = false, onOpenPanel, at =
             <p className="mt-0.5 truncate text-[11px] font-semibold text-zinc-400">
               {fmtHour(show.from)} – {fmtHour(show.to)}
               {show.category ? <span className="ml-1.5 rounded-full bg-white/[0.07] px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-zinc-300">{show.category}</span> : null}
-              {row?.now && minutesLeft ? <span className="ml-1.5 text-purple-300">{minutesLeft} min left</span> : null}
+              {row?.now && minutesLeft ? <span className="ml-1.5 text-red-300">{minutesLeft} min left</span> : null}
             </p>
           ) : null}
         </div>
@@ -224,7 +224,7 @@ export function ProgrammeCard({ row, channel, compact = false, onOpenPanel, at =
           <button
             type="button"
             onClick={onOpenPanel}
-            className="shrink-0 rounded-full border border-purple-300/30 bg-purple-500/10 px-2 py-1 text-[10px] font-black text-purple-100 transition hover:border-purple-300/70"
+            className="shrink-0 rounded-full border border-red-400/30 bg-red-500/10 px-2 py-1 text-[10px] font-black text-red-100 transition hover:border-red-400/70"
             title="Open the Live TV service panel and map this channel to a guide id"
           >
             Map
@@ -232,13 +232,13 @@ export function ProgrammeCard({ row, channel, compact = false, onOpenPanel, at =
         ) : null}
       </div>
 
-      {show ? <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-fuchsia-500 via-purple-400 to-fuchsia-300 transition-[width] duration-1000" style={{ width: `${Math.round(progress * 100)}%` }} /></div> : null}
+      {show ? <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-red-600 via-red-500 to-orange-400 transition-[width] duration-1000" style={{ width: `${Math.round(progress * 100)}%` }} /></div> : null}
       {!compact && show?.desc ? <p className="mt-2 line-clamp-2 text-[11.5px] font-medium leading-5 text-zinc-400">{show.desc}</p> : null}
       {!compact && row?.next ? (
         <p className="mt-2 truncate text-[11px] font-bold text-zinc-300">
           <span className="text-zinc-500">Up next · </span>
           {fmtHour(row.next.from)} {row.next.title}
-          {row.minutesToNext ? <span className="ml-1.5 font-black text-purple-300">in {row.minutesToNext} min</span> : null}
+          {row.minutesToNext ? <span className="ml-1.5 font-black text-red-300">in {row.minutesToNext} min</span> : null}
         </p>
       ) : null}
       {status?.error ? <p className="mt-2 truncate text-[10px] font-bold text-orange-300/80">guide feed: {status.error} (showing the last listing)</p> : null}
@@ -275,12 +275,12 @@ export function DayStrip({ row, at = Date.now(), loading = false }) {
               key={`${show.from}-${show.title}`}
               data-now={show.state === 'now' ? '1' : undefined}
               className={`min-w-[8.5rem] max-w-[11rem] shrink-0 snap-start rounded-xl border px-2 py-1.5 ${
-                show.state === 'now' ? 'border-fuchsia-400/50 bg-fuchsia-500/10' : show.state === 'ended' ? 'border-white/[0.06] bg-white/[0.02] opacity-55' : 'border-white/10 bg-white/[0.04]'
+                show.state === 'now' ? 'border-red-500/60 bg-red-500/10' : show.state === 'ended' ? 'border-white/[0.06] bg-white/[0.02] opacity-55' : 'border-white/10 bg-white/[0.04]'
               }`}
             >
               <p className="text-[10px] font-black tabular-nums text-zinc-300">
                 {fmtHour(show.from)}–{fmtHour(show.to)}
-                {show.state === 'now' ? <span className="ml-1 text-fuchsia-300">now</span> : null}
+                {show.state === 'now' ? <span className="ml-1 text-red-300">now</span> : null}
               </p>
               <p className="mt-0.5 line-clamp-2 text-[11px] font-bold leading-4 text-white">{show.title}</p>
             </div>
@@ -314,7 +314,7 @@ export function GuideStatus({ status, linked = 0, unlinked = 0, onRefresh, refre
       </span>
       {status?.error ? <span className="text-orange-300">{status.error}</span> : null}
       {onRefresh ? (
-        <button type="button" onClick={onRefresh} disabled={refreshing} className="rounded-full border border-purple-300/30 bg-purple-500/10 px-2 py-0.5 text-purple-100 transition hover:border-purple-300/70 disabled:opacity-50">
+        <button type="button" onClick={onRefresh} disabled={refreshing} className="rounded-full border border-red-400/30 bg-red-500/10 px-2 py-0.5 text-red-100 transition hover:border-red-400/70 disabled:opacity-50">
           {refreshing ? 'Refreshing…' : 'Refresh feed'}
         </button>
       ) : null}

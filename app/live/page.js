@@ -75,6 +75,7 @@ export default function LiveTVPage() {
   // choice is per-device — a desktop has no reason to inherit it, and a page that re-stacks itself on
   // reload loses the place the viewer came back to.
   const [guideCompact, setGuideCompact] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   useEffect(() => {
     try {
       setGuideCompact(window.localStorage.getItem(LIVE_GUIDE_ROW_STORAGE_KEY) === '1');
@@ -334,7 +335,7 @@ export default function LiveTVPage() {
   }
 
   return (
-    <main className="palette-cybergrape live-page min-h-dvh overflow-x-clip bg-[#09041a] text-zinc-100">
+    <main className="palette-cybergrape live-page jv-lv min-h-dvh overflow-x-clip bg-[#09041a] text-zinc-100">
       <header id="live-header" className="hidden sm:block sticky top-0 z-50 border-b border-white/10 bg-zinc-950 shadow-[0_14px_30px_-18px_rgba(0,0,0,.9)]">
         <div className="mx-auto grid max-w-7xl gap-2 px-3 py-1.5 sm:px-6 sm:py-2 lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:px-8">
           <div className="flex items-center justify-start gap-3">
@@ -349,7 +350,7 @@ export default function LiveTVPage() {
           <button
             type="button"
             onClick={() => setServiceOpen(true)}
-            className="mr-14 justify-self-end rounded-full border border-purple-300/25 bg-purple-500/10 px-2.5 py-1.5 text-[11px] font-black text-purple-200 transition hover:border-purple-300/70 sm:mr-[4.75rem]"
+            className="mr-14 justify-self-end rounded-full border border-red-400/25 bg-red-500/10 px-2.5 py-1.5 text-[11px] font-black text-red-200 transition hover:border-red-400/70 sm:mr-[4.75rem]"
             title="Live TV Service Panel"
           >
             ⚙
@@ -357,8 +358,8 @@ export default function LiveTVPage() {
         </div>
       </header>
 
-      <section className="mx-auto flex max-w-7xl flex-col items-stretch gap-3 px-3 pt-3 pb-28 sm:gap-4 sm:px-6 sm:pt-5 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(300px,22rem)] lg:items-start xl:grid-cols-[minmax(0,1fr)_minmax(320px,24rem)] lg:px-8 lg:pb-5">
-        <div className="contents min-w-0 space-y-3 sm:space-y-4 lg:block lg:min-h-0 lg:sticky lg:top-[calc(var(--live-header-h,84px)+1rem)] lg:self-start lg:space-y-3">
+      <section className="jv-lv-section mx-auto flex max-w-7xl flex-col items-stretch gap-3 px-3 pt-3 pb-3 sm:gap-4 sm:px-6 sm:pt-5 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,32rem)] lg:items-start xl:grid-cols-[minmax(0,1fr)_minmax(0,36rem)] lg:px-8 lg:pb-5 2xl:max-w-[110rem]">
+        <div className="jv-lv-left contents min-w-0 space-y-3 sm:space-y-4 lg:block lg:min-h-0 lg:sticky lg:top-[calc(var(--live-header-h,84px)+1rem)] lg:self-start lg:space-y-3">
           {/* R1 phone row: the live tile and one line of guide share a single sticky strip, so the
               channel, what is on and the minutes left are all above the fold while the video keeps its
               16:9 letterbox. One <video> in a flex container — the guide is a neighbour, never a wrapper,
@@ -408,7 +409,7 @@ export default function LiveTVPage() {
                   <button
                     type="button"
                     onClick={toggleGuideRow}
-                    className="ml-auto grid h-6 w-6 shrink-0 place-items-center rounded-lg border border-white/15 bg-white/[0.06] text-[11px] font-black text-white transition hover:border-fuchsia-400/60"
+                    className="ml-auto grid h-6 w-6 shrink-0 place-items-center rounded-lg border border-white/15 bg-white/[0.06] text-[11px] font-black text-white transition hover:border-red-400/60"
                     title="Put the guide back under the player"
                     aria-label="Expand the guide below the player"
                   >
@@ -419,7 +420,7 @@ export default function LiveTVPage() {
             ) : null}
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-zinc-950/80 p-3 sm:rounded-3xl sm:p-4">
+          <div className="rounded-2xl border border-white/10 bg-zinc-950/80 p-3 shrink-0 sm:rounded-3xl sm:p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <div className="flex items-center gap-2.5"><h1 className="truncate text-xl font-black text-white sm:text-2xl">{active?.name || 'Tamil Live TV'}</h1></div>
@@ -446,7 +447,18 @@ export default function LiveTVPage() {
               </div>
             </div>
 
-            <div className="mt-4 space-y-2 sm:space-y-3">
+            <div className="mt-3 lg:hidden">
+              <button
+                type="button"
+                onClick={() => setMoreOpen((value) => !value)}
+                aria-expanded={moreOpen}
+                className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-black text-zinc-200 transition hover:border-red-500/50"
+              >
+                {moreOpen ? 'Hide details ▴' : 'Actions · return · today\u2019s guide ▾'}
+              </button>
+            </div>
+            <div className={`${moreOpen ? '' : 'max-lg:hidden'} mt-2 space-y-3 lg:mt-4`}>
+            <div className="space-y-2 sm:space-y-3">
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
@@ -482,20 +494,20 @@ export default function LiveTVPage() {
                 <button onClick={copyUrl} disabled={!active?.url} className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-bold text-white transition hover:border-red-500/50 disabled:opacity-40">Copy stream URL</button>
               </div>
             </div>
+            <DayStrip row={guide.get(active?.id)} at={guide.at} loading={guide.loading} />
+            </div>
           </div>
-
-          <DayStrip row={guide.get(active?.id)} at={guide.at} loading={guide.loading} />
         </div>
 
-        <aside className="min-w-0 space-y-3 lg:w-full">
+        <aside className="jv-lv-wallcol min-w-0 space-y-3 lg:min-h-0 lg:w-full lg:self-stretch">
           <div className="sticky top-[7.7rem] z-30 rounded-2xl border border-white/10 bg-zinc-950 p-3 shadow-[0_18px_40px_-16px_rgba(0,0,0,.85)] sm:rounded-3xl sm:p-4 lg:static lg:shadow-none">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-200">My catalogs</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-200">My catalogs</p>
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => setServiceOpen(true)}
-                  className="rounded-full border border-purple-300/25 bg-purple-500/10 px-2 py-0.5 text-[10px] font-black text-purple-100 sm:hidden"
+                  className="rounded-full border border-red-400/25 bg-red-500/10 px-2 py-0.5 text-[10px] font-black text-red-100 sm:hidden"
                   title="Live TV Service Panel"
                 >
                   ⚙
@@ -507,7 +519,7 @@ export default function LiveTVPage() {
               <button
                 type="button"
                 onClick={() => setCategory('all')}
-                className={`rounded-xl border px-2 py-2 text-xs font-black transition ${category === 'all' ? 'border-purple-400 bg-purple-500/20 text-purple-100' : 'border-white/10 bg-white/[0.04] text-zinc-300'}`}
+                className={`rounded-xl border px-2 py-2 text-xs font-black transition ${category === 'all' ? 'border-red-500 bg-red-500/20 text-red-100' : 'border-white/10 bg-white/[0.04] text-zinc-300'}`}
               >
                 All · {channels.length}
               </button>
@@ -516,7 +528,7 @@ export default function LiveTVPage() {
                   key={catalog.id}
                   type="button"
                   onClick={() => setCategory(catalog.id)}
-                  className={`rounded-xl border px-2 py-2 text-xs font-black transition ${category === catalog.id ? 'border-purple-400 bg-purple-500/20 text-purple-100' : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-purple-400/40'}`}
+                  className={`rounded-xl border px-2 py-2 text-xs font-black transition ${category === catalog.id ? 'border-red-500 bg-red-500/20 text-red-100' : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-red-500/40'}`}
                 >
                   {catalog.icon} {catalog.name} · {catalog.count}
                 </button>
@@ -527,7 +539,7 @@ export default function LiveTVPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search mapped channels"
-                className="min-w-0 rounded-xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-purple-400"
+                className="min-w-0 rounded-xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-red-500"
               />
               <button
                 type="button"
@@ -564,10 +576,10 @@ export default function LiveTVPage() {
             </div>
           ) : null}
 
-          <div className="space-y-2 pr-1 lg:max-h-[70dvh] lg:overflow-y-auto">
-            {status === 'loading' ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">Loading Tamil channels...</div> : null}
-            {status === 'error' ? <div className="rounded-3xl border border-red-500/30 bg-red-950/20 p-6 text-center text-red-200">{error}</div> : null}
-            {status === 'ready' && filteredChannels.length === 0 ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">No manually mapped channels in this catalog.</div> : null}
+          <div className="jv-lv-wall">
+            {status === 'loading' ? <div className="jv-lv-wallnote rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">Loading Tamil channels...</div> : null}
+            {status === 'error' ? <div className="jv-lv-wallnote rounded-3xl border border-red-500/30 bg-red-950/20 p-6 text-center text-red-200">{error}</div> : null}
+            {status === 'ready' && filteredChannels.length === 0 ? <div className="jv-lv-wallnote rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">No manually mapped channels in this catalog.</div> : null}
 
             {filteredChannels.map((channel) => {
               if (!channel) return null;
@@ -576,35 +588,23 @@ export default function LiveTVPage() {
               return (
                 <div
                   key={channel.id}
-                  className={`group/ch flex items-center gap-3 rounded-2xl border p-2.5 transition sm:rounded-3xl sm:p-3 ${
-                    isActive
-                      ? 'border-red-500/80 bg-gradient-to-r from-red-600/20 via-purple-600/10 to-zinc-950 shadow-lg shadow-red-950/30'
-                      : 'border-white/10 bg-zinc-950/80 hover:border-white/30 hover:bg-zinc-900/90'
-                  }`}
+                  className={`jv-lv-tile${isActive ? ' is-active' : ''}`}
+                  title={channel.name || 'Channel'}
                 >
                   <button
                     type="button"
                     onClick={() => selectChannel(channel)}
-                    className="flex min-w-0 flex-1 items-center gap-3 text-left outline-none"
+                    aria-pressed={isActive}
+                    aria-label={`Watch ${channel.name || 'Channel'}`}
+                    className="jv-lv-tune"
                   >
-                    <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/5 sm:h-14 sm:w-14 sm:rounded-2xl">
-                      {channel.logo ? <img src={channel.logo} alt="" className="max-h-full max-w-full object-fill" loading="lazy" /> : <span className="text-xs font-black text-zinc-500">TV</span>}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      {/* The active row is already unmistakable (red border, gradient wash, white title),
-                          and the player carries the one LIVE marker this page needs — a pulsing dot here
-                          was a second "live" symbol for the same channel. */}
-                      <p className={`truncate text-sm font-black ${isActive ? 'text-white' : 'text-zinc-100'}`}>{channel.name || 'Channel'}</p>
-                      <p className="mt-1 truncate text-xs text-zinc-400">{getChannelCatalogIds(channel).map(catalogLabel).join(' + ') || 'Initial Jio'} • {channel.source || 'Jio'}</p>
-                      <div className="mt-1 flex items-center justify-between gap-2">
-                        <span className="flex items-center gap-1.5">
-                          <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${channel.playable ? 'bg-green-500/15 text-green-300 border border-green-500/20' : 'bg-orange-500/15 text-orange-300 border border-orange-500/20'}`}>{(channel.format || 'HLS').toUpperCase()}</span>
-                          {channel.keyId && channel.key ? <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[9px] font-black text-blue-200 border border-blue-500/20">DRM</span> : null}
-                        </span>
-                        <SourceBadges channel={channel} row={guide.get(channel.id)} />
-                      </div>
-                      <GuideNowLine row={guide.get(channel.id)} at={guide.at} className="mt-1.5" />
-                    </div>
+                    {channel.logo ? <img src={channel.logo} alt="" loading="lazy" /> : <span className="jv-lv-tune-none">TV</span>}
+                    <span className="jv-lv-tile-epg" aria-hidden="true">
+                      {/* A wall tile is a logo: the name, catalogs, source and badges live in the
+                          now-playing card once tuned. The per-row guide line stays mounted (its text
+                          hides, its progress hairline shows) so the wall keeps its one live query. */}
+                      <GuideNowLine row={guide.get(channel.id)} at={guide.at} />
+                    </span>
                   </button>
 
                   <button
@@ -613,12 +613,9 @@ export default function LiveTVPage() {
                       e.stopPropagation();
                       toggleFavorite(channel);
                     }}
-                    className={`grid h-8 w-8 place-items-center rounded-xl border transition ${
-                      isFav
-                        ? 'border-yellow-400/50 bg-yellow-500/20 text-yellow-300'
-                        : 'border-white/10 bg-white/5 text-zinc-500 hover:border-yellow-400/40 hover:text-yellow-200'
-                    }`}
+                    className={`jv-lv-fav${isFav ? ' is-fav' : ''}`}
                     title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                    aria-label={isFav ? `Remove ${channel.name || 'Channel'} from favorites` : `Add ${channel.name || 'Channel'} to favorites`}
                   >
                     ★
                   </button>
@@ -765,7 +762,7 @@ function LiveEpgPanel({ channels = [], onAction, epg = null }) {
           <button
             onClick={epg?.refresh}
             disabled={!epg?.refresh || epg?.refreshing}
-            className="rounded-2xl border border-purple-300/30 bg-purple-500/10 px-3 py-2 text-xs font-black text-purple-100 transition hover:border-purple-300/70 disabled:opacity-50"
+            className="rounded-2xl border border-red-300/30 bg-red-500/10 px-3 py-2 text-xs font-black text-red-100 transition hover:border-red-300/70 disabled:opacity-50"
             title="Re-download the feed now. Shares the page's single-flight cache, so it cannot stack up."
           >
             {epg?.refreshing ? 'Refreshing…' : 'Refresh feed now'}
@@ -775,9 +772,9 @@ function LiveEpgPanel({ channels = [], onAction, epg = null }) {
 
       <div className="flex flex-wrap items-center gap-2">
         {[['all', `All · ${channels.length}`], ['unlinked', `Needs mapping · ${unlinked}`], ['linked', `Linked · ${linked}`]].map(([id, label]) => (
-          <button key={id} onClick={() => setScope(id)} className={`rounded-2xl border px-3 py-1.5 text-xs font-black transition ${scope === id ? 'border-purple-400 bg-purple-500/20 text-purple-100' : 'border-white/10 bg-white/[0.04] text-zinc-300'}`}>{label}</button>
+          <button key={id} onClick={() => setScope(id)} className={`rounded-2xl border px-3 py-1.5 text-xs font-black transition ${scope === id ? 'border-red-400 bg-red-500/20 text-red-100' : 'border-white/10 bg-white/[0.04] text-zinc-300'}`}>{label}</button>
         ))}
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter by channel" className="min-w-[10rem] flex-1 rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-purple-400" />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter by channel" className="min-w-[10rem] flex-1 rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-red-400" />
       </div>
 
       {note ? <p className="rounded-2xl bg-white/[0.04] p-3 text-xs leading-5 text-zinc-300">{note}</p> : null}
@@ -798,7 +795,7 @@ function LiveEpgPanel({ channels = [], onAction, epg = null }) {
               </div>
               <button
                 onClick={() => { setEditing(editing === (channel.channelId || channel.id) ? '' : (channel.channelId || channel.id)); setTerm(''); setResults([]); setNote(''); }}
-                className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-black text-zinc-200 transition hover:border-purple-300/60"
+                className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-black text-zinc-200 transition hover:border-red-300/60"
               >
                 {row?.matched ? 'Change binding' : 'Map guide'}
               </button>
@@ -810,13 +807,13 @@ function LiveEpgPanel({ channels = [], onAction, epg = null }) {
             </div>
 
             {editing === (channel.channelId || channel.id) ? (
-              <div className="mt-3 rounded-2xl border border-purple-300/20 bg-purple-500/[0.06] p-3">
+              <div className="mt-3 rounded-2xl border border-red-300/20 bg-red-500/[0.06] p-3">
                 <input
                   autoFocus
                   value={term}
                   onChange={(event) => setTerm(event.target.value)}
                   placeholder="Search the guide feed by name (2+ characters)"
-                  className="w-full rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-purple-400"
+                  className="w-full rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-red-400"
                 />
                 <p className="mt-2 text-[11px] font-semibold text-zinc-400">
                   {searching ? 'Searching the parsed feed…' : term.trim().length < 2 ? 'Type at least two characters. Results come from the same day index the page uses.' : results.length ? `${results.length} match${results.length > 1 ? 'es' : ''}` : 'Nothing in the feed matches that name.'}
@@ -824,13 +821,13 @@ function LiveEpgPanel({ channels = [], onAction, epg = null }) {
                 {results.length ? (
                   <div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto pr-1">
                     {results.map((item) => (
-                      <button key={item.id} onClick={() => bind(channel, item.id, item.name)} className="flex w-full items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-left transition hover:border-purple-300/60">
+                      <button key={item.id} onClick={() => bind(channel, item.id, item.name)} className="flex w-full items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-left transition hover:border-red-300/60">
                         {item.logo ? <img src={item.logo} alt="" className="h-6 w-6 shrink-0 rounded bg-black object-contain" loading="lazy" /> : null}
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-black text-white">{item.name}</span>
                           <span className="block truncate text-[10px] font-semibold text-zinc-500">id {item.id}</span>
                         </span>
-                        {item.id === channel.tvgId ? <span className="shrink-0 rounded-full bg-purple-500/20 px-2 py-0.5 text-[9px] font-black text-purple-100">current</span> : null}
+                        {item.id === channel.tvgId ? <span className="shrink-0 rounded-full bg-red-500/20 px-2 py-0.5 text-[9px] font-black text-red-100">current</span> : null}
                       </button>
                     ))}
                   </div>
@@ -1363,7 +1360,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
 
   return (
     <div className="fixed inset-0 z-[120] bg-black/75 p-2 backdrop-blur-xl sm:p-4">
-      <section className="mx-auto flex h-full max-w-7xl flex-col overflow-hidden rounded-[1.6rem] border border-purple-300/20 bg-zinc-950 text-white shadow-2xl sm:rounded-[2rem]">
+      <section className="mx-auto flex h-full max-w-7xl flex-col overflow-hidden rounded-[1.6rem] border border-red-300/20 bg-zinc-950 text-white shadow-2xl sm:rounded-[2rem]">
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
           <div><h2 className="text-lg font-black sm:text-2xl">Live TV Service Panel</h2><p className="text-[11px] text-zinc-500">Manual catalogs • source-on-demand loading • per-catalog order</p></div>
           <button type="button" onClick={onClose} aria-label="Close service panel" title="Close" className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/15 bg-white/10 text-2xl font-black leading-none text-white transition hover:border-red-400 hover:bg-red-500/80">✕</button>
@@ -1374,7 +1371,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
             <p className="text-sm font-bold text-zinc-300">Enter password to manage Live TV services.</p>
             <input type="password" name="live-service-password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" spellCheck={false} autoFocus className="mt-4 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none" placeholder="Service password" />
             {authError ? <p className="mt-3 text-sm text-red-300">{authError}</p> : null}
-            <button className="mt-4 w-full rounded-2xl bg-purple-500 px-4 py-3 text-sm font-black text-black">Unlock</button>
+            <button className="mt-4 w-full rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white">Unlock</button>
           </form>
         ) : (
           <div className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-[16rem_minmax(0,1fr)_22rem]">
@@ -1388,7 +1385,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
                   ['tools', 'Tools'],
                   ['duplicates', 'Duplicates'],
                   ['epg', 'Guide (EPG)'],
-                ].map(([id, label]) => <button key={id} onClick={() => setTab(id)} className={`rounded-2xl px-4 py-3 text-left text-sm font-black ${tab === id ? 'bg-purple-500 text-black' : 'bg-white/[0.04] text-zinc-300'}`}>{label}</button>)}
+                ].map(([id, label]) => <button key={id} onClick={() => setTab(id)} className={`rounded-2xl px-4 py-3 text-left text-sm font-black ${tab === id ? 'bg-red-500 text-white' : 'bg-white/[0.04] text-zinc-300'}`}>{label}</button>)}
               </div>
               <div className="mt-4 space-y-2">
                 <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white"><option value="">Choose source…</option>{sources.map((s) => <option key={s.sourceId || s.id} value={s.sourceId || s.id}>{s.label}</option>)}</select>
@@ -1408,7 +1405,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
                   <input value={sourceForm.label} onChange={(e) => setSourceForm((f) => ({ ...f, label: e.target.value }))} placeholder="Source name" className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white" />
                   <input value={sourceForm.url} onChange={(e) => setSourceForm((f) => ({ ...f, url: e.target.value }))} placeholder="M3U/JSON URL" className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white" />
                   <select value={sourceForm.type} onChange={(e) => setSourceForm((f) => ({ ...f, type: e.target.value }))} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white"><option value="m3u">M3U</option><option value="json">JSON</option></select>
-                  <button className="rounded-2xl bg-purple-500 px-3 py-2 text-sm font-black text-black">Add / Save Source</button>
+                  <button className="rounded-2xl bg-red-500 px-3 py-2 text-sm font-black text-white">Add / Save Source</button>
                 </form>
                 {sources.map((source) => <div key={source.sourceId || source.id} className="rounded-3xl border border-white/10 bg-white/[0.03] p-3">
                   <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-black">{source.label}</p><p className="break-all text-xs text-zinc-500">{source.url}</p><p className="mt-1 text-xs text-zinc-500">{source.channelCount || 0} channels • {source.mappedCount ?? source.selectedCount ?? 0} mapped • priority {source.priority}</p>{source.lastError ? <p className="mt-2 rounded-xl border border-red-400/25 bg-red-500/10 p-2 text-xs text-red-200">{source.lastError}</p> : null}</div><span className="rounded-full bg-white/[0.06] px-2 py-1 text-[10px] font-bold uppercase">{source.type}</span></div>
@@ -1453,8 +1450,8 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
               </div> : null}
 
               {tab === 'main' ? <div className="space-y-3">
-                <div className="rounded-3xl border border-purple-300/20 bg-purple-500/10 p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-black text-white">Main Panel Preview</p><p className="text-xs text-zinc-400">This list is fetched from /api/live-tv and should exactly match the main Live TV panel.</p></div><button onClick={loadMainPanelPreview} className="rounded-full border border-purple-300/30 px-3 py-1.5 text-xs font-black text-purple-100">Reload</button></div>
+                <div className="rounded-3xl border border-red-300/20 bg-red-500/10 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-black text-white">Main Panel Preview</p><p className="text-xs text-zinc-400">This list is fetched from /api/live-tv and should exactly match the main Live TV panel.</p></div><button onClick={loadMainPanelPreview} className="rounded-full border border-red-300/30 px-3 py-1.5 text-xs font-black text-red-100">Reload</button></div>
                   <div className="mt-3 grid gap-2 sm:grid-cols-3">
                     <select value={mainPanelCategory} onChange={(event) => setMainPanelCategory(event.target.value)} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none"><option value="all">All catalogs</option>{LIVE_CATALOGS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
                     <select value={mainPanelSource} onChange={(event) => setMainPanelSource(event.target.value)} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none"><option value="all">All sources</option>{mainPanelSources.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
@@ -1467,7 +1464,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
               </div> : null}
 
               {tab === 'selected' ? <div className="space-y-3">
-                <div className="rounded-3xl border border-purple-300/20 bg-purple-500/10 p-3">
+                <div className="rounded-3xl border border-red-300/20 bg-red-500/10 p-3">
                   <p className="text-sm font-black text-white">Per-catalog channel order</p>
                   <p className="mt-1 text-xs leading-5 text-zinc-400">A channel can have a different position in every catalog. Use arrows for quick changes or click its position badge to enter an exact number.</p>
                   <select value={orderCatalog} onChange={(event) => setOrderCatalog(event.target.value)} className="mt-3 w-full rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white sm:max-w-xs">{LIVE_CATALOGS.map((catalog) => <option key={catalog.id} value={catalog.id}>{catalog.name}</option>)}</select>
@@ -1488,9 +1485,9 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
                   <div className="mt-2 flex flex-wrap items-center gap-2"><button type="button" onClick={saveJioCookieOverride} className="rounded-full bg-yellow-400 px-4 py-2 text-xs font-black text-black">Save Jio override</button><button type="button" onClick={clearJioCookieOverride} className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-zinc-300">Use automatic token</button></div>
                   {jioTokenStatus ? <p className="mt-3 rounded-xl bg-black/25 p-2 text-xs text-zinc-300">{jioTokenStatus}</p> : null}
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"><button onClick={() => purge('unused')} className="rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white">Purge unused</button><button onClick={() => purge('broken')} className="rounded-2xl border border-red-400/30 px-4 py-3 text-sm font-black text-red-200">Purge broken</button><button onClick={checkBroken} className="rounded-2xl border border-green-400/30 px-4 py-3 text-sm font-black text-green-200">Check broken</button><button onClick={loadDuplicates} className="rounded-2xl border border-yellow-400/30 px-4 py-3 text-sm font-black text-yellow-100">Find duplicates</button><button onClick={addProfile} className="rounded-2xl border border-purple-400/30 px-4 py-3 text-sm font-black text-purple-100">Add profile</button><button onClick={exportBackup} className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-black">Export backup</button></div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"><button onClick={() => purge('unused')} className="rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white">Purge unused</button><button onClick={() => purge('broken')} className="rounded-2xl border border-red-400/30 px-4 py-3 text-sm font-black text-red-200">Purge broken</button><button onClick={checkBroken} className="rounded-2xl border border-green-400/30 px-4 py-3 text-sm font-black text-green-200">Check broken</button><button onClick={loadDuplicates} className="rounded-2xl border border-yellow-400/30 px-4 py-3 text-sm font-black text-yellow-100">Find duplicates</button><button onClick={addProfile} className="rounded-2xl border border-red-400/30 px-4 py-3 text-sm font-black text-red-100">Add profile</button><button onClick={exportBackup} className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-black">Export backup</button></div>
                 <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="Paste exported JSON backup here" className="h-36 w-full rounded-2xl border border-white/10 bg-black p-3 text-xs text-white" />
-                <button onClick={importBackup} className="rounded-2xl bg-purple-500 px-4 py-3 text-sm font-black text-black">Import backup</button>
+                <button onClick={importBackup} className="rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white">Import backup</button>
               </div> : null}
 
               {tab === 'epg' ? <LiveEpgPanel channels={selectedChannels} onAction={channelAction} epg={epg} /> : null}
@@ -1524,8 +1521,8 @@ function PanelPager({ page = 1, total = 0, pageSize = 0, hasMore = false, loadin
         page {page} / {lastPage} • {total ? `${Math.min(total, (page - 1) * pageSize + 1)}–${Math.min(total, page * pageSize)} of ${total}` : 'counting…'}
       </span>
       <span className="flex items-center gap-1.5">
-        <button type="button" onClick={onPrev} disabled={loading || page <= 1} className="rounded-full border border-white/10 px-3 py-1 font-black transition hover:border-purple-300/60 disabled:opacity-35">‹ Prev</button>
-        <button type="button" onClick={onNext} disabled={loading || !hasMore} className="rounded-full border border-white/10 px-3 py-1 font-black transition hover:border-purple-300/60 disabled:opacity-35">Next ›</button>
+        <button type="button" onClick={onPrev} disabled={loading || page <= 1} className="rounded-full border border-white/10 px-3 py-1 font-black transition hover:border-red-300/60 disabled:opacity-35">‹ Prev</button>
+        <button type="button" onClick={onNext} disabled={loading || !hasMore} className="rounded-full border border-white/10 px-3 py-1 font-black transition hover:border-red-300/60 disabled:opacity-35">Next ›</button>
       </span>
     </div>
   );
@@ -1536,7 +1533,7 @@ function RowShowMore({ shown = 0, total = 0, onMore }) {
   const left = Math.max(0, total - shown);
   if (!left) return null;
   return (
-    <button type="button" onClick={onMore} className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-black text-zinc-300 transition hover:border-purple-300/60">
+    <button type="button" onClick={onMore} className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-black text-zinc-300 transition hover:border-red-300/60">
       Show {Math.min(left, ROW_STEP)} more · {left} still hidden
     </button>
   );
@@ -1567,14 +1564,14 @@ function ChannelManagerRow({
             <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${mapped ? 'bg-green-500/15 text-green-200' : 'bg-zinc-500/15 text-zinc-400'}`}>{mapped ? 'Mapped' : 'Unmapped'}</span>
           </div>
           <p className="truncate text-xs text-zinc-500">{channel.category} • {channel.source} • {channel.format?.toUpperCase()} • {channel.workingStatus}</p>
-          {mapped ? <div className="mt-1 flex flex-wrap gap-1">{catalogIds.map((id) => <button key={id} type="button" onClick={() => onPosition?.(channel, id)} className="rounded-full bg-purple-500/15 px-2 py-0.5 text-[9px] font-bold text-purple-100" title="Set exact position">{catalogLabel(id)} · {getCatalogPosition(channel, id)}</button>)}</div> : null}
+          {mapped ? <div className="mt-1 flex flex-wrap gap-1">{catalogIds.map((id) => <button key={id} type="button" onClick={() => onPosition?.(channel, id)} className="rounded-full bg-red-500/15 px-2 py-0.5 text-[9px] font-bold text-red-100" title="Set exact position">{catalogLabel(id)} · {getCatalogPosition(channel, id)}</button>)}</div> : null}
         </div>
       </div>
 
       {onCatalogToggle ? <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
         {LIVE_CATALOGS.map((catalog) => {
           const active = catalogIds.includes(catalog.id);
-          return <button key={catalog.id} type="button" onClick={() => onCatalogToggle(channel, catalog.id)} className={`rounded-xl border px-2 py-1.5 text-[10px] font-black transition ${active ? 'border-green-400/45 bg-green-500/20 text-green-100' : 'border-white/10 bg-black/20 text-zinc-400 hover:border-purple-400/50 hover:text-white'}`}>{active ? '✓ ' : ''}{catalog.name}</button>;
+          return <button key={catalog.id} type="button" onClick={() => onCatalogToggle(channel, catalog.id)} className={`rounded-xl border px-2 py-1.5 text-[10px] font-black transition ${active ? 'border-green-400/45 bg-green-500/20 text-green-100' : 'border-white/10 bg-black/20 text-zinc-400 hover:border-red-400/50 hover:text-white'}`}>{active ? '✓ ' : ''}{catalog.name}</button>;
         })}
       </div> : null}
 
