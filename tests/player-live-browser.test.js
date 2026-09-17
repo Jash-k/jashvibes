@@ -87,3 +87,9 @@ test('the release carries a visible build stamp on the live surfaces', () => {
   assert.ok(page.includes('>K5</span>'), 'the live header shows the build');
   assert.ok(drawer.includes('· K5</span>'), 'and so does the drawer');
 });
+
+test('the wall logo is capped, so a raw upload cannot blow up the grid', () => {
+  const css = read('../app/globals.css');
+  assert.match(css, /\.jv-lv-tune img \{ max-width: 100%; max-height: 56px; object-fit: contain; \}/, 'the logo fits its tile');
+  assert.match(css, /\.jv-lv-tune \{ display: grid; place-items: center;/, 'the tile centers it');
+});

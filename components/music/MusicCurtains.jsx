@@ -5,11 +5,11 @@
  *
  * This is a replacement, not a reskin. The Light Curtains UI — its primitives file, its class
  * family, the docked lyrics sheet, the deck — was deleted outright, and the JSX below is written
- * against small local lounge components. What is *kept* is the logic that was
+ * against small local lounge components. The room dresses for the hour: black and gold by
+ * night, warm cream and bronze by day, from one token block. What is *kept* is the logic that was
  * already correct: the wake-lock and pocket-mode lock machine, the 0.9 s pre-end auto-advance, the
  * two-track prefetch, the session cache, the quality ladder, the synced-lyrics reader, the Spotify
- * import and the song CRUD calls, on top of the `lib/musicCore.js` model. The lounge stays dark in
- * day mode too — it is a night venue, and the day theme only dims its glow.
+ * import and the song CRUD calls, on top of the `lib/musicCore.js` model.
  *
  * No `export const dynamic` anywhere: the page is static and the client fetches, so a sleeping
  * free-tier instance stays asleep on a library browse.
@@ -1296,6 +1296,9 @@ export default function MusicCurtains() {
               <button type="button" role="tab" aria-selected={centerTab === 'playlists'}
                 className={`ll-centertab${centerTab === 'playlists' ? ' is-on' : ''}`}
                 onClick={() => { setCenterTab('playlists'); setShowLyrics(false); }}>Playlists</button>
+              <button type="button" role="tab" aria-selected={centerTab === 'artists'}
+                className={`ll-centertab${centerTab === 'artists' ? ' is-on' : ''}`}
+                onClick={() => { setCenterTab('artists'); setShowLyrics(false); if (facet.id !== 'artists') loadFacet('artists', query); }}>Artists</button>
               <button type="button" role="tab" aria-selected={centerTab === 'library'}
                 className={`ll-centertab${centerTab === 'library' ? ' is-on' : ''}`}
                 onClick={() => { setCenterTab('library'); setShowLyrics(false); }}>Library</button>
@@ -1499,6 +1502,32 @@ export default function MusicCurtains() {
                     ) : <LlNote>No Spotify imports yet — Library is where they land.</LlNote>}
                   </section>
                 </div>
+              ) : centerTab === 'artists' ? (
+                <div className="ll-browse">
+                  <section className="ll-panel" aria-label="Artists">
+                    <header className="ll-head">
+                      <div>
+                        <p className="ll-eyebrow">voices of the lounge</p>
+                        <h2 className="ll-title">Artists</h2>
+                        <p className="ll-note-dim">{facetCounts.artists} returned by the source</p>
+                      </div>
+                      <div className="ll-head-actions">
+                        <button type="button" className="ll-pill" onClick={() => loadFacet('artists', query)}>{facet.id === 'artists' && facet.status === 'loading' ? 'asking…' : 'reload'}</button>
+                      </div>
+                    </header>
+                    {facetLists.artists.length ? (
+                      <div className="ll-grid">
+                        {rowsFor(facetLists.artists).map((item) => <LlTile key={item.id || item.title || item.name} item={item} kind="artist" onOpen={openArtist} />)}
+                      </div>
+                    ) : (
+                      <LlNote tone={facet.id === 'artists' && facet.status === 'error' ? 'error' : 'info'}>
+                        {facet.id === 'artists' && facet.status === 'loading' ? 'asking the source for artists…'
+                          : facet.id === 'artists' && facet.error ? `artists: ${facet.error}`
+                          : 'Nothing under artists right now — the source returned none. Import a Spotify playlist, or search a name above.'}
+                      </LlNote>
+                    )}
+                  </section>
+                </div>
               ) : centerTab === 'library' ? (
                 <div className="ll-browse">
                   <section className="ll-panel" aria-label="Library">
@@ -1506,7 +1535,7 @@ export default function MusicCurtains() {
                       <div>
                         <p className="ll-eyebrow">kept on this device + the stacks</p>
                         <h2 className="ll-title">Library</h2>
-                        <p className="ll-note-dim">{facetCounts.albums} albums · {facetCounts.artists} artists · {favoriteTracks.length} starred · {recents.length} recent</p>
+                        <p className="ll-note-dim">{facetCounts.albums} albums · {favoriteTracks.length} starred · {recents.length} recent</p>
                       </div>
                     </header>
                     <div className="ll-facet">
@@ -1528,28 +1557,6 @@ export default function MusicCurtains() {
                           {facet.id === 'albums' && facet.status === 'loading' ? 'asking the source for albums…'
                             : facet.id === 'albums' && facet.error ? `albums: ${facet.error}`
                             : 'Nothing under albums right now — the source returned none. Import a Spotify playlist, or search a name above.'}
-                        </LlNote>
-                      )}
-                    </div>
-                    <div className="ll-facet">
-                      <header className="ll-head">
-                        <div>
-                          <h3 className="ll-subtitle">Artists</h3>
-                          <p className="ll-note-dim">{facetCounts.artists} returned by the source</p>
-                        </div>
-                        <div className="ll-head-actions">
-                          <button type="button" className="ll-pill" onClick={() => loadFacet('artists', query)}>{facet.id === 'artists' && facet.status === 'loading' ? 'asking…' : 'reload'}</button>
-                        </div>
-                      </header>
-                      {facetLists.artists.length ? (
-                        <div className="ll-grid">
-                          {rowsFor(facetLists.artists).map((item) => <LlTile key={item.id || item.title || item.name} item={item} kind="artist" onOpen={openArtist} />)}
-                        </div>
-                      ) : (
-                        <LlNote tone={facet.id === 'artists' && facet.status === 'error' ? 'error' : 'info'}>
-                          {facet.id === 'artists' && facet.status === 'loading' ? 'asking the source for artists…'
-                            : facet.id === 'artists' && facet.error ? `artists: ${facet.error}`
-                            : 'Nothing under artists right now — the source returned none. Import a Spotify playlist, or search a name above.'}
                         </LlNote>
                       )}
                     </div>

@@ -171,13 +171,14 @@ test('the header is mark · search · nav, with TV icons and a phone search togg
   assert.match(section, /<main className="ll jv-rail-shift">/, 'the lounge keeps its rail clearance');
 });
 
-test('the center is six tabs behind one tab state, queue on phones', () => {
+test('the center is seven tabs behind one tab state, queue on phones', () => {
   assert.match(section, /const \[centerTab, setCenterTab\] = useState\('lyrics'\);/, 'lyrics first, as the design promises');
   assert.match(section, /role="tablist" aria-label="Center"/, 'the center tabs are announced');
-  assert.match(section, /aria-selected=\{centerTab === 'lyrics'\}[\s\S]*aria-selected=\{centerTab === 'trending'\}[\s\S]*aria-selected=\{centerTab === 'new'\}[\s\S]*aria-selected=\{centerTab === 'tracks'\}[\s\S]*aria-selected=\{centerTab === 'playlists'\}[\s\S]*aria-selected=\{centerTab === 'library'\}[\s\S]*aria-selected=\{centerTab === 'queue'\}/, 'all seven tabs report selection, in order');
+  assert.match(section, /aria-selected=\{centerTab === 'lyrics'\}[\s\S]*aria-selected=\{centerTab === 'trending'\}[\s\S]*aria-selected=\{centerTab === 'new'\}[\s\S]*aria-selected=\{centerTab === 'tracks'\}[\s\S]*aria-selected=\{centerTab === 'playlists'\}[\s\S]*aria-selected=\{centerTab === 'artists'\}[\s\S]*aria-selected=\{centerTab === 'library'\}[\s\S]*aria-selected=\{centerTab === 'queue'\}/, 'all eight tabs report selection, in order');
   assert.match(section, /setCenterTab\('lyrics'\); setShowLyrics\(true\); openLyrics\(\)/, 'the lyrics tab opens and loads the panel');
   assert.match(section, /setCenterTab\('trending'\); setShowLyrics\(false\); if \(trending\.status === 'idle'\) loadTrending\(\)/, 'trending parks lyrics and loads once');
   assert.match(section, /setCenterTab\('new'\); setShowLyrics\(false\); if \(fresh\.status === 'idle'\) loadFresh\(\)/, 'new parks lyrics and loads once');
+  assert.match(section, /setCenterTab\('artists'\); setShowLyrics\(false\); if \(facet\.id !== 'artists'\) loadFacet\('artists', query\);/, 'artists parks lyrics and asks its endpoint');
   assert.match(section, /onClose=\{\(\) => \{ setShowLyrics\(false\); setCenterTab\('trending'\); \}\}/, 'closing lyrics lands back on trending');
   assert.match(section, /aria-label="Center shortcuts">[\s\S]*> Lyrics<\/button>[\s\S]*> Trending<\/button>[\s\S]*> Queue<\/button>/, 'the phone bottom nav carries Lyrics · Trending · Queue');
   assert.ok(!section.includes("setCenterTab('browse')"), 'the old browse tab is fully unreferenced');
@@ -223,7 +224,10 @@ test('search and collections overlay any tab; every tab keeps its function', () 
   assert.match(section, /allShelfSongs\.length \? <LlTrackList tracks=\{allShelfSongs\}/, 'tracks plays the whole pool as one list');
   assert.match(section, />From the shelves<\/h3>/, 'shelf collections keep their tiles');
   assert.match(section, /aria-label="Playlists"/, 'playlists exists');
+  assert.match(section, /aria-label="Artists"/, 'artists exists as its own tab');
+  assert.equal(section.match(/aria-label="Artists"/g)?.length || 0, 1, 'the artists panel lives in exactly one place');
   assert.match(section, /aria-label="Library"/, 'library exists');
+  assert.ok(!section.includes('{facetCounts.artists} artists · {favoriteTracks.length}'), 'artists moved out of the library counts');
   assert.match(section, /loadFacet\('albums', query\)/, 'albums reload from their endpoint');
   assert.match(section, /loadFacet\('artists', query\)/, 'artists reload from theirs');
   assert.match(section, />Favorites<\/h3>[\s\S]*>Recently played<\/h3>/, 'starred and recent live in the library');
@@ -232,6 +236,15 @@ test('search and collections overlay any tab; every tab keeps its function', () 
   assert.match(section, /resyncImportedPlaylist\(playlist\)/, 're-sync survived');
   assert.match(section, /renameImportedPlaylist\(playlist\)/, 'rename survived');
   assert.match(section, /deleteImportedPlaylist\(playlist\)/, 'delete survived');
+});
+
+test('day mode dresses the room in cream and bronze; night stays black and gold', () => {
+  assert.match(css, /\.ll \{[\s\S]*?--ll-bg: #0a0614;[\s\S]*?--ll-accent: #f2a63b;/, 'night keeps its black and gold');
+  assert.match(css, /html\.day-mode \.ll \{[\s\S]*?--ll-bg: #faf6ec;[\s\S]*?--ll-ink: #2a1f12;[\s\S]*?--ll-accent: #9a5b0b;/, 'day flips the tokens to cream and bronze');
+  assert.match(css, /html\.day-mode \.ll-search input, html\.day-mode \.ll-input \{ background: rgba\(60, 40, 10, 0\.06\); \}/, 'fields stay visible on cream');
+  assert.match(css, /html\.day-mode \.ll-progress, html\.day-mode \.ll-mini-rail \{ background: rgba\(60, 40, 10, 0\.18\); \}/, 'progress tracks stay visible on cream');
+  assert.match(css, /html\.day-mode \.ll-note\.is-error \{ color: #b3261e;/, 'errors stay readable on cream');
+  assert.match(css, /html\.day-mode \.ll \{[\s\S]*?color: var\(--ll-ink\) !important;/, 'the day blanket still cannot wash the room out');
 });
 
 test('lyrics: the current line glows, timed lines jump, the reader keeps its tools', () => {
@@ -272,7 +285,6 @@ test('the lounge pins its chrome and scrolls only the panes', () => {
   assert.match(css, /\.ll-centertab-queue \{ display: none; \}/, 'no queue tab where the strip shows');
   assert.match(css, /\.ll-centertabs \{[^}]*overflow-x: auto/, 'the tab bar swipes instead of squeezing');
   assert.match(css, /\.ll-line\[data-state="current"\] \.ll-line-text \{[^}]*color: var\(--ll-accent\)/, 'the current line glows gold');
-  assert.match(css, /html\.day-mode \.ll \{ color: var\(--ll-ink\) !important;/, 'day mode cannot wash the room out');
 });
 
 test('phones get the compact card and the bottom nav; the TV gets karaoke', () => {

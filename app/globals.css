@@ -853,8 +853,8 @@ html.day-mode [data-dvp="controls"] [class*="border-white/"] {
 }
 
 /* ===========================================================================
- * LYRIC LOUNGE — the music section. Black room, gold light, purple air.
- * The lounge stays dark in day mode too; the day theme only dims its glow.
+ * LYRIC LOUNGE — the music section. Black room, gold light, purple air by night;
+ * warm cream room, bronze light by day. One token block flips the hour.
  * The page never scrolls: the player card and the center body scroll inside
  * themselves, and the queue strip scrolls sideways.
  * ========================================================================= */
@@ -875,14 +875,31 @@ html.day-mode [data-dvp="controls"] [class*="border-white/"] {
   background: var(--ll-bg);
   color: var(--ll-ink);
 }
-html.day-mode .ll { color: var(--ll-ink) !important; background: var(--ll-bg); }
+html.day-mode .ll {
+  --ll-bg: #faf6ec;
+  --ll-ink: #2a1f12;
+  --ll-ink-dim: #7a6a52;
+  --ll-line: rgba(140, 90, 20, 0.28);
+  --ll-card: rgba(255, 252, 244, 0.85);
+  --ll-card-2: #fffdf6;
+  --ll-accent: #9a5b0b;
+  --ll-grape: #7c3aed;
+  color: var(--ll-ink) !important;
+  background: var(--ll-bg);
+}
+html.day-mode .ll-search input, html.day-mode .ll-input { background: rgba(60, 40, 10, 0.06); }
+html.day-mode .ll-row-main:hover, html.day-mode .ll-queue-row:hover { background: rgba(60, 40, 10, 0.06); }
+html.day-mode .ll-progress, html.day-mode .ll-mini-rail { background: rgba(60, 40, 10, 0.18); }
+html.day-mode .ll-tile, html.day-mode .ll-card { background: rgba(60, 40, 10, 0.04); }
+html.day-mode .ll-note.is-error { color: #b3261e; border-color: rgba(179, 38, 30, 0.4); }
+html.day-mode .ll-line[data-state="current"] .ll-line-text { text-shadow: 0 0 18px rgba(154, 91, 11, 0.35); }
 .ll-ambient { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .ll-glow { position: absolute; border-radius: 50%; filter: blur(90px); opacity: 0.5; }
 .ll-glow-a { width: 44vmax; height: 44vmax; left: -10vmax; top: -12vmax; background: radial-gradient(circle, var(--ll-glow-a, #6d28d9), transparent 70%); }
 .ll-glow-b { width: 36vmax; height: 36vmax; right: -8vmax; top: 6vh; background: radial-gradient(circle, var(--ll-glow-b, #b45309), transparent 70%); opacity: 0.34; }
 .ll-glow-c { width: 40vmax; height: 40vmax; left: 22vw; bottom: -16vmax; background: radial-gradient(circle, var(--ll-glow-c, #4c1d95), transparent 70%); }
 .ll-ambient[data-dim="true"] .ll-glow { opacity: 0.22; }
-html.day-mode .ll-glow { opacity: 0.26; }
+html.day-mode .ll-glow { opacity: 0.16; }
 .ll-inner { position: relative; z-index: 1; flex: 1; min-height: 0; width: 100%; max-width: 1560px; margin: 0 auto; padding: 14px clamp(14px, 2vw, 24px); display: grid; gap: 12px; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "top" "stage" "strip"; }
 /* ── top bar: brand · search · nav ── */
 .ll-top { grid-area: top; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px; }
@@ -2069,6 +2086,11 @@ html.day-mode .jv-st-page { background: var(--st-bg); color: var(--st-ink); }
 /* K5: the day blanket must never white-veil the live picture. This guard sits before
    the sports block, outside every section slice, so no slice edit can swallow it. */
 html.day-mode [data-dvp="ambient"] { background-color: rgba(0, 0, 0, 0.75) !important; }
+
+/* Live wall: a tile is a logo — cap it so raw uploads cannot blow up the grid. */
+.jv-lv-tune { display: grid; place-items: center; width: 100%; min-height: 64px; padding: 8px; }
+.jv-lv-tune img { max-width: 100%; max-height: 56px; object-fit: contain; }
+.jv-lv-tune-none { font-size: 12px; font-weight: 800; color: #71717a; }
 
 /* ============================================================================
    Sports — the Single Feed (`components/sports/SportsFeed.js`)
