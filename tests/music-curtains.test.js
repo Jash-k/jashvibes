@@ -1,11 +1,11 @@
 /*
- * tests/music-curtains.test.js — the Light Curtains music section (v8.15.0).
+ * tests/music-curtains.test.js — the Lyric Lounge music section (G final).
  *
- * Two jobs. First, the pure model in `lib/musicCore.js`, which is where the design's promises live (a `0`
+ * Two jobs. First, the pure model in `lib/musicCore.js`, which is where the promises live (a `0`
  * count is a real count, an unsynchronised lyric is not a button, a hold has a progress). Second, a set of
- * structural assertions on the shipped files, written as the rules a future "tidy up" would break: that the
- * old UI is gone rather than hidden, that exactly two surfaces are frosted, that the lock machine survived the
- * rewrite, and that the theme is a token swap. Pixels are verified in the browser pass, not here.
+ * structural assertions on the shipped files: the old UI is gone rather than hidden, the lounge layout is
+ * exactly header / player card / lyrics-browse center / queue strip, and every hard-won function survived
+ * the rewrite. Pixels are verified in the browser pass, not here.
  */
 
 const test = require('node:test');
@@ -18,7 +18,6 @@ const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
 const core = require('../lib/musicCore');
 const css = read('app/globals.css');
-const curtains = read('components/music/Curtains.jsx');
 const section = read('components/music/MusicCurtains.jsx');
 const page = read('app/music/page.js');
 
@@ -69,8 +68,8 @@ test('the hue rotates by track, so a playlist shifts light instead of flashing w
   const b = core.muCurtainVars('song-one');
   const c = core.muCurtainVars('');
   assert.deepEqual(a, b, 'same key, same colours — a re-render must not restyle the room');
-  assert.notEqual(a['--mu-curtain-a'], core.muCurtainVars('other-song')['--mu-curtain-a']);
-  assert.deepEqual(Object.keys(c), ['--mu-curtain-a', '--mu-curtain-b', '--mu-curtain-c']);
+  assert.notEqual(a['--ll-glow-a'], core.muCurtainVars('other-song')['--ll-glow-a']);
+  assert.deepEqual(Object.keys(c), ['--ll-glow-a', '--ll-glow-b', '--ll-glow-c']);
 });
 
 test('quality chips keep the ladder order and mark what is current', () => {
@@ -123,167 +122,164 @@ test('the helpers the player depends on still behave after moving out of the pag
 
 /* ─────────────────────── the section: old UI gone, promises kept ─────────────────────── */
 
+/* ─────────────────────── the lounge: old UI gone, promises kept ─────────────────────── */
+
 test('the page is a thin shell over one new component', () => {
   assert.match(page, /import MusicCurtains from '@\/components\/music\/MusicCurtains'/);
   assert.match(page, /return <MusicCurtains \/>;/);
-  assert.ok(page.length < 1200, 'the 1697-line page is gone; the logic moved with the new render, not beside it');
+  assert.ok(page.length < 1200, 'the shell stays thin; the logic moved with the new render, not beside it');
   assert.match(page, /No `export const dynamic`|Static shell/, 'the shell stays static so browsing does not wake the server');
 });
 
-test('the previous music UI is deleted, not restyled', () => {
-  assert.ok(!/className="[^"]*palette-music-magenta/.test(section), 'the old palette class is not applied anywhere');
-  assert.ok(!css.includes('.palette-music-magenta'),
-    'and its rule blocks were deleted with it — the section is tinted by --mu-* now');
+test('the previous music UIs are deleted, not restyled', () => {
+  assert.ok(!fs.existsSync(path.join(ROOT, 'components/music/Curtains.jsx')), 'the primitives file is deleted outright');
+  for (const token of ['jv-mu-', '--mu-', 'jv-vinyl', 'palette-music-magenta']) {
+    assert.ok(!section.includes(token), `the section carries no ${token} anymore`);
+    assert.ok(!css.includes(token), `the stylesheet carries no ${token} anymore`);
+  }
   for (const kept of ['deepsea', 'nordic', 'cybergrape']) {
     assert.ok(css.includes(`.palette-${kept}`),
       `the ${kept} palette belongs to another page and must not be collateral damage`);
   }
-  for (const gone of ['VinylArt', 'SectionHeader', 'HorizontalRow', 'TrackTile', 'AlbumTile', 'ArtistTile', 'PlaylistTile', 'TrackList', 'SidebarButton', 'IconButton']) {
+  for (const gone of ['VinylArt', 'SectionHeader', 'HorizontalRow', 'TrackTile', 'AlbumTile', 'ArtistTile', 'PlaylistTile', 'TrackList', 'SidebarButton', 'IconButton',
+      'CurtainField', 'MuPanel', 'MuTabs', 'MuHeading', 'MuTile', 'MuTrackRow', 'MuTrackList', 'NowPlayingPanel', 'LyricsPanel', 'TransportStrip', 'MiniCapsule', 'LockVeil', 'MuNote']) {
     assert.ok(!new RegExp(`function ${gone}\\b`).test(section), `${gone} was removed rather than kept around for old markup`);
     assert.ok(!new RegExp(`<${gone}[\\s/>]`).test(section), `${gone} is not rendered anywhere`);
   }
   const soup = /className="[^"]*(rounded-3xl|bg-\[#050012\]|backdrop-blur)/;
   assert.ok(!soup.test(section), 'no Tailwind soup left in the section — it is one class family now');
-  assert.ok(!soup.test(curtains), 'the primitives are clean too');
 });
 
-test('the tabs the user asked for are in the layout and wired to the facets', () => {
-  assert.match(section, /<MuTabs[\s\S]{0,600}onSelect=\{\(id\) => \{[\s\S]{0,160}setView\(id\);\n\s{12}loadFacet\(id, query\);/);
-  assert.match(section, /const loadFacet = useCallback\(async \(id, searchTerm = ''\)/,
-    'a tab asks its own endpoint, so it is never an absence the app could have filled');
-  assert.match(section, /fetch\(url, \{ cache: 'no-store' \}\)[\s\S]{0,220}facet\.status|setFacet\(\{ id, status: 'ready', items, error: '' \}\)/);
-  assert.match(section, /onClick=\{\(\) => loadFacet\(activeTab, query\)\}>retry/, 'and an empty facet has a way out');
-  assert.match(curtains, /role="tablist"[\s\S]*role="tab"/);
-  assert.match(curtains, /aria-selected=\{active === tab\.id\}/);
-  assert.match(curtains, /jv-mu-tab-count/);
-  assert.match(section, /muTabs\(facetCounts\)/);
-  assert.match(section, /facetLists = \{[\s\S]*albums:[\s\S]*artists:[\s\S]*playlists:/);
+test('the header is brand · search · nav, with TV icons and a phone search toggle', () => {
+  assert.match(section, /LlAmbient vars=\{curtainVars\}/, 'the room glows with the track hash');
+  assert.match(section, /Lyric Lounge<\/p>/, 'the brand reads Lyric Lounge');
+  assert.match(section, /placeholder="Search Tamil Songs\.\.\."/, 'the search pill matches the design');
+  assert.match(section, /aria-label="Music"[\s\S]*>Home<\/button>[\s\S]*>Explore<\/button>[\s\S]*>My Library<\/button>/, 'Home · Explore · My Library, in that order');
+  assert.match(section, /setView\('explore'\); setSelectedCollection\(null\); setCenterTab\('browse'\)/, 'Explore lands on browse');
+  assert.match(section, /setView\('library'\); setSelectedCollection\(null\); setCenterTab\('browse'\)/, 'My Library lands on browse');
+  assert.match(section, /aria-label="Quick actions"/, 'the TV icon trio is mounted');
+  assert.match(section, /aria-pressed=\{mSearch\}/, 'phones toggle the search row');
+  assert.match(section, /<main className="ll jv-rail-shift">/, 'the lounge keeps its rail clearance');
 });
 
-test('the rail is mounted and its clearance is kept', () => {
-  assert.match(section, /import RailNav from '@\/components\/rail\/RailNav'/);
-  assert.match(section, /<RailNav onOpenSearch=/);
-  assert.match(section, /className="jv-mu jv-rail-shift"/, 'the page must render the nav it reserves room for');
-});
-
-test('exactly two surfaces are frosted, because blur is the expensive part of this design', () => {
-  const opted = [section, curtains].join('\n').match(/data-mu-blur="true"/g) || [];
-  assert.equal(opted.length, 2, 'the playing panel and the open lyrics panel; a third would be a budget breach');
-  const rules = css.match(/\.jv-mu-panel\[data-mu-blur\], \.jv-mu-lyrics\.is-open \{ backdrop-filter: \.\.\. \}/);
-  assert.match(css, /\.jv-mu-panel\[data-mu-blur\], \.jv-mu-lyrics\.is-open \{ backdrop-filter: blur\(18px\) saturate\(1\.15\); \}/);
-  assert.ok(!rules, 'placeholder guard');
-  assert.ok(!/\.jv-mu-(transport|mini|veil)[^{]*\{[^}]*backdrop-filter/.test(css),
-    'the transport strip, the mini capsule and the veil are flat rgba by rule, not by accident');
-});
-
-test('the theme is a token swap, with a contrast floor that is a property of the tokens', () => {
-  const night = css.slice(css.indexOf('.jv-mu {'), css.indexOf('html.day-mode .jv-mu {'));
-  const day = css.slice(css.indexOf('html.day-mode .jv-mu {'));
-  for (const token of ['--mu-bg', '--mu-ink', '--mu-ink-dim', '--mu-line', '--mu-glass', '--mu-accent']) {
-    assert.ok(night.includes(`${token}:`), `night declares ${token}`);
-    assert.ok(day.slice(0, day.indexOf('}')).includes(`${token}:`), `day re-declares ${token} instead of overriding rules`);
-  }
-  assert.match(night, /--mu-ink-dim: #93a0bf/, 'muted lyric text on night — 7.24:1 against the composited panel, 7.4:1 on the bare bg');
-  assert.match(day.slice(0, day.indexOf('}')), /--mu-ink-dim: #5b6376/, 'and 5.98:1 in day mode against its composited panel — above the 4.5:1 floor');
-  assert.match(css, /\.jv-mu-line\[data-state="current"\] \.jv-mu-line-text \{ color: var\(--mu-ink\);/,
-    'the current line is full ink, not accent-on-glass');
-});
-
-test('the lock machine survived the rewrite, in both its moods', () => {
-  for (const kept of ['startPocketUnlock', 'cancelPocketUnlock', 'enableListeningMode', 'disableListeningMode',
-    'wakeLockStatusText', 'requestWakeLock', 'startUnlockHold', 'cancelUnlockHold', 'visibilitychange']) {
-    assert.ok(new RegExp(kept).test(section), `${kept} is still in the section`);
-  }
-  assert.match(section, /muLockView\(\{[\s\S]*pocketMode,[\s\S]*listeningMode,[\s\S]*wakeLockStatus/);
-  assert.match(section, /<LockVeil[\s\S]*onHoldStart=\{startPocketUnlock\} onHoldEnd=\{cancelPocketUnlock\}/);
-  assert.match(curtains, /conic-gradient\(var\(--mu-accent\) \$\{view\.progress\}%/, 'the hold ring is driven by the real hold progress');
-  assert.match(curtains, /onKeyDown=\{\(event\) => \{ if \(event\.key === 'Enter' \|\| event\.key === ' '\) onHoldStart\(\); \}\}/,
-    'a hold has to be doable with a keyboard or a remote, not only a thumb');
-  assert.match(css, /\.jv-mu-veil \{ position: fixed; inset: 0; z-index: 90/);
-});
-
-test('the things that were hard-won in the old page are still wired', () => {
-  assert.match(section, /total - now <= 0\.9/, 'the pre-end auto-advance that keeps a locked phone on the queue');
-  assert.match(section, /prefetchTrack/);
-  assert.match(section, /restoreScroll|saveScroll/, 'scroll position is still restored from the client cache');
-  assert.match(section, /writeSessionCache\(MUSIC_CACHE_KEY/);
-  assert.match(section, /readSessionCache\(MUSIC_CACHE_KEY/);
-  assert.match(section, /window\.localStorage\.setItem\(FAVORITES_KEY|FAVORITES_KEY/, 'favorites stay on the device');
-  assert.match(section, /RECENTS_KEY/);
-  assert.match(section, /VOLUME_KEY/);
-  assert.match(section, /importSpotifyPlaylists|refreshImportedPlaylists/, 'the Spotify import is not collateral damage');
-  assert.match(section, /addImportedTrack\(\)[\s\S]*replaceImportedTrack|replaceImportedTrack/, 'song CRUD still reachable');
-  assert.match(section, /<audio ref=\{videoRef\}/, 'one element owns playback; the mini capsule never gets its own');
-});
-
-test('the mini capsule is a control surface, and dismissible by drag', () => {
-  assert.match(curtains, /if \(!visible\) return null;/);
-  assert.match(section, /onDragEnd=\{\(\) => \{ if \(dragDy > MU_MINI_DRAG_CLOSE_PX\) closeMiniPlayer\(\)/);
-  assert.equal(core.MU_MINI_DRAG_CLOSE_PX, 120);
-  assert.ok(!/jv-mu-mini[\s\S]{0,80}<audio/.test(curtains), 'no second audio element inside the capsule');
-  assert.match(css, /\.jv-mu-mini \{[\s\S]*touch-action: pan-y/);
-});
-
-test('lyrics: the column of light is one node, and the panel is closable', () => {
-  assert.match(curtains, /\{row\.state === 'current' \? <span className="jv-mu-line-light" aria-hidden="true" \/> : null\}/);
-  assert.match(section, /onJump=\{\(time\) => \{ if \(Number\.isFinite\(time\)\) seekTo\(time\); \}\}/);
-  assert.match(section, /showLyrics && lyricAutoScroll && activeLyricRef\.current/,
-    'auto-scroll is a real toggle, so turning it off stops the scrollIntoView, not just the label');
-  assert.match(section, /the source has no timed lyrics for this song/, 'and the empty state says so in words');
-  assert.match(css, /\.jv-mu-lines\.is-blur \.jv-mu-line:not\(\[data-state="current"\]\) \{ filter: blur\(0\.5px\); opacity: 0\.7; \}/);
-});
-
-test('the design still works when motion and blur are taken away', () => {
-  const reduced = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce) {\n  .jv-mu-shaft'));
-  assert.ok(reduced.length > 40, 'the music block has its own reduced-motion section');
-  assert.match(reduced.slice(0, 700), /animation: none/);
-  assert.match(reduced.slice(0, 700), /transition: none/);
-  assert.ok(!/\.jv-mu-bead/.test(reduced.slice(0, 700)), 'the bead keeps reporting position — progress is information, not decoration');
-  assert.match(css, /@supports not \(\(backdrop-filter: blur\(1px\)\) or \(-webkit-backdrop-filter: blur\(1px\)\)\)/,
-    'and there is a flat fallback for engines without blur: same layout, solid panel');
-});
-
-/**
- * A scanner, not a regex: every `<button` must be closed before another one opens. That is the rule book's
- * "no control nested in a control", and it is the thing a "just wrap the whole row in a link" refactor
- * reintroduces while every other test stays green.
- */
-function deepestButtonNesting(src) {
-  const tokens = src.match(/<button\b[^>]*\/>|<button\b|<\/button>/g) || [];
-  let depth = 0;
-  let max = 0;
-  for (const token of tokens) {
-    if (token === '</button>') { depth = Math.max(0, depth - 1); continue; }
-    const selfClosing = token.endsWith('/>');
-    max = Math.max(max, depth + 1);
-    if (!selfClosing) depth += 1;
-  }
-  return max;
-}
-
-test('no control sits inside a control, in either file', () => {
-  assert.equal(deepestButtonNesting(curtains), 1, `Curtains.jsx nests a button (depth ${deepestButtonNesting(curtains)})`);
-  assert.equal(deepestButtonNesting(section), 1, `MusicCurtains.jsx nests a button (depth ${deepestButtonNesting(section)})`);
-  // and the row keeps its two actions as siblings, which is what that depth proves in practice
-  assert.match(curtains, /<\/button>\n {6}\{onFavorite \? \(\n {8}<button/,
-    'favourite is a sibling of the play button in every track row');
-});
-
-test('the lounge centers lyrics and browse behind one tab state, with the queue in a strip', () => {
+test('the center is lyrics · browse behind one tab state, queue on phones', () => {
   assert.match(section, /const \[centerTab, setCenterTab\] = useState\('lyrics'\);/, 'lyrics first, as the design promises');
-  assert.match(section, /role="tablist" aria-label="Lyrics or browse"/, 'the center tabs are announced');
+  assert.match(section, /role="tablist" aria-label="Lyrics, browse or queue"/, 'the center tabs are announced');
   assert.match(section, /aria-selected=\{centerTab === 'lyrics'\}[\s\S]*aria-selected=\{centerTab === 'browse'\}[\s\S]*aria-selected=\{centerTab === 'queue'\}/, 'all three tabs report selection');
   assert.match(section, /setCenterTab\('lyrics'\); setShowLyrics\(true\); openLyrics\(\)/, 'the lyrics tab opens and loads the panel');
   assert.match(section, /setCenterTab\('browse'\); setShowLyrics\(false\)/, 'browse parks the panel');
   assert.match(section, /onClose=\{\(\) => \{ setShowLyrics\(false\); setCenterTab\('browse'\); \}\}/, 'closing lyrics lands back on browse');
-  assert.match(section, /className="jv-mu-strip" aria-label="Up next"/, 'the queue strip keeps its label');
-  assert.match(section, /queueTracks\.slice\(0, 12\)\.map/, 'the strip shows a dozen, scrollable');
-  assert.match(section, /className="jv-mu-queuepane"/, 'phones get the full queue as a third tab');
+  assert.match(section, /aria-label="Lyrics, browse or queue">[\s\S]*> Lyrics<\/button>[\s\S]*> Browse<\/button>[\s\S]*> Queue<\/button>/, 'the phone bottom nav mirrors the tabs');
 });
 
-test('the lounge grid pins chrome and scrolls only the panes', () => {
-  assert.match(css, /grid-template-areas: "mast mast" "tabs tabs" "deck center" "strip strip" "foot foot"/, 'deck and center share the middle row');
-  assert.match(css, /\.jv-mu-center-body \{[^}]*overflow-y: auto/, 'the center body is the scroller');
-  assert.match(css, /\.jv-mu-centertab-queue \{ display: none; \}/, 'no queue tab where the strip shows');
-  assert.ok(!css.includes('.jv-mu-panel-lyrics { position: fixed'), 'lyrics are no longer a docked sheet');
+test('the player card carries art, transport, progress, quality and every extra', () => {
+  assert.match(section, /aria-label="Now playing"/, 'the card is labelled');
+  assert.match(section, /onClick=\{playPrevious\}[\s\S]*onClick=\{togglePlay\}[\s\S]*onClick=\{\(\) => playNext\(\)\}/, 'previous · play · next');
+  assert.match(section, /scaleX\(\$\{curtainPosition\.toFixed\(4\)\}\)/, 'progress comes from playback position');
+  assert.match(section, /formatTime\(currentTime\)\}<\/span><span>\{duration \? formatTime\(duration\)/, 'elapsed and total stay visible');
+  assert.match(section, /aria-label="Stream quality"/, 'the quality ladder survived');
+  assert.match(section, /setShuffleEnabled/, 'shuffle survived');
+  assert.match(section, /onClick=\{cycleRepeat\}[\s\S]*repeat \{repeatMode\}/, 'repeat survived with its three moods');
+  assert.match(section, /toggleListeningMode/, 'listening mode survived');
+  assert.match(section, /onClick=\{enterPocketMode\} title="Pocket mode">lock<\/button>/, 'pocket mode survived');
+  assert.match(section, /onClick=\{\(\) => loadHome\(\)\} title="Refresh the shelves"/, 'refresh survived');
+  assert.match(section, /aria-label="Volume" onChange=\{\(event\) => changeVolume\(event\.target\.value\)\}/, 'volume survived with its slider');
+  assert.match(section, /onClick=\{toggleMute\}/, 'mute survived');
+  assert.match(section, /onClick=\{\(\) => setCardHidden\(true\)\} title="Hide player"/, 'the phone card closes into the capsule');
+});
+
+test('the queue rides a strip on the big screens and a full tab on phones', () => {
+  assert.match(section, /className="ll-strip" aria-label="Up next"/, 'the strip keeps its label');
+  assert.match(section, /queueTracks\.slice\(0, 12\)\.map/, 'the strip shows a dozen, scrollable');
+  assert.match(section, /className="ll-queuepane"/, 'phones get the full queue as a third tab');
+  assert.match(section, /<span className="ll-queue-num">\{index \+ 1\}<\/span>/, 'queue rows are numbered');
+});
+
+test('browse keeps the collection, the stacks, the shelves, search and the library', () => {
+  assert.match(section, /aria-label="Collection"/, 'collections open');
+  assert.match(section, /song controls · \{showSongCrud \? 'open' : 'minimized'\}/, 'song controls survived');
+  assert.match(section, /replaceImportedTrack\(selectedCollection\.tracks\?\.\[0\]\)/, 'replace-first survived');
+  assert.match(section, /removeImportedTrack\(selectedCollection\.tracks\?\.\[0\]\)/, 'remove-first survived');
+  assert.match(section, /aria-label="Explore"/, 'Explore exists');
+  assert.match(section, /\['albums', 'artists', 'playlists'\]\.map\(\(facetId\)/, 'all three facets render from one loop');
+  assert.match(section, /loadFacet\(facetId, query\)/, 'each facet asks its own endpoint');
+  assert.match(section, /Spotify playlist sync/, 'the import block survived');
+  assert.match(section, /onClick=\{\(\) => importSpotifyPlaylists\(\)\}/, 'import survived');
+  assert.match(section, /aria-label="Search results"/, 'search results survived');
+  assert.match(section, /aria-label="My library"/, 'the library survived');
+  assert.match(section, />Favorites<\/h3>[\s\S]*>Recently played<\/h3>[\s\S]*>Imported playlists<\/h3>/, 'starred · recent · imported, in that order');
+  assert.match(section, /resyncImportedPlaylist\(playlist\)/, 're-sync survived');
+  assert.match(section, /renameImportedPlaylist\(playlist\)/, 'rename survived');
+  assert.match(section, /deleteImportedPlaylist\(playlist\)/, 'delete survived');
+});
+
+test('lyrics: the current line glows, timed lines jump, the reader keeps its tools', () => {
+  assert.match(section, /data-state=\{row\.state\} ref=\{row\.state === 'current' \? activeRef : undefined\}/, 'rows carry state and the current row takes the scroll ref');
+  assert.match(section, /onJump=\{\(time\) => \{ if \(Number\.isFinite\(time\)\) seekTo\(time\); \}\}/, 'tap-to-jump seeks exactly');
+  assert.match(section, /onToggleAutoScroll=\{\(\) => setLyricAutoScroll\(\(current\) => !current\)\}/, 'auto-scroll toggles');
+  assert.match(section, /onBlurToggle=\{\(\) => setLyricBlur\(\(current\) => !current\)\}/, 'blur toggles');
+  assert.match(section, /the source has no timed lyrics for this song/, 'unsynced sources say so');
+});
+
+test('the lock machine survived, in both its moods', () => {
+  assert.match(section, /view=\{lockView\.kind === 'pocket' \? lockView : null\}/, 'the veil only rises for pocket mode');
+  assert.match(section, /onHoldStart=\{startPocketUnlock\} onHoldEnd=\{cancelPocketUnlock\}/, 'the hold-to-release gesture is wired');
+  assert.match(section, /conic-gradient\(var\(--ll-accent\)/, 'the ring reads gold now');
+  assert.match(section, /className="ll-listenbar" role="status"/, 'listening mode keeps its bar');
+  assert.match(section, /hold 1\.5s to leave<\/button>/, 'leaving still takes a hold');
+  assert.match(section, /wakeLockStatusText\(\)/, 'wake-lock states are still spoken');
+});
+
+test('the mini capsule is a control surface, and dismissible by drag', () => {
+  assert.match(section, /if \(!visible\) return null;/, 'hidden is unmounted, never a second player');
+  assert.match(section, /cardHidden \|\| \(showMiniPlayer && centerTab !== 'lyrics'\)/, 'it answers the hidden card and the lyrics call');
+  assert.match(section, /onTouchStart=\{onDragStart\} onTouchMove=\{onDragMove\} onTouchEnd=\{onDragEnd\}/, 'the drag surface is the capsule itself');
+  assert.match(section, /if \(dragDy > MU_MINI_DRAG_CLOSE_PX\) \{ closeMiniPlayer\(\); setCardHidden\(false\); \}/, 'a long drag dismisses and reopens the card');
+});
+
+test('the hard-won wiring is still in the room', () => {
+  assert.match(section, /<audio ref=\{videoRef\}/, 'one audio node, still the only player');
+  assert.match(section, /total - now <= 0\.9/, 'the pre-end advance still beats the lock screen');
+  assert.match(section, /\[queueTracks\[index \+ 1\], queueTracks\[index \+ 2\]\]/, 'the two-track prefetch still runs ahead');
+  assert.match(section, /Streams are resolved by this app/, 'the footer still tells the truth');
+  assert.equal(section.match(/export const dynamic/g)?.length || 0, 1, 'the only mention is the header comment — the screen stays static');
+});
+
+test('the lounge pins its chrome and scrolls only the panes', () => {
+  assert.match(css, /\.ll \{[\s\S]*?height: 100dvh;[\s\S]*?overflow: hidden;/, 'the room is the viewport');
+  assert.match(css, /grid-template-areas: "top" "stage" "strip" "foot"/, 'header · stage · strip · footer');
+  assert.match(css, /\.ll-center-body \{[\s\S]*?overflow-y: auto/, 'the center body is the scroller');
+  assert.match(css, /\.ll-centertab-queue \{ display: none; \}/, 'no queue tab where the strip shows');
+  assert.match(css, /\.ll-line\[data-state="current"\] \.ll-line-text \{[^}]*color: var\(--ll-accent\)/, 'the current line glows gold');
+  assert.match(css, /html\.day-mode \.ll \{ color: var\(--ll-ink\) !important;/, 'day mode cannot wash the room out');
+});
+
+test('phones get the compact card and the bottom nav; the TV gets karaoke', () => {
+  assert.match(css, /@media \(max-width: 899px\) \{[\s\S]*?\.ll-strip \{ display: none; \}/, 'the strip folds away on phones');
+  assert.match(css, /@media \(max-width: 899px\) \{[\s\S]*?\.ll-centertab-queue \{ display: inline-flex; \}/, 'the queue tab appears on phones');
+  assert.match(css, /@media \(max-width: 899px\) \{[\s\S]*?\.ll-bottomnav \{ display: grid;/, 'the bottom nav appears on phones');
+  assert.match(css, /@media \(max-width: 899px\) \{[\s\S]*?\.ll-vol \{ display: none; \}/, 'no software volume where hardware keys rule');
+  assert.match(css, /@media \(min-width: 1600px\) \{[\s\S]*?\.ll-line-text \{ font-size: clamp\(34px, 3\.4vw, 54px\); \}/, 'the TV verse is karaoke-big');
+  assert.match(css, /@media \(min-width: 1600px\) \{[\s\S]*?\.ll-icons \{ display: flex; \}/, 'the TV header trades words for icons');
+});
+
+function deepestButtonNesting(source) {
+  const tag = /<\/?([a-zA-Z][a-zA-Z0-9]*)[^>]*>/g;
+  let depth = 0;
+  let max = 0;
+  let match;
+  while ((match = tag.exec(source))) {
+    const full = match[0];
+    const name = match[1];
+    if (name !== 'button') continue;
+    if (full.startsWith('</')) depth -= 1;
+    else if (!full.endsWith('/>')) { depth += 1; max = Math.max(max, depth); }
+  }
+  return max;
+}
+
+test('no control sits inside a control', () => {
+  assert.equal(deepestButtonNesting(section), 1, `the section nests a button (depth ${deepestButtonNesting(section)})`);
+  assert.match(section, /<\/button>\n {6}\{onFavorite \? \(\n {8}<button/,
+    'favourite is a sibling of the play button in every track row');
 });
