@@ -90,8 +90,9 @@ test('the release carries a visible build stamp on the live surfaces', () => {
 
 test('the wall logo is capped, so a raw upload cannot blow up the grid', () => {
   const css = read('../app/globals.css');
-  assert.match(css, /\.jv-lv-tune img \{ max-width: 100%; max-height: 56px; object-fit: contain; \}/, 'the logo fits its tile');
-  assert.match(css, /\.jv-lv-tune \{ display: grid; place-items: center;/, 'the tile centers it');
+  assert.match(css, /\.jv-lv-tune img \{ max-width: 100%; max-height: 56px; object-fit: contain; justify-self: center; \}/, 'the logo fits its tile');
+  assert.match(css, /\.jv-lv-tune \{ display: grid; align-items: center; justify-items: stretch;/, 'the tile stretches so truncate can bite');
+  assert.match(css, /\.jv-lv-tile-epg \{ display: block; min-width: 0; \}/, 'the guide line cannot spill sideways');
 });
 
 test('the wall is a responsive grid, never a single column', () => {
