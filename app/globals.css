@@ -1062,56 +1062,6 @@ html.day-mode .jv-lyrics-frost{ background:rgba(26,10,38,.38)!important; -webkit
 .jv-cgal:active { cursor: grabbing; }
 html.day-mode .jv-cgal-card { border-color: rgba(168, 85, 247, 0.35); }
 
-/* --- Target cursor (reticle) + glow trail --- */
-html.jv-cursor-fx, html.jv-cursor-fx * { cursor: none !important; }
-/* ...but never inside players or fullscreen: the drawn reticle can't follow
-   there (iframe boundaries / fullscreen stacking), so restore the native cursor. */
-html.jv-cursor-fx .jv-native-cursor, html.jv-cursor-fx .jv-native-cursor *,
-html.jv-cursor-fx :fullscreen, html.jv-cursor-fx :fullscreen * { cursor: auto !important; }
-.jv-reticle {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483646;
-  pointer-events: none;
-  mix-blend-mode: difference;
-}
-.jv-reticle-dot {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 6px;
-  height: 6px;
-  border-radius: 9999px;
-  background: #ffffff;
-}
-.jv-reticle-c {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 8px;
-  height: 8px;
-  transition: transform 90ms ease-out;
-}
-.jv-reticle.is-target .jv-reticle-c { transition: transform 190ms var(--jv-ease); }
-.jv-reticle-c.tl { border-top: 2px solid #ffffff; border-left: 2px solid #ffffff; }
-.jv-reticle-c.tr { border-top: 2px solid #ffffff; border-right: 2px solid #ffffff; }
-.jv-reticle-c.bl { border-bottom: 2px solid #ffffff; border-left: 2px solid #ffffff; }
-.jv-reticle-c.br { border-bottom: 2px solid #ffffff; border-right: 2px solid #ffffff; }
-.jv-reticle.is-target .jv-reticle-c {
-  border-color: #fbbf24;
-  filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.85));
-}
-.jv-reticle.is-target .jv-reticle-c { animation: none; }
-.jv-glowcursor {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483645;
-  width: 100vw;
-  height: 100vh;
-  pointer-events: none;
-  mix-blend-mode: screen;
-}
-html.day-mode .jv-glowcursor { display: none; } /* light theme keeps the reticle */
 
 /* ── Unified player (JashPlayer) ───────────────────────────────────── */
 /* Double-tap / hold-to-2x badges in the chrome fade-expand through this. The
@@ -2074,6 +2024,11 @@ html.day-mode .jv-sp-page { background: var(--sp-bg); color: var(--sp-ink); }
 .jv-sp-tag.is-live { border-color: rgba(255, 93, 104, 0.45); background: rgba(255, 93, 104, 0.14); color: #fff0f1; }
 .jv-sp-tag.is-soon { border-color: rgba(242, 180, 68, 0.42); background: rgba(242, 180, 68, 0.12); color: var(--sp-amber); }
 .jv-sp-tag.is-play { border-color: rgba(99, 210, 145, 0.4); background: rgba(99, 210, 145, 0.1); color: #d7ffe9; }
+.jv-sp-tag.is-stale { border-color: rgba(242, 180, 68, 0.5); background: rgba(120, 60, 10, 0.25); color: #ffd9a0; }
+.jv-sp-updated { font-size: 11px; font-weight: 700; color: var(--sp-dim); white-space: nowrap; }
+.jv-sp-auto { padding: 6px 10px; border: 1px solid var(--sp-line); border-radius: 8px; font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sp-dim); cursor: pointer; background: transparent; }
+.jv-sp-auto.on { border-color: rgba(99, 210, 145, 0.45); background: rgba(99, 210, 145, 0.12); color: #d7ffe9; }
+.jv-sp-sources li.stale > b { color: #ffd9a0; }
 .jv-sp-caret { color: var(--sp-faint); font-size: 11px; }
 .jv-sp-card.is-open .jv-sp-caret { color: var(--sp-amber); }
 

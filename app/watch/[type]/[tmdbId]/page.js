@@ -106,6 +106,8 @@ export default function WatchByTMDBPage() {
   const [trailerTitle, setTrailerTitle] = useState('');
   const [playerMode, setPlayerMode] = useState('stream');
   const [trailerStatus, setTrailerStatus] = useState('idle');
+  // Embed documents flash white while they load — the cover below holds until onLoad.
+  const [frameLoaded, setFrameLoaded] = useState(false);
   const streamChoices = useMemo(() => [...new Set([streamUrl, ...(streamFallbacks || [])].filter(Boolean))], [streamUrl, streamFallbacks]);
   const currentStreamUrl = streamChoices[streamChoiceIndex] || streamUrl;
   const activePlayerUrl = playerMode === 'trailer' ? trailerUrl : currentStreamUrl;
@@ -341,6 +343,14 @@ export default function WatchByTMDBPage() {
 
   const directStreamActive = playerMode === 'stream' && isDirectPlayerType(streamType, activePlayerUrl);
 
+  useEffect(() => { setFrameLoaded(false); }, [activePlayerUrl]);
+  useEffect(() => {
+    if (frameLoaded || directStreamActive || status !== 'ready' || !activePlayerUrl) return undefined;
+    // A blocked frame never fires onLoad — never trap the user behind the cover.
+    const timer = setTimeout(() => setFrameLoaded(true), 15000);
+    return () => clearTimeout(timer);
+  }, [frameLoaded, directStreamActive, status, activePlayerUrl]);
+
   // ---------- DirectWatchPlayer wiring (v7.7.0) ----------
   // Labelled source list for the player's stream picker menu — labels resolve
   // in order: stream meta → parsed from the URL filename ("1080p 2.9GB") →
@@ -455,12 +465,10 @@ export default function WatchByTMDBPage() {
         </div>
       </header>
 
-      <section className="relative mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
-        {titleMeta?.posterUrl ? (
-          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 hidden h-[560px] overflow-hidden sm:block">
-            <img src={titleMeta.posterUrl} alt="" className="h-full w-full scale-125 object-cover opacity-25 blur-3xl saturate-150" />
-          </div>
-        ) : null}
+      <section className="relative mx-auto max-w-7xl px-4 pt-5 pb-28 sm:px-6 sm:pt-8 lg:px-8 lg:pb-8">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 hidden h-[420px] overflow-hidden sm:block">
+          <div className="h-full w-full bg-[radial-gradient(60%_100%_at_50%_0%,rgba(220,38,38,0.13),transparent_70%)]" />
+        </div>
 
         <div className="relative mb-4 flex flex-wrap items-end justify-between gap-3 sm:mb-6">
           <div className="min-w-0">
@@ -579,7 +587,7 @@ export default function WatchByTMDBPage() {
           className="relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-screen fullscreen:w-screen fullscreen:rounded-none fullscreen:border-0 sm:rounded-3xl"
         >
           {/* Ambient Theater Backlight */}
-          <div className="pointer-events-none absolute -inset-4 z-0 opacity-40 blur-3xl bg-gradient-to-tr from-amber-500/20 via-rose-600/20 to-purple-600/20" />
+          <div className="pointer-events-none absolute -inset-4 z-0 opacity-25 blur-3xl bg-gradient-to-tr from-amber-500/20 via-rose-600/20 to-purple-600/20" />
 
           <div className="jv-native-cursor relative z-10 aspect-video w-full bg-zinc-950 fullscreen:h-screen fullscreen:aspect-auto">
             {status === 'loading' ? (
@@ -638,7 +646,9 @@ export default function WatchByTMDBPage() {
                 title={playerMode === 'trailer' ? trailerTitle || 'Trailer player' : 'Embed player'}
                 data={activePlayerUrl}
                 type="text/html"
-                className="h-full w-full border-0 bg-black"
+                onLoad={() => setFrameLoaded(true)}
+                className="h-full w-full border-0 bg-black transition-opacity duration-300"
+                style={{ opacity: frameLoaded ? 1 : 0 }}
               >
                 <a href={activePlayerUrl} target="_blank" rel="noreferrer" className="flex h-full w-full items-center justify-center bg-black text-white">
                   Open player
@@ -651,12 +661,20 @@ export default function WatchByTMDBPage() {
                 key={`${popupBlocker ? 'blocked' : 'open'}-${activePlayerUrl}`}
                 title={playerMode === 'trailer' ? trailerTitle || 'Trailer player' : 'Embed player'}
                 src={activePlayerUrl}
-                className="h-full w-full border-0"
+                onLoad={() => setFrameLoaded(true)}
+                className="h-full w-full border-0 bg-black transition-opacity duration-300"
+                style={{ opacity: frameLoaded ? 1 : 0 }}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
                 sandbox={popupBlocker && !/onestream|stream\/page/i.test(activePlayerUrl) ? 'allow-scripts allow-same-origin allow-forms allow-presentation' : undefined}
                 allowFullScreen
                 referrerPolicy="origin-when-cross-origin"
               />
+            ) : null}
+            {status === 'ready' && activePlayerUrl && !directStreamActive && !frameLoaded ? (
+              <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-zinc-950">
+                <div className="h-10 w-10 animate-spin rounded-full border-4 border-zinc-700 border-t-red-600" />
+                <p className="text-xs font-bold text-zinc-400">Loading {playerMode === 'trailer' ? 'trailer' : 'player'}…</p>
+              </div>
             ) : null}
           </div>
         </div>

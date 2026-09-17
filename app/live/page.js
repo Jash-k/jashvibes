@@ -357,7 +357,7 @@ export default function LiveTVPage() {
         </div>
       </header>
 
-      <section className="mx-auto flex max-w-7xl flex-col items-stretch gap-3 px-3 py-3 sm:gap-4 sm:px-6 sm:py-5 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(300px,22rem)] lg:items-start xl:grid-cols-[minmax(0,1fr)_minmax(320px,24rem)] lg:px-8">
+      <section className="mx-auto flex max-w-7xl flex-col items-stretch gap-3 px-3 pt-3 pb-28 sm:gap-4 sm:px-6 sm:pt-5 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(300px,22rem)] lg:items-start xl:grid-cols-[minmax(0,1fr)_minmax(320px,24rem)] lg:px-8 lg:pb-5">
         <div className="contents min-w-0 space-y-3 sm:space-y-4 lg:block lg:min-h-0 lg:sticky lg:top-[calc(var(--live-header-h,84px)+1rem)] lg:self-start lg:space-y-3">
           {/* R1 phone row: the live tile and one line of guide share a single sticky strip, so the
               channel, what is on and the minutes left are all above the fold while the video keeps its

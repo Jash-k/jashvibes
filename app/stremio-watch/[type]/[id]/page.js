@@ -242,7 +242,7 @@ export default function StremioPlayerPage() {
         </div>
       </header>
 
-      <section className="mx-auto grid max-w-7xl gap-3 px-2 py-3 sm:gap-5 sm:px-6 sm:py-5 lg:grid-cols-[1.45fr_0.75fr] lg:px-8">
+      <section className="mx-auto grid max-w-7xl gap-3 px-2 pt-3 pb-28 sm:gap-5 sm:px-6 sm:pt-5 lg:grid-cols-[1.45fr_0.75fr] lg:px-8 lg:pb-5">
         <div className="space-y-3 sm:space-y-4">
           <div ref={shellRef} className="classics-player-shell overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:rounded-none fullscreen:border-0 sm:rounded-3xl">
             <div className="jv-native-cursor relative aspect-video h-full w-full bg-black fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:aspect-auto">

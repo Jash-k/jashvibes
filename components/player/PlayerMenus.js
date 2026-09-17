@@ -14,20 +14,26 @@ import { ASPECT_MODES } from '@/lib/player/aspect';
 
 export const Menu = memo(function Menu({ title, subtitle, onClose, children, wide = false, coarse = false, footer }) {
   const panelRef = useRef(null);
+  // JashPlayer passes an inline onClose, so without this ref the effect below
+  // re-runs — and re-steals focus — on every player render while open.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
 
   useEffect(() => {
     const node = panelRef.current;
     const onKey = (event) => {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        onClose?.();
+        closeRef.current?.();
       }
     };
     node?.addEventListener?.('keydown', onKey);
     // Focus the dialog: a sheet you cannot reach with the keyboard is a sheet you cannot leave with it.
     node?.focus?.({ preventScroll: true });
     return () => node?.removeEventListener?.('keydown', onKey);
-  }, [onClose]);
+    // Mount-only on purpose — closeRef always points at the latest onClose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const sheet = coarse
     ? 'absolute inset-x-0 bottom-0 z-50 max-h-[min(70%,calc(100%-3rem))] overflow-hidden rounded-t-3xl border-t border-white/10 bg-zinc-950/97 pb-[max(env(safe-area-inset-bottom),16px)] shadow-[0_-18px_60px_rgba(0,0,0,.8)]'
@@ -43,7 +49,14 @@ export const Menu = memo(function Menu({ title, subtitle, onClose, children, wid
           made the whole page unclickable while a sheet was open — invisible, because nothing dims it —
           so a sheet that failed to render (or was clipped by the frame) looked exactly like a frozen
           page, with no Escape and no close button in sight. */}
-      <div data-dvp="controls" className="absolute inset-0 z-40 bg-black/35" onClick={onClose} onContextMenu={(event) => { event.preventDefault(); onClose?.(); }} />
+      <div
+        data-dvp="controls"
+        className="absolute inset-0 z-40 cursor-pointer bg-black/35"
+        style={{ touchAction: 'manipulation' }}
+        onPointerDown={() => closeRef.current?.()}
+        onClick={() => closeRef.current?.()}
+        onContextMenu={(event) => { event.preventDefault(); closeRef.current?.(); }}
+      />
       <div
         ref={panelRef}
         data-dvp="controls"

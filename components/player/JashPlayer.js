@@ -744,6 +744,9 @@ export function JashPlayer(props) {
   const onTrackHover = useCallback(
     (event) => {
       if (!canSeek || !win) return;
+      // Touch drags get the scrub bubble instead — a hover tooltip that can
+      // never receive mouseleave would stick on screen after release.
+      if (event.pointerType === 'touch') return;
       const rect = trackRef.current?.getBoundingClientRect?.();
       if (!rect) return;
       const ratio = ratioFromClientX(event.clientX);
@@ -780,6 +783,7 @@ export function JashPlayer(props) {
     engine.seekTo(scrubValue);
     engine.setScrubbing(false);
     setScrubValue(null);
+    setPreview(null);
   }, [engine, scrubValue]);
 
   // A-B loop enforcement (the element, not React state, so it stays frame-exact).
@@ -1177,12 +1181,13 @@ export function JashPlayer(props) {
         {canSeek ? (
           <div
             ref={trackRef}
-            className="group/track relative -my-2 cursor-pointer py-3"
+            className="group/track relative -my-2 cursor-pointer touch-none select-none py-3"
             title={engine.seekRefused ? 'The browser cannot jump ahead in this file: you can scrub within what has downloaded' : undefined}
             onPointerDown={onTrackDown}
             onPointerMove={onTrackMove}
             onPointerUp={onTrackUp}
             onPointerCancel={onTrackUp}
+            onLostPointerCapture={onTrackUp}
             onMouseMove={onTrackHover}
             onMouseLeave={() => setPreview(null)}
           >

@@ -79,7 +79,7 @@ export default function ClassicPlayerPage() {
         </div>
       </header>
 
-      <section className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-7xl px-4 pt-5 pb-28 sm:px-6 lg:px-8 lg:pb-5">
         {status === 'loading' ? <div className="rounded-3xl border border-white/10 bg-zinc-950 p-8 text-center text-zinc-400">Loading ReTro classic...</div> : null}
         {status === 'error' ? <div className="rounded-3xl border border-red-500/30 bg-red-950/20 p-8 text-red-200">{error}</div> : null}
 

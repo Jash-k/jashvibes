@@ -127,7 +127,7 @@ export default function CleanEmbedBrowserPage() {
         </div>
       </header>
 
-      <section className="mx-auto flex max-w-7xl flex-col gap-3 px-3 py-3 sm:px-6 sm:py-4 lg:px-8">
+      <section className="mx-auto flex max-w-7xl flex-col gap-3 px-3 pt-3 pb-28 sm:px-6 sm:pt-4 lg:px-8 lg:pb-4">
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
           {sites.map((site) => (
             <button

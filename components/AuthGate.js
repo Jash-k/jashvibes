@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import MobileDock from '@/components/MobileDock';
-import CursorFX from '@/components/CursorFX';
 import SlimTopStrip from '@/components/SlimTopStrip';
 
 const STORAGE_KEY = 'jash_theatre_access_token';
@@ -55,22 +54,36 @@ async function fetchJsonWithRetry(url, options = {}, retries = 2) {
   throw lastError || new Error('Request failed');
 }
 
+function syncThemeColor(mode) {
+  try {
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', mode === 'day' ? '#faf7f2' : '#050012');
+  } catch {}
+}
+
 function DayNightToggle() {
-  const [mode, setMode] = useState('day');
+  // Night is the designed theme — day is the secondary option. First run
+  // honors the OS preference so light-mode users still land in day mode.
+  const [mode, setMode] = useState('night');
   const pathname = usePathname();
   const compactMobile = pathname !== '/';
 
   useEffect(() => {
-    const saved = window.localStorage.getItem('jash_theme_mode') || 'day';
-    setMode(saved);
-    document.documentElement.classList.toggle('day-mode', saved === 'day');
+    let initial = 'night';
+    try {
+      const saved = window.localStorage.getItem('jash_theme_mode');
+      initial = saved || (window.matchMedia?.('(prefers-color-scheme: light)')?.matches ? 'day' : 'night');
+    } catch {}
+    setMode(initial);
+    document.documentElement.classList.toggle('day-mode', initial === 'day');
+    syncThemeColor(initial);
   }, []);
 
   function toggleMode() {
     const next = mode === 'day' ? 'night' : 'day';
     setMode(next);
-    window.localStorage.setItem('jash_theme_mode', next);
+    try { window.localStorage.setItem('jash_theme_mode', next); } catch {}
     document.documentElement.classList.toggle('day-mode', next === 'day');
+    syncThemeColor(next);
   }
 
   return (
@@ -88,6 +101,7 @@ function DayNightToggle() {
 
 export default function AuthGate({ children }) {
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState('checking');
   const [error, setError] = useState('');
 
@@ -178,7 +192,6 @@ export default function AuthGate({ children }) {
         {children}
         <DayNightToggle />
         <MobileDock />
-        <CursorFX />
       </>
     );
   }
@@ -202,14 +215,33 @@ export default function AuthGate({ children }) {
 
         <label className="mt-6 block text-sm font-semibold text-zinc-300">
           Password
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            autoFocus
-            className="mt-2 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none transition placeholder:text-zinc-600 focus:border-red-500 focus:ring-2 focus:ring-red-500/30"
-            placeholder="Enter password"
-          />
+          <div className="relative mt-2">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              name="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              ref={(node) => {
+                // Autofocus only where a real keyboard exists — popping the
+                // virtual keyboard on every phone/TV unlock is hostile.
+                if (node && !node.dataset.autofocused && window.matchMedia?.('(pointer:fine)')?.matches) {
+                  node.dataset.autofocused = '1';
+                  node.focus({ preventScroll: true });
+                }
+              }}
+              className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 pr-16 text-white outline-none transition placeholder:text-zinc-600 focus:border-red-500 focus:ring-2 focus:ring-red-500/30"
+              placeholder="Enter password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((value) => !value)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-2.5 py-1.5 text-xs font-black uppercase tracking-wider text-zinc-500 transition hover:text-white"
+            >
+              {showPassword ? 'Hide' : 'Show'}
+            </button>
+          </div>
         </label>
 
         {error ? (

@@ -47,6 +47,16 @@ const CHANNELS_URL = '/api/sports/channels';
 const REFRESH_FLOOR_MS = 20_000;
 
 /** The player only ever gets a channel-shaped object, so the policy ladder is the same one /live uses. */
+function formatAge(ms = 0) {
+  const seconds = Math.max(0, Math.round(Number(ms) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
+}
+
 function streamChannel({ url, label, source = 'sports', extra = {} }) {
   return {
     id: `sports-${label}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-').slice(0, 48),
@@ -113,6 +123,7 @@ function MatchHead({ item, open, onToggle, now }) {
       <span className="jv-sp-side">
         {item.has?.watch || item.stream ? <span className="jv-sp-tag is-play">stream</span> : null}
         {item.state === 'soon' ? <span className="jv-sp-tag is-soon">{countdownLine(item, now)}</span> : null}
+        {item.state === 'live' && item.staleFeed ? <span className="jv-sp-tag is-stale" title="This card's feed is stale — the score may be old">old feed</span> : null}
         <span className={`jv-sp-tag is-${chip.tone}`}>{chip.label}</span>
         <span className="jv-sp-caret" aria-hidden="true">{open ? '▴' : '▾'}</span>
       </span>
@@ -604,9 +615,12 @@ function SourcesSheet({ open, onClose, channels, sources, onReload }) {
           <h3>Feeds</h3>
           <ul className="jv-sp-sources">
             {(sources || []).map((source) => (
-              <li key={source.id} className={source.ok ? 'ok' : 'no'}>
+              <li key={source.id} className={source.ok ? (source.stale ? 'stale' : 'ok') : 'no'}>
                 <b>{source.id}</b>
-                <span>{source.ok ? `${source.count} ${source.count === 1 ? 'match' : 'matches'}` : source.note}</span>
+                <span title={source.at || undefined}>
+                  {source.ok ? `${source.count} ${source.count === 1 ? 'match' : 'matches'}` : source.note}
+                  {source.ok && source.stale ? ` · stale${source.ageMs ? ` · ${formatAge(source.ageMs)} old` : ''}` : ''}
+                </span>
               </li>
             ))}
             {!sources?.length ? <li className="no"><b>feeds</b><span>not read yet · press reload</span></li> : null}
@@ -656,6 +670,13 @@ export default function SportsFeed({ initialOpen = null } = {}) {
   const hubRequests = useRef(new Map());
   const lastFetch = useRef(0);
   const seededHub = useRef('');
+  // Per-visit toggle on purpose: the board is always live on arrival, and storage reads are banned
+  // in this file (see tests) so deep links never depend on them.
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const pollBackoff = useRef({ fails: 0, nextAt: 0 });
+  const lastHubPoll = useRef({ key: '', at: 0 });
+  const fetchHubRef = useRef(null);
+  const hubsRef = useRef({});
 
   const load = useCallback((force = false) => {
     lastFetch.current = Date.now();
@@ -664,9 +685,9 @@ export default function SportsFeed({ initialOpen = null } = {}) {
 
   useEffect(() => { load(false); /* once per visit: the page is a board, not a ticker */ }, [load]);
 
-  // Labels ("in 25 h 0 m") are clock-dependent, so the minute tick repaints them. No network on this timer.
+  // Labels ("in 25 h 0 m", "upd 25s ago") are clock-dependent, so this tick repaints them. No network here.
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    const timer = setInterval(() => setNow(Date.now()), 10_000);
     return () => clearInterval(timer);
   }, []);
 
@@ -682,9 +703,52 @@ export default function SportsFeed({ initialOpen = null } = {}) {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [feed.data?.counts?.live, load]);
 
+  /* Smart polling: the board re-reads while (and only while) it is visible with live matches, and an
+     open live hub re-reads its scorecard. The server coalesces + TTL-caches reads, so a tick is one
+     cheap JSON hit — nothing like the old always-on poller that got the free tier suspended. Failures
+     back off exponentially to 5 minutes, and the masthead toggle pauses everything. */
+  useEffect(() => {
+    if (!autoRefresh) return undefined;
+    const tick = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!feed.data?.counts?.live) return;
+      if (feed.status === 'loading') return;
+      const nowMs = Date.now();
+      if (nowMs - lastFetch.current >= 30_000 && nowMs >= pollBackoff.current.nextAt) {
+        load(false).then(([data]) => {
+          if (data) pollBackoff.current = { fails: 0, nextAt: Date.now() + 30_000 };
+          else {
+            const fails = pollBackoff.current.fails + 1;
+            pollBackoff.current = { fails, nextAt: Date.now() + Math.min(300_000, 30_000 * 2 ** fails) };
+          }
+        }).catch(() => {
+          const fails = pollBackoff.current.fails + 1;
+          pollBackoff.current = { fails, nextAt: Date.now() + Math.min(300_000, 30_000 * 2 ** fails) };
+        });
+      }
+      if (open && fetchHubRef.current) {
+        const separator = open.indexOf(':');
+        const source = open.slice(0, separator);
+        const id = open.slice(separator + 1);
+        const item = (itemsRef.current || []).find((entry) => entry.source === source && String(entry.id) === String(id));
+        const hub = hubsRef.current[open];
+        if (item?.state === 'live' && !hub?.loading) {
+          const last = lastHubPoll.current;
+          if (last.key !== open || nowMs - last.at >= 20_000) {
+            lastHubPoll.current = { key: open, at: nowMs };
+            fetchHubRef.current(item, true);
+          }
+        }
+      }
+    };
+    const timer = setInterval(tick, 10_000);
+    return () => clearInterval(timer);
+  }, [autoRefresh, feed.data?.counts?.live, feed.status, load, open]);
+
   const items = useMemo(() => (feed.data?.items || []), [feed.data]);
   const itemsRef = useRef(items);
   itemsRef.current = items;
+  hubsRef.current = hubs;
   const list = useMemo(() => {
     if (!initialOpen) return items;
     const wanted = items.find((item) => item.source === initialOpen.source && String(item.id) === String(initialOpen.id));
@@ -782,6 +846,20 @@ export default function SportsFeed({ initialOpen = null } = {}) {
     if (next) fetchHub(item);
     if (next && !item.stream && !item.videoId) setPlaying(null);
   }, [open, fetchHub]);
+  fetchHubRef.current = fetchHub;
+
+  const staleLive = useMemo(() => {
+    const liveItems = items.filter((item) => item.state === 'live');
+    if (!liveItems.length || !liveItems.every((item) => item.staleFeed)) return '';
+    const dump = (feed.data?.sources || []).find((source) => source.id === 'fancode');
+    return `every live card rides a stale feed${dump?.ageMs ? ` · ${formatAge(dump.ageMs)} old` : ''}`;
+  }, [items, feed.data?.sources]);
+
+  const updatedLabel = useMemo(() => {
+    const at = Date.parse(feed.data?.generatedAt || '') || Number(feed.data?.cachedAt) || 0;
+    if (!at) return feed.status === 'loading' ? 'reading…' : 'not read yet';
+    return `upd ${formatAge(now - at)} ago`;
+  }, [feed.data?.generatedAt, feed.data?.cachedAt, feed.status, now]);
 
   const counts = feed.data?.counts || { live: 0, soon: 0, done: 0, tbc: 0 };
   const chanCounts = useMemo(() => channelCounts(channelList, now), [channelList, now]);
@@ -801,11 +879,20 @@ export default function SportsFeed({ initialOpen = null } = {}) {
               <h1 className="jv-sp-h1">All of it, one feed</h1>
             </div>
             <div className="jv-sp-mast-side">
+              <span className="jv-sp-updated">{updatedLabel}{autoRefresh && counts.live ? ' · auto' : ''}</span>
               <span className={`jv-sp-livepill${counts.live ? ' on' : ''}`}>
                 {counts.live ? <i aria-hidden="true" /> : null}{feedLine(counts)}
               </span>
               <button type="button" className="jv-sp-reload" onClick={() => load(true)} disabled={feed.status === 'loading'}>
                 {feed.status === 'loading' ? 'reading…' : 'reload'}
+              </button>
+              <button
+                type="button"
+                className={`jv-sp-auto${autoRefresh ? ' on' : ''}`}
+                onClick={() => setAutoRefresh((value) => !value)}
+                title={autoRefresh ? 'Pause live auto-refresh' : 'Resume live auto-refresh'}
+              >
+                {autoRefresh ? 'auto ✓' : 'auto off'}
               </button>
             </div>
           </header>
@@ -814,6 +901,7 @@ export default function SportsFeed({ initialOpen = null } = {}) {
             <p className="jv-sp-banner">The feeds did not answer: {feed.error}. The board stays empty rather than showing yesterday as today. <button type="button" onClick={() => load(true)}>try again</button></p>
           ) : null}
           {feed.data?.unavailable ? <p className="jv-sp-banner is-soft">{feed.data.note || 'no feed answered'} · <button type="button" onClick={() => load(true)}>reload</button></p> : null}
+          {staleLive ? <p className="jv-sp-banner">Live scores may be old — {staleLive}. <button type="button" onClick={() => load(true)}>reload</button></p> : null}
           {!feed.data && feed.status === 'loading' ? (
             <div className="jv-sp-skels" aria-hidden="true">{[0, 1, 2, 3].map((row) => <span className="jv-sp-skel" key={row} />)}</div>
           ) : null}

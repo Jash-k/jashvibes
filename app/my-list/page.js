@@ -100,7 +100,7 @@ export default function MyListPage() {
         </div>
       </header>
 
-      <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+      <section className="mx-auto max-w-7xl px-4 pt-6 pb-28 sm:px-6 sm:pt-10 lg:px-8 lg:pb-10">
         <div className="sticky top-[60px] z-30 -mx-1 mb-6 grid grid-cols-2 gap-2 rounded-3xl border border-white/10 bg-[#050505]/90 p-1.5 backdrop-blur sm:top-[68px] sm:mx-0 sm:w-max sm:min-w-96 sm:gap-3">
           <TabButton active={isFavoritesTab} count={favorites.length} onClick={() => setTab('favorites')}>
             ❤ My List
