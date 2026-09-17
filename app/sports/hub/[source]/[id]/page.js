@@ -13,7 +13,7 @@ import SportsFeed from '@/components/sports/SportsFeed';
  * `?tab=live|video|info|scorecard` opens a particular panel; an unknown or unavailable
  * one falls back to the first tab the match actually has, which is decided by the data.
  */
-const SOURCE = /^(bcci|ipl|icc|fancode)$/;
+const SOURCE = /^(bcci|ipl|icc|fancode|sonyliv)$/;
 
 export default async function SportsHubPage({ params, searchParams }) {
   const { source, id } = await params;

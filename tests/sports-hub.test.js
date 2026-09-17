@@ -157,6 +157,35 @@ const fancodeRow = {
 };
 
 /** A fetch stub that answers the exact URLs the loaders build, and 404s anything else. */
+/* The live playlist family fixtures (round 23). Dates are built from NOW so "fresh" stays fresh. */
+const istDateLine = (ms) => {
+  const d = new Date(ms + 5.5 * 3600_000);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `#DATE:- ${pad(d.getUTCDate())}-${pad(d.getUTCMonth() + 1)}-${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+};
+const FAN_M3U = [
+  '#EXTM3U',
+  istDateLine(NOW),
+  '#EXTINF:-1 tvg-id="4248492" tvg-name="India Vs Afghanistan" tvg-language="English" group-title="Cricket",ENG | India Vs Afghanistan',
+  'https://dai.example/afg-eng.m3u8|User-Agent=ReactNativeVideo/9.11.1&Referer=https://fancode.com/',
+].join('\n');
+const SONY_M3U = [
+  '#EXTM3U',
+  istDateLine(NOW),
+  '#EXTINF:-1 tvg-id="1090542526" tvg-name="DP World Tour" tvg-language="English" group-title="Golf",ENG | BMW PGA Championship - Day 1',
+  'https://sony.example/golf-eng.m3u8|User-Agent=Mozilla/5.0&Referer=https://www.sonyliv.com/&Origin=https://www.sonyliv.com',
+].join('\n');
+const ICC_M3U_STALE = [
+  '#EXTM3U',
+  '#DATE:- 06-09-2026 16:45',
+  '#EXTINF:-1 tvg-id="6ac27684-74f9-4b4f-80da-291bec7b471c" tvg-lang="English" group-title="Cricket",English | Zimbabwe v South Africa',
+  '#KODIPROP:inputstream.adaptive.manifest_type=mpd',
+  '#KODIPROP:inputstream.adaptive.license_key={"keys":[{"kty":"oct","k":"mGn4BLoY1-UIy_94GCkiHA","kid":"Ob0wLN7tNxCon7AE0jKrZw"}],"type":"temporary"}',
+  '#EXTVLCOPT:http-user-agent=Mozilla/5.0',
+  '#EXTVLCOPT:http-referrer=https://www.icc-cricket.com/',
+  'https://icc.example/manifest.mpd',
+].join('\n');
+
 function stubFetch({ fail = [] } = {}) {
   const calls = [];
   const json = (value) => ({ ok: true, status: 200, json: async () => value, text: async () => JSON.stringify(value) });
@@ -207,6 +236,9 @@ function stubFetch({ fail = [] } = {}) {
       });
     }
     if (where.includes('/api/match/19987/summary')) return json({ data: { SeriesName: 'Asia Cup', Venue: 'Abu Dhabi', Toss: 'not yet' } });
+    if (where.includes('fancode.m3u')) return { ok: true, status: 200, json: async () => ({}), text: async () => FAN_M3U };
+    if (where.includes('sony.m3u')) return { ok: true, status: 200, json: async () => ({}), text: async () => SONY_M3U };
+    if (where.includes('icc.m3u')) return { ok: true, status: 200, json: async () => ({}), text: async () => ICC_M3U_STALE };
     if (where.includes('fancode.json')) return json({ matches: [fancodeRow] });
     if (where.includes('fancode.com')) {
       const state = {
@@ -455,21 +487,32 @@ test('FanCode scorecard scraper: reads the innings out of __INIT_STATE__ and shr
 
 /* ------------------------------------------------------------------ 4 · the loaders, against fixtures */
 
-test('loadFeed: five sources, merged, with per-source health and an honest ttl', async () => {
+test('loadFeed: the playlist family plus the score feeds, merged, with per-source health and an honest ttl', async () => {
   const { fetchImpl, calls } = stubFetch();
   const feed = await loadFeed({ fetchImpl, env, now: NOW });
   assert.equal(feed.ok, true);
-  assert.equal(feed.items.length, 4, '6 rows in, 4 cards: the IND-SL pair (BCCI live + FanCode) and the IND-PAK pair (stale-live + recent) each collapse to one');
-  assert.equal(feed.counts.live, 2, 'the BCCI card and the ICC card');
+  assert.equal(feed.items.length, 6, 'the 4 score-feed cards + the FanCode playlist match + the SonyLiv channel');
+  assert.equal(feed.counts.live, 4, 'BCCI + ICC + the two playlist entries that are on air');
   assert.equal(feed.counts.done, 1);
   assert.equal(feed.counts.soon, 1);
   assert.ok(!feed.items.some((item) => item.state === 'live' && item.result), 'a card with a result is never printed live');
   assert.ok(feed.items.some((item) => item.state === 'live' && item.source === 'icc'), 'the ICC row is live on its own "In progress" word');
+  const fanM3u = feed.items.find((item) => item.source === 'fancode' && item.id === '4248492');
+  assert.ok(fanM3u, 'the FanCode playlist match is on the board');
+  assert.equal(fanM3u.state, 'live');
+  assert.equal(fanM3u.variants.length, 1, 'one playlist entry, one playable variant with its headers');
+  assert.equal(fanM3u.variants[0].userAgent, 'ReactNativeVideo/9.11.1');
+  assert.equal(fanM3u.variants[0].referer, 'https://fancode.com/');
+  const sony = feed.items.find((item) => item.source === 'sonyliv');
+  assert.ok(sony && sony.state === 'live', 'the SonyLiv channel is a live card');
   assert.equal(feed.ttlMs, FEED_TTL_LIVE_MS);
-  assert.deepEqual(feed.sources.map((source) => source.id), ['bcci-live', 'bcci-upcoming', 'bcci-recent', 'icc-wt20', 'fancode']);
-  assert.equal(feed.sources.every((source) => source.ok), true);
-  assert.ok(feed.sources.every((source) => source.count > 0));
-  assert.equal(calls.length, 5, 'one upstream call per source, not one per card');
+  assert.deepEqual(feed.sources.map((source) => source.id), ['bcci-live', 'bcci-upcoming', 'bcci-recent', 'icc-wt20', 'fancode-m3u', 'sonyliv-m3u', 'icc-m3u', 'fancode-legacy']);
+  assert.equal(feed.sources.find((source) => source.id === 'icc-m3u').ok, false, 'the ICC playlist is Sep 6 old: named, not shown');
+  assert.match(feed.sources.find((source) => source.id === 'icc-m3u').note, /too old to show/);
+  assert.equal(feed.sources.find((source) => source.id === 'fancode-legacy').ok, false, 'the legacy JSON is skipped, not fetched, while the playlist answers');
+  assert.ok(feed.sources.filter((source) => source.ok).every((source) => source.count > 0));
+  assert.equal(calls.length, 7, 'three BCCI/ICC score feeds + three playlists; the legacy dump is not fetched');
+  assert.ok(calls.every((url) => !url.includes('fancode.json')), 'the dead JSON dump is not worth a request while the playlist answers');
   assert.ok(calls.every((url) => !url.includes('scores2.bcci.tv')), 'the free-tier proxy is tried first');
   assert.equal(sportsBackend(env), 'https://scores.example');
   assert.equal(sportsBackend({ SPORTS_BACKEND: 'https://alt/' }), 'https://alt', 'the older variable name still works, and a trailing slash is stripped');
@@ -482,7 +525,9 @@ test('loadFeed: a source that is asleep is named, and the board still prints wha
   const { fetchImpl } = stubFetch({ fail: ['/api/wt20/schedule', '/api/bcci/live', '/api/bcci/recent'] });
   const feed = await loadFeed({ fetchImpl, env, now: NOW });
   assert.equal(feed.ok, true, 'whatever answered is enough to show something');
-  assert.deepEqual(feed.items.map((item) => item.source), ['fancode', 'bcci'], 'rank orders the board — live before upcoming, whatever feed answered');
+  const live = feed.items.filter((item) => item.state === 'live').map((item) => item.source);
+  assert.deepEqual(live.sort(), ['fancode', 'sonyliv'], 'the playlists carry the board while the score feeds sleep');
+  assert.ok(feed.items.some((item) => item.state === 'soon' && item.source === 'bcci'), 'the BCCI schedule card survives');
   const icc = feed.sources.find((source) => source.id === 'icc-wt20');
   assert.equal(icc.ok, false);
   assert.match(icc.note, /^unavailable · icc: HTTP 404/, 'the panel says which feed and why');
@@ -491,20 +536,21 @@ test('loadFeed: a source that is asleep is named, and the board still prints wha
 });
 
 test('loadFeed: nothing live means a long cache, not a 20 s poll', async () => {
-  const { fetchImpl } = stubFetch({ fail: ['/api/bcci/live', '/api/bcci/recent', '/api/wt20', 'fancode.json'] });
+  const { fetchImpl } = stubFetch({ fail: ['/api/bcci/live', '/api/bcci/recent', '/api/wt20', 'fancode.json', 'fancode.m3u', 'sony.m3u', 'icc.m3u'] });
   const feed = await loadFeed({ fetchImpl, env, now: NOW });
   assert.equal(feed.counts.live, 0);
   assert.equal(feed.items.length, 1);
   assert.equal(feed.items[0].state, 'soon');
   assert.equal(feed.ttlMs, FEED_TTL_IDLE_MS, 'an idle board is refetched after minutes, not seconds');
+  assert.ok(feed.sources.find((source) => source.id === 'fancode-legacy').note.includes('unavailable'), 'the legacy dump was asked for (the playlist failed) and its failure is named');
 });
 
 test('loadFeed: every source failing is an unavailable board, not an empty one', async () => {
-  const { fetchImpl } = stubFetch({ fail: ['/api/bcci', '/api/wt20', 'fancode.json', 'scores2.bcci.tv'] });
+  const { fetchImpl } = stubFetch({ fail: ['/api/bcci', '/api/wt20', 'fancode.json', 'scores2.bcci.tv', 'fancode.m3u', 'sony.m3u', 'icc.m3u'] });
   const feed = await loadFeed({ fetchImpl, env, now: NOW });
   assert.equal(feed.ok, false);
   assert.equal(feed.items.length, 0);
-  assert.equal(feed.sources.filter((source) => !source.ok).length, 5);
+  assert.equal(feed.sources.filter((source) => !source.ok).length, 8);
   assert.ok(feed.sources.every((source) => source.note.includes('unavailable')));
 });
 
@@ -770,17 +816,16 @@ test('cachedFeed: one upstream read for the board and the hub, coalesced, then a
   const again = await cachedFeed({ fetchImpl: async () => { throw new Error('all hosts down'); }, env, now: NOW + 999_999 });
   assert.equal(again.unavailable, true);
   assert.equal(again.ttlMs, 5_000, 'a failed read is retried soon, not after five minutes');
-  assert.equal(again.sources.length, 5, 'every source that was asked is listed as failing, with its own sentence');
+  assert.equal(again.sources.length, 8, 'every source that was asked is listed as failing, with its own sentence');
   assert.ok(again.sources.every((source) => source.note.includes('all hosts down')), 'the error each source gave is what the sheet prints');
-  const empty = await cachedFeed({ fetchImpl: stubFetch({ fail: ['/api/bcci', '/api/wt20', 'fancode.json', 'scores2.bcci.tv'] }).fetchImpl, env, now: NOW + 1_000_000 });
+  const empty = await cachedFeed({ fetchImpl: stubFetch({ fail: ['/api/bcci', '/api/wt20', 'fancode.json', 'scores2.bcci.tv', 'fancode.m3u', 'sony.m3u', 'icc.m3u'] }).fetchImpl, env, now: NOW + 1_000_000 });
   assert.equal(empty.ok, false);
   assert.equal(empty.ttlMs, 5_000, 'a source that answered with nothing is retried soon too');
   assert.equal(findFeedItem(again, 'bcci', '19986'), null);
-  const card = findFeedItem(first, 'fancode', '610');
+  const card = findFeedItem(first, 'fancode', '4248492');
   assert.equal(card.home, 'India');
-  assert.equal(card.also.sort().join(','), 'bcci,fancode', 'the merged card answers to either feed’s id lookup…');
-  assert.equal(findFeedItem(first, 'bcci', '19986'), null, '…but only the surviving source owns the hub url, which is what its href says');
-  assert.equal(card.href, '/sports/hub/fancode/610');
+  assert.equal(card.also.includes('bcci'), false, 'a playlist card and the score card stay separate: the playlist carries no date to merge on, so neither invents one');
+  assert.equal(card.href, '/sports/hub/fancode/4248492', 'the playlist card deep-links under its own id');
   assert.equal(findFeedItem(first, 'bcci', '19980').home, 'India', 'a match only one feed carries is found by that feed’s id');
   assert.equal(findFeedItem(first, 'icc', '19980'), null, 'ids are only unique inside their own source');
 });

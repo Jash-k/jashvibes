@@ -254,13 +254,20 @@ function VideoPanel({ item, hub, channels, playing, onPickChannel, onResolveVide
                   url: variant.url,
                   label: `${item.homeCode || ''} v ${item.awayCode || ''}`.trim() || item.competition || 'Match stream',
                   source: `${sourceLine(item)} · ${variant.label}`,
-                  extra: { cookie: variant.cookie, referer: variant.referer, userAgent: variant.userAgent },
+                  extra: {
+                    cookie: variant.cookie,
+                    referer: variant.referer || variant.origin,
+                    userAgent: variant.userAgent,
+                    keyId: variant.keyId,
+                    key: variant.key,
+                    licenseKey: variant.licenseKey,
+                  },
                   expiresAt: variant.expiresAt,
                   variantId: variant.id || '',
                   matchSource: item.source,
                   matchId: String(item.id),
-                  via: /\.m3u8/i.test(variant.url) ? 'HLS' : 'direct',
-                  note: variant.cookie ? 'the token this feed published travels through the live proxy' : 'plays direct',
+                  via: /\.m3u8/i.test(variant.url) ? 'HLS' : (/\.mpd/i.test(variant.url) ? 'DASH' : 'direct'),
+                  note: variant.cookie ? 'the token this feed published travels through the live proxy' : (variant.keyId ? 'ClearKey stream · played in JashPlayer' : 'plays direct'),
                 })}
               >
                 <b>{variant.label}</b>
