@@ -110,6 +110,19 @@ html.day-mode .day-night-toggle {
   --palette-accent-2: #14b8a6;
 }
 
+/* Player quick-menu rows: 44 px is the thumb-trust minimum on a phone; from
+   1600 px (TV boxes on big panels) the rows get roomier for the 10-foot UI. */
+.jv-menu-row {
+  min-height: 44px;
+}
+
+@media (min-width: 1600px) {
+  .jv-menu-row {
+    min-height: 52px;
+  }
+}
+
+
 .palette-nordic {
   --palette-accent: #86efac;
   --palette-accent-2: #2f6f4e;

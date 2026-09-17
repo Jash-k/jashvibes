@@ -361,6 +361,16 @@ export default function WatchByTMDBPage() {
     [streamChoices, stremioStreams],
   );
 
+  // The Stremio Quality dropdown must describe the stream that is *playing*,
+  // not the one that was picked first. The engine auto-rotates past dead
+  // streams (and the player's own quality list can switch them), so derive the
+  // select's value from the active URL — the same URL the resolver handed us
+  // for that stream id — instead of trusting the stale selected-id state.
+  const activeStremioStream = useMemo(
+    () => stremioStreams.find((stream) => stream?.url && stream.url === currentStreamUrl) || null,
+    [stremioStreams, currentStreamUrl],
+  );
+
   // Next-episode pill data (same-season next ep, else first ep of next season).
   const nextEpisodeInfo = useMemo(() => {
     if (!isSeries || !seasonOptions?.length) return null;
@@ -564,7 +574,7 @@ export default function WatchByTMDBPage() {
               <label className="col-span-2 text-sm text-zinc-400 sm:col-span-4">
                 Stremio Quality
                 <select
-                  value={selectedStremioStreamId || resolvedStremioStreamId || ''}
+                  value={activeStremioStream?.id || selectedStremioStreamId || resolvedStremioStreamId || ''}
                   onChange={(event) => setSelectedStremioStreamId(event.target.value)}
                   disabled={status === 'loading' || !stremioStreams.length}
                   className="mt-1 w-full rounded-xl border border-fuchsia-500/25 bg-black px-3 py-2 text-white outline-none focus:border-fuchsia-500 disabled:cursor-wait disabled:opacity-60"

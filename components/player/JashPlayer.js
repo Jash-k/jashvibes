@@ -21,21 +21,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePlaybackEngine } from './usePlaybackEngine';
-import { COMMANDS, commandForKey, digitSeekPercent } from '@/lib/player/commands';
+import { commandForKey, digitSeekPercent } from '@/lib/player/commands';
 import { INCIDENT_QUEUE_KEY } from '@/lib/player/prefs';
 import { buildHeaderFilter, createDirectPolicy } from '@/lib/player/policy/stream';
 import { fmtTime, warnForSource } from '@/lib/player/labels';
 import { Icon, PATHS } from './PlayerIcons';
 import { ChannelDrawer } from './PlayerBrowser';
 import {
-  AudioMenu,
+  AspectMenu,
   ContextMenu,
   QualityMenu,
-  SettingsMenu,
-  ShortcutList,
-  SourcesMenu,
-  SpeedMenu,
-  SubtitlesMenu,
   TimeBubble,
 } from './PlayerMenus';
 import {
@@ -53,7 +48,6 @@ import {
   TopBar,
 } from './PlayerOverlays';
 import {
-  useAirPlay,
   useCoarsePointer,
   useFullscreen,
   useLandscapePhone,
@@ -172,6 +166,13 @@ export function JashPlayer(props) {
   );
   const sourceUrls = useMemo(() => sources.map((item) => (typeof item === 'string' ? item : item?.url)).filter(Boolean), [sources]);
   const activeIndex = Number(lineup.activeIndex ?? activeSource ?? 0);
+  // Labeled streams: rows with a name and (when known) a resolution and size —
+  // what the quality list prints. Plain URL strings are "plain files" and fall
+  // back to the manifest's Auto + height rows instead.
+  const labeledSources = useMemo(
+    () => sources.filter((item) => typeof item !== 'string' && (item?.label || item?.quality)),
+    [sources],
+  );
   const [rotateIndex, setRotateIndex] = useState(activeIndex);
   useEffect(() => setRotateIndex(activeIndex), [activeIndex]);
 
@@ -292,7 +293,6 @@ export function JashPlayer(props) {
   // --------------------------------------------------------------- window/PiP/lock
   const { isFullscreen, canFullscreen, toggleFullscreen } = useFullscreen();
   const { pipActive, canPip, togglePip } = usePip(videoEl);
-  const { canAirPlay, showAirPlay } = useAirPlay(videoEl);
   useWakeLock(playing);
 
   const ambientActive = policy.ambient !== false && Boolean(prefs.ambient) && playing && !isFullscreen && !compact;
@@ -582,10 +582,15 @@ export function JashPlayer(props) {
           togglePip();
           break;
         case 'cycleCaptions':
-          if (!engine.cycleCaptions()) setMenu('subtitles');
+          // The subtitle sheet is gone from the UI; a stream with no tracks
+          // gets a sentence instead of a dead menu.
+          if (!engine.cycleCaptions()) setNotice({ tone: 'info', text: 'This stream carries no subtitles.' });
           break;
         case 'openSubtitles':
-          setMenu(menu === 'subtitles' ? null : 'subtitles');
+          // Was "open the subtitle options sheet". The sheet no longer exists,
+          // so the key now does the useful thing the sheet's Off/On row did:
+          // toggle captions. Same engine call as C.
+          if (!engine.cycleCaptions()) setNotice({ tone: 'info', text: 'This stream carries no subtitles.' });
           break;
         case 'subtitleDelayUp':
           engine.shiftSubtitleDelay(250);
@@ -902,7 +907,6 @@ export function JashPlayer(props) {
   }, [notice]);
 
   // ----------------------------------------------------------------- derived UI
-  const commandList = useMemo(() => Object.entries(COMMANDS).map(([name, command]) => ({ name, ...command })), []);
 
   // A sheet is modal, so Escape must close it whether or not the player still holds focus — losing
   // that focus is easy (clicking a rail row, tabbing out) and with the old page-wide backdrop it left
@@ -934,9 +938,19 @@ export function JashPlayer(props) {
       text: 'This file has no seek index the browser can use, so a long jump would mean re-reading it from the start. Scrubbing stays inside what has downloaded, and playback will not restart at 0.',
     });
   }, [engine.seekRefused]);
-  const qualityLabel = prefs.qualityAuto || !prefs.qualityHeight ? 'Auto' : Number(prefs.qualityHeight) >= 2160 ? '4K' : `${prefs.qualityHeight}p`;
+  // The pill names what you are watching: a labeled stream's resolution
+  // ("1080p") when the page discovered streams, else the engine's rendition
+  // state ("Auto" / the locked height). Same words the quality list prints.
+  const activeStreamEntry = sources[rotateIndex];
+  const activeStreamQuality =
+    typeof activeStreamEntry === 'string' ? '' : String(activeStreamEntry?.quality || '').match(/^(?:\d{3,4}p|4K)$/i)?.[0] || '';
+  const renditionLabel = prefs.qualityAuto || !prefs.qualityHeight ? 'Auto' : Number(prefs.qualityHeight) >= 2160 ? '4K' : `${prefs.qualityHeight}p`;
+  const qualityLabel = activeStreamQuality || renditionLabel;
 
   const subtitleOn = (tracks.text || []).some((track) => track.active) || Boolean(engine.externalSubtitle);
+  // No control that controls nothing: the CC toggle exists only when there is
+  // a track to toggle — embedded, or a file the viewer dropped on the player.
+  const hasSubtitles = (tracks.text || []).length > 0 || Boolean(engine.externalSubtitle);
 
   const contextItems = useMemo(() => {
     const items = [];
@@ -1231,7 +1245,8 @@ export function JashPlayer(props) {
                 data-jash-command="seekBack"
                 onClick={() => runCommand('seekBack')}
                 aria-label="Back 10 seconds"
-                className="grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95"
+                title="Back 10s (arrowleft)"
+                className="hidden h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95 sm:grid"
               >
                 <Icon d={PATHS.back10} className="h-5 w-5" />
               </button>
@@ -1240,7 +1255,8 @@ export function JashPlayer(props) {
                 data-jash-command="seekForward"
                 onClick={() => runCommand('seekForward')}
                 aria-label="Forward 10 seconds"
-                className="grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95"
+                title="Forward 10s (arrowright)"
+                className="hidden h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95 sm:grid"
               >
                 <Icon d={PATHS.fwd10} className="h-5 w-5" />
               </button>
@@ -1277,24 +1293,62 @@ export function JashPlayer(props) {
           <div className="flex-1" />
 
           <div className="flex items-center gap-0.5 sm:gap-1">
-            {/* Two controls on the right: the bitrate you are getting, and one
-                sheet that holds everything else. The old bar had a pill per
-                capability and on a phone most of them were `hidden sm:grid`, so
-                quality looked missing while dead icons took the space. */}
-            {/* The one entry point: the quality list is the first thing in it, so a
-                phone is a single tap from "which bitrate am I getting". */}
+            {/* Four controls, one tap each. The old bar hid most of its pills
+                behind breakpoints and stuffed the rest into a settings sheet;
+                every one of these is reachable on every device, and each is
+                rendered only when it can actually do something. */}
             <button
               type="button"
-              data-jash-command="cycleQuality"
-              onClick={() => setMenu(menu === 'settings' ? null : 'settings')}
-              aria-label="Quality and settings"
-              className="grid h-11 min-w-[4.25rem] place-items-center gap-1.5 rounded-full border border-white/15 px-2.5 text-[11px] font-black text-white transition hover:border-fuchsia-400/50 hover:text-fuchsia-200"
+              onClick={() => setMenu(menu === 'quality' ? null : 'quality')}
+              aria-haspopup="dialog"
+              aria-expanded={menu === 'quality'}
+              aria-label={`Quality: ${qualityLabel}`}
+              className="grid h-11 min-w-[4.25rem] place-items-center rounded-full border border-white/15 px-2.5 text-[11px] font-black text-white transition hover:border-fuchsia-400/50 hover:text-fuchsia-200"
             >
               <span className="flex items-center gap-1.5">
                 <Icon d={PATHS.list} className="h-4 w-4" />
                 {qualityLabel}
               </span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setMenu(menu === 'aspect' ? null : 'aspect')}
+              aria-haspopup="dialog"
+              aria-expanded={menu === 'aspect'}
+              aria-label={`Aspect ratio: ${aspectLabel(aspectMode)}`}
+              className="grid h-11 min-w-[3.4rem] place-items-center rounded-full border border-white/15 px-2.5 text-[11px] font-black text-white transition hover:border-fuchsia-400/50 hover:text-fuchsia-200"
+            >
+              {aspectLabel(aspectMode)}
+            </button>
+
+            {hasSubtitles ? (
+              <button
+                type="button"
+                data-jash-command="cycleCaptions"
+                onClick={() => runCommand('cycleCaptions')}
+                aria-label={subtitleOn ? 'Subtitles on' : 'Subtitles off'}
+                aria-pressed={subtitleOn}
+                title="Subtitles (C)"
+                className={`grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 ${subtitleOn ? 'bg-white/15 text-fuchsia-200' : ''}`}
+              >
+                <span className="text-[11px] font-black tracking-wide">CC</span>
+              </button>
+            ) : null}
+
+            {canPip ? (
+              <button
+                type="button"
+                data-jash-command="togglePip"
+                onClick={() => togglePip()}
+                aria-label={pipActive ? 'Exit picture in picture' : 'Picture in picture'}
+                aria-pressed={pipActive}
+                title="Picture in picture (P)"
+                className={`grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95 ${pipActive ? 'bg-white/15 text-fuchsia-200' : ''}`}
+              >
+                <Icon d={PATHS.pip} className="h-5 w-5" />
+              </button>
+            ) : null}
 
             {canFullscreen ? (
               <button
@@ -1324,119 +1378,42 @@ export function JashPlayer(props) {
         </div>
       </div>
 
-      {menu === 'settings' ? (
-        <SettingsMenu
-          coarse={coarse}
-          onClose={() => setMenu(null)}
-          variants={tracks.video || []}
-          heights={heights}
-          activeHeight={Number(prefs.qualityHeight) || 0}
-          autoQuality={Boolean(prefs.qualityAuto)}
-          onPickHeight={(height) => engine.selectQualityHeight(height)}
-          onAutoHeight={() => engine.setAutoQuality()}
-          rate={Number(videoEl?.playbackRate) || 1}
-          onPickRate={(value) => engine.setRate(value)}
-          audio={tracks.audio || []}
-          audioLanguage={prefs.audioLanguage}
-          onPickAudio={(language) => engine.selectAudioLanguage(language)}
-          sources={sources}
-          activeSourceIndex={rotateIndex}
-          onPickSource={(index) => {
+      {menu === 'quality' ? (
+        <QualityMenu
+          streams={labeledSources}
+          activeIndex={rotateIndex}
+          onPickStream={(index) => {
+            // Same path the old sources sheet used: the engine switches with
+            // the position kept, and the page is told so its own dropdown
+            // re-syncs to the stream that is actually playing.
             engine.rotateFallback(index);
             try {
               onPickSource?.(index);
             } catch {}
             setMenu(null);
           }}
-          captionsOn={subtitleOn}
-          textTracks={tracks.text || []}
-          onToggleCaptions={() => runCommand('cycleCaptions')}
-          onOpenSubtitles={() => setMenu('subtitles')}
-          statsOn={engine.showStats}
-          onToggleStats={() => engine.toggleStats()}
-          frozen={Boolean(frozenFrame)}
-          onToggleFreeze={toggleFreeze}
-          onRestart={() => {
-            setMenu(null);
-            engine.startOver();
-          }}
-          onOpenShortcuts={() => setMenu('shortcuts')}
+          heights={heights}
+          auto={Boolean(prefs.qualityAuto)}
+          activeHeight={Number(prefs.qualityHeight) || 0}
+          onPickHeight={(height) => engine.selectQualityHeight(height)}
+          onAuto={() => engine.setAutoQuality()}
+          coarse={coarse}
+          onClose={() => setMenu(null)}
+          note={codecWarning.risky ? `Codec flags: ${codecWarning.tags.join(', ')} — this file may not decode on some phones.` : undefined}
+        />
+      ) : null}
+      {menu === 'aspect' ? (
+        <AspectMenu
           aspect={aspectMode}
-          onPickAspect={(value) => {
+          onPick={(value) => {
             if (!isAspectMode(value)) return;
             engine.setPref('aspect', value);
             setNotice({ tone: 'info', text: `Aspect ratio: ${aspectLabel(value)}` });
           }}
-          canPip={canPip}
-          pipActive={pipActive}
-          onTogglePip={() => togglePip()}
-          canAirPlay={canAirPlay}
-          onAirPlay={() => showAirPlay()}
-          note={codecWarning.risky ? `Codec flags: ${codecWarning.tags.join(', ')} — this file may not decode on some phones.` : undefined}
-        />
-      ) : null}
-      {menu === 'speed' ? (
-        <SpeedMenu rate={Number(videoEl?.playbackRate) || 1} onPick={(value) => { engine.setRate(value); setMenu(null); }} coarse={coarse} onClose={() => setMenu(null)} />
-      ) : null}
-      {menu === 'quality' ? (
-        <QualityMenu
-          variants={tracks.video || []}
-          activeHeight={Number(prefs.qualityHeight) || 0}
-          auto={Boolean(prefs.qualityAuto)}
-          onPick={(height) => engine.selectQualityHeight(height)}
-          onAuto={() => engine.setAutoQuality()}
-          coarse={coarse}
-          onClose={() => setMenu(null)}
-          footer={(tracks.video || []).length ? null : 'A plain file has one rendition — the server decides the quality.'}
-        />
-      ) : null}
-      {menu === 'audio' ? (
-        <AudioMenu
-          audio={tracks.audio || []}
-          language={prefs.audioLanguage}
-          onPick={(language2) => {
-            engine.selectAudioLanguage(language2);
-            setMenu(null);
-          }}
           coarse={coarse}
           onClose={() => setMenu(null)}
         />
       ) : null}
-      {menu === 'subtitles' ? (
-        <SubtitlesMenu
-          text={tracks.text || []}
-          external={engine.externalSubtitle}
-          canStyleExternal={Boolean(engine.externalSubtitle)}
-          delayMs={Number(prefs.subtitleDelayMs) || 0}
-          scale={Number(prefs.subtitleScale) || 1}
-          background={Number(prefs.subtitleBackground) || 0}
-          onDelay={(delta) => engine.shiftSubtitleDelay(delta)}
-          onScale={(value) => engine.setPref('subtitleScale', value)}
-          onBackground={(value) => engine.setPref('subtitleBackground', value)}
-          onPick={(id) => engine.selectTextTrack(id)}
-          onFile={importSubtitleFile}
-          onRemove={() => engine.removeExternalSubtitle()}
-          coarse={coarse}
-          onClose={() => setMenu(null)}
-        />
-      ) : null}
-      {menu === 'sources' ? (
-        <SourcesMenu
-          sources={sources}
-          activeIndex={rotateIndex}
-          note={codecWarning.risky ? `Codec flags: ${codecWarning.tags.join(', ')}` : undefined}
-          onPick={(index) => {
-            engine.rotateFallback(index);
-            try {
-              onPickSource?.(index);
-            } catch {}
-            setMenu(null);
-          }}
-          coarse={coarse}
-          onClose={() => setMenu(null)}
-        />
-      ) : null}
-      {menu === 'shortcuts' ? <ShortcutList commands={commandList} coarse={coarse} onClose={() => setMenu(null)} /> : null}
 
       {contextMenu ? <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextItems} onClose={() => setContextMenu(null)} /> : null}
 
