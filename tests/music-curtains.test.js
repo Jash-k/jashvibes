@@ -122,7 +122,7 @@ test('the helpers the player depends on still behave after moving out of the pag
 
 /* ─────────────────────── the section: old UI gone, promises kept ─────────────────────── */
 
-/* ─────────────────────── the lounge: old UI gone, promises kept ─────────────────────── */
+/* ─────────────────────── the lounge: 6 tabs, promises kept ─────────────────────── */
 
 test('the page is a thin shell over one new component', () => {
   assert.match(page, /import MusicCurtains from '@\/components\/music\/MusicCurtains'/);
@@ -133,7 +133,7 @@ test('the page is a thin shell over one new component', () => {
 
 test('the previous music UIs are deleted, not restyled', () => {
   assert.ok(!fs.existsSync(path.join(ROOT, 'components/music/Curtains.jsx')), 'the primitives file is deleted outright');
-  for (const token of ['jv-mu-', '--mu-', 'jv-vinyl', 'palette-music-magenta']) {
+  for (const token of ['jv-mu-', '--mu-', 'jv-vinyl', 'jv-spin', 'MUSIC PLAYER']) {
     assert.ok(!section.includes(token), `the section carries no ${token} anymore`);
     assert.ok(!css.includes(token), `the stylesheet carries no ${token} anymore`);
   }
@@ -150,37 +150,49 @@ test('the previous music UIs are deleted, not restyled', () => {
   assert.ok(!soup.test(section), 'no Tailwind soup left in the section — it is one class family now');
 });
 
-test('the header is brand · search · nav, with TV icons and a phone search toggle', () => {
+test('the asked-out wordings are gone: brand text, footer line, listen button', () => {
+  assert.ok(!section.includes(' Lyric Lounge</p>'), 'the header keeps the bars mark, not the words');
+  assert.match(section, /ll-brand-bars"[\s\S]{0,120}ll-sr">Music<\/span>/, 'the mark stays announced for screen readers');
+  assert.ok(!section.includes('Streams are resolved by this app'), 'the footer line is deleted');
+  assert.ok(!section.includes('ll-foot'), 'and the footer element went with it');
+  assert.ok(!css.includes('.ll-foot'), 'and its rules');
+  assert.ok(!section.includes('>listen</button>'), 'the listen button is off the card');
+});
+
+test('the header is mark · search · nav, with TV icons and a phone search toggle', () => {
   assert.match(section, /LlAmbient vars=\{curtainVars\}/, 'the room glows with the track hash');
-  assert.match(section, /Lyric Lounge<\/p>/, 'the brand reads Lyric Lounge');
   assert.match(section, /placeholder="Search Tamil Songs\.\.\."/, 'the search pill matches the design');
   assert.match(section, /aria-label="Music"[\s\S]*>Home<\/button>[\s\S]*>Explore<\/button>[\s\S]*>My Library<\/button>/, 'Home · Explore · My Library, in that order');
-  assert.match(section, /setView\('explore'\); setSelectedCollection\(null\); setCenterTab\('browse'\)/, 'Explore lands on browse');
-  assert.match(section, /setView\('library'\); setSelectedCollection\(null\); setCenterTab\('browse'\)/, 'My Library lands on browse');
+  assert.match(section, /setCenterTab\('trending'\); setSelectedCollection\(null\); setQuery\(''\); if \(trending\.status === 'idle'\) loadTrending\(\);/, 'Home jumps to Trending and loads it');
+  assert.match(section, /setCenterTab\('tracks'\); setSelectedCollection\(null\); setQuery\(''\);/, 'Explore jumps to Tracks');
+  assert.match(section, /setCenterTab\('library'\); setSelectedCollection\(null\); setQuery\(''\);/, 'My Library jumps to Library');
   assert.match(section, /aria-label="Quick actions"/, 'the TV icon trio is mounted');
   assert.match(section, /aria-pressed=\{mSearch\}/, 'phones toggle the search row');
   assert.match(section, /<main className="ll jv-rail-shift">/, 'the lounge keeps its rail clearance');
 });
 
-test('the center is lyrics · browse behind one tab state, queue on phones', () => {
+test('the center is six tabs behind one tab state, queue on phones', () => {
   assert.match(section, /const \[centerTab, setCenterTab\] = useState\('lyrics'\);/, 'lyrics first, as the design promises');
-  assert.match(section, /role="tablist" aria-label="Lyrics, browse or queue"/, 'the center tabs are announced');
-  assert.match(section, /aria-selected=\{centerTab === 'lyrics'\}[\s\S]*aria-selected=\{centerTab === 'browse'\}[\s\S]*aria-selected=\{centerTab === 'queue'\}/, 'all three tabs report selection');
+  assert.match(section, /role="tablist" aria-label="Center"/, 'the center tabs are announced');
+  assert.match(section, /aria-selected=\{centerTab === 'lyrics'\}[\s\S]*aria-selected=\{centerTab === 'trending'\}[\s\S]*aria-selected=\{centerTab === 'new'\}[\s\S]*aria-selected=\{centerTab === 'tracks'\}[\s\S]*aria-selected=\{centerTab === 'playlists'\}[\s\S]*aria-selected=\{centerTab === 'library'\}[\s\S]*aria-selected=\{centerTab === 'queue'\}/, 'all seven tabs report selection, in order');
   assert.match(section, /setCenterTab\('lyrics'\); setShowLyrics\(true\); openLyrics\(\)/, 'the lyrics tab opens and loads the panel');
-  assert.match(section, /setCenterTab\('browse'\); setShowLyrics\(false\)/, 'browse parks the panel');
-  assert.match(section, /onClose=\{\(\) => \{ setShowLyrics\(false\); setCenterTab\('browse'\); \}\}/, 'closing lyrics lands back on browse');
-  assert.match(section, /aria-label="Lyrics, browse or queue">[\s\S]*> Lyrics<\/button>[\s\S]*> Browse<\/button>[\s\S]*> Queue<\/button>/, 'the phone bottom nav mirrors the tabs');
+  assert.match(section, /setCenterTab\('trending'\); setShowLyrics\(false\); if \(trending\.status === 'idle'\) loadTrending\(\)/, 'trending parks lyrics and loads once');
+  assert.match(section, /setCenterTab\('new'\); setShowLyrics\(false\); if \(fresh\.status === 'idle'\) loadFresh\(\)/, 'new parks lyrics and loads once');
+  assert.match(section, /onClose=\{\(\) => \{ setShowLyrics\(false\); setCenterTab\('trending'\); \}\}/, 'closing lyrics lands back on trending');
+  assert.match(section, /aria-label="Center shortcuts">[\s\S]*> Lyrics<\/button>[\s\S]*> Trending<\/button>[\s\S]*> Queue<\/button>/, 'the phone bottom nav carries Lyrics · Trending · Queue');
+  assert.ok(!section.includes("setCenterTab('browse')"), 'the old browse tab is fully unreferenced');
 });
 
 test('the player card carries art, transport, progress, quality and every extra', () => {
   assert.match(section, /aria-label="Now playing"/, 'the card is labelled');
   assert.match(section, /onClick=\{playPrevious\}[\s\S]*onClick=\{togglePlay\}[\s\S]*onClick=\{\(\) => playNext\(\)\}/, 'previous · play · next');
   assert.match(section, /scaleX\(\$\{curtainPosition\.toFixed\(4\)\}\)/, 'progress comes from playback position');
-  assert.match(section, /formatTime\(currentTime\)\}<\/span><span>\{duration \? formatTime\(duration\)/, 'elapsed and total stay visible');
+  assert.match(section, /formatTime\(currentTime\)\}<\/span><span>\{duration/, 'elapsed and total stay visible');
   assert.match(section, /aria-label="Stream quality"/, 'the quality ladder survived');
   assert.match(section, /setShuffleEnabled/, 'shuffle survived');
   assert.match(section, /onClick=\{cycleRepeat\}[\s\S]*repeat \{repeatMode\}/, 'repeat survived with its three moods');
-  assert.match(section, /toggleListeningMode/, 'listening mode survived');
+  assert.match(section, /setCenterTab\(next \? 'lyrics' : 'trending'\)/, 'the lyrics chip toggles against trending');
+  assert.match(section, /function toggleListeningMode/, 'the lock machine is intact behind the scenes');
   assert.match(section, /onClick=\{enterPocketMode\} title="Pocket mode">lock<\/button>/, 'pocket mode survived');
   assert.match(section, /onClick=\{\(\) => loadHome\(\)\} title="Refresh the shelves"/, 'refresh survived');
   assert.match(section, /aria-label="Volume" onChange=\{\(event\) => changeVolume\(event\.target\.value\)\}/, 'volume survived with its slider');
@@ -195,19 +207,28 @@ test('the queue rides a strip on the big screens and a full tab on phones', () =
   assert.match(section, /<span className="ll-queue-num">\{index \+ 1\}<\/span>/, 'queue rows are numbered');
 });
 
-test('browse keeps the collection, the stacks, the shelves, search and the library', () => {
+test('search and collections overlay any tab; every tab keeps its function', () => {
+  assert.match(section, /\{query\.trim\(\) \? \(\n {16}<div className="ll-browse">\n {18}<section className="ll-panel" aria-label="Search results">/, 'typing searches over whatever tab is open');
+  assert.match(section, /onClick=\{\(\) => setQuery\(''\)\}>clear<\/button>/, 'clearing returns to the tab');
+  assert.match(section, /: selectedCollection \? \(/, 'an opened collection takes the stage');
   assert.match(section, /aria-label="Collection"/, 'collections open');
   assert.match(section, /song controls · \{showSongCrud \? 'open' : 'minimized'\}/, 'song controls survived');
   assert.match(section, /replaceImportedTrack\(selectedCollection\.tracks\?\.\[0\]\)/, 'replace-first survived');
   assert.match(section, /removeImportedTrack\(selectedCollection\.tracks\?\.\[0\]\)/, 'remove-first survived');
-  assert.match(section, /aria-label="Explore"/, 'Explore exists');
-  assert.match(section, /\['albums', 'artists', 'playlists'\]\.map\(\(facetId\)/, 'all three facets render from one loop');
-  assert.match(section, /loadFacet\(facetId, query\)/, 'each facet asks its own endpoint');
-  assert.match(section, /Spotify playlist sync/, 'the import block survived');
+  assert.match(section, /aria-label="Trending now"/, 'trending exists');
+  assert.match(section, /fetch\('\/api\/music\/trending\?limit=48'/, 'trending asks its own endpoint');
+  assert.match(section, /aria-label="New releases"/, 'new exists');
+  assert.match(section, /fetch\('\/api\/music\/new\?limit=48'/, 'new asks its own endpoint');
+  assert.match(section, /aria-label="All tracks"/, 'tracks exists');
+  assert.match(section, /allShelfSongs\.length \? <LlTrackList tracks=\{allShelfSongs\}/, 'tracks plays the whole pool as one list');
+  assert.match(section, />From the shelves<\/h3>/, 'shelf collections keep their tiles');
+  assert.match(section, /aria-label="Playlists"/, 'playlists exists');
+  assert.match(section, /aria-label="Library"/, 'library exists');
+  assert.match(section, /loadFacet\('albums', query\)/, 'albums reload from their endpoint');
+  assert.match(section, /loadFacet\('artists', query\)/, 'artists reload from theirs');
+  assert.match(section, />Favorites<\/h3>[\s\S]*>Recently played<\/h3>/, 'starred and recent live in the library');
+  assert.match(section, /Spotify playlist sync/, 'the import block survived, in the library');
   assert.match(section, /onClick=\{\(\) => importSpotifyPlaylists\(\)\}/, 'import survived');
-  assert.match(section, /aria-label="Search results"/, 'search results survived');
-  assert.match(section, /aria-label="My library"/, 'the library survived');
-  assert.match(section, />Favorites<\/h3>[\s\S]*>Recently played<\/h3>[\s\S]*>Imported playlists<\/h3>/, 'starred · recent · imported, in that order');
   assert.match(section, /resyncImportedPlaylist\(playlist\)/, 're-sync survived');
   assert.match(section, /renameImportedPlaylist\(playlist\)/, 'rename survived');
   assert.match(section, /deleteImportedPlaylist\(playlist\)/, 'delete survived');
@@ -241,15 +262,15 @@ test('the hard-won wiring is still in the room', () => {
   assert.match(section, /<audio ref=\{videoRef\}/, 'one audio node, still the only player');
   assert.match(section, /total - now <= 0\.9/, 'the pre-end advance still beats the lock screen');
   assert.match(section, /\[queueTracks\[index \+ 1\], queueTracks\[index \+ 2\]\]/, 'the two-track prefetch still runs ahead');
-  assert.match(section, /Streams are resolved by this app/, 'the footer still tells the truth');
   assert.equal(section.match(/export const dynamic/g)?.length || 0, 1, 'the only mention is the header comment — the screen stays static');
 });
 
 test('the lounge pins its chrome and scrolls only the panes', () => {
   assert.match(css, /\.ll \{[\s\S]*?height: 100dvh;[\s\S]*?overflow: hidden;/, 'the room is the viewport');
-  assert.match(css, /grid-template-areas: "top" "stage" "strip" "foot"/, 'header · stage · strip · footer');
+  assert.match(css, /grid-template-areas: "top" "stage" "strip"/, 'header · stage · strip, no footer row');
   assert.match(css, /\.ll-center-body \{[\s\S]*?overflow-y: auto/, 'the center body is the scroller');
   assert.match(css, /\.ll-centertab-queue \{ display: none; \}/, 'no queue tab where the strip shows');
+  assert.match(css, /\.ll-centertabs \{[^}]*overflow-x: auto/, 'the tab bar swipes instead of squeezing');
   assert.match(css, /\.ll-line\[data-state="current"\] \.ll-line-text \{[^}]*color: var\(--ll-accent\)/, 'the current line glows gold');
   assert.match(css, /html\.day-mode \.ll \{ color: var\(--ll-ink\) !important;/, 'day mode cannot wash the room out');
 });

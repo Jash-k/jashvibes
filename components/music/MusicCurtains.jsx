@@ -220,6 +220,8 @@ function LlVeil({ view, onHoldStart, onHoldEnd, onExit }) {
 export default function MusicCurtains() {
   const videoRef = useRef(null);
   const [facet, setFacet] = useState({ id: '', status: 'idle', items: [], error: '' });
+  const [trending, setTrending] = useState({ status: 'idle', items: [], error: '' });
+  const [fresh, setFresh] = useState({ status: 'idle', tracks: [], albums: [], error: '' });
   const [lyricAutoScroll, setLyricAutoScroll] = useState(true);
   const [lyricBlur, setLyricBlur] = useState(false);
   const [crudQuery, setCrudQuery] = useState('');
@@ -231,7 +233,6 @@ export default function MusicCurtains() {
   const wakeLockRef = useRef(null);
   const unlockHoldTimerRef = useRef(null);
   const activeLyricRef = useRef(null);
-  const [view, setView] = useState('home');
   const [query, setQuery] = useState('');
   const [home, setHome] = useState({ sections: [], artists: [], playlists: [], releases: { tracks: [], albums: [] } });
   const [searchResults, setSearchResults] = useState(() => emptySearchResults());
@@ -343,7 +344,6 @@ export default function MusicCurtains() {
     );
     if (cachedHasCards) {
       setHome(cached.home);
-      setView(cached.view || 'home');
       setQuery(cached.query || '');
       setSearchResults(normalizeSearchResults(cached.searchResults));
       setSelectedCollection(cached.selectedCollection || null);
@@ -354,6 +354,8 @@ export default function MusicCurtains() {
       setShuffleEnabled(Boolean(cached.shuffleEnabled));
       setRepeatMode(cached.repeatMode || 'off');
       setShowLyrics(Boolean(cached.showLyrics));
+      setTrending(cached.trending || { status: 'idle', items: [], error: '' });
+      setFresh(cached.fresh || { status: 'idle', tracks: [], albums: [], error: '' });
       setLyrics(cached.lyrics || '');
       setLyricsData(cached.lyricsData || {});
       setHomeWarning(cached.homeWarning || cached.home?.warning || cached.home?.warnings?.[0] || '');
@@ -366,8 +368,8 @@ export default function MusicCurtains() {
   }, [loadHome]);
 
   useEffect(() => {
-    writeSessionCache(MUSIC_CACHE_KEY, { home, homeWarning, view, query, searchResults, selectedCollection, queue, active, activeDetail, quality, shuffleEnabled, repeatMode, showLyrics, lyrics, lyricsData, status });
-  }, [home, homeWarning, view, query, searchResults, selectedCollection, queue, active, activeDetail, quality, shuffleEnabled, repeatMode, showLyrics, lyrics, lyricsData, status]);
+    writeSessionCache(MUSIC_CACHE_KEY, { home, homeWarning, query, searchResults, selectedCollection, queue, active, activeDetail, quality, shuffleEnabled, repeatMode, showLyrics, lyrics, lyricsData, status, trending, fresh });
+  }, [home, homeWarning, query, searchResults, selectedCollection, queue, active, activeDetail, quality, shuffleEnabled, repeatMode, showLyrics, lyrics, lyricsData, status, trending, fresh]);
 
   useEffect(() => {
     const onScroll = () => saveScroll(MUSIC_CACHE_KEY);
@@ -434,12 +436,11 @@ export default function MusicCurtains() {
 
   useEffect(() => {
     const trimmed = query.trim();
-    if (!trimmed) { setSearchResults(emptySearchResults()); setSearchStatus('idle'); setView('home'); return; }
+    if (!trimmed) { setSearchResults(emptySearchResults()); setSearchStatus('idle'); return; }
     const controller = new AbortController();
     const timeout = setTimeout(async () => {
       try {
         setSearchStatus('loading');
-        setView('search');
         const response = await fetch(`/api/music/search?q=${encodeURIComponent(trimmed)}&limit=40`, { signal: controller.signal, cache: 'no-store' });
         const data = await response.json();
         if (!response.ok) throw new Error(data?.error || 'Search failed');
@@ -850,7 +851,7 @@ export default function MusicCurtains() {
       const tracks = dedupeQueue([...(item.topSongs || []), ...(item.singles || [])]);
       setSelectedCollection({ type: 'artist', title: item.name, subtitle: `${item.dominantType || 'Artist'}${item.fanCount ? ` • ${item.fanCount} fans` : ''}`, image: item.image, tracks, albums: item.topAlbums || [], related: item.similarArtists || [] });
       setQueue(tracks);
-      setCenterTab('browse');
+      setCenterTab('trending');
       setCollectionStatus('ready');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) { setCollectionStatus('error'); setError(err.message || 'Unable to load artist'); }
@@ -880,7 +881,7 @@ export default function MusicCurtains() {
       const tracks = item.songs || [];
       setSelectedCollection({ type: 'album', title: item.title, subtitle: `${item.artists || 'Album'}${item.year ? ` • ${item.year}` : ''}${item.songCount ? ` • ${item.songCount} songs` : ''}`, image: item.image, tracks, albums: [] });
       setQueue(tracks);
-      setCenterTab('browse');
+      setCenterTab('trending');
       setCollectionStatus('ready');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) { setCollectionStatus('error'); setError(err.message || 'Unable to load album'); }
@@ -899,7 +900,7 @@ export default function MusicCurtains() {
       const tracks = item.songs || [];
       setSelectedCollection({ type: 'playlist', id: item.id || playlist.id, isImported: Boolean(item.isImported || playlist.isImported), sourceUrl: item.sourceUrl || playlist.sourceUrl || '', title: item.title, subtitle: `${item.songCount || tracks.length || 0} songs`, image: item.image, tracks, albums: [] });
       setQueue(tracks);
-      setCenterTab('browse');
+      setCenterTab('trending');
       setCollectionStatus('ready');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) { setCollectionStatus('error'); setError(err.message || 'Unable to load playlist'); }
@@ -934,6 +935,7 @@ export default function MusicCurtains() {
       if (!response.ok) throw new Error(data?.error || 'Spotify import failed');
       await refreshImportedPlaylists();
       setImportText('');
+      setCenterTab('playlists');
       setImportStatus(data.ok ? 'done' : 'error');
       const imported = data.imported || [];
       const failed = data.failed || 0;
@@ -1066,7 +1068,6 @@ export default function MusicCurtains() {
   const rawSections = home.sections || [];
   const mainSections = rawSections.filter((section) => (section.items || []).length);
   const importedPlaylists = home.playlists || [];
-  const homeHasAnySongCards = mainSections.length || home.releases?.tracks?.length || home.releases?.albums?.length;
   const activeKeyValue = activeKey;
   const searchSongsList = searchResults.songs || [];
   const searchAlbumsList = searchResults.albums || [];
@@ -1115,6 +1116,35 @@ export default function MusicCurtains() {
     }
   }, []);
 
+  const loadTrending = useCallback(async () => {
+    setTrending((current) => ({ ...current, status: 'loading', error: '' }));
+    try {
+      const response = await fetch('/api/music/trending?limit=48', { cache: 'no-store' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'trending lookup failed');
+      setTrending({ status: 'ready', items: Array.isArray(data?.items) ? data.items : [], error: '' });
+    } catch (err) {
+      setTrending({ status: 'error', items: [], error: err.message || 'trending lookup failed' });
+    }
+  }, []);
+
+  const loadFresh = useCallback(async () => {
+    setFresh((current) => ({ ...current, status: 'loading', error: '' }));
+    try {
+      const response = await fetch('/api/music/new?limit=48', { cache: 'no-store' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'new releases lookup failed');
+      setFresh({
+        status: 'ready',
+        tracks: Array.isArray(data?.tracks) ? data.tracks : [],
+        albums: Array.isArray(data?.albums) ? data.albums : [],
+        error: '',
+      });
+    } catch (err) {
+      setFresh({ status: 'error', tracks: [], albums: [], error: err.message || 'new releases lookup failed' });
+    }
+  }, []);
+
   const curtainVars = useMemo(() => muCurtainVars(trackKey(playingTrack) || 'idle'), [playingTrack]);
   const curtainPosition = muCurtainPosition(currentTime, duration);
   const lyricRows = useMemo(
@@ -1152,16 +1182,21 @@ export default function MusicCurtains() {
     playlists: facet.id === 'playlists' && facet.items.length ? facet.items : facetHome.playlists,
   };
   const rowsFor = (list) => (list || []).filter(Boolean);
-  function goHome() { setView('home'); setSelectedCollection(null); setCenterTab('browse'); setQuery(''); }
+  const allShelfSongs = useMemo(() => dedupeQueue([
+    ...mainSections.flatMap((section) => rowsFor(section.items).filter((item) => !(item?.type === 'album' || item?.type === 'playlist'))),
+    ...rowsFor(home?.releases?.tracks),
+  ]), [home]);
+  const shelfCollections = useMemo(() => mainSections.flatMap((section) => rowsFor(section.items).filter((item) => item?.type === 'album' || item?.type === 'playlist')), [home]);
+  const trendingShelf = useMemo(() => mainSections.find((section) => section.title === 'Trending Now'), [home]);
 
   return (
     <main className="ll jv-rail-shift">
       <LlAmbient vars={curtainVars} position={curtainPosition} dim={pocketMode || listeningMode} />
-      <RailNav onOpenSearch={() => { setView('search'); setQuery(''); setCenterTab('browse'); setMSearch(true); }} />
+      <RailNav onOpenSearch={() => { setQuery(''); setCenterTab('trending'); setMSearch(true); }} />
 
       <div className="ll-inner">
         <header className={`ll-top${mSearch ? ' ll-msearch-open' : ''}`}>
-          <p className="ll-brand"><span className="ll-brand-bars" aria-hidden="true"><span /><span /><span /><span /></span> Lyric Lounge</p>
+          <p className="ll-brand"><span className="ll-brand-bars" aria-hidden="true"><span /><span /><span /><span /></span><span className="ll-sr">Music</span></p>
           <label className="ll-search">
             <span className="ll-sr">Search Tamil songs</span>
             <input
@@ -1170,18 +1205,17 @@ export default function MusicCurtains() {
               value={query}
               placeholder="Search Tamil Songs..."
               onChange={(event) => setQuery(event.target.value)}
-              onFocus={() => setCenterTab('browse')}
             />
           </label>
           <nav className="ll-nav" aria-label="Music">
-            <button type="button" className={`ll-nav-btn${view === 'home' ? ' is-on' : ''}`} onClick={() => goHome()}>Home</button>
-            <button type="button" className={`ll-nav-btn${view === 'explore' ? ' is-on' : ''}`} onClick={() => { setView('explore'); setSelectedCollection(null); setCenterTab('browse'); }}>Explore</button>
-            <button type="button" className={`ll-nav-btn${view === 'library' ? ' is-on' : ''}`} onClick={() => { setView('library'); setSelectedCollection(null); setCenterTab('browse'); }}>My Library</button>
+            <button type="button" className={`ll-nav-btn${centerTab === 'trending' ? ' is-on' : ''}`} onClick={() => { setCenterTab('trending'); setSelectedCollection(null); setQuery(''); if (trending.status === 'idle') loadTrending(); }}>Home</button>
+            <button type="button" className={`ll-nav-btn${centerTab === 'tracks' ? ' is-on' : ''}`} onClick={() => { setCenterTab('tracks'); setSelectedCollection(null); setQuery(''); }}>Explore</button>
+            <button type="button" className={`ll-nav-btn${centerTab === 'library' ? ' is-on' : ''}`} onClick={() => { setCenterTab('library'); setSelectedCollection(null); setQuery(''); }}>My Library</button>
           </nav>
           <div className="ll-icons" role="group" aria-label="Quick actions">
             {playingTrack ? <button type="button" className={`ll-ghost${favoriteSet.has(trackKey(playingTrack)) ? ' is-on' : ''}`} onClick={() => toggleFavorite(playingTrack)} title="Favorite">♥<span className="ll-sr"> favorite</span></button> : null}
             <button type="button" className="ll-ghost" onClick={() => searchRef.current?.focus()} title="Search">⌕<span className="ll-sr"> search</span></button>
-            <button type="button" className="ll-ghost" onClick={() => setCenterTab('browse')} title="Browse">▦<span className="ll-sr"> browse</span></button>
+            <button type="button" className="ll-ghost" onClick={() => setCenterTab('trending')} title="Trending">▦<span className="ll-sr"> trending</span></button>
           </div>
           <button type="button" className="ll-msearch" aria-pressed={mSearch} onClick={() => setMSearch((current) => !current)} title="Search">⌕<span className="ll-sr"> search</span></button>
         </header>
@@ -1232,9 +1266,8 @@ export default function MusicCurtains() {
               <div className="ll-extras" role="group" aria-label="Player options">
                 <button type="button" className={`ll-ghost${shuffleEnabled ? ' is-on' : ''}`} aria-pressed={shuffleEnabled} onClick={() => setShuffleEnabled((current) => !current)} title="Shuffle">⇄<span className="ll-sr"> shuffle</span></button>
                 <button type="button" className={`ll-ghost${repeatMode !== 'off' ? ' is-on' : ''}`} onClick={cycleRepeat} title={`Repeat: ${repeatMode}`}>{repeatMode === 'one' ? '🔂' : '🔁'}<span className="ll-sr"> repeat {repeatMode}</span></button>
-                <button type="button" className={`ll-ghost${showLyrics ? ' is-on' : ''}`} aria-pressed={showLyrics} onClick={() => { const next = !showLyrics; setShowLyrics(next); setCenterTab(next ? 'lyrics' : 'browse'); if (next) openLyrics(); }} title="Lyrics">lyrics</button>
+                <button type="button" className={`ll-ghost${showLyrics ? ' is-on' : ''}`} aria-pressed={showLyrics} onClick={() => { const next = !showLyrics; setShowLyrics(next); setCenterTab(next ? 'lyrics' : 'trending'); if (next) openLyrics(); }} title="Lyrics">lyrics</button>
                 {playingTrack ? <button type="button" className={`ll-ghost${favoriteSet.has(trackKey(playingTrack)) ? ' is-on' : ''}`} aria-pressed={favoriteSet.has(trackKey(playingTrack))} onClick={() => toggleFavorite(playingTrack)} title="Favorite">♥<span className="ll-sr"> favorite</span></button> : null}
-                <button type="button" className={`ll-ghost${listeningMode ? ' is-on' : ''}`} aria-pressed={listeningMode} onClick={toggleListeningMode} title="Listening mode">listen</button>
                 {playingTrack ? <button type="button" className="ll-ghost" onClick={enterPocketMode} title="Pocket mode">lock</button> : null}
                 <button type="button" className="ll-ghost" onClick={() => loadHome()} title="Refresh the shelves">{status === 'loading' ? '…' : '⟳'}<span className="ll-sr"> refresh</span></button>
               </div>
@@ -1247,19 +1280,93 @@ export default function MusicCurtains() {
           ) : null}
 
           <div className="ll-center">
-            <div className="ll-centertabs" role="tablist" aria-label="Lyrics, browse or queue">
+            <div className="ll-centertabs" role="tablist" aria-label="Center">
               <button type="button" role="tab" aria-selected={centerTab === 'lyrics'}
                 className={`ll-centertab${centerTab === 'lyrics' ? ' is-on' : ''}`}
                 onClick={() => { setCenterTab('lyrics'); setShowLyrics(true); openLyrics(); }}>Lyrics</button>
-              <button type="button" role="tab" aria-selected={centerTab === 'browse'}
-                className={`ll-centertab${centerTab === 'browse' ? ' is-on' : ''}`}
-                onClick={() => { setCenterTab('browse'); setShowLyrics(false); }}>Browse</button>
+              <button type="button" role="tab" aria-selected={centerTab === 'trending'}
+                className={`ll-centertab${centerTab === 'trending' ? ' is-on' : ''}`}
+                onClick={() => { setCenterTab('trending'); setShowLyrics(false); if (trending.status === 'idle') loadTrending(); }}>Trending</button>
+              <button type="button" role="tab" aria-selected={centerTab === 'new'}
+                className={`ll-centertab${centerTab === 'new' ? ' is-on' : ''}`}
+                onClick={() => { setCenterTab('new'); setShowLyrics(false); if (fresh.status === 'idle') loadFresh(); }}>New</button>
+              <button type="button" role="tab" aria-selected={centerTab === 'tracks'}
+                className={`ll-centertab${centerTab === 'tracks' ? ' is-on' : ''}`}
+                onClick={() => { setCenterTab('tracks'); setShowLyrics(false); }}>Tracks</button>
+              <button type="button" role="tab" aria-selected={centerTab === 'playlists'}
+                className={`ll-centertab${centerTab === 'playlists' ? ' is-on' : ''}`}
+                onClick={() => { setCenterTab('playlists'); setShowLyrics(false); }}>Playlists</button>
+              <button type="button" role="tab" aria-selected={centerTab === 'library'}
+                className={`ll-centertab${centerTab === 'library' ? ' is-on' : ''}`}
+                onClick={() => { setCenterTab('library'); setShowLyrics(false); }}>Library</button>
               <button type="button" role="tab" aria-selected={centerTab === 'queue'}
                 className={`ll-centertab ll-centertab-queue${centerTab === 'queue' ? ' is-on' : ''}`}
                 onClick={() => setCenterTab('queue')}>Queue · {queueTracks.length}</button>
             </div>
             <div className="ll-center-body">
-              {centerTab === 'lyrics' ? (
+              {query.trim() ? (
+                <div className="ll-browse">
+                  <section className="ll-panel" aria-label="Search results">
+                    <header className="ll-head">
+                      <div>
+                        <p className="ll-eyebrow">search</p>
+                        <h2 className="ll-title">{searchTotal} results</h2>
+                        <p className="ll-note-dim">{searchStatus === 'loading' ? 'asking the source…' : 'songs, albums, artists and playlists are kept apart'}</p>
+                      </div>
+                      <div className="ll-head-actions">
+                        <button type="button" className="ll-pill" onClick={() => setQuery('')}>clear</button>
+                      </div>
+                    </header>
+                    {rowsFor(searchSongsList).length ? <LlTrackList tracks={searchSongsList} activeKey={activeKeyValue} favoriteSet={favoriteSet}
+                      onPlay={(track) => playTrack(track, searchSongsList, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} /> : null}
+                    {rowsFor(searchAlbumsList).length ? <div className="ll-grid">{searchAlbumsList.map((album) => <LlTile key={album.id || album.title} item={album} kind="album" onOpen={openAlbum} />)}</div> : null}
+                    {rowsFor(searchArtistsList).length ? <div className="ll-grid">{searchArtistsList.map((artist) => <LlTile key={artist.id || artist.name} item={artist} kind="artist" onOpen={openArtist} />)}</div> : null}
+                    {rowsFor(searchPlaylistsList).length ? <div className="ll-grid">{searchPlaylistsList.map((playlist) => <LlTile key={playlist.id} item={playlist} kind="playlist" onOpen={openPlaylist} />)}</div> : null}
+                    {!searchTotal && searchStatus !== 'loading' ? <LlNote>No results for “{query.trim()}”. A shorter word usually matches.</LlNote> : null}
+                  </section>
+                </div>
+              ) : selectedCollection ? (
+                <div className="ll-browse">
+                  <section className="ll-panel" aria-label="Collection">
+                    <header className="ll-head">
+                      <div>
+                        <p className="ll-eyebrow">{selectedCollection.type} · {selectedCollection.tracks?.length || 0} songs</p>
+                        <h2 className="ll-title">{selectedCollection.title || 'Collection'}</h2>
+                        {selectedCollection.subtitle ? <p className="ll-note-dim">{selectedCollection.subtitle}</p> : null}
+                      </div>
+                      <div className="ll-head-actions">
+                        <button type="button" className="ll-pill" onClick={() => { setSelectedCollection(null); }}>close</button>
+                        {selectedCollection.type === 'artist' && (selectedCollection.albums?.length || 0) >= 24 && !selectedCollection.albumsExpanded
+                          ? <button type="button" className="ll-pill" onClick={() => loadAllArtistAlbums()}>see all albums</button> : null}
+                      </div>
+                    </header>
+                    {collectionStatus === 'loading' ? <LlNote>reading {selectedCollection.type}…</LlNote> : null}
+                    {collectionStatus === 'error' ? <LlNote tone="error">{selectedCollection.error || 'This collection could not be read. The source may be rate limiting.'}</LlNote> : null}
+                    {selectedCollection.tracks?.length ? <LlTrackList tracks={selectedCollection.tracks} activeKey={activeKeyValue} favoriteSet={favoriteSet}
+                      onPlay={(track) => playTrack(track, selectedCollection.tracks, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} /> : null}
+                    {selectedCollection.albums?.length ? (
+                      <div className="ll-grid">
+                        {rowsFor(selectedCollection.albums).map((album) => <LlTile key={album.id || album.title} item={album} kind="album" onOpen={openAlbum} />)}
+                      </div>
+                    ) : null}
+                    {selectedCollection.isImported ? (
+                      <div className="ll-crud">
+                        <p className="ll-label">song controls · {showSongCrud ? 'open' : 'minimized'}</p>
+                        <div className="ll-crud-row">
+                          <input className="ll-input" placeholder={showSongCrud ? 'song name to add or replace' : ''} value={crudQuery}
+                            onChange={(event) => setCrudQuery(event.target.value)} disabled={!showSongCrud} />
+                          <button type="button" className="ll-pill" onClick={() => setShowSongCrud((current) => !current)}>{showSongCrud ? 'minimize' : 'expand'}</button>
+                          <button type="button" className="ll-pill" disabled={!showSongCrud} onClick={() => addImportedTrack()}>add song</button>
+                          <button type="button" className="ll-pill" disabled={!showSongCrud} onClick={() => replaceImportedTrack(selectedCollection.tracks?.[0])}>replace first</button>
+                          <button type="button" className="ll-pill" disabled={!showSongCrud} onClick={() => removeImportedTrack(selectedCollection.tracks?.[0])}>remove first</button>
+                          <button type="button" className="ll-pill" onClick={() => resyncImportedPlaylist(selectedCollection)}>re-sync</button>
+                        </div>
+                        {importMessage ? <LlNote>{importMessage}</LlNote> : null}
+                      </div>
+                    ) : null}
+                  </section>
+                </div>
+              ) : centerTab === 'lyrics' ? (
                 <LlLyrics
                   rows={lyricRows.length ? lyricRows : plainLyricLines}
                   open={showLyrics}
@@ -1267,244 +1374,206 @@ export default function MusicCurtains() {
                   onToggleAutoScroll={() => setLyricAutoScroll((current) => !current)}
                   blur={lyricBlur}
                   onBlurToggle={() => setLyricBlur((current) => !current)}
-                  onClose={() => { setShowLyrics(false); setCenterTab('browse'); }}
+                  onClose={() => { setShowLyrics(false); setCenterTab('trending'); }}
                   onJump={(time) => { if (Number.isFinite(time)) seekTo(time); }}
                   status={lyricsStatus === 'ready' && !syncedLyricLines.length && !lyricRows.length ? 'the source has no timed lyrics for this song' : lyricsStatus === 'error' ? 'lyrics could not be read; the panel will retry when you open it again' : ''}
                   loading={lyricsStatus === 'loading'}
                   note={playingTrack ? 'open lyrics to follow the line' : 'nothing playing'}
                   activeRef={activeLyricRef}
                 />
-              ) : null}
-              {centerTab === 'browse' ? (
+              ) : centerTab === 'trending' ? (
                 <div className="ll-browse">
-                  {selectedCollection ? (
-                    <section className="ll-panel" aria-label="Collection">
+                  <section className="ll-panel" aria-label="Trending now">
+                    <header className="ll-head">
+                      <div>
+                        <p className="ll-eyebrow">live from the source</p>
+                        <h2 className="ll-title">Trending Now</h2>
+                        <p className="ll-note-dim">{trending.items.length ? `${trending.items.length} songs riding the wave` : 'Tamil songs, fresh off the wire'}</p>
+                      </div>
+                      <div className="ll-head-actions">
+                        <button type="button" className="ll-pill" onClick={() => loadTrending()}>{trending.status === 'loading' ? 'asking…' : 'reload'}</button>
+                      </div>
+                    </header>
+                    {trending.status === 'loading' && !trending.items.length ? <LlNote>asking the source for trending…</LlNote> : null}
+                    {trending.status === 'error' ? <LlNote tone="error">{trending.error}</LlNote> : null}
+                    {trending.items.length ? <LlTrackList tracks={trending.items} activeKey={activeKeyValue} favoriteSet={favoriteSet}
+                      onPlay={(track) => playTrack(track, trending.items, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} /> : null}
+                    {!trending.items.length && trending.status === 'ready' ? <LlNote>The source returned no trending songs right now — reload tries again.</LlNote> : null}
+                    {trendingShelf && rowsFor(trendingShelf.items).filter((item) => item?.type === 'album' || item?.type === 'playlist').length ? (
+                      <div className="ll-grid">
+                        {rowsFor(trendingShelf.items).filter((item) => item?.type === 'album' || item?.type === 'playlist').map((item) => (
+                          <LlTile key={`trending-${item.id || item.title}`} item={item} kind={item.type === 'playlist' ? 'playlist' : 'album'}
+                            onOpen={(value) => (value.type === 'playlist' ? openPlaylist(value) : openAlbum(value))} />
+                        ))}
+                      </div>
+                    ) : null}
+                  </section>
+                </div>
+              ) : centerTab === 'new' ? (
+                <div className="ll-browse">
+                  <section className="ll-panel" aria-label="New releases">
+                    <header className="ll-head">
+                      <div>
+                        <p className="ll-eyebrow">just landed</p>
+                        <h2 className="ll-title">New</h2>
+                        <p className="ll-note-dim">{fresh.tracks.length ? `${fresh.tracks.length} tracks · ${fresh.albums.length} albums` : 'this year’s Tamil arrivals'}</p>
+                      </div>
+                      <div className="ll-head-actions">
+                        <button type="button" className="ll-pill" onClick={() => loadFresh()}>{fresh.status === 'loading' ? 'asking…' : 'reload'}</button>
+                      </div>
+                    </header>
+                    {fresh.status === 'loading' && !fresh.tracks.length ? <LlNote>asking the source for new releases…</LlNote> : null}
+                    {fresh.status === 'error' ? <LlNote tone="error">{fresh.error}</LlNote> : null}
+                    {fresh.tracks.length ? <LlTrackList tracks={fresh.tracks} activeKey={activeKeyValue} favoriteSet={favoriteSet}
+                      onPlay={(track) => playTrack(track, fresh.tracks, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} /> : null}
+                    {fresh.albums.length ? (
+                      <div className="ll-grid">
+                        {rowsFor(fresh.albums).map((album) => <LlTile key={album.id || album.title} item={album} kind="album" onOpen={openAlbum} />)}
+                      </div>
+                    ) : null}
+                    {!fresh.tracks.length && !fresh.albums.length && fresh.status === 'ready' ? <LlNote>The source returned no new releases right now — reload tries again.</LlNote> : null}
+                  </section>
+                </div>
+              ) : centerTab === 'tracks' ? (
+                <div className="ll-browse">
+                  <section className="ll-panel" aria-label="All tracks">
+                    <header className="ll-head">
+                      <div>
+                        <p className="ll-eyebrow">every shelf, one list</p>
+                        <h2 className="ll-title">Tracks</h2>
+                        <p className="ll-note-dim">{allShelfSongs.length ? `${allShelfSongs.length} songs, de-duplicated` : status === 'error' ? 'The music source did not answer. Refresh re-reads it; nothing was cached as empty.' : 'reading the shelves…'}</p>
+                      </div>
+                    </header>
+                    {allShelfSongs.length ? <LlTrackList tracks={allShelfSongs} activeKey={activeKeyValue} favoriteSet={favoriteSet}
+                      onPlay={(track) => playTrack(track, allShelfSongs, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} /> : null}
+                    {shelfCollections.length ? (
+                      <>
+                        <h3 className="ll-subtitle">From the shelves</h3>
+                        <div className="ll-grid">
+                          {shelfCollections.map((item) => (
+                            <LlTile key={`shelf-${item.id || item.title}`} item={item} kind={item.type === 'playlist' ? 'playlist' : 'album'}
+                              onOpen={(value) => (value.type === 'playlist' ? openPlaylist(value) : openAlbum(value))} />
+                          ))}
+                        </div>
+                      </>
+                    ) : null}
+                  </section>
+                </div>
+              ) : centerTab === 'playlists' ? (
+                <div className="ll-browse">
+                  <section className="ll-panel" aria-label="Playlists">
+                    <header className="ll-head">
+                      <div>
+                        <p className="ll-eyebrow">yours + the shelves</p>
+                        <h2 className="ll-title">Playlists</h2>
+                        <p className="ll-note-dim">{importedPlaylists.length} imported · {facetCounts.playlists} on the shelves</p>
+                      </div>
+                      <div className="ll-head-actions">
+                        <button type="button" className="ll-pill" onClick={() => refreshImportedPlaylists()}>reload</button>
+                      </div>
+                    </header>
+                    {shelfCollections.filter((item) => item?.type === 'playlist').length ? (
+                      <div className="ll-grid">
+                        {shelfCollections.filter((item) => item?.type === 'playlist').map((item) => (
+                          <LlTile key={`pl-${item.id || item.title}`} item={item} kind="playlist" onOpen={openPlaylist} />
+                        ))}
+                      </div>
+                    ) : null}
+                    <h3 className="ll-subtitle">Imported playlists</h3>
+                    {importedPlaylists.length ? (
+                      <ul className="ll-rows">
+                        {importedPlaylists.map((playlist) => (
+                          <li key={playlist.id} className="ll-row">
+                            <button type="button" className="ll-row-main" onClick={() => openPlaylist(playlist)}>
+                              <span className="ll-row-body"><span className="ll-row-title">{playlist.title}</span>
+                                <span className="ll-row-artist">{playlist.count || playlist.tracks?.length || 0} tracks · {playlist.owner || 'imported'}</span></span>
+                            </button>
+                            <span className="ll-row-tools">
+                              {playlist.sourceUrl ? <button type="button" className="ll-row-fav" onClick={() => resyncImportedPlaylist(playlist)} title="Re-sync from Spotify">⟳</button> : null}
+                              <button type="button" className="ll-row-fav" onClick={() => renameImportedPlaylist(playlist)} title="Rename">✎</button>
+                              <button type="button" className="ll-row-fav" onClick={() => deleteImportedPlaylist(playlist)} title="Delete">🗑</button>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : <LlNote>No Spotify imports yet — Library is where they land.</LlNote>}
+                  </section>
+                </div>
+              ) : centerTab === 'library' ? (
+                <div className="ll-browse">
+                  <section className="ll-panel" aria-label="Library">
+                    <header className="ll-head">
+                      <div>
+                        <p className="ll-eyebrow">kept on this device + the stacks</p>
+                        <h2 className="ll-title">Library</h2>
+                        <p className="ll-note-dim">{facetCounts.albums} albums · {facetCounts.artists} artists · {favoriteTracks.length} starred · {recents.length} recent</p>
+                      </div>
+                    </header>
+                    <div className="ll-facet">
                       <header className="ll-head">
                         <div>
-                          <p className="ll-eyebrow">{selectedCollection.type} · {selectedCollection.tracks?.length || 0} songs</p>
-                          <h2 className="ll-title">{selectedCollection.title || 'Collection'}</h2>
-                          {selectedCollection.subtitle ? <p className="ll-note-dim">{selectedCollection.subtitle}</p> : null}
+                          <h3 className="ll-subtitle">Albums</h3>
+                          <p className="ll-note-dim">{facetCounts.albums} returned by the source</p>
                         </div>
                         <div className="ll-head-actions">
-                          <button type="button" className="ll-pill" onClick={() => { setSelectedCollection(null); setView('home'); }}>close</button>
-                          {selectedCollection.type === 'artist' && (selectedCollection.albums?.length || 0) >= 24 && !selectedCollection.albumsExpanded
-                            ? <button type="button" className="ll-pill" onClick={() => loadAllArtistAlbums()}>see all albums</button> : null}
+                          <button type="button" className="ll-pill" onClick={() => loadFacet('albums', query)}>{facet.id === 'albums' && facet.status === 'loading' ? 'asking…' : 'reload'}</button>
                         </div>
                       </header>
-                      {collectionStatus === 'loading' ? <LlNote>reading {selectedCollection.type}…</LlNote> : null}
-                      {collectionStatus === 'error' ? <LlNote tone="error">{selectedCollection.error || 'This collection could not be read. The source may be rate limiting.'}</LlNote> : null}
-                      {selectedCollection.tracks?.length ? <LlTrackList tracks={selectedCollection.tracks} activeKey={activeKeyValue} favoriteSet={favoriteSet}
-                        onPlay={(track) => playTrack(track, selectedCollection.tracks, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} /> : null}
-                      {selectedCollection.albums?.length ? (
+                      {facetLists.albums.length ? (
                         <div className="ll-grid">
-                          {rowsFor(selectedCollection.albums).map((album) => <LlTile key={album.id || album.title} item={album} kind="album" onOpen={openAlbum} />)}
+                          {rowsFor(facetLists.albums).map((item) => <LlTile key={item.id || item.title || item.name} item={item} kind="album" onOpen={openAlbum} />)}
                         </div>
-                      ) : null}
-                      {selectedCollection.isImported ? (
-                        <div className="ll-crud">
-                          <p className="ll-label">song controls · {showSongCrud ? 'open' : 'minimized'}</p>
-                          <div className="ll-crud-row">
-                            <input className="ll-input" placeholder={showSongCrud ? 'song name to add or replace' : ''} value={crudQuery}
-                              onChange={(event) => setCrudQuery(event.target.value)} disabled={!showSongCrud} />
-                            <button type="button" className="ll-pill" onClick={() => setShowSongCrud((current) => !current)}>{showSongCrud ? 'minimize' : 'expand'}</button>
-                            <button type="button" className="ll-pill" disabled={!showSongCrud} onClick={() => addImportedTrack()}>add song</button>
-                            <button type="button" className="ll-pill" disabled={!showSongCrud} onClick={() => replaceImportedTrack(selectedCollection.tracks?.[0])}>replace first</button>
-                            <button type="button" className="ll-pill" disabled={!showSongCrud} onClick={() => removeImportedTrack(selectedCollection.tracks?.[0])}>remove first</button>
-                            <button type="button" className="ll-pill" onClick={() => resyncImportedPlaylist(selectedCollection)}>re-sync</button>
-                          </div>
-                          {importMessage ? <LlNote>{importMessage}</LlNote> : null}
-                        </div>
-                      ) : null}
-                    </section>
-                  ) : null}
-
-                  {view === 'explore' ? (
-                    <section className="ll-panel" aria-label="Explore">
+                      ) : (
+                        <LlNote tone={facet.id === 'albums' && facet.status === 'error' ? 'error' : 'info'}>
+                          {facet.id === 'albums' && facet.status === 'loading' ? 'asking the source for albums…'
+                            : facet.id === 'albums' && facet.error ? `albums: ${facet.error}`
+                            : 'Nothing under albums right now — the source returned none. Import a Spotify playlist, or search a name above.'}
+                        </LlNote>
+                      )}
+                    </div>
+                    <div className="ll-facet">
                       <header className="ll-head">
                         <div>
-                          <p className="ll-eyebrow">the stacks</p>
-                          <h2 className="ll-title">Explore</h2>
-                          <p className="ll-note-dim">{facetCounts.albums} albums · {facetCounts.artists} artists · {facetCounts.playlists} playlists on the shelves{query.trim() ? ` · filtered by “${query.trim()}”` : ''}</p>
+                          <h3 className="ll-subtitle">Artists</h3>
+                          <p className="ll-note-dim">{facetCounts.artists} returned by the source</p>
+                        </div>
+                        <div className="ll-head-actions">
+                          <button type="button" className="ll-pill" onClick={() => loadFacet('artists', query)}>{facet.id === 'artists' && facet.status === 'loading' ? 'asking…' : 'reload'}</button>
                         </div>
                       </header>
-                      {['albums', 'artists', 'playlists'].map((facetId) => (
-                        <div key={facetId} className="ll-facet">
-                          <header className="ll-head">
-                            <div>
-                              <h3 className="ll-subtitle">{facetId === 'albums' ? 'Albums' : facetId === 'artists' ? 'Artists' : 'Playlists'}</h3>
-                              <p className="ll-note-dim">{facetCounts[facetId]} returned by the source</p>
-                            </div>
-                            <div className="ll-head-actions">
-                              <button type="button" className="ll-pill" onClick={() => loadFacet(facetId, query)}>{facet.id === facetId && facet.status === 'loading' ? 'asking…' : 'reload'}</button>
-                            </div>
-                          </header>
-                          {facetLists[facetId].length ? (
-                            <div className="ll-grid">
-                              {rowsFor(facetLists[facetId]).map((item) => (
-                                <LlTile key={item.id || item.title || item.name} item={item} kind={facetId === 'artists' ? 'artist' : 'album'}
-                                  onOpen={facetId === 'artists' ? openArtist : facetId === 'albums' ? openAlbum : openPlaylist} />
-                              ))}
-                            </div>
-                          ) : (
-                            <LlNote tone={facet.id === facetId && facet.status === 'error' ? 'error' : 'info'}>
-                              {facet.id === facetId && facet.status === 'loading'
-                                ? `asking the source for ${facetId}…`
-                                : facet.id === facetId && facet.error
-                                  ? `${facetId}: ${facet.error}`
-                                  : `Nothing under ${facetId} right now — the source returned no ${facetId}. Import a Spotify playlist, or search a name above.`}
-                            </LlNote>
-                          )}
-                          {facetId === 'playlists' ? (
-                            <div className="ll-import">
-                              <p className="ll-label">Spotify playlist sync · tracks are matched and played through the music source only</p>
-                              <textarea className="ll-input ll-textarea" rows="3" value={importText} placeholder="https://open.spotify.com/playlist/…"
-                                onChange={(event) => setImportText(event.target.value)} />
-                              <div className="ll-crud-row">
-                                <button type="button" className="ll-pill" onClick={() => importSpotifyPlaylists()}>{importStatus === 'loading' ? 'importing…' : 'import'}</button>
-                                <button type="button" className="ll-pill" onClick={() => refreshImportedPlaylists()}>reload list</button>
-                              </div>
-                              {importMessage ? <LlNote tone={importStatus === 'error' ? 'error' : 'info'}>{importMessage}</LlNote> : null}
-                              {importedPlaylists.length ? (
-                                <ul className="ll-rows">
-                                  {importedPlaylists.map((playlist) => (
-                                    <li key={playlist.id} className="ll-row">
-                                      <button type="button" className="ll-row-main" onClick={() => openPlaylist(playlist)}>
-                                        <span className="ll-row-body"><span className="ll-row-title">{playlist.title}</span>
-                                          <span className="ll-row-artist">{playlist.count || playlist.tracks?.length || 0} tracks · {playlist.owner || 'imported'}</span></span>
-                                      </button>
-                                      <span className="ll-row-tools">
-                                        <button type="button" className="ll-row-fav" onClick={() => renameImportedPlaylist(playlist)} title="Rename">✎</button>
-                                        <button type="button" className="ll-row-fav" onClick={() => deleteImportedPlaylist(playlist)} title="Delete">🗑</button>
-                                      </span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              ) : null}
-                            </div>
-                          ) : null}
+                      {facetLists.artists.length ? (
+                        <div className="ll-grid">
+                          {rowsFor(facetLists.artists).map((item) => <LlTile key={item.id || item.title || item.name} item={item} kind="artist" onOpen={openArtist} />)}
                         </div>
-                      ))}
-                    </section>
-                  ) : null}
-
-                  {view === 'home' || (view === 'search' && !query.trim()) ? (
-                    <>
-                      {mainSections.map((section) => {
-                        const songs = rowsFor(section.items).filter((item) => !(item?.type === 'album' || item?.type === 'playlist'));
-                        const collections = rowsFor(section.items).filter((item) => item?.type === 'album' || item?.type === 'playlist');
-                        return (
-                          <section className="ll-panel" key={section.title} aria-label={section.title}>
-                            <header className="ll-head">
-                              <div>
-                                <p className="ll-eyebrow">shelf</p>
-                                <h2 className="ll-title">{section.title}</h2>
-                                <p className="ll-note-dim">{collections.length} records · {songs.length} songs from the source</p>
-                              </div>
-                            </header>
-                            {collections.length ? (
-                              <div className="ll-grid">
-                                {collections.map((item) => (
-                                  <LlTile key={`${section.title}-${item.id || item.title}`} item={item} kind={item.type === 'playlist' ? 'playlist' : 'album'}
-                                    onOpen={(value) => (value.type === 'playlist' ? openPlaylist(value) : openAlbum(value))} />
-                                ))}
-                              </div>
-                            ) : null}
-                            {songs.length ? (
-                              <LlTrackList tracks={songs} activeKey={activeKeyValue} favoriteSet={favoriteSet}
-                                onPlay={(track) => playTrack(track, songs, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} />
-                            ) : null}
-                            {!songs.length && !collections.length ? <LlNote>This shelf came back empty from the source.</LlNote> : null}
-                          </section>
-                        );
-                      })}
-                      {!mainSections.length && !homeHasAnySongCards ? <section className="ll-panel" aria-label="Empty"><LlNote tone="error">{status === 'error' ? 'The music source did not answer. Refresh re-reads it; nothing was cached as empty.' : 'reading the shelves…'}</LlNote></section> : null}
-                      {rowsFor(home?.releases?.tracks).length ? (
-                        <section className="ll-panel" aria-label="New releases">
-                          <header className="ll-head">
-                            <div>
-                              <p className="ll-eyebrow">new releases</p>
-                              <h2 className="ll-title">Tracks</h2>
-                              <p className="ll-note-dim">played by this app, streamed by your browser</p>
-                            </div>
-                          </header>
-                          <LlTrackList tracks={home.releases.tracks} activeKey={activeKeyValue} favoriteSet={favoriteSet}
-                            onPlay={(track) => playTrack(track, home.releases.tracks, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} />
-                        </section>
-                      ) : null}
-                      {(view === 'home' || (view === 'search' && !query.trim())) && (favoriteTracks.length || recents.length) ? (
-                        <section className="ll-panel" aria-label="Pinned">
-                          <header className="ll-head">
-                            <div>
-                              <p className="ll-eyebrow">kept on this device</p>
-                              <h2 className="ll-title">Favorites & recent</h2>
-                              <p className="ll-note-dim">{favoriteTracks.length} starred · {recents.length} recent · nothing is written to the database</p>
-                            </div>
-                          </header>
-                          <LlTrackList tracks={favoriteTracks.length ? favoriteTracks : recents} activeKey={activeKeyValue} favoriteSet={favoriteSet}
-                            onPlay={(track) => playTrack(track, favoriteTracks.length ? favoriteTracks : recents, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} />
-                        </section>
-                      ) : null}
-                    </>
-                  ) : null}
-
-                  {view === 'search' && query.trim() ? (
-                    <section className="ll-panel" aria-label="Search results">
-                      <header className="ll-head">
-                        <div>
-                          <p className="ll-eyebrow">search</p>
-                          <h2 className="ll-title">{searchTotal} results</h2>
-                          <p className="ll-note-dim">{searchStatus === 'loading' ? 'asking the source…' : 'songs, albums, artists and playlists are kept apart'}</p>
-                        </div>
-                      </header>
-                      {rowsFor(searchSongsList).length ? <LlTrackList tracks={searchSongsList} activeKey={activeKeyValue} favoriteSet={favoriteSet}
-                        onPlay={(track) => playTrack(track, searchSongsList, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} /> : null}
-                      {rowsFor(searchAlbumsList).length ? <div className="ll-grid">{searchAlbumsList.map((album) => <LlTile key={album.id || album.title} item={album} kind="album" onOpen={openAlbum} />)}</div> : null}
-                      {rowsFor(searchArtistsList).length ? <div className="ll-grid">{searchArtistsList.map((artist) => <LlTile key={artist.id || artist.name} item={artist} kind="artist" onOpen={openArtist} />)}</div> : null}
-                      {rowsFor(searchPlaylistsList).length ? <div className="ll-grid">{searchPlaylistsList.map((playlist) => <LlTile key={playlist.id} item={playlist} kind="playlist" onOpen={openPlaylist} />)}</div> : null}
-                      {!searchTotal && searchStatus !== 'loading' ? <LlNote>No results for “{query.trim()}”. A shorter word usually matches.</LlNote> : null}
-                    </section>
-                  ) : null}
-
-                  {view === 'library' ? (
-                    <section className="ll-panel" aria-label="My library">
-                      <header className="ll-head">
-                        <div>
-                          <p className="ll-eyebrow">kept on this device</p>
-                          <h2 className="ll-title">My Library</h2>
-                          <p className="ll-note-dim">{favoriteTracks.length} starred · {recents.length} recent · {importedPlaylists.length} imported · nothing is written to the database</p>
-                        </div>
-                      </header>
-                      <h3 className="ll-subtitle">Favorites</h3>
-                      {favoriteTracks.length ? <LlTrackList tracks={favoriteTracks} activeKey={activeKeyValue} favoriteSet={favoriteSet}
-                        onPlay={(track) => playTrack(track, favoriteTracks, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} />
-                        : <LlNote>Nothing starred yet — the ☆ on any row is all there is to it.</LlNote>}
-                      <h3 className="ll-subtitle">Recently played</h3>
-                      {recents.length ? <LlTrackList tracks={recents} activeKey={activeKeyValue} favoriteSet={favoriteSet}
-                        onPlay={(track) => playTrack(track, recents, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} />
-                        : <LlNote>No history yet.</LlNote>}
-                      <h3 className="ll-subtitle">Imported playlists</h3>
-                      {importedPlaylists.length ? (
-                        <ul className="ll-rows">
-                          {importedPlaylists.map((playlist) => (
-                            <li key={playlist.id} className="ll-row">
-                              <button type="button" className="ll-row-main" onClick={() => openPlaylist(playlist)}>
-                                <span className="ll-row-body"><span className="ll-row-title">{playlist.title}</span>
-                                  <span className="ll-row-artist">{playlist.count || playlist.tracks?.length || 0} tracks · {playlist.owner || 'imported'}</span></span>
-                              </button>
-                              <span className="ll-row-tools">
-                                {playlist.sourceUrl ? <button type="button" className="ll-row-fav" onClick={() => resyncImportedPlaylist(playlist)} title="Re-sync from Spotify">⟳</button> : null}
-                                <button type="button" className="ll-row-fav" onClick={() => renameImportedPlaylist(playlist)} title="Rename">✎</button>
-                                <button type="button" className="ll-row-fav" onClick={() => deleteImportedPlaylist(playlist)} title="Delete">🗑</button>
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : <LlNote>No Spotify imports yet — Explore · Playlists is where they land.</LlNote>}
-                    </section>
-                  ) : null}
+                      ) : (
+                        <LlNote tone={facet.id === 'artists' && facet.status === 'error' ? 'error' : 'info'}>
+                          {facet.id === 'artists' && facet.status === 'loading' ? 'asking the source for artists…'
+                            : facet.id === 'artists' && facet.error ? `artists: ${facet.error}`
+                            : 'Nothing under artists right now — the source returned none. Import a Spotify playlist, or search a name above.'}
+                        </LlNote>
+                      )}
+                    </div>
+                    <h3 className="ll-subtitle">Favorites</h3>
+                    {favoriteTracks.length ? <LlTrackList tracks={favoriteTracks} activeKey={activeKeyValue} favoriteSet={favoriteSet}
+                      onPlay={(track) => playTrack(track, favoriteTracks, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} />
+                      : <LlNote>Nothing starred yet — the ☆ on any row is all there is to it.</LlNote>}
+                    <h3 className="ll-subtitle">Recently played</h3>
+                    {recents.length ? <LlTrackList tracks={recents} activeKey={activeKeyValue} favoriteSet={favoriteSet}
+                      onPlay={(track) => playTrack(track, recents, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} />
+                      : <LlNote>No history yet.</LlNote>}
+                    <div className="ll-import">
+                      <p className="ll-label">Spotify playlist sync · tracks are matched and played through the music source only</p>
+                      <textarea className="ll-input ll-textarea" rows="3" value={importText} placeholder="https://open.spotify.com/playlist/…"
+                        onChange={(event) => setImportText(event.target.value)} />
+                      <div className="ll-crud-row">
+                        <button type="button" className="ll-pill" onClick={() => importSpotifyPlaylists()}>{importStatus === 'loading' ? 'importing…' : 'import'}</button>
+                        <button type="button" className="ll-pill" onClick={() => refreshImportedPlaylists()}>reload list</button>
+                      </div>
+                      {importMessage ? <LlNote tone={importStatus === 'error' ? 'error' : 'info'}>{importMessage}</LlNote> : null}
+                    </div>
+                  </section>
                 </div>
-              ) : null}
-              {centerTab === 'queue' ? (
+              ) : centerTab === 'queue' ? (
                 <div className="ll-queuepane">
                   <p className="ll-label">queue · {queueTracks.length}</p>
                   <ol className="ll-queue-list">
@@ -1525,11 +1594,11 @@ export default function MusicCurtains() {
                 </div>
               ) : null}
             </div>
-            <nav className="ll-bottomnav" aria-label="Lyrics, browse or queue">
+            <nav className="ll-bottomnav" aria-label="Center shortcuts">
               <button type="button" className={`ll-bottomnav-btn${centerTab === 'lyrics' ? ' is-on' : ''}`} aria-pressed={centerTab === 'lyrics'}
                 onClick={() => { setCenterTab('lyrics'); setShowLyrics(true); openLyrics(); }}><span aria-hidden="true">♪</span> Lyrics</button>
-              <button type="button" className={`ll-bottomnav-btn${centerTab === 'browse' ? ' is-on' : ''}`} aria-pressed={centerTab === 'browse'}
-                onClick={() => { setCenterTab('browse'); setShowLyrics(false); }}><span aria-hidden="true">♫</span> Browse</button>
+              <button type="button" className={`ll-bottomnav-btn${centerTab === 'trending' ? ' is-on' : ''}`} aria-pressed={centerTab === 'trending'}
+                onClick={() => { setCenterTab('trending'); setShowLyrics(false); if (trending.status === 'idle') loadTrending(); }}><span aria-hidden="true">♫</span> Trending</button>
               <button type="button" className={`ll-bottomnav-btn${centerTab === 'queue' ? ' is-on' : ''}`} aria-pressed={centerTab === 'queue'}
                 onClick={() => setCenterTab('queue')}><span aria-hidden="true">☰</span> Queue</button>
             </nav>
@@ -1556,9 +1625,6 @@ export default function MusicCurtains() {
           </ol>
         </section>
 
-        <footer className="ll-foot">
-          <p>Streams are resolved by this app and fetched by this browser; nothing is stored on the server. Quality switching reloads the file from the top — that is the source's limit, not a bug.</p>
-        </footer>
       </div>
 
       <LlMini
