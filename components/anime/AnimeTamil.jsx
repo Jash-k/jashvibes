@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import RailNav from '@/components/rail/RailNav';
-import JashPlayer from '@/components/player/JashPlayer';
+import JashPlayer from '@/components/player/JashPlayerLazy';
 import { createDirectPolicy } from '@/lib/player/policy/stream';
 import { MAX_PROBES, preFlightNote, verifyFromBrowser } from '@/lib/animeTamilProbe';
 import {

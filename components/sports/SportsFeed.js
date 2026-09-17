@@ -21,7 +21,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import RailNav from '@/components/rail/RailNav';
-import JashPlayer from '@/components/player/JashPlayer';
+import JashPlayer from '@/components/player/JashPlayerLazy';
 import { createLiveTvPolicy } from '@/lib/player/policy/liveTv';
 import {
   channelCounts,
@@ -247,7 +247,6 @@ function VideoPanel({ item, hub, channels, playing, onPickChannel, onResolveVide
           source={{ url: channel.url, kind: 'auto', label: channel.name }}
           playbackPolicy={createLiveTvPolicy(channel)}
           live
-          liveLabel={playing.liveLabel || 'LIVE'}
           display={{ title: channel.name, subtitle: `${channel.source} · ${channel.format.toUpperCase()} · ${playing.via || 'direct'}`, aspect: 'fill', poster: item.poster || undefined }}
         />
         <p className="jv-sp-note">
@@ -813,7 +812,7 @@ export default function SportsFeed({ initialOpen = null } = {}) {
       const data = await response.json().catch(() => null);
       const url = data?.manifestUrl || data?.url || '';
       if (!url) throw new Error(data?.error || 'no manifest came back');
-      setPlaying({ key: video?.key || 'channel', url, label, source: video?.source || 'ICC', via: video?.via || 'resolved', liveLabel: 'VOD' });
+      setPlaying({ key: video?.key || 'channel', url, label, source: video?.source || 'ICC', via: video?.via || 'resolved' });
     } catch (error) {
       setPlaying({ key: video?.key || 'channel', label, source: video?.source || 'ICC', via: `could not resolve · ${error.message}` });
     } finally {
@@ -982,7 +981,6 @@ export default function SportsFeed({ initialOpen = null } = {}) {
                       source={{ url: playing.url, kind: 'auto', label: playing.label }}
                       playbackPolicy={createLiveTvPolicy(streamChannel({ url: playing.url, label: playing.label, source: playing.source, extra: playing.extra }))}
                       live
-                      liveLabel="LIVE"
                       display={{ title: playing.label, subtitle: `${playing.source} · ${playing.via || 'direct'}`, aspect: 'fill' }}
                     />
                     <button type="button" className="jv-sp-stop" onClick={() => setPlaying(null)}>stop</button>

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
 import { useCallback, startTransition, useEffect, useMemo, useRef, useState } from 'react';
-import JashPlayer from '@/components/player/JashPlayer';
+import JashPlayer from '@/components/player/JashPlayerLazy';
 import { DayStrip, GuideNowLine, GuideStatus, ProgrammeCard, SourceBadges, showProgress, useLiveGuide } from '@/components/live/LiveGuide';
 import { createLiveTvPolicy, isPocketChannel } from '@/lib/player/policy/liveTv';
 import PlayerIncidents from '@/components/player/PlayerIncidents';
@@ -407,7 +407,6 @@ export default function LiveTVPage() {
                   playbackPolicy={livePolicy}
                   poster={active.logo || ''}
                   live
-                  liveLabel="LIVE"
                   display={{
                     title: active.name || 'Tamil Live TV',
                     subtitle: `${active.source || 'Jio'} • ${(active.format || 'HLS').toUpperCase()}${active.keyId && active.key ? ' • ClearKey' : ''}`,
@@ -904,7 +903,6 @@ function ServicePreviewPlayer({ channel }) {
             playbackPolicy={policy}
             poster={channel.logo || ''}
             live
-            liveLabel="PREVIEW"
             compact
             gesturesEnabled={false}
             display={{ title: channel.name || 'Preview', aspect: 'fill', bufferAheadSeconds: 6 }}

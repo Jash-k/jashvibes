@@ -25,7 +25,6 @@ import { COMMANDS, commandForKey, digitSeekPercent } from '@/lib/player/commands
 import { INCIDENT_QUEUE_KEY } from '@/lib/player/prefs';
 import { buildHeaderFilter, createDirectPolicy } from '@/lib/player/policy/stream';
 import { fmtTime, warnForSource } from '@/lib/player/labels';
-import { readSeekWindow } from '@/lib/player/kind';
 import { Icon, PATHS } from './PlayerIcons';
 import { ChannelDrawer } from './PlayerBrowser';
 import {
@@ -99,7 +98,6 @@ export function JashPlayer(props) {
     pipOnHide = false,
     audioOnly = Boolean(display.audioOnly),
     live: liveProp,
-    liveLabel = 'LIVE',
     fallbackUrls,
     activeSource,
     onPickSource,
