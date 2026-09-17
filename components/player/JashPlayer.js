@@ -230,6 +230,7 @@ export function JashPlayer(props) {
   const trackRef = useRef(null);
   const hideTimerRef = useRef(0);
   const pulseTimerRef = useRef(0);
+  const busyRef = useRef(false);
   const [visible, setVisible] = useState(true);
   const [menu, setMenu] = useState(null);
   const [contextMenu, setContextMenu] = useState(null);
@@ -277,6 +278,12 @@ export function JashPlayer(props) {
   const wake = useCallback(() => {
     setVisible(true);
     window.clearTimeout(hideTimerRef.current);
+    // Re-arm instead of only cancelling: the old version cleared the pending hide and nothing ever
+    // rescheduled it, so a single click/keypress pinned the UI on screen for the rest of playback.
+    // The busy check at fire time keeps menus, scrubs and prompts visible.
+    hideTimerRef.current = window.setTimeout(() => {
+      if (!busyRef.current) setVisible(false);
+    }, HIDE_DELAY_MS);
   }, []);
 
   useEffect(() => () => window.clearTimeout(hideTimerRef.current), []);
@@ -341,6 +348,7 @@ export function JashPlayer(props) {
     status === 'recovering' ||
     status === 'loading';
   const toastIsActionable = Boolean(resumePrompt) || Boolean(errorInfo) || skipCountdown !== null || Boolean(notice);
+  busyRef.current = controlsAreBusy || toastIsActionable;
   useEffect(() => {
     if (controlsAreBusy || toastIsActionable) {
       setVisible(true);
@@ -1041,6 +1049,11 @@ export function JashPlayer(props) {
       tabIndex={0}
       role="region"
       aria-label={`${display.title || title || 'Video'} player`}
+      onPointerMove={(event) => {
+        // A mouse glide re-shows the chrome and restarts the idle clock. Touch pointers are ignored:
+        // taps wake via the gesture layer, and fingers do not hover.
+        if (event.pointerType === 'mouse') wake();
+      }}
       onContextMenu={(event) => {
         if (event.target?.closest?.('[data-dvp="controls"]')) return;
         event.preventDefault();

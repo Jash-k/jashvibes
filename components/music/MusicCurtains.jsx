@@ -1103,167 +1103,169 @@ const MU_TABS_IDS = ['albums', 'artists', 'playlists'];
           />
         </MuPanel>
 
-        {selectedCollection ? (
-          <MuPanel as="div" name="collection">
-            <MuHeading eyebrow={`${selectedCollection.type} · ${selectedCollection.tracks?.length || 0} songs`}
-              title={selectedCollection.title || 'Collection'} note={selectedCollection.subtitle || ''}>
-              <button type="button" className="jv-mu-chip" onClick={() => { setSelectedCollection(null); setView('home'); }}>close</button>
-              {selectedCollection.type === 'artist' && (selectedCollection.albums?.length || 0) >= 24 && !selectedCollection.albumsExpanded
-                ? <button type="button" className="jv-mu-chip" onClick={() => loadAllArtistAlbums()}>see all albums</button> : null}
-            </MuHeading>
-            {collectionStatus === 'loading' ? <MuNote>reading {selectedCollection.type}…</MuNote> : null}
-            {collectionStatus === 'error' ? <MuNote tone="error">{selectedCollection.error || 'This collection could not be read. The source may be rate limiting.'}</MuNote> : null}
-            {selectedCollection.tracks?.length ? <MuTrackList tracks={selectedCollection.tracks} activeKey={activeKeyValue} favoriteSet={favoriteSet}
-              onPlay={(track) => playTrack(track, selectedCollection.tracks, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} /> : null}
-            {selectedCollection.albums?.length ? (
-              <div className="jv-mu-grid">
-                {rowsFor(selectedCollection.albums).map((album) => <MuTile key={album.id || album.title} item={album} kind="album" onOpen={openAlbum} />)}
-              </div>
-            ) : null}
-            {selectedCollection.isImported ? (
-              <div className="jv-mu-crud">
-                <p className="jv-mu-side-label">song controls · {showSongCrud ? 'open' : 'minimized'}</p>
-                <div className="jv-mu-crud-row">
-                  <input className="jv-mu-input" placeholder={showSongCrud ? 'song name to add or replace' : ''} value={crudQuery}
-                    onChange={(event) => setCrudQuery(event.target.value)} disabled={!showSongCrud} />
-                  <button type="button" className="jv-mu-chip" onClick={() => setShowSongCrud((current) => !current)}>{showSongCrud ? 'minimize' : 'expand'}</button>
-                  <button type="button" className="jv-mu-chip" disabled={!showSongCrud} onClick={() => addImportedTrack()}>add song</button>
-                  <button type="button" className="jv-mu-chip" disabled={!showSongCrud} onClick={() => replaceImportedTrack(selectedCollection.tracks?.[0])}>replace first</button>
-                  <button type="button" className="jv-mu-chip" disabled={!showSongCrud} onClick={() => removeImportedTrack(selectedCollection.tracks?.[0])}>remove first</button>
-                  <button type="button" className="jv-mu-chip" onClick={() => resyncImportedPlaylist(selectedCollection)}>re-sync</button>
+        <div className="jv-mu-browse">
+          {selectedCollection ? (
+            <MuPanel as="div" name="collection">
+              <MuHeading eyebrow={`${selectedCollection.type} · ${selectedCollection.tracks?.length || 0} songs`}
+                title={selectedCollection.title || 'Collection'} note={selectedCollection.subtitle || ''}>
+                <button type="button" className="jv-mu-chip" onClick={() => { setSelectedCollection(null); setView('home'); }}>close</button>
+                {selectedCollection.type === 'artist' && (selectedCollection.albums?.length || 0) >= 24 && !selectedCollection.albumsExpanded
+                  ? <button type="button" className="jv-mu-chip" onClick={() => loadAllArtistAlbums()}>see all albums</button> : null}
+              </MuHeading>
+              {collectionStatus === 'loading' ? <MuNote>reading {selectedCollection.type}…</MuNote> : null}
+              {collectionStatus === 'error' ? <MuNote tone="error">{selectedCollection.error || 'This collection could not be read. The source may be rate limiting.'}</MuNote> : null}
+              {selectedCollection.tracks?.length ? <MuTrackList tracks={selectedCollection.tracks} activeKey={activeKeyValue} favoriteSet={favoriteSet}
+                onPlay={(track) => playTrack(track, selectedCollection.tracks, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} /> : null}
+              {selectedCollection.albums?.length ? (
+                <div className="jv-mu-grid">
+                  {rowsFor(selectedCollection.albums).map((album) => <MuTile key={album.id || album.title} item={album} kind="album" onOpen={openAlbum} />)}
                 </div>
-                {importMessage ? <MuNote>{importMessage}</MuNote> : null}
-              </div>
-            ) : null}
-          </MuPanel>
-        ) : null}
-
-        {activeTab ? (
-          <MuPanel as="div" name="facet">
-            <MuHeading eyebrow={`tab · ${activeTab}`} title={activeTab === 'albums' ? 'Albums' : activeTab === 'artists' ? 'Artists' : 'Playlists'}
-              note={`${facetCounts[activeTab]} returned by the source${query.trim() ? ` · filtered by “${query.trim()}”` : ''}`}>
-              <button type="button" className="jv-mu-chip" onClick={() => setView('home')}>back to the pile</button>
-              <button type="button" className="jv-mu-chip" onClick={() => loadFacet(activeTab, query)}>retry</button>
-            </MuHeading>
-            {facetLists[activeTab].length ? (
-              <div className="jv-mu-grid">
-                {rowsFor(facetLists[activeTab]).map((item) => (
-                  <MuTile key={item.id || item.title || item.name} item={item} kind={activeTab === 'artists' ? 'artist' : 'album'}
-                    onOpen={activeTab === 'artists' ? openArtist : activeTab === 'albums' ? openAlbum : openPlaylist} />
-                ))}
-              </div>
-            ) : (
-              <MuNote tone={facet.status === 'error' ? 'error' : 'info'}>
-                {facet.status === 'loading'
-                  ? `asking the source for ${activeTab}…`
-                  : facet.error
-                    ? `${activeTab}: ${facet.error}`
-                    : `Nothing under ${activeTab} right now — the source returned no ${activeTab}. Import a Spotify playlist, or search a name above.`}
-              </MuNote>
-            )}
-            {activeTab === 'playlists' ? (
-              <div className="jv-mu-import">
-                <p className="jv-mu-side-label">Spotify playlist sync · tracks are matched and played through the music source only</p>
-                <textarea className="jv-mu-input jv-mu-textarea" rows="3" value={importText} placeholder="https://open.spotify.com/playlist/…"
-                  onChange={(event) => setImportText(event.target.value)} />
-                <div className="jv-mu-crud-row">
-                  <button type="button" className="jv-mu-chip" onClick={() => importSpotifyPlaylists()}>{importStatus === 'loading' ? 'importing…' : 'import'}</button>
-                  <button type="button" className="jv-mu-chip" onClick={() => refreshImportedPlaylists()}>reload list</button>
+              ) : null}
+              {selectedCollection.isImported ? (
+                <div className="jv-mu-crud">
+                  <p className="jv-mu-side-label">song controls · {showSongCrud ? 'open' : 'minimized'}</p>
+                  <div className="jv-mu-crud-row">
+                    <input className="jv-mu-input" placeholder={showSongCrud ? 'song name to add or replace' : ''} value={crudQuery}
+                      onChange={(event) => setCrudQuery(event.target.value)} disabled={!showSongCrud} />
+                    <button type="button" className="jv-mu-chip" onClick={() => setShowSongCrud((current) => !current)}>{showSongCrud ? 'minimize' : 'expand'}</button>
+                    <button type="button" className="jv-mu-chip" disabled={!showSongCrud} onClick={() => addImportedTrack()}>add song</button>
+                    <button type="button" className="jv-mu-chip" disabled={!showSongCrud} onClick={() => replaceImportedTrack(selectedCollection.tracks?.[0])}>replace first</button>
+                    <button type="button" className="jv-mu-chip" disabled={!showSongCrud} onClick={() => removeImportedTrack(selectedCollection.tracks?.[0])}>remove first</button>
+                    <button type="button" className="jv-mu-chip" onClick={() => resyncImportedPlaylist(selectedCollection)}>re-sync</button>
+                  </div>
+                  {importMessage ? <MuNote>{importMessage}</MuNote> : null}
                 </div>
-                {importMessage ? <MuNote tone={importStatus === 'error' ? 'error' : 'info'}>{importMessage}</MuNote> : null}
-                {importedPlaylists.length ? (
-                  <ul className="jv-mu-rows">
-                    {importedPlaylists.map((playlist) => (
-                      <li key={playlist.id} className="jv-mu-row">
-                        <button type="button" className="jv-mu-row-main" onClick={() => openPlaylist(playlist)}>
-                          <span className="jv-mu-row-body"><span className="jv-mu-row-title">{playlist.title}</span>
-                            <span className="jv-mu-row-artist">{playlist.count || playlist.tracks?.length || 0} tracks · {playlist.owner || 'imported'}</span></span>
-                        </button>
-                        <span className="jv-mu-row-tools">
-                          <button type="button" className="jv-mu-row-fav" onClick={() => renameImportedPlaylist(playlist)} title="Rename">✎</button>
-                          <button type="button" className="jv-mu-row-fav" onClick={() => deleteImportedPlaylist(playlist)} title="Delete">🗑</button>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
-            ) : null}
-          </MuPanel>
-        ) : null}
+              ) : null}
+            </MuPanel>
+          ) : null}
 
-        {view === 'home' ? (
-          <>
-            {mainSections.map((section) => {
-              const songs = rowsFor(section.items).filter((item) => !(item?.type === 'album' || item?.type === 'playlist'));
-              const collections = rowsFor(section.items).filter((item) => item?.type === 'album' || item?.type === 'playlist');
-              return (
-                <MuPanel as="section" name="row" key={section.title}>
-                  <MuHeading eyebrow="shelf" title={section.title}
-                    note={`${collections.length} records · ${songs.length} songs from the source`} />
-                  {collections.length ? (
-                    <div className="jv-mu-grid">
-                      {collections.map((item) => (
-                        <MuTile key={`${section.title}-${item.id || item.title}`} item={item} kind={item.type === 'playlist' ? 'playlist' : 'album'}
-                          onOpen={(value) => (value.type === 'playlist' ? openPlaylist(value) : openAlbum(value))} />
+          {activeTab ? (
+            <MuPanel as="div" name="facet">
+              <MuHeading eyebrow={`tab · ${activeTab}`} title={activeTab === 'albums' ? 'Albums' : activeTab === 'artists' ? 'Artists' : 'Playlists'}
+                note={`${facetCounts[activeTab]} returned by the source${query.trim() ? ` · filtered by “${query.trim()}”` : ''}`}>
+                <button type="button" className="jv-mu-chip" onClick={() => setView('home')}>back to the pile</button>
+                <button type="button" className="jv-mu-chip" onClick={() => loadFacet(activeTab, query)}>retry</button>
+              </MuHeading>
+              {facetLists[activeTab].length ? (
+                <div className="jv-mu-grid">
+                  {rowsFor(facetLists[activeTab]).map((item) => (
+                    <MuTile key={item.id || item.title || item.name} item={item} kind={activeTab === 'artists' ? 'artist' : 'album'}
+                      onOpen={activeTab === 'artists' ? openArtist : activeTab === 'albums' ? openAlbum : openPlaylist} />
+                  ))}
+                </div>
+              ) : (
+                <MuNote tone={facet.status === 'error' ? 'error' : 'info'}>
+                  {facet.status === 'loading'
+                    ? `asking the source for ${activeTab}…`
+                    : facet.error
+                      ? `${activeTab}: ${facet.error}`
+                      : `Nothing under ${activeTab} right now — the source returned no ${activeTab}. Import a Spotify playlist, or search a name above.`}
+                </MuNote>
+              )}
+              {activeTab === 'playlists' ? (
+                <div className="jv-mu-import">
+                  <p className="jv-mu-side-label">Spotify playlist sync · tracks are matched and played through the music source only</p>
+                  <textarea className="jv-mu-input jv-mu-textarea" rows="3" value={importText} placeholder="https://open.spotify.com/playlist/…"
+                    onChange={(event) => setImportText(event.target.value)} />
+                  <div className="jv-mu-crud-row">
+                    <button type="button" className="jv-mu-chip" onClick={() => importSpotifyPlaylists()}>{importStatus === 'loading' ? 'importing…' : 'import'}</button>
+                    <button type="button" className="jv-mu-chip" onClick={() => refreshImportedPlaylists()}>reload list</button>
+                  </div>
+                  {importMessage ? <MuNote tone={importStatus === 'error' ? 'error' : 'info'}>{importMessage}</MuNote> : null}
+                  {importedPlaylists.length ? (
+                    <ul className="jv-mu-rows">
+                      {importedPlaylists.map((playlist) => (
+                        <li key={playlist.id} className="jv-mu-row">
+                          <button type="button" className="jv-mu-row-main" onClick={() => openPlaylist(playlist)}>
+                            <span className="jv-mu-row-body"><span className="jv-mu-row-title">{playlist.title}</span>
+                              <span className="jv-mu-row-artist">{playlist.count || playlist.tracks?.length || 0} tracks · {playlist.owner || 'imported'}</span></span>
+                          </button>
+                          <span className="jv-mu-row-tools">
+                            <button type="button" className="jv-mu-row-fav" onClick={() => renameImportedPlaylist(playlist)} title="Rename">✎</button>
+                            <button type="button" className="jv-mu-row-fav" onClick={() => deleteImportedPlaylist(playlist)} title="Delete">🗑</button>
+                          </span>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   ) : null}
-                  {songs.length ? (
-                    <MuTrackList tracks={songs} activeKey={activeKeyValue} favoriteSet={favoriteSet}
-                      onPlay={(track) => playTrack(track, songs, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} />
-                  ) : null}
-                  {!songs.length && !collections.length ? <MuNote>This shelf came back empty from the source.</MuNote> : null}
+                </div>
+              ) : null}
+            </MuPanel>
+          ) : null}
+
+          {view === 'home' ? (
+            <>
+              {mainSections.map((section) => {
+                const songs = rowsFor(section.items).filter((item) => !(item?.type === 'album' || item?.type === 'playlist'));
+                const collections = rowsFor(section.items).filter((item) => item?.type === 'album' || item?.type === 'playlist');
+                return (
+                  <MuPanel as="section" name="row" key={section.title}>
+                    <MuHeading eyebrow="shelf" title={section.title}
+                      note={`${collections.length} records · ${songs.length} songs from the source`} />
+                    {collections.length ? (
+                      <div className="jv-mu-grid">
+                        {collections.map((item) => (
+                          <MuTile key={`${section.title}-${item.id || item.title}`} item={item} kind={item.type === 'playlist' ? 'playlist' : 'album'}
+                            onOpen={(value) => (value.type === 'playlist' ? openPlaylist(value) : openAlbum(value))} />
+                        ))}
+                      </div>
+                    ) : null}
+                    {songs.length ? (
+                      <MuTrackList tracks={songs} activeKey={activeKeyValue} favoriteSet={favoriteSet}
+                        onPlay={(track) => playTrack(track, songs, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} />
+                    ) : null}
+                    {!songs.length && !collections.length ? <MuNote>This shelf came back empty from the source.</MuNote> : null}
+                  </MuPanel>
+                );
+              })}
+              {!mainSections.length && !homeHasAnySongCards ? <MuPanel as="div" name="empty"><MuNote tone="error">{status === 'error' ? 'The music source did not answer. Refresh re-reads it; nothing was cached as empty.' : 'reading the shelves…'}</MuNote></MuPanel> : null}
+              {rowsFor(home?.releases?.tracks).length ? (
+                <MuPanel as="section" name="new">
+                  <MuHeading eyebrow="new releases" title="Tracks" note="played by this app, streamed by your browser" />
+                  <MuTrackList tracks={home.releases.tracks} activeKey={activeKeyValue} favoriteSet={favoriteSet}
+                    onPlay={(track) => playTrack(track, home.releases.tracks, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} />
                 </MuPanel>
-              );
-            })}
-            {!mainSections.length && !homeHasAnySongCards ? <MuPanel as="div" name="empty"><MuNote tone="error">{status === 'error' ? 'The music source did not answer. Refresh re-reads it; nothing was cached as empty.' : 'reading the shelves…'}</MuNote></MuPanel> : null}
-            {rowsFor(home?.releases?.tracks).length ? (
-              <MuPanel as="section" name="new">
-                <MuHeading eyebrow="new releases" title="Tracks" note="played by this app, streamed by your browser" />
-                <MuTrackList tracks={home.releases.tracks} activeKey={activeKeyValue} favoriteSet={favoriteSet}
-                  onPlay={(track) => playTrack(track, home.releases.tracks, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} />
-              </MuPanel>
-            ) : null}
-            {view === 'home' && (favoriteTracks.length || recents.length) ? (
-              <MuPanel as="section" name="pinned">
-                <MuHeading eyebrow="kept on this device" title="Favorites & recent" note={`${favoriteTracks.length} starred · ${recents.length} recent · nothing is written to the database`} />
-                <MuTrackList tracks={favoriteTracks.length ? favoriteTracks : recents} activeKey={activeKeyValue} favoriteSet={favoriteSet}
-                  onPlay={(track) => playTrack(track, favoriteTracks.length ? favoriteTracks : recents, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} />
-              </MuPanel>
-            ) : null}
-          </>
-        ) : null}
+              ) : null}
+              {view === 'home' && (favoriteTracks.length || recents.length) ? (
+                <MuPanel as="section" name="pinned">
+                  <MuHeading eyebrow="kept on this device" title="Favorites & recent" note={`${favoriteTracks.length} starred · ${recents.length} recent · nothing is written to the database`} />
+                  <MuTrackList tracks={favoriteTracks.length ? favoriteTracks : recents} activeKey={activeKeyValue} favoriteSet={favoriteSet}
+                    onPlay={(track) => playTrack(track, favoriteTracks.length ? favoriteTracks : recents, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} />
+                </MuPanel>
+              ) : null}
+            </>
+          ) : null}
 
-        {view === 'search' && query.trim() ? (
-          <MuPanel as="section" name="search">
-            <MuHeading eyebrow="search" title={`${searchTotal} results`} note={searchStatus === 'loading' ? 'asking the source…' : 'songs, albums, artists and playlists are kept apart'} />
-            {rowsFor(searchSongsList).length ? <MuTrackList tracks={searchSongsList} activeKey={activeKeyValue} favoriteSet={favoriteSet}
-              onPlay={(track) => playTrack(track, searchSongsList, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} /> : null}
-            {rowsFor(searchAlbumsList).length ? <div className="jv-mu-grid">{searchAlbumsList.map((album) => <MuTile key={album.id || album.title} item={album} kind="album" onOpen={openAlbum} />)}</div> : null}
-            {rowsFor(searchArtistsList).length ? <div className="jv-mu-grid">{searchArtistsList.map((artist) => <MuTile key={artist.id || artist.name} item={artist} kind="artist" onOpen={openArtist} />)}</div> : null}
-            {rowsFor(searchPlaylistsList).length ? <div className="jv-mu-grid">{searchPlaylistsList.map((playlist) => <MuTile key={playlist.id} item={playlist} kind="playlist" onOpen={openPlaylist} />)}</div> : null}
-            {!searchTotal && searchStatus !== 'loading' ? <MuNote>No results for “{query.trim()}”. A shorter word usually matches.</MuNote> : null}
-          </MuPanel>
-        ) : null}
+          {view === 'search' && query.trim() ? (
+            <MuPanel as="section" name="search">
+              <MuHeading eyebrow="search" title={`${searchTotal} results`} note={searchStatus === 'loading' ? 'asking the source…' : 'songs, albums, artists and playlists are kept apart'} />
+              {rowsFor(searchSongsList).length ? <MuTrackList tracks={searchSongsList} activeKey={activeKeyValue} favoriteSet={favoriteSet}
+                onPlay={(track) => playTrack(track, searchSongsList, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} /> : null}
+              {rowsFor(searchAlbumsList).length ? <div className="jv-mu-grid">{searchAlbumsList.map((album) => <MuTile key={album.id || album.title} item={album} kind="album" onOpen={openAlbum} />)}</div> : null}
+              {rowsFor(searchArtistsList).length ? <div className="jv-mu-grid">{searchArtistsList.map((artist) => <MuTile key={artist.id || artist.name} item={artist} kind="artist" onOpen={openArtist} />)}</div> : null}
+              {rowsFor(searchPlaylistsList).length ? <div className="jv-mu-grid">{searchPlaylistsList.map((playlist) => <MuTile key={playlist.id} item={playlist} kind="playlist" onOpen={openPlaylist} />)}</div> : null}
+              {!searchTotal && searchStatus !== 'loading' ? <MuNote>No results for “{query.trim()}”. A shorter word usually matches.</MuNote> : null}
+            </MuPanel>
+          ) : null}
 
-        {view === 'favorites' ? (
-          <MuPanel as="section" name="list">
-            <MuHeading eyebrow="on this device" title="Favorites" note={`${favoriteTracks.length} songs`} />
-            {favoriteTracks.length ? <MuTrackList tracks={favoriteTracks} activeKey={activeKeyValue} favoriteSet={favoriteSet}
-              onPlay={(track) => playTrack(track, favoriteTracks, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} />
-              : <MuNote>Nothing starred yet — the ☆ on any row is all there is to it.</MuNote>}
-          </MuPanel>
-        ) : null}
+          {view === 'favorites' ? (
+            <MuPanel as="section" name="list">
+              <MuHeading eyebrow="on this device" title="Favorites" note={`${favoriteTracks.length} songs`} />
+              {favoriteTracks.length ? <MuTrackList tracks={favoriteTracks} activeKey={activeKeyValue} favoriteSet={favoriteSet}
+                onPlay={(track) => playTrack(track, favoriteTracks, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} />
+                : <MuNote>Nothing starred yet — the ☆ on any row is all there is to it.</MuNote>}
+            </MuPanel>
+          ) : null}
 
-        {view === 'recent' ? (
-          <MuPanel as="section" name="list">
-            <MuHeading eyebrow="on this device" title="Recently played" note={`${recents.length} remembered`} />
-            {recents.length ? <MuTrackList tracks={recents} activeKey={activeKeyValue} favoriteSet={favoriteSet}
-              onPlay={(track) => playTrack(track, recents, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} />
-              : <MuNote>No history yet.</MuNote>}
-          </MuPanel>
-        ) : null}
+          {view === 'recent' ? (
+            <MuPanel as="section" name="list">
+              <MuHeading eyebrow="on this device" title="Recently played" note={`${recents.length} remembered`} />
+              {recents.length ? <MuTrackList tracks={recents} activeKey={activeKeyValue} favoriteSet={favoriteSet}
+                onPlay={(track) => playTrack(track, recents, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} />
+                : <MuNote>No history yet.</MuNote>}
+            </MuPanel>
+          ) : null}
+        </div>
 
         <MuPanel as="aside" name="lyrics">
           <LyricsPanel

@@ -517,7 +517,7 @@ export default function AnimeTamil() {
         ) : null}
 
         {shown.length ? (
-          <>
+          <div className="jv-an-scroll">
             <div className="jv-an-grid">
               {shown.map((item) => <Card key={item.id} item={item} onOpen={openTitle} />)}
             </div>
@@ -532,7 +532,7 @@ export default function AnimeTamil() {
                 </p>
               )}
             </div>
-          </>
+          </div>
         ) : null}
 
         <section className="jv-an-about">

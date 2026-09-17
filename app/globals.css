@@ -1931,17 +1931,17 @@ html.day-mode .jv-st-page { background: var(--st-bg); color: var(--st-ink); }
    its colours instead of fighting the day-mode blanket.
    ========================================================================= */
 .jv-sp-page {
-  --sp-bg: #07070b;
-  --sp-panel: #0d0d14;
-  --sp-panel-2: #121119;
-  --sp-ink: #f2f2f6;
-  --sp-dim: #9c9cab;
-  --sp-faint: #7c7b8c;
-  --sp-line: rgba(255, 255, 255, 0.1);
-  --sp-line-soft: rgba(255, 255, 255, 0.055);
-  --sp-amber: #f2b444;
+  --sp-bg: #060a07;
+  --sp-panel: #0b120c;
+  --sp-panel-2: #101711;
+  --sp-ink: #f2f7f1;
+  --sp-dim: #a3b3a6;
+  --sp-faint: #71816f;
+  --sp-line: rgba(178, 255, 198, 0.12);
+  --sp-line-soft: rgba(178, 255, 198, 0.06);
+  --sp-amber: #fbbf24;
   --sp-live: #ff5d68;
-  --sp-grass: #63d291;
+  --sp-grass: #4ade80;
   --sp-court: #7fb2ff;
   min-height: 100dvh;
   background: var(--sp-bg);
@@ -1981,8 +1981,8 @@ html.day-mode .jv-sp-page { background: var(--sp-bg); color: var(--sp-ink); }
 .jv-sp-livepill.on { border-color: rgba(255, 93, 104, 0.45); background: rgba(255, 93, 104, 0.1); color: #ffe6e8; }
 .jv-sp-livepill i { width: 6px; height: 6px; border-radius: 999px; background: var(--sp-live); box-shadow: 0 0 0 3px rgba(255, 93, 104, 0.16); animation: jv-sp-pulse 1.9s ease-in-out infinite; }
 @keyframes jv-sp-pulse { 50% { opacity: 0.35; } }
-.jv-sp-reload { border-color: rgba(242, 180, 68, 0.35); background: rgba(242, 180, 68, 0.1); color: var(--sp-amber); cursor: pointer; }
-.jv-sp-reload:hover { border-color: rgba(242, 180, 68, 0.6); color: #ffd98a; }
+.jv-sp-reload { border-color: rgba(251, 191, 36, 0.35); background: rgba(251, 191, 36, 0.1); color: var(--sp-amber); cursor: pointer; }
+.jv-sp-reload:hover { border-color: rgba(251, 191, 36, 0.6); color: #ffd98a; }
 .jv-sp-reload:disabled { opacity: 0.55; cursor: default; }
 
 .jv-sp-banner, .jv-sp-note {
@@ -2007,7 +2007,7 @@ html.day-mode .jv-sp-page { background: var(--sp-bg); color: var(--sp-ink); }
 
 .jv-sp-card { border: 1px solid var(--sp-line); border-radius: 14px; background: rgba(255, 255, 255, 0.022); overflow: hidden; min-width: 0; }
 .jv-sp-card.is-live { border-color: rgba(255, 93, 104, 0.34); }
-.jv-sp-card.is-open { border-color: rgba(242, 180, 68, 0.42); background: var(--sp-panel); }
+.jv-sp-card.is-open { border-color: rgba(251, 191, 36, 0.42); background: var(--sp-panel); }
 .jv-sp-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 11px; align-items: center; width: 100%; padding: 12px; text-align: left; color: var(--sp-ink); cursor: pointer; }
 .jv-sp-head:hover { background: rgba(255, 255, 255, 0.03); }
 .jv-sp-state { display: grid; justify-items: center; gap: 4px; min-width: 44px; }
@@ -2022,12 +2022,12 @@ html.day-mode .jv-sp-page { background: var(--sp-bg); color: var(--sp-ink); }
 .jv-sp-side { display: flex; align-items: center; gap: 7px; }
 .jv-sp-tag { padding: 4px 7px; border-radius: 7px; border: 1px solid var(--sp-line); font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sp-dim); white-space: nowrap; }
 .jv-sp-tag.is-live { border-color: rgba(255, 93, 104, 0.45); background: rgba(255, 93, 104, 0.14); color: #fff0f1; }
-.jv-sp-tag.is-soon { border-color: rgba(242, 180, 68, 0.42); background: rgba(242, 180, 68, 0.12); color: var(--sp-amber); }
-.jv-sp-tag.is-play { border-color: rgba(99, 210, 145, 0.4); background: rgba(99, 210, 145, 0.1); color: #d7ffe9; }
-.jv-sp-tag.is-stale { border-color: rgba(242, 180, 68, 0.5); background: rgba(120, 60, 10, 0.25); color: #ffd9a0; }
+.jv-sp-tag.is-soon { border-color: rgba(251, 191, 36, 0.42); background: rgba(251, 191, 36, 0.12); color: var(--sp-amber); }
+.jv-sp-tag.is-play { border-color: rgba(74, 222, 128, 0.4); background: rgba(74, 222, 128, 0.1); color: #d7ffe9; }
+.jv-sp-tag.is-stale { border-color: rgba(251, 191, 36, 0.5); background: rgba(120, 60, 10, 0.25); color: #ffd9a0; }
 .jv-sp-updated { font-size: 11px; font-weight: 700; color: var(--sp-dim); white-space: nowrap; }
 .jv-sp-auto { padding: 6px 10px; border: 1px solid var(--sp-line); border-radius: 8px; font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sp-dim); cursor: pointer; background: transparent; }
-.jv-sp-auto.on { border-color: rgba(99, 210, 145, 0.45); background: rgba(99, 210, 145, 0.12); color: #d7ffe9; }
+.jv-sp-auto.on { border-color: rgba(74, 222, 128, 0.45); background: rgba(74, 222, 128, 0.12); color: #d7ffe9; }
 .jv-sp-sources li.stale > b { color: #ffd9a0; }
 .jv-sp-caret { color: var(--sp-faint); font-size: 11px; }
 .jv-sp-card.is-open .jv-sp-caret { color: var(--sp-amber); }
@@ -2036,7 +2036,7 @@ html.day-mode .jv-sp-page { background: var(--sp-bg); color: var(--sp-ink); }
 .jv-sp-hubbar { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .jv-sp-tabs { display: flex; gap: 5px; flex-wrap: wrap; }
 .jv-sp-tabs button { padding: 6px 9px; border: 1px solid var(--sp-line); border-radius: 8px; color: var(--sp-dim); font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; }
-.jv-sp-tabs button.on { border-color: rgba(242, 180, 68, 0.5); background: rgba(242, 180, 68, 0.14); color: #fff; }
+.jv-sp-tabs button.on { border-color: rgba(251, 191, 36, 0.5); background: rgba(251, 191, 36, 0.14); color: #fff; }
 .jv-sp-hubtools { margin-left: auto; display: flex; align-items: center; gap: 7px; }
 .jv-sp-hubtools button, .jv-sp-hubtools-link { padding: 6px 9px; border: 1px solid var(--sp-line); border-radius: 8px; color: var(--sp-dim); font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; }
 .jv-sp-hubtools button:hover, .jv-sp-hubtools-link:hover { color: var(--sp-ink); border-color: rgba(255, 255, 255, 0.28); }
@@ -2045,7 +2045,7 @@ html.day-mode .jv-sp-page { background: var(--sp-bg); color: var(--sp-ink); }
 
 .jv-sp-innings { display: flex; gap: 5px; flex-wrap: wrap; }
 .jv-sp-innings button { padding: 5px 9px; border: 1px solid var(--sp-line-soft); border-radius: 7px; background: rgba(255, 255, 255, 0.02); color: var(--sp-dim); font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 11px; cursor: pointer; }
-.jv-sp-innings button.on { border-color: rgba(242, 180, 68, 0.5); color: var(--sp-amber); background: rgba(242, 180, 68, 0.1); }
+.jv-sp-innings button.on { border-color: rgba(251, 191, 36, 0.5); color: var(--sp-amber); background: rgba(251, 191, 36, 0.1); }
 .jv-sp-line { margin: 2px 0 0; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 11.5px; color: var(--sp-dim); font-variant-numeric: tabular-nums; }
 .jv-sp-card-tables { display: grid; gap: 10px; min-width: 0; overflow-x: auto; }
 .jv-sp-table { width: 100%; border-collapse: collapse; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--sp-dim); }
@@ -2055,7 +2055,7 @@ html.day-mode .jv-sp-page { background: var(--sp-bg); color: var(--sp-ink); }
 .jv-sp-table td.num { text-align: right; color: var(--sp-ink); }
 .jv-sp-table td.dim { color: var(--sp-faint); }
 .jv-sp-table th.num { text-align: right; }
-.jv-sp-table tr.here td { background: rgba(242, 180, 68, 0.07); }
+.jv-sp-table tr.here td { background: rgba(251, 191, 36, 0.07); }
 
 .jv-sp-fields { margin: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .jv-sp-fields div { padding: 7px 8px; border: 1px solid var(--sp-line-soft); border-radius: 9px; background: rgba(255, 255, 255, 0.02); }
@@ -2067,7 +2067,7 @@ html.day-mode .jv-sp-page { background: var(--sp-bg); color: var(--sp-ink); }
 .jv-sp-play { display: grid; gap: 3px; padding: 9px 10px; border: 1px solid var(--sp-line); border-radius: 10px; background: rgba(255, 255, 255, 0.03); text-align: left; cursor: pointer; }
 .jv-sp-play b { font-size: 12px; font-weight: 800; color: var(--sp-ink); }
 .jv-sp-play span { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 11px; color: var(--sp-faint); }
-.jv-sp-play:hover { border-color: rgba(242, 180, 68, 0.5); background: rgba(242, 180, 68, 0.08); }
+.jv-sp-play:hover { border-color: rgba(251, 191, 36, 0.5); background: rgba(251, 191, 36, 0.08); }
 .jv-sp-play:disabled { opacity: 0.5; cursor: default; }
 .jv-sp-player-wrap { position: relative; display: grid; gap: 8px; }
 .jv-sp-player-wrap .jv-sp-note { margin: 0; }
@@ -2090,14 +2090,14 @@ html.day-mode .jv-sp-page { background: var(--sp-bg); color: var(--sp-ink); }
 .jv-sp-chans b { font-size: 12px; font-weight: 700; color: var(--sp-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .jv-sp-chans li span span { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 11px; color: var(--sp-faint); }
 .jv-sp-chans em { font-style: normal; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 11px; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--sp-line-soft); color: var(--sp-dim); white-space: nowrap; }
-.jv-sp-chans em.is-ready, .jv-sp-chans em.is-key { border-color: rgba(99, 210, 145, 0.42); color: #cdefdd; }
+.jv-sp-chans em.is-ready, .jv-sp-chans em.is-key { border-color: rgba(74, 222, 128, 0.42); color: #cdefdd; }
 .jv-sp-chans em.is-proxy { border-color: rgba(127, 178, 255, 0.42); color: #d6e6ff; }
 .jv-sp-chans em.is-expired, .jv-sp-chans em.is-unset { border-color: rgba(255, 93, 104, 0.4); color: #ffc9cd; }
 .jv-sp-chans .jv-sp-count { display: block; border: 0; padding: 2px 0 0; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 11px; color: var(--sp-faint); }
 .jv-sp-replays li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
 .jv-sp-replay-who { font-size: 11.5px; color: var(--sp-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .jv-sp-replays button { padding: 5px 8px; border: 1px solid var(--sp-line); border-radius: 7px; color: var(--sp-dim); font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; }
-.jv-sp-replays button:hover { border-color: rgba(242, 180, 68, 0.5); color: var(--sp-amber); }
+.jv-sp-replays button:hover { border-color: rgba(251, 191, 36, 0.5); color: var(--sp-amber); }
 .jv-sp-sources li { display: grid; grid-template-columns: minmax(0, 84px) minmax(0, 1fr); gap: 8px; align-items: baseline; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 11px; color: var(--sp-faint); }
 .jv-sp-sources li b { color: var(--sp-dim); font-weight: 800; }
 .jv-sp-sources li.ok b { color: var(--sp-grass); }
@@ -2109,7 +2109,7 @@ html.day-mode .jv-sp-page { background: var(--sp-bg); color: var(--sp-ink); }
 .jv-sp-sheet-card h3 { margin: 0 0 7px; font-size: 11px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: var(--sp-faint); }
 .jv-sp-x { margin-left: auto; display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--sp-line); border-radius: 9px; color: var(--sp-dim); font-size: 12px; cursor: pointer; }
 .jv-sp-sheet-card footer { display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--sp-line-soft); padding-top: 11px; }
-.jv-sp-sheet-card footer button { padding: 8px 11px; border: 1px solid rgba(242, 180, 68, 0.42); border-radius: 9px; background: rgba(242, 180, 68, 0.12); color: var(--sp-amber); font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; }
+.jv-sp-sheet-card footer button { padding: 8px 11px; border: 1px solid rgba(251, 191, 36, 0.42); border-radius: 9px; background: rgba(251, 191, 36, 0.12); color: var(--sp-amber); font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; }
 .jv-sp-sheet-card footer a { margin-left: auto; font-size: 11.5px; color: var(--sp-dim); text-decoration: underline; }
 
 .jv-sp-head:focus-visible, .jv-sp-tabs button:focus-visible, .jv-sp-play:focus-visible, .jv-sp-reload:focus-visible, .jv-sp-burger:focus-visible, .jv-sp-chans button:focus-visible, .jv-sp-replays button:focus-visible, .jv-sp-innings button:focus-visible, .jv-sp-hubtools :focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
@@ -2125,14 +2125,14 @@ html.day-mode .jv-sp-page { background: var(--sp-bg); color: var(--sp-ink); }
 .jv-sp-live, .jv-sp-info, .jv-sp-watch-alt { display: grid; gap: 9px; min-width: 0; }
 .jv-sp-score { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .jv-sp-score li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 8px 10px; border: 1px solid var(--sp-line-soft); border-radius: 10px; background: rgba(255, 255, 255, 0.022); }
-.jv-sp-score li.is-batting { border-color: rgba(99, 210, 145, 0.4); background: rgba(99, 210, 145, 0.07); }
+.jv-sp-score li.is-batting { border-color: rgba(74, 222, 128, 0.4); background: rgba(74, 222, 128, 0.07); }
 .jv-sp-score b { font-size: 12.5px; font-weight: 800; letter-spacing: -0.005em; color: var(--sp-ink); }
 .jv-sp-score span { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--sp-ink); justify-self: end; text-align: right; }
 .jv-sp-score em { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 11px; font-style: normal; color: var(--sp-faint); }
 .jv-sp-bat { display: block; grid-column: 1 / -1; font-size: 11px; color: var(--sp-grass); }
 .jv-sp-status { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--sp-dim); }
 .jv-sp-clock { display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; margin: 0; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 11.5px; color: var(--sp-dim); }
-.jv-sp-clock em { font-style: normal; padding: 3px 7px; border-radius: 999px; border: 1px solid rgba(242, 180, 68, 0.32); background: rgba(242, 180, 68, 0.1); color: var(--sp-amber); }
+.jv-sp-clock em { font-style: normal; padding: 3px 7px; border-radius: 999px; border: 1px solid rgba(251, 191, 36, 0.32); background: rgba(251, 191, 36, 0.1); color: var(--sp-amber); }
 
 .jv-sp-overs { display: grid; gap: 7px; border-top: 1px solid var(--sp-line-soft); padding-top: 9px; }
 .jv-sp-rule.is-sub { font-size: 11px; letter-spacing: 0.18em; }
@@ -2148,7 +2148,7 @@ html.day-mode .jv-sp-page { background: var(--sp-bg); color: var(--sp-ink); }
 .jv-sp-over li.is-boundary { color: var(--sp-ink); }
 .jv-sp-over li.is-wicket { color: #ffd8c0; }
 .jv-sp-over li.is-wicket .jv-sp-ball { border-color: rgba(255, 93, 104, 0.5); color: var(--sp-live); }
-.jv-sp-over li.is-boundary .jv-sp-ball { border-color: rgba(99, 210, 145, 0.45); color: var(--sp-grass); }
+.jv-sp-over li.is-boundary .jv-sp-ball { border-color: rgba(74, 222, 128, 0.45); color: var(--sp-grass); }
 .jv-sp-ball { justify-self: start; padding: 1px 5px; border: 1px solid var(--sp-line-soft); border-radius: 6px; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 11px; color: var(--sp-faint); }
 .jv-sp-text { min-width: 0; overflow-wrap: anywhere; }
 .jv-sp-kph { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 11px; color: var(--sp-faint); }
@@ -2159,8 +2159,8 @@ html.day-mode .jv-sp-page { background: var(--sp-bg); color: var(--sp-ink); }
 .jv-sp-unavailable p { margin: 0; font-size: 12.5px; font-weight: 700; color: var(--sp-ink); }
 .jv-sp-unavailable span { font-size: 11.5px; line-height: 1.5; color: var(--sp-dim); }
 .jv-sp-links { display: flex; gap: 7px; flex-wrap: wrap; }
-.jv-sp-link { display: inline-flex; align-items: center; gap: 5px; padding: 7px 10px; border: 1px solid rgba(242, 180, 68, 0.4); border-radius: 9px; background: rgba(242, 180, 68, 0.1); color: var(--sp-amber); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
-.jv-sp-link:hover { border-color: rgba(242, 180, 68, 0.7); color: #ffd98a; }
+.jv-sp-link { display: inline-flex; align-items: center; gap: 5px; padding: 7px 10px; border: 1px solid rgba(251, 191, 36, 0.4); border-radius: 9px; background: rgba(251, 191, 36, 0.1); color: var(--sp-amber); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.jv-sp-link:hover { border-color: rgba(251, 191, 36, 0.7); color: #ffd98a; }
 .jv-sp-fow { display: grid; gap: 5px; }
 .jv-sp-mini { margin: 0; font-size: 11px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--sp-faint); }
 .jv-sp-fow ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
@@ -2179,7 +2179,7 @@ html.day-mode .jv-sp-page { background: var(--sp-bg); color: var(--sp-ink); }
 .jv-sp-links.is-clips { gap: 6px; }
 .jv-sp-links.is-clips .jv-sp-link { text-transform: none; letter-spacing: 0; font-weight: 700; font-size: 11.5px; }
 
-.jv-sp-unavailable.is-warn { border-color: rgba(242, 180, 68, 0.42); background: rgba(242, 180, 68, 0.07); }
+.jv-sp-unavailable.is-warn { border-color: rgba(251, 191, 36, 0.42); background: rgba(251, 191, 36, 0.07); }
 .jv-sp-unavailable.is-warn p b { color: var(--sp-amber); }
 .jv-sp-unavailable.is-warn .jv-sp-link { margin-top: 2px; }
 
@@ -2190,6 +2190,47 @@ html.day-mode .jv-sp-page { background: var(--sp-bg); color: var(--sp-ink); }
 .jv-sp-notes-box[open] > summary::before { content: "− "; }
 .jv-sp-notes-box .jv-sp-notes { padding: 0 10px 9px; }
 
+/* ── Stadium Board shell: the board is a viewport app. Masthead ticker on top, three rails below
+   (cards · hub stage · channels) — each rail scrolls inside itself, the page never scrolls. ── */
+.jv-sp-page { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+.jv-sp { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.jv-sp-mast { flex: 0 0 auto; flex-wrap: wrap; row-gap: 8px; }
+.jv-sp-banner, .jv-sp-skels { flex: 0 0 auto; }
+.jv-sp-skels { margin: 0; }
+.jv-sp-cols { flex: 1; min-height: 0; margin-top: 0; }
+.jv-sp-feed, .jv-sp-stage, .jv-sp-aside { min-height: 0; min-width: 0; }
+.jv-sp-rule { position: sticky; top: 0; z-index: 3; background: var(--sp-bg); padding: 8px 0; }
+/* The hub used to live inside its card; on the stage it is a card of its own. */
+.jv-sp-hub { border: 1px solid var(--sp-line); border-radius: 14px; background: var(--sp-panel); }
+.jv-sp-stage { display: grid; align-content: start; gap: 10px; }
+.jv-sp-stage-empty { display: grid; gap: 6px; align-content: start; border: 1px dashed var(--sp-line); border-radius: 14px; padding: 18px 16px; }
+.jv-sp-stage-empty-kicker { margin: 0; font-size: 11px; font-weight: 800; letter-spacing: 0.22em; text-transform: uppercase; color: var(--sp-amber); }
+.jv-sp-stage-empty p { margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--sp-faint); }
+@media (min-width: 1024px) {
+  .jv-sp-cols { grid-template-columns: minmax(300px, 350px) minmax(0, 1fr) minmax(250px, 290px); align-items: stretch; }
+  .jv-sp-feed, .jv-sp-stage, .jv-sp-aside { overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding-bottom: 12px; }
+}
+@media (max-width: 1023px) {
+  .jv-sp-h1 { font-size: 17px; }
+  .jv-sp-mast { padding-right: 0; }
+  .jv-sp-cols { display: flex; flex-direction: column; }
+  .jv-sp-feed { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .jv-sp-aside { flex: 0 0 auto; display: flex; gap: 10px; overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: 4px; max-height: 32dvh; }
+  .jv-sp-aside > * { flex: 0 0 min(78vw, 340px); max-height: 100%; overflow-y: auto; }
+  .jv-sp-stage:not(:has(.jv-sp-hub)) { display: none; }
+  .jv-sp-stage { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; max-height: 74dvh; overflow-y: auto; overscroll-behavior: contain; background: var(--sp-bg); border-top: 1px solid var(--sp-line); border-radius: 16px 16px 0 0; padding: 12px 14px calc(20px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -18px 50px -20px rgba(0, 0, 0, 0.8); }
+}
+/* Ten-foot board: roomier rails, larger type and targets, louder focus for remotes. */
+@media (min-width: 1600px) {
+  .jv-sp { max-width: 1720px; }
+  .jv-sp-cols { grid-template-columns: minmax(360px, 400px) minmax(0, 1fr) minmax(290px, 330px); gap: 18px; }
+  .jv-sp-h1 { font-size: 24px; }
+  .jv-sp-which b { font-size: 14.5px; }
+  .jv-sp-head { padding: 14px; }
+  .jv-sp-tabs button, .jv-sp-hubtools button, .jv-sp-hubtools-link { font-size: 12px; padding: 8px 12px; }
+  .jv-sp-head:focus-visible, .jv-sp-tabs button:focus-visible, .jv-sp-reload:focus-visible, .jv-sp-burger:focus-visible { outline-width: 3px; }
+}
+
 /* ============================================================================
    Tamil anime — `/anime/tamil` (`components/anime/AnimeTamil.jsx`)
    The catalogue of piratexplay.cc/language/tamil, read by `lib/animeTamilFeed.js`.
@@ -2198,15 +2239,15 @@ html.day-mode .jv-sp-page { background: var(--sp-bg); color: var(--sp-ink); }
    carries `.jv-rail-shift` — the rail clearance is that class's job alone.
    ========================================================================= */
 .jv-an-page {
-  --an-bg: #07070b;
-  --an-panel: #0d0d14;
-  --an-panel-2: #131219;
-  --an-ink: #f2f2f6;
-  --an-dim: #9c9cab;
-  --an-faint: #7c7b8c;
-  --an-line: rgba(255, 255, 255, 0.1);
-  --an-line-soft: rgba(255, 255, 255, 0.055);
-  --an-accent: #7ad0ff;
+  --an-bg: #0b0708;
+  --an-panel: #140d0e;
+  --an-panel-2: #1a1113;
+  --an-ink: #f5f1ee;
+  --an-dim: #b8a9a6;
+  --an-faint: #8a7a77;
+  --an-line: rgba(255, 96, 106, 0.16);
+  --an-line-soft: rgba(255, 96, 106, 0.08);
+  --an-accent: #ff4655;
   --an-ok: #63d291;
   --an-warn: #f2b444;
   --an-bad: #ff5d68;
@@ -2227,7 +2268,7 @@ html.day-mode .jv-an-page {
   --an-faint: #6d7c72;
   --an-line: rgba(12, 30, 20, 0.16);
   --an-line-soft: rgba(12, 30, 20, 0.09);
-  --an-accent: #0b6a92;
+  --an-accent: #b3122e;
   --an-ok: #1d6b41;
   --an-warn: #8a5308;
   --an-bad: #a8262f;
@@ -2423,6 +2464,35 @@ html.day-mode .jv-an-page .jv-an-btn.is-major { color: #fffdfa; }
   .jv-an-card:hover { transform: none; }
 }
 
+
+/* ── Manga Noir shell: the gallery is a viewport app — masthead and tools pinned, the poster
+   wall scrolling inside itself, the explainer docked below, the title sheet docked right. ── */
+.jv-an-page { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+.jv-an { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; }
+.jv-an-mast, .jv-an-tools { flex: 0 0 auto; }
+.jv-an-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding-bottom: 10px; }
+.jv-an-more { position: sticky; bottom: 0; z-index: 3; background: var(--an-bg); border-top: 1px solid var(--an-line-soft); padding: 10px 0; }
+.jv-an-about { flex: 0 0 auto; max-height: 24dvh; overflow-y: auto; overscroll-behavior: contain; margin-top: 10px; }
+@media (min-width: 1024px) {
+  /* Docked panel: the grid stays live beside it, so scrim and pointer trap go away on desktop. */
+  .jv-an-sheet { pointer-events: none; }
+  .jv-an-sheet-scrim { display: none; }
+  .jv-an-sheet-body { pointer-events: auto; width: min(560px, 40vw); }
+}
+@media (max-width: 767px) {
+  .jv-an-mast { padding-right: 0; }
+  .jv-an-tools { gap: 8px; }
+  .jv-an-sheet { align-items: flex-end; justify-content: stretch; }
+  .jv-an-sheet-body { width: 100%; max-height: 88dvh; }
+}
+/* Ten-foot gallery: bigger posters and rows, louder focus for remotes. */
+@media (min-width: 1600px) {
+  .jv-an { max-width: 1720px; }
+  .jv-an-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; }
+  .jv-an-chip, .jv-an-btn { font-size: 13px; min-height: 40px; }
+  .jv-an-ep { font-size: 13px; }
+  .jv-an-card:focus-visible, .jv-an-chip:focus-visible, .jv-an-btn:focus-visible, .jv-an-ep:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+}
 
 /* Contrast is a property of the tokens, not of each rule. Measured against the composited panel colour
  * (glass over bg), which is harder than the bare background: night #93a0bf on #0c1117 = 7.24:1, day
@@ -2691,4 +2761,41 @@ html.day-mode .jv-mu-btn-play { color: #fbfcff; }
   .jv-mu-shaft, .jv-mu-row-pulse, .jv-mu-listenbar-dot { animation: none; }
   .jv-mu-tab, .jv-mu-btn, .jv-mu-tile-art, .jv-mu-mini { transition: none; }
   /* The shafts freeze, the bead still reports position: the curtain is decoration, progress is not. */
+}
+
+/* ── Neon Deck shell: music is a viewport app. Masthead and tabs pinned; the playing deck
+   left and the browse column right, each scrolling inside itself; lyrics docks as a sheet.
+   The page never scrolls. Colours untouched — the tokens above are the section's own. ── */
+.jv-mu { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+.jv-mu-inner { flex: 1; min-height: 0; width: 100%; max-width: 1560px; padding: 14px clamp(14px, 2vw, 24px); display: grid; gap: 12px; grid-template-columns: minmax(300px, 340px) minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto; grid-template-areas: "mast mast" "tabs tabs" "deck browse" "foot foot"; }
+.jv-mu-mast { grid-area: mast; }
+.jv-mu-tabs { grid-area: tabs; }
+.jv-mu-panel-playing { grid-area: deck; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.jv-mu-browse { grid-area: browse; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; display: grid; gap: 14px; align-content: start; padding-bottom: 12px; }
+.jv-mu-foot { grid-area: foot; }
+/* Page-level status floats instead of shifting the grid; notes inside panels are untouched. */
+.jv-mu-inner > .jv-mu-note-line { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 80; width: max-content; max-width: min(560px, calc(100vw - 24px)); box-shadow: 0 18px 50px -24px rgba(0, 0, 0, 0.7); }
+.jv-mu-inner > .jv-mu-note-line + .jv-mu-note-line { top: 62px; }
+.jv-mu-inner > .jv-mu-note-line + .jv-mu-note-line + .jv-mu-note-line { top: 112px; }
+/* Lyrics docks right on desktop, rises from the bottom on phones; shut means gone. */
+.jv-mu-panel-lyrics { position: fixed; top: 0; right: 0; bottom: 0; z-index: 70; width: min(400px, 32vw); overflow-y: auto; overscroll-behavior: contain; background: var(--mu-glass); border-left: 1px solid var(--mu-line); padding: 16px 14px 24px; }
+.jv-mu-panel-lyrics:not(:has(.jv-mu-lyrics.is-open)) { display: none; }
+.jv-mu-panel-lyrics .jv-mu-lyrics { max-height: none; }
+@media (max-width: 899px) {
+  .jv-mu-inner { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto auto; grid-template-areas: "mast" "tabs" "browse" "deck" "foot"; }
+  .jv-mu-panel-playing { max-height: 36dvh; }
+  .jv-mu-playing-art { width: min(180px, 40vw); }
+  .jv-mu-mast-tools { width: 100%; }
+  .jv-mu-search { flex: 1 1 auto; }
+  .jv-mu-search input { width: 100%; }
+  .jv-mu-panel-lyrics { top: auto; left: 0; width: 100%; max-height: 72dvh; border-left: 0; border-top: 1px solid var(--mu-line); border-radius: 18px 18px 0 0; }
+}
+/* Ten-foot deck: wider console, larger type and targets, louder focus for remotes. */
+@media (min-width: 1600px) {
+  .jv-mu-inner { max-width: 1760px; grid-template-columns: minmax(360px, 400px) minmax(0, 1fr); gap: 18px; }
+  .jv-mu-title { font-size: 24px; }
+  .jv-mu-tab, .jv-mu-chip { font-size: 14px; }
+  .jv-mu-playing-title { font-size: 30px; }
+  .jv-mu-side-row { font-size: 14px; }
+  .jv-mu-tab:focus-visible, .jv-mu-chip:focus-visible, .jv-mu-side-row:focus-visible { outline: 3px solid var(--mu-accent); outline-offset: 2px; }
 }

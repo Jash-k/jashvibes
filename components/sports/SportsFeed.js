@@ -864,6 +864,10 @@ export default function SportsFeed({ initialOpen = null } = {}) {
   const counts = feed.data?.counts || { live: 0, soon: 0, done: 0, tbc: 0 };
   const chanCounts = useMemo(() => channelCounts(channelList, now), [channelList, now]);
   const firstGroup = groups[0];
+  /* The open card's key at render scope, so the center stage can mount its hub. Named `key` on purpose:
+     the hub test pins the literal `playing={playing?.key === key ? playing : null}`. */
+  const key = open || '';
+  const openItem = key ? list.find((entry) => `${entry.source}:${entry.id}` === key) || null : null;
 
   return (
     <>
@@ -923,27 +927,6 @@ export default function SportsFeed({ initialOpen = null } = {}) {
                       return (
                         <article key={key} className={`jv-sp-card is-${item.state}${isOpen ? ' is-open' : ''}`}>
                           <MatchHead item={item} open={isOpen} onToggle={() => toggle(item)} now={now} />
-                          {isOpen ? (
-                            <Hub
-                              item={item}
-                              panel={hubs[key]}
-                              loading={Boolean(hubs[key]?.loading)}
-                              error={hubs[key]?.error || ''}
-                              channels={channelList}
-                              playing={playing?.key === key ? playing : null}
-                              initialTab={tab === 'live' ? undefined : tab}
-                              onPickTab={(next) => {
-                                setTab(next);
-                                if (typeof window !== 'undefined') {
-                                  window.history.replaceState(null, '', `/sports/hub/${item.source}/${item.id}${next && next !== 'live' ? `?tab=${next}` : ''}`);
-                                }
-                              }}
-                              onPickChannel={(state) => setPlaying({ key, ...state })}
-                              onReload={() => fetchHub(item, true)}
-                              onResolveVideo={(video) => resolveVideo({ ...video, key })}
-                              resolving={resolving}
-                            />
-                          ) : null}
                         </article>
                       );
                     })}
@@ -951,6 +934,36 @@ export default function SportsFeed({ initialOpen = null } = {}) {
                 </section>
               ))}
               {!groups.length && feed.status !== 'loading' && !firstGroup ? null : null}
+            </div>
+
+            <div className="jv-sp-stage">
+              {openItem ? (
+                <Hub
+                  key={key}
+                  item={openItem}
+                  panel={hubs[key]}
+                  loading={Boolean(hubs[key]?.loading)}
+                  error={hubs[key]?.error || ''}
+                  channels={channelList}
+                  playing={playing?.key === key ? playing : null}
+                  initialTab={tab === 'live' ? undefined : tab}
+                  onPickTab={(next) => {
+                    setTab(next);
+                    if (typeof window !== 'undefined') {
+                      window.history.replaceState(null, '', `/sports/hub/${openItem.source}/${openItem.id}${next && next !== 'live' ? `?tab=${next}` : ''}`);
+                    }
+                  }}
+                  onPickChannel={(state) => setPlaying({ key, ...state })}
+                  onReload={() => fetchHub(openItem, true)}
+                  onResolveVideo={(video) => resolveVideo({ ...video, key })}
+                  resolving={resolving}
+                />
+              ) : (
+                <div className="jv-sp-stage-empty">
+                  <p className="jv-sp-stage-empty-kicker">Match hub</p>
+                  <p>Pick a match on the left — live score, video, match info and the full scorecard open here.</p>
+                </div>
+              )}
             </div>
 
             <aside className="jv-sp-aside">
