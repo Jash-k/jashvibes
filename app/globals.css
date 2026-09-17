@@ -2491,6 +2491,16 @@ html.day-mode .jv-sp-page { background: var(--sp-bg); color: var(--sp-ink); }
 .jv-sg-hubbtn:hover { color: var(--sp-ink); border-color: rgba(255, 255, 255, 0.26); }
 .jv-sg-hubbtn:focus-visible { outline: 3px solid var(--sp-amber); outline-offset: 2px; }
 .jv-sg-hubzone { margin: 0 0 18px; }
+.jv-sg-fail {
+  display: grid; gap: 8px; justify-items: start; padding: 30px 26px;
+  border: 1px solid rgba(255, 93, 104, 0.35); border-radius: 18px;
+  background: linear-gradient(160deg, rgba(255, 93, 104, 0.07), rgba(255, 255, 255, 0.02));
+}
+.jv-sg-stage-feeds { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.jv-sg-stage-feeds .jv-sg-feedchip { min-height: 30px; }
+.jv-sg-src-line { margin: 4px 0 0; font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; color: var(--sp-faint); }
+.jv-sg-src-line b { color: var(--sp-dim); font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; margin-right: 6px; }
+.jv-sg-src-line em { font-style: normal; font-weight: 600; }
 .jv-sg-about { margin-top: 6px; padding-top: 4px; }
 
 @media (max-width: 860px) {

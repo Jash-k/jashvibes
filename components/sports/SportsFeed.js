@@ -30,9 +30,6 @@ import JashPlayer from '@/components/player/JashPlayerLazy';
 import { createLiveTvPolicy } from '@/lib/player/policy/liveTv';
 import { heroNote, otherLiveEntries, pickHeroSource, rankPlayableSources } from '@/lib/sportsLive';
 import {
-  channelCounts,
-  channelLine,
-  channelReadiness,
   countdownLine,
   feedLine,
   hubTabLabel,
@@ -47,7 +44,6 @@ import {
 
 const FEED_URL = '/api/sports/feed';
 const HUB_URL = '/api/sports/hub';
-const CHANNELS_URL = '/api/sports/channels';
 const REFRESH_FLOOR_MS = 20_000;
 
 /** The player only ever gets a channel-shaped object, so the policy ladder is the same one /live uses. */
@@ -200,7 +196,7 @@ function OverList({ panel }) {
 const SOURCE_NAME = { fancode: 'FanCode', icc: 'ICC', bcci: 'BCCI', ipl: 'IPL' };
 const sourceName = (item = {}) => SOURCE_NAME[item.source] || String(item.source || 'the source').toUpperCase();
 
-function VideoPanel({ item, hub, channels, playing, onPickChannel, onResolveVideo, resolving }) {
+function VideoPanel({ item, hub, playing, onPickChannel, onResolveVideo, resolving }) {
   const panel = hub?.panels?.video || {};
   const playable = panel.playable || [];
   const videos = panel.items || [];
@@ -267,7 +263,7 @@ function VideoPanel({ item, hub, channels, playing, onPickChannel, onResolveVide
                   matchSource: item.source,
                   matchId: String(item.id),
                   via: /\.m3u8/i.test(variant.url) ? 'HLS' : (/\.mpd/i.test(variant.url) ? 'DASH' : 'direct'),
-                  note: variant.cookie ? 'the token this feed published travels through the live proxy' : (variant.keyId ? 'ClearKey stream · played in JashPlayer' : 'plays direct'),
+                  note: variant.cookie ? 'the token this feed published travels through the live proxy' : (variant.keyId ? 'plays with the key this feed published' : 'plays direct · if the edge refuses, it retries through this server'),
                 })}
               >
                 <b>{variant.label}</b>
@@ -314,35 +310,6 @@ function VideoPanel({ item, hub, channels, playing, onPickChannel, onResolveVide
               {key === 'match' ? `Open this match on ${sourceName(item)}` : `on ${sourceName(item)} · ${linkLabel[key] || key}`} <span aria-hidden="true">↗</span>
             </a>
           ))}
-        </div>
-      ) : null}
-      {channels.length ? (
-        <div className="jv-sp-watch-alt">
-          <p className="jv-sp-note">or play a channel this device already has</p>
-          <div className="jv-sp-watch-list">
-            {channels.filter((channel) => channelReadiness(channel).state !== 'unset' && channelReadiness(channel).state !== 'needs-key').slice(0, 4).map((channel) => {
-              const readiness = channelReadiness(channel);
-              return (
-                <button
-                  key={channel.id}
-                  type="button"
-                  className="jv-sp-play"
-                  disabled={readiness.state === 'expired'}
-                  onClick={() => onPickChannel({
-                    url: channel.url,
-                    label: channel.name,
-                    source: channel.source || 'channel',
-                    extra: { keyId: channel.keyId, key: channel.key, licenseKey: channel.licenseKey, cookie: channel.cookie, referer: channel.referer, userAgent: channel.userAgent },
-                    via: readiness.label,
-                    note: readiness.note,
-                  })}
-                >
-                  <b>{channel.name}</b>
-                  <span>{channelLine(channel)} · {readiness.label}</span>
-                </button>
-              );
-            })}
-          </div>
         </div>
       ) : null}
     </div>
@@ -486,7 +453,7 @@ function Scorecard({ panel, activeIndex, onInnings }) {
   );
 }
 
-function Hub({ item, panel, loading, error, onReload, channels, onPickChannel, playing, initialTab, onPickTab, now, onResolveVideo, resolving }) {
+function Hub({ item, panel, loading, error, onReload, onPickChannel, playing, initialTab, onPickTab, now, onResolveVideo, resolving }) {
   const tabs = useMemo(() => hubTabs(panel?.panels || {}, item), [panel?.panels, item]);
   const [tab, setTab] = useState(() => (tabs.includes(initialTab) ? initialTab : tabs[0] || 'live'));
   const wanted = useRef(initialTab && initialTab !== tab ? initialTab : '');
@@ -517,7 +484,7 @@ function Hub({ item, panel, loading, error, onReload, channels, onPickChannel, p
       {error ? <p className="jv-sp-note is-warn">{error} · the hub did not build, press refresh score</p> : null}
       {loading && !panel ? <p className="jv-sp-note">asking the score feed… one request, no polling</p> : null}
       {!loading && tab === 'live' ? <LiveScore item={item} hub={panel} now={now} /> : null}
-      {!loading && tab === 'video' ? <VideoPanel item={item} hub={panel} channels={channels} playing={playing} onPickChannel={onPickChannel} onResolveVideo={onResolveVideo} resolving={resolving} /> : null}
+      {!loading && tab === 'video' ? <VideoPanel item={item} hub={panel} playing={playing} onPickChannel={onPickChannel} onResolveVideo={onResolveVideo} resolving={resolving} /> : null}
       {!loading && tab === 'info' ? <InfoPanel item={item} hub={panel} /> : null}
       {!loading && tab === 'scorecard' ? <Scorecard panel={panels.scorecard || {}} activeIndex={innings} onInnings={setInnings} /> : null}
     </div>
@@ -552,7 +519,7 @@ function ReplaysBox({ items, onPlay, resolving }) {
   );
 }
 
-function SourcesSheet({ open, onClose, channels, sources, onReload }) {
+function SourcesSheet({ open, onClose, sources, onReload }) {
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (event) => { if (event.key === 'Escape') onClose(); };
@@ -560,7 +527,8 @@ function SourcesSheet({ open, onClose, channels, sources, onReload }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
   if (!open) return null;
-  const blocked = channels.filter((channel) => channelReadiness(channel).state === 'unset');
+  const healthy = (sources || []).filter((source) => source.ok);
+  const sleeping = (sources || []).filter((source) => !source.ok && source.id !== 'fancode-legacy');
   return (
     <div className="jv-sp-sheet" role="dialog" aria-modal="true" aria-label="Sports feeds and channels">
       <div className="jv-sp-sheet-card">
@@ -571,37 +539,21 @@ function SourcesSheet({ open, onClose, channels, sources, onReload }) {
         <section>
           <h3>Feeds</h3>
           <ul className="jv-sp-sources">
-            {(sources || []).map((source) => (
-              <li key={source.id} className={source.ok ? (source.stale ? 'stale' : 'ok') : 'no'}>
+            {healthy.map((source) => (
+              <li key={source.id} className={source.stale ? 'stale' : 'ok'}>
                 <b>{source.id}</b>
                 <span title={source.at || undefined}>
-                  {source.ok ? `${source.count} ${source.count === 1 ? 'match' : 'matches'}` : source.note}
-                  {source.ok && source.stale ? ` · stale${source.ageMs ? ` · ${formatAge(source.ageMs)} old` : ''}` : ''}
+                  {`${source.count} ${source.count === 1 ? 'match' : 'matches'}`}
+                  {source.stale ? ` · stale${source.ageMs ? ` · ${formatAge(source.ageMs)} old` : ''}` : ''}
+                  {source.note ? ` · ${source.note}` : ''}
                 </span>
               </li>
             ))}
-            {!sources?.length ? <li className="no"><b>feeds</b><span>not read yet · press reload</span></li> : null}
+            {!healthy.length ? <li className="ok"><b>feeds</b><span>not read yet · press reload</span></li> : null}
           </ul>
-        </section>
-        <section>
-          <h3>Channels</h3>
-          <p className="jv-sp-note">
-            Every entry below is a stream URL this device was given. Anything that needs a key or a Referer is
-            played through the same policy <code>/live</code> uses; nothing here opens a third-party player.
-          </p>
-          <ul className="jv-sp-chans">
-            {channels.map((channel) => {
-              const readiness = channelReadiness(channel);
-              return (
-                <li key={channel.id}>
-                  <span style={{ minWidth: 0 }}><b>{channel.name}</b><span>{channelLine(channel)}</span></span>
-                  <em className={`is-${readiness.state}`} title={readiness.note}>{readiness.label}</em>
-                </li>
-              );
-            })}
-            {!channels.length ? <li><span><b>nothing configured</b><span>add SPORTS_FANCODE_URL or SPORTS_WILLOW_URL in .env.local, or let the live-TV catalog carry a sports channel</span></span></li> : null}
-          </ul>
-          {blocked.length ? <p className="jv-sp-note">{blocked.length} entries carry no URL, so they are listed and never offered.</p> : null}
+          {sleeping.length ? (
+            <p className="jv-sp-note">{sleeping.length} score feed{sleeping.length === 1 ? ' is' : 's are'} asleep — the live playlists carry the board, and the asleep feed{sleeping.length === 1 ? '' : 's'} wake{sleeping.length === 1 ? 's' : ''} on the next read.</p>
+          ) : null}
         </section>
         <footer>
           <button type="button" onClick={() => { onReload(); onClose(); }}>reload feeds now</button>
@@ -616,7 +568,6 @@ function SourcesSheet({ open, onClose, channels, sources, onReload }) {
 
 export default function SportsFeed({ initialOpen = null } = {}) {
   const feed = useAsyncJson();
-  const channels = useAsyncJson();
   const [sheet, setSheet] = useState(false);
   const [open, setOpen] = useState(initialOpen ? `${initialOpen.source}:${initialOpen.id}` : '');
   const [hubs, setHubs] = useState({});
@@ -638,8 +589,8 @@ export default function SportsFeed({ initialOpen = null } = {}) {
 
   const load = useCallback((force = false) => {
     lastFetch.current = Date.now();
-    return Promise.all([feed.load(FEED_URL, { force }), channels.load(CHANNELS_URL)]);
-  }, [feed.load, channels.load]);
+    return feed.load(FEED_URL, { force });
+  }, [feed.load]);
 
   useEffect(() => { load(false); /* once per visit: the page is a board, not a ticker */ }, [load]);
 
@@ -673,7 +624,7 @@ export default function SportsFeed({ initialOpen = null } = {}) {
       if (feed.status === 'loading') return;
       const nowMs = Date.now();
       if (nowMs - lastFetch.current >= 30_000 && nowMs >= pollBackoff.current.nextAt) {
-        load(false).then(([data]) => {
+        load(false).then((data) => {
           if (data) pollBackoff.current = { fails: 0, nextAt: Date.now() + 30_000 };
           else {
             const fails = pollBackoff.current.fails + 1;
@@ -726,18 +677,46 @@ export default function SportsFeed({ initialOpen = null } = {}) {
     }, ...items];
   }, [items, initialOpen]);
 
-  const channelList = useMemo(() => channels.data?.channels || [], [channels.data]);
-  const chanCounts = useMemo(() => channelCounts(channelList, now), [channelList, now]);
-
-  /* ---- the On Air resolver: one ranked list of everything that can play right now ---- */
+  /* ---- the On Air resolver: one ranked list of everything that can play right now.
+     Channels are /live's business — the sports board is matches only. ---- */
   const liveItems = useMemo(() => items.filter((item) => item.state === 'live' && !item.staleFeed), [items]);
-  const ranked = useMemo(() => rankPlayableSources({ items: liveItems, channels: channelList, now }), [liveItems, channelList, now]);
+  const ranked = useMemo(() => rankPlayableSources({ items: liveItems, channels: [], now }), [liveItems, now]);
   const hero = useMemo(() => pickHeroSource(ranked), [ranked]);
   const heroIsMatch = Boolean(hero?.match);
   const heroFeeds = useMemo(
     () => (heroIsMatch ? ranked.filter((entry) => entry.kind === 'variant' && entry.match.source === hero.match.source && String(entry.match.id) === String(hero.match.id)) : []),
     [ranked, hero, heroIsMatch],
   );
+  const heroChain = useMemo(
+    () => heroFeeds.map((entry) => ({
+      url: entry.url,
+      label: entry.langLabel ? `${entry.match.label} · ${entry.langLabel}` : entry.label,
+      extra: entry.extra || {},
+      via: 'HLS · match feed',
+      expiresAt: entry.expiresAt || '',
+      variantId: entry.variantId || '',
+    })),
+    [heroFeeds],
+  );
+  /* Every live match's chain (all its language feeds), so a grid card gets the same fallback depth. */
+  const chainByMatch = useMemo(() => {
+    const map = new Map();
+    for (const entry of ranked) {
+      if (entry.kind !== 'variant' || !entry.match) continue;
+      const matchKey = `${entry.match.source}:${entry.match.id}`;
+      const attempts = map.get(matchKey) || [];
+      attempts.push({
+        url: entry.url,
+        label: entry.langLabel ? `${entry.match.label} · ${entry.langLabel}` : entry.label,
+        extra: entry.extra || {},
+        via: 'HLS · match feed',
+        expiresAt: entry.expiresAt || '',
+        variantId: entry.variantId || '',
+      });
+      map.set(matchKey, attempts);
+    }
+    return map;
+  }, [ranked]);
   /* Also-live cards: one per live match that is not the hero's own. Each carries its best playable entry. */
   const alsoLive = useMemo(() => {
     const others = otherLiveEntries(ranked, hero);
@@ -745,8 +724,6 @@ export default function SportsFeed({ initialOpen = null } = {}) {
       .filter((item) => !heroIsMatch || !(item.source === hero.match.source && String(item.id) === String(hero.match.id)))
       .map((item) => ({ item, entry: others.find((entry) => entry.match && entry.match.source === item.source && String(entry.match.id) === String(item.id)) || null }));
   }, [ranked, hero, heroIsMatch, liveItems]);
-  const channelEntries = useMemo(() => ranked.filter((entry) => entry.kind === 'channel'), [ranked]);
-  const channelEntryById = useMemo(() => new Map(channelEntries.map((entry) => [entry.key, entry])), [channelEntries]);
   const upcoming = useMemo(() => items.filter((item) => item.state === 'soon').slice(0, 8), [items]);
   const finished = useMemo(() => items.filter((item) => item.state === 'done').slice(0, 6), [items]);
   /* The waiting-room hero: when nothing can play, the next fixture is still the headline — with its
@@ -840,21 +817,79 @@ export default function SportsFeed({ initialOpen = null } = {}) {
     toggle(item || match);
   }, [toggle]);
 
-  /* ---- watch: the one path to the stage. The resolver entry carries everything the policy ladder needs. ---- */
-  const watch = useCallback((entry) => {
+  /* ---- watch: the one path to the stage. Every way in builds a CHAIN of attempts — the clicked
+     feed first, then the match's other language feeds. JashPlayer already retries direct → this
+     server's proxy on its own; if a whole attempt dies anyway, the stage moves down the chain
+     instead of showing a black frame. ---- */
+  const watch = useCallback((entry, chain = null) => {
     if (!entry?.url) return;
-    setPlaying({
-      key: entry.match ? `${entry.match.source}:${entry.match.id}` : 'channel',
+    const attempts = chain?.length ? chain : [{
       url: entry.url,
       label: entry.label,
-      source: entry.badge || 'sports',
       extra: entry.extra || {},
-      via: entry.kind === 'channel' ? (entry.readiness?.label || 'channel') : (entry.kind === 'variant' ? 'HLS · match feed' : 'stream'),
+      via: entry.kind === 'variant' ? 'HLS · match feed' : 'stream',
       expiresAt: entry.expiresAt || '',
       variantId: entry.variantId || '',
+    }];
+    setPlaying({
+      key: entry.match ? `${entry.match.source}:${entry.match.id}` : 'channel',
+      url: attempts[0].url,
+      label: attempts[0].label || entry.label,
+      source: entry.badge || 'sports',
+      extra: attempts[0].extra || {},
+      via: attempts[0].via || 'stream',
+      expiresAt: attempts[0].expiresAt || '',
+      variantId: attempts[0].variantId || '',
       matchSource: entry.match?.source || '',
       matchId: entry.match ? String(entry.match.id) : '',
       poster: entry.match?.poster || '',
+      chain: attempts,
+      chainIndex: 0,
+      failed: false,
+      note: '',
+    });
+  }, []);
+
+  /* One attempt (direct → proxy, handled inside the player) died for good: move down the chain.
+     The last attempt that fails is said out loud — never a silent black frame. */
+  const onStageFatal = useCallback(() => {
+    setPlaying((current) => {
+      if (!current?.chain?.length) return { ...current, failed: true };
+      const nextIndex = (current.chainIndex || 0) + 1;
+      if (nextIndex >= current.chain.length) return { ...current, failed: true, note: '' };
+      const next = current.chain[nextIndex];
+      return {
+        ...current,
+        url: next.url,
+        label: next.label || current.label,
+        extra: next.extra || {},
+        via: next.via || current.via,
+        expiresAt: next.expiresAt || '',
+        variantId: next.variantId || '',
+        chainIndex: nextIndex,
+        note: `that feed would not open · switching to ${next.label || 'the next feed'}…`,
+      };
+    });
+  }, []);
+
+  const [stageStatus, setStageStatus] = useState('');
+  const onStageStatus = useCallback((status) => setStageStatus(String(status || '')), []);
+  const switchAttempt = useCallback((index) => {
+    setPlaying((current) => {
+      const next = current?.chain?.[index];
+      if (!next || index === current.chainIndex) return current;
+      return {
+        ...current,
+        url: next.url,
+        label: next.label || current.label,
+        extra: next.extra || {},
+        via: next.via || current.via,
+        expiresAt: next.expiresAt || '',
+        variantId: next.variantId || '',
+        chainIndex: index,
+        failed: false,
+        note: '',
+      };
     });
   }, []);
 
@@ -871,7 +906,7 @@ export default function SportsFeed({ initialOpen = null } = {}) {
     const expiresAt = Date.parse(playing.expiresAt);
     if (!Number.isFinite(expiresAt)) return undefined;
     const swap = async () => {
-      const [data] = await load(true) || [];
+      const data = await load(true);
       const item = (data?.items || []).find((entry) => entry.state === 'live' && entry.source === playing.matchSource && String(entry.id) === String(playing.matchId));
       if (!item) return;
       const variants = Array.isArray(item.variants) ? item.variants : [];
@@ -931,7 +966,10 @@ export default function SportsFeed({ initialOpen = null } = {}) {
             type="button"
             className="jv-sg-play"
             disabled={!entry}
-            onClick={() => watch({ ...entry, match: entry?.match || { source: item.source, id: item.id, poster: item.poster || '' } })}
+            onClick={() => {
+              const entryWithMatch = { ...entry, match: entry?.match || { source: item.source, id: item.id, poster: item.poster || '' } };
+              watch(entryWithMatch, chainByMatch.get(`${item.source}:${item.id}`) || null);
+            }}
             title={entry ? `Watch ${entry.label}` : 'no playable stream on this feed'}
           >
             ▶ Watch
@@ -988,7 +1026,24 @@ export default function SportsFeed({ initialOpen = null } = {}) {
           ) : null}
 
           {/* ---------- the stage: watching replaces the hero, one press, no navigation ---------- */}
-          {playing?.url ? (
+          {playing?.failed ? (
+            <section className="jv-sg-stage" aria-label="Stream did not open">
+              <div className="jv-sg-fail">
+                <p className="jv-sg-kicker">This stream did not open</p>
+                <h2 className="jv-sg-hero-who">{playing.label}</h2>
+                <p className="jv-sg-hero-line">
+                  Every way in was tried{playing.chain?.length > 1 ? ` — ${playing.chain.length} feeds, direct and through this server` : ' — direct and through this server'} — and the edge refused each one. The match may have ended, or the feed is geo-fenced to where this server cannot follow.
+                </p>
+                <div className="jv-sg-hero-actions">
+                  <button type="button" className="jv-sg-ghost" onClick={() => { setPlaying(null); setStageStatus(''); }}>Back to the board</button>
+                  <button type="button" className="jv-sg-watch" onClick={() => {
+                    const retry = { ...playing, url: playing.chain?.[0]?.url || playing.url, chainIndex: 0, failed: false, note: '' };
+                    setPlaying(retry);
+                  }}>Try again</button>
+                </div>
+              </div>
+            </section>
+          ) : playing?.url ? (
             <section className="jv-sg-stage" aria-label="Now watching">
               <div className="jv-sg-stage-video">
                 <JashPlayer
@@ -998,13 +1053,34 @@ export default function SportsFeed({ initialOpen = null } = {}) {
                   playbackPolicy={createLiveTvPolicy(streamChannel({ url: playing.url, label: playing.label, source: playing.source, extra: playing.extra }))}
                   live
                   display={{ title: playing.label, subtitle: `${playing.source} · ${playing.via || 'direct'}`, aspect: 'fill', poster: playing.poster || undefined }}
+                  on={{ onFatal: onStageFatal, onStatus: onStageStatus }}
                 />
               </div>
               <div className="jv-sg-stage-bar">
                 <span className="jv-sg-tag is-live"><i aria-hidden="true" /> LIVE</span>
                 <b className="jv-sg-stage-who">{playing.label}</b>
-                <span className="jv-sg-stage-note">{playing.via || 'direct'}{playing.expiresAt ? ` · token until ${new Date(playing.expiresAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : ''}</span>
-                <button type="button" className="jv-sg-stop" onClick={() => setPlaying(null)}>stop</button>
+                <span className="jv-sg-stage-note">
+                  {playing.note
+                    ? playing.note
+                    : (stageStatus === 'buffering' || stageStatus === 'loading' ? 'connecting…'
+                      : stageStatus === 'error' ? 'reconnecting…'
+                        : `${playing.via || 'direct'}${playing.expiresAt ? ` · token until ${new Date(playing.expiresAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : ''}`)}
+                </span>
+                {playing.chain?.length > 1 ? (
+                  <span className="jv-sg-stage-feeds" role="group" aria-label="Feeds on this match">
+                    {playing.chain.map((attempt, index) => (
+                      <button
+                        key={attempt.url}
+                        type="button"
+                        className={`jv-sg-feedchip${index === playing.chainIndex ? ' on' : ''}`}
+                        onClick={() => switchAttempt(index)}
+                      >
+                        {(attempt.label || 'feed').split(' · ').pop()}
+                      </button>
+                    ))}
+                  </span>
+                ) : null}
+                <button type="button" className="jv-sg-stop" onClick={() => { setPlaying(null); setStageStatus(''); }}>stop</button>
               </div>
             </section>
           ) : hero ? (
@@ -1027,7 +1103,7 @@ export default function SportsFeed({ initialOpen = null } = {}) {
                       {hero.match.venue ? ` · ${hero.match.venue}` : ''}
                     </p>
                   ) : (
-                    <p className="jv-sg-hero-line">{channelLineLabel(hero)}</p>
+                    <p className="jv-sg-hero-line">{heroNote(hero)}</p>
                   )}
                   <p className="jv-sg-hero-note">{heroNote(hero)}</p>
                   <div className="jv-sg-hero-actions">
@@ -1035,7 +1111,7 @@ export default function SportsFeed({ initialOpen = null } = {}) {
                       type="button"
                       className="jv-sg-watch"
                       autoFocus={heroIsMatch}
-                      onClick={() => watch(hero)}
+                      onClick={() => watch(hero, heroIsMatch ? heroChain : null)}
                       aria-label={`Watch live: ${hero.label}`}
                     >
                       ▶ WATCH LIVE
@@ -1084,7 +1160,6 @@ export default function SportsFeed({ initialOpen = null } = {}) {
                 panel={hubs[key]}
                 loading={Boolean(hubs[key]?.loading)}
                 error={hubs[key]?.error || ''}
-                channels={channelList}
                 playing={playing?.key === key ? playing : null}
                 initialTab={tab === 'live' ? undefined : tab}
                 onPickTab={(next) => {
@@ -1110,46 +1185,6 @@ export default function SportsFeed({ initialOpen = null } = {}) {
               </div>
             </section>
           ) : null}
-
-          <section className="jv-sg-section" aria-labelledby="jv-sg-chans">
-            <p className="jv-sp-rule" id="jv-sg-chans">
-              Channels
-              <em>{chanCounts.ready} ready · {chanCounts.blocked} not</em>
-              <hr />
-            </p>
-            {channels.status === 'loading' && !channelList.length ? <p className="jv-sp-note">asking the live-TV catalog…</p> : null}
-            {channels.error ? <p className="jv-sp-note is-warn">channels failed: {channels.error}</p> : null}
-            <div className="jv-sg-grid">
-              {channelList.map((channel) => {
-                const readiness = channelReadiness(channel, now);
-                const playable = readiness.state === 'ready' || readiness.state === 'key' || readiness.state === 'proxy';
-                const entry = channelEntryById.get(`channel:${channel.id}`);
-                return (
-                  <article key={channel.id} className={`jv-sg-card is-channel${playable ? '' : ' is-blocked'}`}>
-                    <div className="jv-sg-card-top">
-                      <span className={`jv-sg-tag is-${readiness.state}`} title={readiness.note}>{readiness.label}</span>
-                      <span className="jv-sg-src">{channelLine(channel)}</span>
-                    </div>
-                    <h3 className="jv-sg-card-who">{channel.name}</h3>
-                    <div className="jv-sg-card-actions">
-                      <button
-                        type="button"
-                        className="jv-sg-play"
-                        disabled={!playable || !entry}
-                        onClick={() => entry && watch(entry)}
-                        title={readiness.note}
-                      >
-                        ▶ Watch
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-              {!channelList.length && channels.status !== 'loading' ? (
-                <p className="jv-sp-note">no sports channels answered · add SPORTS_FANCODE_URL or SPORTS_WILLOW_URL, or let the live-TV catalog carry one</p>
-              ) : null}
-            </div>
-          </section>
 
           {upcoming.length ? (
             <section className="jv-sg-section" aria-labelledby="jv-sg-today">
@@ -1179,27 +1214,30 @@ export default function SportsFeed({ initialOpen = null } = {}) {
           <footer className="jv-sg-about">
             <p className="jv-sp-note">
               One request per open match, one per reload, and one when this tab becomes visible again if a match
-              was live and the last read is older than {REFRESH_FLOOR_MS / 1000} s. A playing token is refreshed
-              twice as it nears expiry. Nothing else asks the upstreams anything.
+              was live and the last read is older than {REFRESH_FLOOR_MS / 1000} s. A playing stream that fails
+              direct retries through this server before moving to the match&rsquo;s next feed. Nothing else asks the
+              upstreams anything.
             </p>
-            <ul className="jv-sp-sources">
-              {(feed.data?.sources || []).map((source) => (
-                <li key={source.id} className={source.ok ? 'ok' : 'no'}>
-                  <b>{source.id}</b>
-                  <span>{source.ok ? source.note || 'answered' : source.note}</span>
-                </li>
-              ))}
-            </ul>
+            {(() => {
+              const healthy = (feed.data?.sources || []).filter((source) => source.ok);
+              const sleeping = (feed.data?.sources || []).filter((source) => !source.ok && source.id !== 'fancode-legacy');
+              if (!healthy.length && !sleeping.length) return null;
+              return (
+                <p className="jv-sg-src-line">
+                  {healthy.length ? (
+                    <>
+                      <b>on air via</b> {healthy.map((source) => source.id.replace('-m3u', '')).join(' · ')}
+                    </>
+                  ) : null}
+                  {sleeping.length ? <em>{healthy.length ? ' · ' : ''}{sleeping.length} score feed{sleeping.length === 1 ? '' : 's'} asleep, back on the next read</em> : null}
+                </p>
+              );
+            })()}
           </footer>
         </div>
       </main>
-      <SourcesSheet open={sheet} onClose={() => setSheet(false)} channels={channelList} sources={feed.data?.sources} onReload={() => load(true)} />
+      <SourcesSheet open={sheet} onClose={() => setSheet(false)} sources={feed.data?.sources} onReload={() => load(true)} />
     </>
   );
 }
 
-/** The hero's channel line: source · format · language, straight off the channel object. */
-function channelLineLabel(entry) {
-  const readiness = entry.readiness || {};
-  return [entry.badge, readiness.label].filter(Boolean).join(' · ');
-}

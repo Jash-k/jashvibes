@@ -109,12 +109,13 @@ describe('sportsLive resolver', () => {
     assert.match(entries[1].label, /தமிழ்/);
   });
 
-  test('channels that need a key, have no URL, or whose key expired are never ranked', () => {
+  test('channels that need a key — any key — have no URL, or whose key expired are never ranked', () => {
     const entries = rankPlayableSources({
       items: [],
       channels: [
         channel({ id: 'no-url', url: undefined }),
         channel({ id: 'needs-key', keyId: 'AA' }),
+        channel({ id: 'full-pair', keyId: 'AA', key: 'BB' }),
         channel({ id: 'expired', keyExpiresAt: new Date(NOW - 1000).toISOString() }),
         channel({ id: 'ok', priority: 1 }),
         channel({ id: 'proxy', referer: 'https://tv/', priority: 0 }),
@@ -122,7 +123,7 @@ describe('sportsLive resolver', () => {
       now: NOW,
     });
     const states = entries.map((entry) => entry.readiness.state);
-    assert.deepEqual(states, ['proxy', 'ready'], 'needs-key/expired/unset are listed on the page but never ranked');
+    assert.deepEqual(states, ['proxy', 'ready'], 'key/needs-key/expired/unset never rank — keys are /live\u2019s business, not the sports board\u2019s');
   });
 
   test('a quarantined stale-dump LIVE row is not live and never reaches the board', () => {
@@ -180,13 +181,30 @@ describe('On Air Grid board contract', () => {
     assert.match(feed, /swapTimersRef/, 'the timers are cleared on unmount and on every swap');
   });
 
-  test('the grid sections are content-gated and the grid card is honest about what plays', () => {
-    for (const label of ['Also live', 'Channels', 'Today', 'Finished']) {
+  test('the grid sections are content-gated, channels are not on the board, and the card is honest', () => {
+    for (const label of ['Also live', 'Today', 'Finished']) {
       assert.ok(feed.includes(label), `grid section "${label}" exists`);
     }
+    assert.ok(!feed.includes('jv-sg-chans'), 'the channels section is gone from the sports board entirely');
+    assert.ok(!/channelReadiness|channelLine|channelCounts/.test(feed), 'no key vocabulary anywhere on the sports page');
+    assert.ok(!feed.includes('CHANNELS_URL'), 'the board no longer even asks the channels route');
     assert.match(feed, /disabled=\{!entry\}/, 'a card with nothing to play shows a disabled button, not a broken promise');
-    assert.match(feed, /is-blocked/, 'a blocked channel is visibly muted');
-    assert.match(feed, /title=\{readiness\.note\}/, 'why it cannot play is one hover/long-press away');
+  });
+
+  test('the sources walls are gone: healthy feeds are named, asleep ones are one quiet line', () => {
+    assert.ok(!/className=\{source\.ok \? 'ok' : 'no'\}/.test(feed), 'no red per-source failure list');
+    assert.match(feed, /score feed.*asleep/, 'sleeping feeds collapse to one muted sentence');
+    assert.match(feed, /on air via/, 'healthy playlists are named in the footer');
+    assert.match(feed, /the live playlists carry the board/, 'the sheet says what is carrying the board');
+  });
+
+  test('playback is a chain: direct, then the proxy, then the next feed, then the truth', () => {
+    assert.match(feed, /onFatal: onStageFatal/, 'a dead attempt moves the stage down the chain');
+    assert.match(feed, /onStatus: onStageStatus/, 'the stage shows connecting\/buffering instead of a black frame');
+    assert.match(feed, /switching to/, 'the switch is announced');
+    assert.match(feed, /This stream did not open/, 'exhausted chains get the honest card, with a Try again');
+    assert.match(feed, /chainByMatch/, 'grid cards get the same fallback depth as the hero');
+    assert.match(feed, /retries through this server/, 'the proxy step is printed, not hidden');
   });
 
   test('the empty-hero state is the next fixture with a countdown — never a fake play button', () => {

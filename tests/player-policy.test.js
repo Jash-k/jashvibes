@@ -254,6 +254,35 @@ test('Pocket channels try direct playback first, then the proxy', async () => {
   assert.equal(policy.hasRecovery(), false);
 });
 
+test('a playlist-family stream tries direct, then rides the live proxy with its own headers', async () => {
+  const channel = { name: 'IND v AFG', url: 'https://dai-fancode.pages.dev/live.m3u8', referer: 'https://fancode.com/', userAgent: 'ReactNativeVideo/9.11.1' };
+  const policy = createLiveTvPolicy(channel);
+  assert.equal(policy.hasRecovery(), true, 'a header-carrying stream always has one more trick: the live proxy');
+
+  const direct = await policy.resolve({});
+  const directRequest = { headers: {}, uris: ['https://in-ak-flive.akamaized.net/seg.ts'] };
+  direct.http.requestFilter(3, directRequest, {});
+  assert.equal(directRequest.uris[0], 'https://in-ak-flive.akamaized.net/seg.ts', 'direct first, headers attached in-browser');
+  assert.equal(directRequest.headers.Referer, 'https://fancode.com/');
+
+  const step = await policy.recover({ error: { code: 1003 } });
+  assert.equal(step.retry, 'reload');
+  assert.match(step.message, /live proxy/);
+  assert.equal(policy.hasRecovery(), false, 'one proxy step, then the truth');
+
+  const proxied = await policy.resolve({});
+  assert.match(proxied.url, /^\/api\/live-proxy\?u=/, 'the manifest starts on the proxy after a direct failure');
+  assert.equal(proxied.allowNativeHls, false, 'native HLS cannot rewrite segment URLs, so Shaka takes it');
+  const segRequest = { headers: { Referer: 'https://fancode.com/' }, uris: ['https://in-ak-flive.akamaized.net/seg.ts'] };
+  proxied.http.requestFilter(3, segRequest, {});
+  assert.match(segRequest.uris[0], /^\/api\/live-proxy\?u=https%3A%2F%2Fin-ak-flive/, 'every segment rides the proxy too');
+  assert.equal(segRequest.headers.Referer, undefined, 'the proxy sets the headers server-side');
+  const response = { uri: proxied.url };
+  proxied.http.responseFilter(1, response);
+  assert.match(response.uri, /^https:\/\/dai-fancode\.pages\.dev/, 'the response filter restores the real URI for relative resolution');
+  assert.equal(await policy.recover({ error: {} }), null);
+});
+
 test('non-live channels keep their stored headers but never a stale Cookie', async () => {
   const policy = createLiveTvPolicy({
     name: 'Geo News',
