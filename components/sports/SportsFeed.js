@@ -36,7 +36,7 @@ function formatAge(ms = 0) {
   return `${Math.floor(minutes / 60)}h`;
 }
 
-function streamChannel({ url, label, source = 'sports', extra = {} }) {
+function streamChannel({ url, label, source = 'sports', extra = {}, streamProxy = '' }) {
   return {
     id: `sports-${label}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-').slice(0, 48),
     name: label,
@@ -44,6 +44,7 @@ function streamChannel({ url, label, source = 'sports', extra = {} }) {
     category: 'Sports',
     source,
     format: /\.m3u8/i.test(url) ? 'hls' : 'video',
+    streamProxy,
     ...extra,
   };
 }
@@ -268,8 +269,8 @@ export default function SportsFeed({ initialOpen = null } = {}) {
   }, [feed.data?.generatedAt, feed.status, now]);
 
   const counts = feed.data?.counts || { live: 0, soon: 0, done: 0, tbc: 0 };
+  const streamProxy = String(feed.data?.streamProxy || '');
   const healthySources = (feed.data?.sources || []).filter((source) => source.ok);
-  const asleepSources = (feed.data?.sources || []).filter((source) => !source.ok);
 
   return (
     <>
@@ -309,7 +310,8 @@ export default function SportsFeed({ initialOpen = null } = {}) {
                 <p className="jv-sp-kicker">This stream did not open</p>
                 <h2 className="jv-sg-stage-fail-who">{playing.label}</h2>
                 <p className="jv-sg-stage-fail-line">
-                  Every way in was tried{playing.chain?.length > 1 ? ` — ${playing.chain.length} feeds, direct and through this server` : ' — direct and through this server'} — and the edge refused each one. It may have gone off air, or the feed may be fenced to where this server cannot follow.
+                  Every way in was tried{playing.chain?.length > 1 ? ` — ${playing.chain.length} feeds, direct and through this server` : ' — direct and through this server'} — and the edge refused each one.
+                  {!streamProxy ? ' These CDNs block browsers and datacenter regions; adding the free stream proxy (docs/STREAM-WORKER.md — one deploy, one env var) unlocks them.' : ''}
                 </p>
                 <div className="jv-sg-fail-actions">
                   <button type="button" className="jv-sg-ghost" onClick={stop}>Back to the wall</button>
@@ -326,7 +328,7 @@ export default function SportsFeed({ initialOpen = null } = {}) {
                   key={playing.url}
                   className="jv-sg-player"
                   source={{ url: playing.url, kind: 'auto', label: playing.label }}
-                  playbackPolicy={createLiveTvPolicy(streamChannel({ url: playing.url, label: playing.label, source: playing.source, extra: playing.extra }))}
+                  playbackPolicy={createLiveTvPolicy(streamChannel({ url: playing.url, label: playing.label, source: playing.source, extra: playing.extra, streamProxy }))}
                   live
                   display={{ title: playing.label, subtitle: `${SOURCE_LABEL[playing.source] || playing.source} · ${playing.via || 'direct'}`, aspect: 'fill', poster: playing.poster || undefined }}
                   on={{ onFatal: onStageFatal, onStatus: onStageStatus }}
@@ -437,18 +439,6 @@ export default function SportsFeed({ initialOpen = null } = {}) {
             )
           ) : null}
 
-          <footer className="jv-sg-about">
-            {healthySources.length || asleepSources.length ? (
-              <p className="jv-sg-src-line">
-                {healthySources.length ? (<><b>on air via</b> {healthySources.map((source) => source.id.replace('-m3u', '')).join(' · ')}</>) : null}
-                {asleepSources.length ? <em>{healthySources.length ? ' · ' : ''}{asleepSources.map((source) => `${source.id.replace('-m3u', '')} asleep`).join(', ')}, back when they publish</em> : null}
-              </p>
-            ) : null}
-            <p className="jv-sp-note">
-              Only streams whose manifest answered on the last read are shown. Playback retries through this
-              server before giving up, and the wall re-reads every 30 s while it is on screen.
-            </p>
-          </footer>
         </div>
       </main>
       <SourcesSheet open={sheet} onClose={() => setSheet(false)} sources={feed.data?.sources} onReload={() => load(true)} />

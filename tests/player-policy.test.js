@@ -254,6 +254,37 @@ test('Pocket channels try direct playback first, then the proxy', async () => {
   assert.equal(policy.hasRecovery(), false);
 });
 
+test('the stream proxy (owner worker) is the rung between direct and the render proxy', async () => {
+  const channel = {
+    name: 'IND v AFG',
+    url: 'https://dai-fancode.pages.dev/live.m3u8',
+    referer: 'https://fancode.com/',
+    userAgent: 'ReactNativeVideo/9.11.1',
+    streamProxy: 'https://jv-streams.somebody.workers.dev',
+  };
+  const policy = createLiveTvPolicy(channel);
+  assert.equal(policy.hasRecovery(), true);
+
+  const first = await policy.recover({ error: { code: 1001 } });
+  assert.match(first.message, /stream proxy/, 'run g one is the viewer-region worker, not the render proxy');
+  const viaWorker = await policy.resolve({});
+  assert.match(viaWorker.url, /^https:\/\/jv-streams\.somebody\.workers\.dev\/\?url=/, 'the manifest rides the owner worker');
+  assert.match(viaWorker.url, /ref=https%3A%2F%2Ffancode\.com/, 'the worker gets the stream headers server-side');
+  assert.equal(viaWorker.allowNativeHls, false, 'proxied playlists need the engine, not native src');
+
+  // Children rewritten by the worker arrive pre-proxied: the filter must not double-wrap them.
+  const childRequest = { headers: {}, uris: ['https://jv-streams.somebody.workers.dev/?url=https%3A%2F%2Fin-ak-flive.akamaized.net%2Fseg.ts'] };
+  viaWorker.http.requestFilter(3, childRequest, {});
+  assert.equal(childRequest.uris[0], 'https://jv-streams.somebody.workers.dev/?url=https%3A%2F%2Fin-ak-flive.akamaized.net%2Fseg.ts', 'no double proxy');
+
+  const second = await policy.recover({ error: { code: 1001 } });
+  assert.match(second.message, /live proxy/, 'then the app\u2019s own proxy');
+  const viaRender = await policy.resolve({});
+  assert.match(viaRender.url, /^\/api\/live-proxy\?u=/);
+  assert.equal(await policy.recover({ error: {} }), null, 'and then the truth');
+  assert.equal(policy.hasRecovery(), false);
+});
+
 test('a playlist-family stream tries direct, then rides the live proxy with its own headers', async () => {
   const channel = { name: 'IND v AFG', url: 'https://dai-fancode.pages.dev/live.m3u8', referer: 'https://fancode.com/', userAgent: 'ReactNativeVideo/9.11.1' };
   const policy = createLiveTvPolicy(channel);

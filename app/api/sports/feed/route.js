@@ -23,8 +23,11 @@ export async function GET(request) {
     const payload = await cachedFeed({ now: started, force });
     const fresh = payload.cachedAt + (payload.ttlMs || 0) - Date.now();
     const maxAge = Math.max(0, Math.min(20, Math.ceil(fresh / 1000)));
+    /* The viewer-side stream proxy (the owner's Cloudflare Worker, docs/STREAM-WORKER.md).
+       Public on purpose: the PLAYER needs it to unlock geo-fenced, CORS-less CDNs. */
+    const streamProxy = String(process.env.SPORTS_STREAM_PROXY || '').trim();
     return NextResponse.json(
-      { ...payload, tookMs: Date.now() - started },
+      { ...payload, streamProxy, tookMs: Date.now() - started },
       { headers: { 'Cache-Control': maxAge > 1 ? `public, max-age=${maxAge}` : 'no-store' } },
     );
   } catch (error) {

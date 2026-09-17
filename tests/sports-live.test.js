@@ -186,9 +186,11 @@ describe('Live Streams board contract (round 25)', () => {
       assert.ok(!code.includes(banned), `the board must not use ${banned}`);
     }
     assert.match(feed, /Nothing is on air right now/, 'an empty wall says so, plainly');
-    assert.match(feed, /on air via/, 'healthy playlists are named in the footer');
-    assert.match(feed, /asleep/, 'sleeping playlists are one quiet phrase, not a wall');
-    assert.match(feed, /Only streams whose manifest answered/, 'the working-streams promise is printed');
+    assert.ok(!feed.includes('on air via'), 'no source bookkeeping in the footer — the page is streams, not a status board');
+    assert.ok(!feed.includes('Only streams whose manifest answered'), 'no pipeline self-narration on the page');
+    assert.match(feed, /asleep/, 'sleeping playlists get one quiet phrase inside the sheet only');
+    assert.match(feed, /streamProxy/, 'the unlock proxy rides with the player policy');
+    assert.match(feed, /docs\/STREAM-WORKER\.md/, 'a failed stream says how to unlock the fenced CDNs');
   });
 });
 
