@@ -804,6 +804,9 @@ html.day-mode [data-shaka-player-container] video {
   background-color: #000000 !important;
 }
 
+/* Idle player: the cursor leaves with the chrome, so a resting pointer never floats over the film. */
+.jv-idle.jv-idle, .jv-idle.jv-idle * { cursor: none; }
+
 html.day-mode [data-dvp="root"] [class*="bg-black"],
 html.day-mode [data-dvp="controls"] [class*="bg-black"],
 html.day-mode #live-player-shell [class*="bg-black"] {
@@ -2231,6 +2234,15 @@ html.day-mode .jv-sp-page { background: var(--sp-bg); color: var(--sp-ink); }
   .jv-sp-head:focus-visible, .jv-sp-tabs button:focus-visible, .jv-sp-reload:focus-visible, .jv-sp-burger:focus-visible { outline-width: 3px; }
 }
 
+/* ── Calm pass: unverified tone, one-line cards, slim sticky hub header. ── */
+.jv-sp-tag.is-qua { border-color: rgba(251, 191, 36, 0.5); background: rgba(120, 60, 10, 0.25); color: #ffd9a0; }
+.jv-sp-group:has(.jv-sp-tag.is-qua) .jv-sp-rule { color: var(--sp-amber); }
+.jv-sp-which { min-width: 0; }
+.jv-sp-which b, .jv-sp-which p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jv-sp-hubbar { position: sticky; top: 0; z-index: 2; background: var(--sp-panel); padding: 8px 0; margin: 0; }
+.jv-sp-live { overflow: hidden; }
+.jv-sp-live b, .jv-sp-live span { overflow-wrap: anywhere; }
+
 /* ============================================================================
    Tamil anime — `/anime/tamil` (`components/anime/AnimeTamil.jsx`)
    The catalogue of piratexplay.cc/language/tamil, read by `lib/animeTamilFeed.js`.
@@ -2494,6 +2506,23 @@ html.day-mode .jv-an-page .jv-an-btn.is-major { color: #fffdfa; }
   .jv-an-card:focus-visible, .jv-an-chip:focus-visible, .jv-an-btn:focus-visible, .jv-an-ep:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 }
 
+/* ── Calm pass: one-line cards and rows, shield toolbar, clamped sheet titles. ── */
+.jv-an-card { min-width: 0; }
+.jv-an-card-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jv-an-sheet-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.jv-an-ep-tag, .jv-an-ep-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jv-an-search { flex: 1 1 220px; min-width: 0; }
+.jv-an-search input { min-width: 0; width: 100%; }
+.jv-an-src-bar { border: 1px solid var(--an-line); border-radius: 14px; background: var(--an-panel); padding: 10px 12px; gap: 10px; }
+.jv-an-src-bar::before { content: "🛡"; font-size: 18px; line-height: 1; align-self: center; }
+.jv-an-src-note { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 11px; }
+.jv-an-src-tools { flex-wrap: wrap; }
+@media (max-width: 767px) {
+  .jv-an-mast { gap: 8px; }
+  .jv-an-title { font-size: 19px; }
+  .jv-an-src-bar { flex-wrap: wrap; }
+}
+
 /* Contrast is a property of the tokens, not of each rule. Measured against the composited panel colour
  * (glass over bg), which is harder than the bare background: night #93a0bf on #0c1117 = 7.24:1, day
  * #5b6376 on #fcffff = 5.98:1 for `--mu-ink-dim`; `--mu-ink` is 17.57:1 and 18.35:1. That is why
@@ -2524,8 +2553,8 @@ html.day-mode .jv-mu {
   --mu-bg: #f2f3f8;
   --mu-ink: #101322;
   --mu-ink-dim: #5b6376;
-  --mu-line: rgba(16, 19, 34, 0.16);
-  --mu-glass: rgba(255, 255, 255, 0.74);
+  --mu-line: rgba(16, 19, 34, 0.22);
+  --mu-glass: #ffffff;
   --mu-glass-2: rgba(255, 255, 255, 0.88);
   --mu-accent: #0b6a92;
   --mu-accent-2: #6a4fb8;
@@ -2799,3 +2828,18 @@ html.day-mode .jv-mu-btn-play { color: #fbfcff; }
   .jv-mu-side-row { font-size: 14px; }
   .jv-mu-tab:focus-visible, .jv-mu-chip:focus-visible, .jv-mu-side-row:focus-visible { outline: 3px solid var(--mu-accent); outline-offset: 2px; }
 }
+
+/* ── Calm pass: nothing wraps into its neighbour, one surface at a time, day mode goes crisp. ── */
+.jv-mu-panel-playing .jv-mu-playing { grid-template-columns: minmax(0, 1fr); }
+.jv-mu-playing-title, .jv-mu-playing-album { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jv-mu-playing-artist { overflow: hidden; }
+.jv-mu-side-queue { max-height: 230px; overflow-y: auto; overscroll-behavior: contain; }
+.jv-mu-side-row { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jv-mu-row-body { min-width: 0; }
+.jv-mu-row-title, .jv-mu-row-artist { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jv-mu-tile-body { min-width: 0; }
+.jv-mu-tile-title, .jv-mu-tile-sub { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jv-mu-panel-playing .jv-mu-transport { position: sticky; bottom: 0; background: var(--mu-bg); padding-bottom: 8px; }
+.jv-mu:has(.jv-mu-lyrics.is-open) .jv-mu-mini { display: none; }
+html.day-mode .jv-mu-shaft { mix-blend-mode: multiply; opacity: 0.32; }
+html.day-mode .jv-mu-bead { opacity: 0.7; }

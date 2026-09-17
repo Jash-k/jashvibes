@@ -51,8 +51,8 @@ export const Menu = memo(function Menu({ title, subtitle, onClose, children, wid
           page, with no Escape and no close button in sight. */}
       <div
         data-dvp="controls"
-        className="absolute inset-0 z-40 cursor-pointer bg-black/35"
-        style={{ touchAction: 'manipulation' }}
+        className="absolute inset-0 z-40 bg-black/35"
+        style={{ touchAction: 'manipulation', cursor: 'pointer' }}
         onPointerDown={() => closeRef.current?.()}
         onClick={() => closeRef.current?.()}
         onContextMenu={(event) => { event.preventDefault(); closeRef.current?.(); }}

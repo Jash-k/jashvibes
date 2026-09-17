@@ -123,8 +123,7 @@ function MatchHead({ item, open, onToggle, now }) {
       <span className="jv-sp-side">
         {item.has?.watch || item.stream ? <span className="jv-sp-tag is-play">stream</span> : null}
         {item.state === 'soon' ? <span className="jv-sp-tag is-soon">{countdownLine(item, now)}</span> : null}
-        {item.state === 'live' && item.staleFeed ? <span className="jv-sp-tag is-stale" title="This card's feed is stale — the score may be old">old feed</span> : null}
-        <span className={`jv-sp-tag is-${chip.tone}`}>{chip.label}</span>
+        {item.state === 'live' && item.staleFeed ? <span className="jv-sp-tag is-qua" title="This feed is too old to trust — the match is quarantined, not live">unverified</span> : <span className={`jv-sp-tag is-${chip.tone}`}>{chip.label}</span>}
         <span className="jv-sp-caret" aria-hidden="true">{open ? '▴' : '▾'}</span>
       </span>
     </button>
@@ -849,11 +848,11 @@ export default function SportsFeed({ initialOpen = null } = {}) {
   fetchHubRef.current = fetchHub;
 
   const staleLive = useMemo(() => {
-    const liveItems = items.filter((item) => item.state === 'live');
-    if (!liveItems.length || !liveItems.every((item) => item.staleFeed)) return '';
+    const count = feed.data?.counts?.unverified || 0;
+    if (!count) return '';
     const dump = (feed.data?.sources || []).find((source) => source.id === 'fancode');
-    return `every live card rides a stale feed${dump?.ageMs ? ` · ${formatAge(dump.ageMs)} old` : ''}`;
-  }, [items, feed.data?.sources]);
+    return `${count} alleged-live match${count === 1 ? '' : 'es'} moved to Unverified below — the feed calling ${count === 1 ? 'it' : 'them'} live is too old to trust${dump?.ageMs ? ` · newest stale dump ${formatAge(dump.ageMs)} old` : ''}`;
+  }, [feed.data?.counts?.unverified, feed.data?.sources]);
 
   const updatedLabel = useMemo(() => {
     const at = Date.parse(feed.data?.generatedAt || '') || Number(feed.data?.cachedAt) || 0;
@@ -905,7 +904,7 @@ export default function SportsFeed({ initialOpen = null } = {}) {
             <p className="jv-sp-banner">The feeds did not answer: {feed.error}. The board stays empty rather than showing yesterday as today. <button type="button" onClick={() => load(true)}>try again</button></p>
           ) : null}
           {feed.data?.unavailable ? <p className="jv-sp-banner is-soft">{feed.data.note || 'no feed answered'} · <button type="button" onClick={() => load(true)}>reload</button></p> : null}
-          {staleLive ? <p className="jv-sp-banner">Live scores may be old — {staleLive}. <button type="button" onClick={() => load(true)}>reload</button></p> : null}
+          {staleLive ? <p className="jv-sp-banner">{staleLive}. <button type="button" onClick={() => load(true)}>reload</button></p> : null}
           {!feed.data && feed.status === 'loading' ? (
             <div className="jv-sp-skels" aria-hidden="true">{[0, 1, 2, 3].map((row) => <span className="jv-sp-skel" key={row} />)}</div>
           ) : null}

@@ -25,6 +25,7 @@ export default function AnimeTamilSource({ path = '', rawBase = '', title = '' }
   // “back one page” safe: a frame with no history of its own sends `history.back()` to the joint session
   // history, which would have thrown the whole app page away instead.
   const [frame, setFrame] = useState({ loaded: false, blocked: 0, label: title || '', timedOut: false, depth: 0 });
+  const [popup, setPopup] = useState('');
   const seenRef = useRef([]);
   const loadedRef = useRef(false);
 
@@ -45,6 +46,7 @@ export default function AnimeTamilSource({ path = '', rawBase = '', title = '' }
       if (event.origin !== window.location.origin && event.origin !== 'null') return;
       const data = event.data;
       if (!data || data.kind !== 'jv-source') return;
+      if (data.popup) setPopup(String(data.popup).slice(0, 220));
       loadedRef.current = true;
       const seen = data.path ? String(data.path) : '';
       if (seen && !seenRef.current.includes(seen)) seenRef.current = [...seenRef.current, seen];
@@ -105,9 +107,14 @@ export default function AnimeTamilSource({ path = '', rawBase = '', title = '' }
               >
                 back one page
               </button>
-              <button type="button" className="jv-an-btn" onClick={() => setReloadKey((value) => value + 1)}>
+              <button type="button" className="jv-an-btn" onClick={() => { setPopup(''); setReloadKey((value) => value + 1); }}>
                 reload this page
               </button>
+              {popup ? (
+                <a className="jv-an-btn is-major" href={popup} target="_blank" rel="noopener noreferrer" title="Open the blocked address in a real tab, once — the frame stays locked down">
+                  allow once <span aria-hidden="true">↗</span>
+                </a>
+              ) : null}
               <a className="jv-an-btn is-quiet" href={rawHref} target="_blank" rel="noopener noreferrer">
                 open raw <span aria-hidden="true">↗</span>
               </a>

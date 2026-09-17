@@ -349,6 +349,7 @@ export function JashPlayer(props) {
     status === 'loading';
   const toastIsActionable = Boolean(resumePrompt) || Boolean(errorInfo) || skipCountdown !== null || Boolean(notice);
   busyRef.current = controlsAreBusy || toastIsActionable;
+  const debugPlayer = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('jvdebug');
   useEffect(() => {
     if (controlsAreBusy || toastIsActionable) {
       setVisible(true);
@@ -670,35 +671,8 @@ export function JashPlayer(props) {
     ],
   );
 
-  // ------------------------------------------------------- wheel (desktop only)
-  // Wheel over the video = volume, Shift+wheel = speed. Plain wheel is only
-  // taken while the player is fullscreen or keyboard-focused, so scrolling a
-  // page past an inline player still scrolls the page.
-  useEffect(() => {
-    const node = wrapRef.current;
-    if (!node?.addEventListener) return undefined;
-    const onWheel = (event) => {
-      if (event.ctrlKey) return; // browser/pinch zoom
-      if (locked) return;
-      const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
-      if (!delta) return;
-      const shift = event.shiftKey;
-      const focused = isFullscreen || (typeof document !== 'undefined' && document.activeElement === node);
-      if (!shift && !focused) return;
-      event.preventDefault();
-      wake();
-      if (shift) {
-        engine.nudgeRate(delta > 0 ? -0.25 : 0.25);
-        flash({ kind: 'badge', label: 'Speed', value: `${(Number(videoEl?.playbackRate) || 1).toFixed(2)}×` });
-        return;
-      }
-      const next = Math.min(1, Math.max(0, (Number(videoEl?.volume) || 0) + (delta > 0 ? -0.05 : 0.05)));
-      engine.setVolume(next);
-      flash({ kind: 'badge', label: 'Volume', value: `${Math.round(next * 100)}%` });
-    };
-    node.addEventListener('wheel', onWheel, { passive: false });
-    return () => node.removeEventListener('wheel', onWheel);
-  }, [engine, flash, isFullscreen, locked, videoEl, wake]);
+  /* No wheel handling on purpose (see usePlayerGestures): the wheel scrolls the page.
+     Volume stays on the slider, the buttons and ↑/↓; speed stays in the settings sheet. */
 
   // ------------------------------------------------------------------ TV remotes
   // On a channel change the element (and sometimes the focused node) is gone,
@@ -1013,7 +987,7 @@ export function JashPlayer(props) {
         <div
           data-dvp="controls"
           className={`pointer-events-none absolute inset-x-0 bottom-0 z-30 flex items-center gap-1.5 bg-gradient-to-t from-black/90 to-transparent px-2 pb-1.5 pt-6 transition-opacity ${
-            visible || status !== 'ready' ? 'opacity-100' : 'opacity-0 group-hover/player:opacity-100 group-hover/player:pointer-events-auto'
+            visible || status !== 'ready' ? 'opacity-100' : 'pointer-events-none opacity-0 invisible'
           }`}
         >
           <button
@@ -1059,11 +1033,17 @@ export function JashPlayer(props) {
         event.preventDefault();
         setContextMenu({ x: event.clientX, y: event.clientY });
       }}
-      className={`group/player jv-native-cursor relative isolate overflow-hidden bg-black text-white outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/60 ${aspectClass(
+      className={`group/player jv-native-cursor relative isolate overflow-hidden bg-black text-white outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/60${visible ? '' : ' jv-idle'} ${aspectClass(
         display.aspect,
       )} ${landscapePhone ? 'jv-landscape-phone' : ''} ${className}`}
     >
       {videoNode}
+
+      {debugPlayer ? (
+        <div className="pointer-events-none absolute left-2 top-2 z-[100] max-w-[75%] whitespace-pre-wrap rounded-lg bg-black/85 p-2 font-mono text-[10px] leading-relaxed text-lime-200">
+          {JSON.stringify({ visible, playing, status, menu: Boolean(menu), ctx: Boolean(contextMenu), scrub: scrubValue, jog: jog?.seconds ?? null, hold2x, locked, notice: Boolean(notice), skip: skipCountdown, resume: Boolean(resumePrompt), err: Boolean(errorInfo), t: Math.round(Number(time) || 0) }, null, 1)}
+        </div>
+      ) : null}
 
       {!audioOnly && !locked ? (
         <div data-dvp="gestures" className="absolute inset-0 z-10 touch-none select-none" {...layerProps} />
@@ -1187,8 +1167,8 @@ export function JashPlayer(props) {
       <div
         data-dvp="controls"
         onPointerDown={wake}
-        className={`absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/95 via-black/60 to-transparent px-2 pb-[max(env(safe-area-inset-bottom),0.625rem)] pt-12 transition-opacity duration-300 group-hover/player:pointer-events-auto group-hover/player:opacity-100 sm:px-3 ${
-          visible ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+        className={`absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/95 via-black/60 to-transparent px-2 pb-[max(env(safe-area-inset-bottom),0.625rem)] pt-12 transition-opacity duration-300 sm:px-3 ${
+          visible ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0 invisible'
         }`}
       >
         {canSeek ? (

@@ -859,3 +859,17 @@ test('surface: only the routes the board calls remain, the old URLs redirect, an
     assert.ok(!component.includes(banned), `the hub must not use ${banned}`);
   }
 });
+
+test('quarantine: a stale feed cannot put a match in Live now, whatever it claims', () => {
+  const staleLive = { source: 'fancode', id: 'old', state: 'live', staleFeed: true, home: 'A', away: 'B' };
+  const freshLive = { source: 'bcci', id: 'new', state: 'live', home: 'C', away: 'D' };
+  const merged = mergeFeed({ now: NOW, batches: [{ items: [staleLive, freshLive] }] });
+  assert.equal(merged.counts.live, 1, 'only the fresh card counts as live');
+  assert.equal(merged.counts.unverified, 1);
+  assert.equal(feedLine(merged.counts), '1 live · 1 unverified');
+  const groups = groupFeed(merged.items, { now: NOW });
+  const ids = groups.map((group) => group.id);
+  assert.ok(!groups.find((group) => group.id === 'live').items.some((item) => item.staleFeed), 'no stale row in Live now');
+  assert.deepEqual(groups.find((group) => group.id === 'unverified').items.map((item) => item.id), ['old']);
+  assert.equal(ids[ids.length - 1], 'unverified', 'quarantine sits last, after Finished');
+});

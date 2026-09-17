@@ -109,7 +109,7 @@ export function usePlayerGestures({
         rectHeight: rect.height,
         startAt: Date.now(),
         zone: tapZone(event.clientX, rect),
-        type: event.pointerType || 'touch',
+        type: !coarse ? 'mouse' : (event.pointerType || 'touch'),
         active: true,
         lastX: event.clientX,
         lastY: event.clientY,
@@ -121,7 +121,7 @@ export function usePlayerGestures({
       holdTimerRef.current = window.setTimeout(startHold, LONG_PRESS_MS);
       return true;
     },
-    [enabled, endHold, locked, onWake, startHold],
+    [coarse, enabled, endHold, locked, onWake, startHold],
   );
 
   const moveGesture = useCallback(
@@ -298,31 +298,15 @@ export function usePlayerGestures({
     [coarse, locked, onToggleFullscreen],
   );
 
-  /** Wheel over the picture: volume, or speed with Shift. */
-  const onWheel = useCallback(
-    (event) => {
-      if (!coarse && Math.abs(event.deltaY) > 0) {
-        event.preventDefault();
-        const step = event.deltaY < 0 ? 0.05 : -0.05;
-        if (event.shiftKey) {
-          engine.nudgeRate(event.deltaY < 0 ? 0.25 : -0.25);
-        } else {
-          const el = videoEl || engine.videoEl;
-          engine.setVolume((Number(el?.volume) || 0) + step);
-          if (el?.muted && step > 0) engine.toggleMute();
-        }
-      }
-    },
-    [coarse, engine, videoEl],
-  );
-
+  /* No wheel handler on purpose: wheel-over-video used to drive volume/speed on desktop, which
+     hijacked page scroll and surprised everyone. Volume lives on the slider, the buttons and the
+     arrow keys; touch-swipe volume (mobile) is classified in moveGesture and is unaffected. */
   const layerProps = {
     onPointerDown: beginGesture,
     onPointerMove: moveGesture,
     onPointerUp: endGesture,
     onPointerCancel: cancelGesture,
     onDoubleClick,
-    onWheel,
   };
 
   return { layerProps, bubble, hold2x, jog, ready };
