@@ -2091,6 +2091,16 @@ html.day-mode [data-dvp="ambient"] { background-color: rgba(0, 0, 0, 0.75) !impo
 .jv-lv-tune { display: grid; place-items: center; width: 100%; min-height: 64px; padding: 8px; }
 .jv-lv-tune img { max-width: 100%; max-height: 56px; object-fit: contain; }
 .jv-lv-tune-none { font-size: 12px; font-weight: 800; color: #71717a; }
+/* The wall itself: a responsive grid, not a single column. The browser rail is 32rem at lg
+   and 36rem at xl, so 3–4 columns of ~130px tiles; the min-widths keep truncate honest. */
+.jv-lv-wall { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
+@media (min-width: 640px) { .jv-lv-wall { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1280px) { .jv-lv-wall { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.jv-lv-wallnote { grid-column: 1 / -1; }
+.jv-lv-tile { position: relative; min-width: 0; }
+.jv-lv-tune > * { min-width: 0; }
+.jv-lv-fav { position: absolute; top: 6px; right: 6px; z-index: 2; width: 26px; height: 26px; border: 0; border-radius: 999px; background: rgba(0, 0, 0, 0.45); color: #a1a1aa; font-size: 13px; line-height: 1; cursor: pointer; }
+.jv-lv-fav.is-fav { color: #fbbf24; }
 
 /* ============================================================================
    Sports — the Single Feed (`components/sports/SportsFeed.js`)

@@ -93,3 +93,12 @@ test('the wall logo is capped, so a raw upload cannot blow up the grid', () => {
   assert.match(css, /\.jv-lv-tune img \{ max-width: 100%; max-height: 56px; object-fit: contain; \}/, 'the logo fits its tile');
   assert.match(css, /\.jv-lv-tune \{ display: grid; place-items: center;/, 'the tile centers it');
 });
+
+test('the wall is a responsive grid, never a single column', () => {
+  const css = read('../app/globals.css');
+  assert.match(css, /\.jv-lv-wall \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/, 'two columns on phones');
+  assert.match(css, /@media \(min-width: 640px\) \{ \.jv-lv-wall \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \}/, 'three on tablets');
+  assert.match(css, /@media \(min-width: 1280px\) \{ \.jv-lv-wall \{ grid-template-columns: repeat\(4, minmax\(0, 1fr\)\); \}/, 'four on desktops');
+  assert.match(css, /\.jv-lv-wallnote \{ grid-column: 1 \/ -1; \}/, 'status notes span the row');
+  assert.match(css, /\.jv-lv-fav \{ position: absolute;/, 'the star floats instead of stacking');
+});
