@@ -111,6 +111,7 @@ const MU_TABS_IDS = ['albums', 'artists', 'playlists'];
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
+  const [centerTab, setCenterTab] = useState('lyrics');
   const [dockVolumeOpen, setDockVolumeOpen] = useState(false);
   const [pocketMode, setPocketMode] = useState(false);
   const [pocketHold, setPocketHold] = useState(0);
@@ -1063,21 +1064,8 @@ const MU_TABS_IDS = ['albums', 'artists', 'playlists'];
             onQuality={(key) => setQuality(key)}
             artistChips={currentArtistChips}
             onArtist={(artist) => { openArtist({ id: artist.id || artist.name, name: artist.name, image: artist.image }); }}
-          >
-            <div className="jv-mu-side">
-              <p className="jv-mu-side-label">queue · {queueTracks.length}</p>
-              <ol className="jv-mu-side-queue">
-                {queueTracks.slice(0, 5).map((track, index) => (
-                  <li key={`${trackKey(track)}-${index}`}>
-                    <button type="button" className={`jv-mu-side-row${trackKey(track) === activeKeyValue ? ' is-on' : ''}`} onClick={() => playTrack(track, queueTracks, true)}>
-                      <span>{index + 1}</span> {track.title || 'Untitled'}
-                    </button>
-                  </li>
-                ))}
-              </ol>
-              <p className="jv-mu-side-note">{playerStatus === 'error' ? 'this stream refused to start — another song will be tried next' : `lock mode · ${wakeLockStatusText()}`}</p>
-            </div>
-          </NowPlayingPanel>
+
+          />
 
           <TransportStrip
             isPlaying={isPlaying}
@@ -1094,7 +1082,7 @@ const MU_TABS_IDS = ['albums', 'artists', 'playlists'];
             onRepeat={cycleRepeat}
             onVolume={(value) => changeVolume(value)}
             onMute={toggleMute}
-            onLyrics={() => { const next = !showLyrics; setShowLyrics(next); if (next) openLyrics(); }}
+            onLyrics={() => { const next = !showLyrics; setShowLyrics(next); setCenterTab(next ? 'lyrics' : 'browse'); if (next) openLyrics(); }}
             lyricsOn={showLyrics}
             onListening={toggleListeningMode}
             listeningOn={listeningMode}
@@ -1103,6 +1091,37 @@ const MU_TABS_IDS = ['albums', 'artists', 'playlists'];
           />
         </MuPanel>
 
+        <div className="jv-mu-center">
+          <div className="jv-mu-centertabs" role="tablist" aria-label="Lyrics or browse">
+            <button type="button" role="tab" aria-selected={centerTab === 'lyrics'}
+              className={`jv-mu-centertab${centerTab === 'lyrics' ? ' is-on' : ''}`}
+              onClick={() => { setCenterTab('lyrics'); setShowLyrics(true); openLyrics(); }}>lyrics</button>
+            <button type="button" role="tab" aria-selected={centerTab === 'browse'}
+              className={`jv-mu-centertab${centerTab === 'browse' ? ' is-on' : ''}`}
+              onClick={() => { setCenterTab('browse'); setShowLyrics(false); }}>browse</button>
+            <button type="button" role="tab" aria-selected={centerTab === 'queue'}
+              className={`jv-mu-centertab jv-mu-centertab-queue${centerTab === 'queue' ? ' is-on' : ''}`}
+              onClick={() => setCenterTab('queue')}>queue · {queueTracks.length}</button>
+          </div>
+          <div className="jv-mu-center-body">
+          {centerTab === 'lyrics' ? (
+        <MuPanel as="aside" name="lyrics">
+          <LyricsPanel
+            rows={lyricRows.length ? lyricRows : plainLyricLines}
+            open={showLyrics}
+            autoScroll={lyricAutoScroll}
+            onToggleAutoScroll={() => setLyricAutoScroll((current) => !current)}
+            blur={lyricBlur}
+            onBlurToggle={() => setLyricBlur((current) => !current)}
+            onClose={() => { setShowLyrics(false); setCenterTab('browse'); }}
+            onJump={(time) => { if (Number.isFinite(time)) seekTo(time); }}
+            status={lyricsStatus === 'ready' && !syncedLyricLines.length && !lyricRows.length ? 'the source has no timed lyrics for this song' : lyricsStatus === 'error' ? 'lyrics could not be read; the panel will retry when you open it again' : ''}
+            loading={lyricsStatus === 'loading'}
+            note={playingTrack ? 'open lyrics to follow the line' : 'nothing playing'}
+          />
+        </MuPanel>
+          ) : null}
+          {centerTab === 'browse' ? (
         <div className="jv-mu-browse">
           {selectedCollection ? (
             <MuPanel as="div" name="collection">
@@ -1266,22 +1285,40 @@ const MU_TABS_IDS = ['albums', 'artists', 'playlists'];
             </MuPanel>
           ) : null}
         </div>
+          ) : null}
+          {centerTab === 'queue' ? (
+            <div className="jv-mu-queuepane">
+              <p className="jv-mu-side-label">queue · {queueTracks.length}</p>
+              <ol className="jv-mu-side-queue">
+                {queueTracks.map((track, index) => (
+                  <li key={`pane-${trackKey(track)}-${index}`}>
+                    <button type="button" className={`jv-mu-side-row${trackKey(track) === activeKeyValue ? ' is-on' : ''}`} onClick={() => playTrack(track, queueTracks, true)}>
+                      <span>{index + 1}</span> {track.title || 'Untitled'}
+                    </button>
+                  </li>
+                ))}
+              </ol>
+              <p className="jv-mu-side-note">{playerStatus === 'error' ? 'this stream refused to start — another song will be tried next' : `lock mode · ${wakeLockStatusText()}`}</p>
+            </div>
+          ) : null}
+          </div>
+        </div>
 
-        <MuPanel as="aside" name="lyrics">
-          <LyricsPanel
-            rows={lyricRows.length ? lyricRows : plainLyricLines}
-            open={showLyrics}
-            autoScroll={lyricAutoScroll}
-            onToggleAutoScroll={() => setLyricAutoScroll((current) => !current)}
-            blur={lyricBlur}
-            onBlurToggle={() => setLyricBlur((current) => !current)}
-            onClose={() => setShowLyrics(false)}
-            onJump={(time) => { if (Number.isFinite(time)) seekTo(time); }}
-            status={lyricsStatus === 'ready' && !syncedLyricLines.length && !lyricRows.length ? 'the source has no timed lyrics for this song' : lyricsStatus === 'error' ? 'lyrics could not be read; the panel will retry when you open it again' : ''}
-            loading={lyricsStatus === 'loading'}
-            note={playingTrack ? 'open lyrics to follow the line' : 'nothing playing'}
-          />
-        </MuPanel>
+        <section className="jv-mu-strip" aria-label="Up next">
+          <div className="jv-mu-strip-head">
+            <p className="jv-mu-side-label">queue · {queueTracks.length}</p>
+            <p className="jv-mu-side-note">{playerStatus === 'error' ? 'this stream refused to start — another song will be tried next' : `lock mode · ${wakeLockStatusText()}`}</p>
+          </div>
+          <ol className="jv-mu-side-queue jv-mu-strip-queue">
+            {queueTracks.slice(0, 12).map((track, index) => (
+              <li key={`strip-${trackKey(track)}-${index}`}>
+                <button type="button" className={`jv-mu-side-row${trackKey(track) === activeKeyValue ? ' is-on' : ''}`} onClick={() => playTrack(track, queueTracks, true)}>
+                  <span>{index + 1}</span> {track.title || 'Untitled'}
+                </button>
+              </li>
+            ))}
+          </ol>
+        </section>
 
         <footer className="jv-mu-foot">
           <p>Streams are resolved by this app and fetched by this browser; nothing is stored on the server. Quality switching reloads the file from the top — that is the source's limit, not a bug.</p>

@@ -268,3 +268,22 @@ test('no control sits inside a control, in either file', () => {
   assert.match(curtains, /<\/button>\n {6}\{onFavorite \? \(\n {8}<button/,
     'favourite is a sibling of the play button in every track row');
 });
+
+test('the lounge centers lyrics and browse behind one tab state, with the queue in a strip', () => {
+  assert.match(section, /const \[centerTab, setCenterTab\] = useState\('lyrics'\);/, 'lyrics first, as the design promises');
+  assert.match(section, /role="tablist" aria-label="Lyrics or browse"/, 'the center tabs are announced');
+  assert.match(section, /aria-selected=\{centerTab === 'lyrics'\}[\s\S]*aria-selected=\{centerTab === 'browse'\}[\s\S]*aria-selected=\{centerTab === 'queue'\}/, 'all three tabs report selection');
+  assert.match(section, /setCenterTab\('lyrics'\); setShowLyrics\(true\); openLyrics\(\)/, 'the lyrics tab opens and loads the panel');
+  assert.match(section, /setCenterTab\('browse'\); setShowLyrics\(false\)/, 'browse parks the panel');
+  assert.match(section, /onClose=\{\(\) => \{ setShowLyrics\(false\); setCenterTab\('browse'\); \}\}/, 'closing lyrics lands back on browse');
+  assert.match(section, /className="jv-mu-strip" aria-label="Up next"/, 'the queue strip keeps its label');
+  assert.match(section, /queueTracks\.slice\(0, 12\)\.map/, 'the strip shows a dozen, scrollable');
+  assert.match(section, /className="jv-mu-queuepane"/, 'phones get the full queue as a third tab');
+});
+
+test('the lounge grid pins chrome and scrolls only the panes', () => {
+  assert.match(css, /grid-template-areas: "mast mast" "tabs tabs" "deck center" "strip strip" "foot foot"/, 'deck and center share the middle row');
+  assert.match(css, /\.jv-mu-center-body \{[^}]*overflow-y: auto/, 'the center body is the scroller');
+  assert.match(css, /\.jv-mu-centertab-queue \{ display: none; \}/, 'no queue tab where the strip shows');
+  assert.ok(!css.includes('.jv-mu-panel-lyrics { position: fixed'), 'lyrics are no longer a docked sheet');
+});
