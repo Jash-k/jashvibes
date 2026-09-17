@@ -36,6 +36,10 @@ const ANIME_REDIRECT = [{ source: '/anime', destination: '/anime/tamil', permane
 
 const nextConfig = {
   reactStrictMode: true,
+  // Emit .next/standalone so the Docker runtime image needs no node_modules
+  // (see Dockerfile multi-stage build). `next start` (Render Node deploy)
+  // still works normally with this option set.
+  output: 'standalone',
   // Do not advertise the framework in response headers.
   poweredByHeader: false,
   async redirects() {
