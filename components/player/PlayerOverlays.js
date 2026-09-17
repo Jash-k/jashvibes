@@ -195,7 +195,7 @@ export const StatsPanel = memo(function StatsPanel({ stats, model, source, statu
   );
 });
 
-export const TopBar = memo(function TopBar({ title, subtitle, live, liveLabel = 'LIVE', canSeek, dvrMinutes, visible, badges = [], onPrev, onNext, children }) {
+export const TopBar = memo(function TopBar({ title, subtitle, visible, badges = [], onPrev, onNext, children }) {
   return (
     <div
       data-dvp="controls"
@@ -223,39 +223,9 @@ export const TopBar = memo(function TopBar({ title, subtitle, live, liveLabel = 
           </button>
         ) : null}
       </div>
-      {/* One live marker per player, never two. The bar row below the title used to repeat exactly
-          what LiveBadge already draws in the control row for a non-seekable stream — same red ping,
-          same word — which is what looked like a glitch while a channel was loading. It only appears
-          now when the control row is showing a DVR track instead of that badge, so a timeshifted feed
-          keeps a LIVE indicator and a plain simulcast keeps exactly one. */}
-      {live && canSeek ? (
-        <p className="mt-1 flex items-center gap-2 pl-1">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
-          </span>
-          <span className="text-[10px] font-black uppercase tracking-[0.22em] text-red-300">{liveLabel}</span>
-        </p>
-      ) : null}
+      {/* No live marker in the chrome: on a live-TV page the badge and the catch-up button were
+          chrome for something the viewer already knows, so both were deleted. */}
       {children}
-    </div>
-  );
-});
-
-export const LiveBadge = memo(function LiveBadge({ label = 'LIVE', dvrMinutes, onCatchUp }) {
-  return (
-    <div className="flex items-center gap-2 py-1">
-      <span className="relative flex h-2 w-2">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
-        <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
-      </span>
-      <span className="text-[11px] font-black uppercase tracking-[0.22em] text-red-300">{label}</span>
-      {dvrMinutes >= 2 ? <span className="text-[10px] font-bold uppercase tracking-wider text-white/45">timeshift {Math.round(dvrMinutes)} min</span> : null}
-      {onCatchUp ? (
-        <button type="button" onClick={onCatchUp} className="ml-auto min-h-[40px] rounded-full border border-white/15 px-3 text-[10px] font-black uppercase tracking-wider text-white/80 transition hover:border-red-400/50 hover:text-red-200">
-          Go live
-        </button>
-      ) : null}
     </div>
   );
 });

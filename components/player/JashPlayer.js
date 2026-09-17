@@ -42,7 +42,6 @@ import {
   CenterPulse,
   ErrorCard,
   HoldBadge,
-  LiveBadge,
   LockedOverlay,
   NextEpisodePill,
   NoticeBar,
@@ -1000,7 +999,7 @@ export function JashPlayer(props) {
             <Icon d={playing ? PATHS.pause : PATHS.play} className="h-4 w-4" />
           </button>
           <span className="min-w-0 flex-1 truncate text-[10px] font-black uppercase tracking-[0.18em] text-white/70">
-            {live ? liveLabel : fmtTime(shownTime - (win?.start || 0))}
+            {live && !canSeek ? null : fmtTime(shownTime - (win?.start || 0))}
           </span>
           <button
             type="button"
@@ -1108,10 +1107,6 @@ export function JashPlayer(props) {
       <TopBar
         title={display.title || title}
         subtitle={display.subtitle}
-        live={live}
-        liveLabel={liveLabel}
-        canSeek={canSeek}
-        dvrMinutes={(model.dvrSeconds || 0) / 60}
         visible={visible || status !== 'ready'}
         onPrev={onPrev}
         onNext={onNext}
@@ -1208,15 +1203,6 @@ export function JashPlayer(props) {
               </p>
             ) : null}
           </div>
-        ) : live ? (
-          <LiveBadge
-            label={liveLabel}
-            dvrMinutes={(model.dvrSeconds || 0) / 60}
-            onCatchUp={() => {
-              const window2 = readSeekWindow(videoEl);
-              if (window2) engine.seekTo(window2.end - 3);
-            }}
-          />
         ) : null}
 
         <div className="mt-1 flex items-center gap-0.5 sm:gap-1.5">

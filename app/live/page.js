@@ -515,7 +515,19 @@ export default function LiveTVPage() {
                 <span className="rounded-full bg-white/[0.06] px-2 py-1 text-[10px] font-bold text-zinc-400">{filteredChannels.length}</span>
               </div>
             </div>
-            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2">
+            {/* Phones and tablets get one dropdown; the button grid is desktop-only. */}
+            <select
+              value={category}
+              onChange={(event) => setCategory(event.target.value)}
+              aria-label="Catalog"
+              className="mt-2 w-full rounded-xl border border-white/10 bg-black px-3 py-2 text-sm font-bold text-white outline-none focus:border-red-500 lg:hidden"
+            >
+              <option value="all">All · {channels.length}</option>
+              {catalogOptions.map((catalog) => (
+                <option key={catalog.id} value={catalog.id}>{catalog.icon} {catalog.name} · {catalog.count}</option>
+              ))}
+            </select>
+            <div className="mt-2 grid grid-cols-2 gap-2 max-lg:hidden sm:grid-cols-3 lg:grid-cols-2">
               <button
                 type="button"
                 onClick={() => setCategory('all')}

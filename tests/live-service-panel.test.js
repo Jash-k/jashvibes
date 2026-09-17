@@ -52,12 +52,15 @@ test('the preview player fills the box it is given', () => {
   assert.match(page, /has no stream URL to preview/, 'a channel without a URL says so instead of showing an empty frame');
 });
 
-test('a live broadcast is marked once per player', () => {
-  const topBar = overlays.slice(overlays.indexOf('export const TopBar'), overlays.indexOf('export const LiveBadge'));
-  assert.match(topBar, /\{live && canSeek \? \(/, 'the header only adds LIVE when the bar has a seek track instead of the badge');
-  assert.ok(!topBar.includes('live && !canSeek'), 'the duplicate ping+LIVE row for a simulcast is gone');
-  assert.equal(overlays.split('animate-ping').length - 1, 2, 'two ping dots exist: one per live marker style, never both at once');
+test('a live broadcast carries no marker in the player chrome', () => {
+  const topBar = overlays.slice(overlays.indexOf('export const TopBar'), overlays.indexOf('export const SkipButton'));
+  assert.ok(!topBar.includes('liveLabel'), 'the header draws no LIVE word');
+  assert.ok(!topBar.includes('animate-ping'), 'and no ping dot next to the title');
+  assert.ok(!overlays.includes('LiveBadge'), 'the badge component (word + ping + Go live) is deleted');
+  assert.ok(!overlays.includes('Go live'), 'no catch-up button anywhere in the chrome');
+  assert.equal(overlays.split('animate-ping').length - 1, 0, 'no ping dots remain in the chrome');
   assert.ok(!page.includes('jv-badge-live'), 'the card under the player no longer repeats the same symbol');
+  assert.match(read('../components/player/JashPlayer.js'), /\{live && !canSeek \? null : fmtTime/, 'a plain simulcast shows no clock either — only a DVR window earns one');
 });
 
 test('the homepage has no client-side filter rail', () => {

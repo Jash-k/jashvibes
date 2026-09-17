@@ -71,7 +71,7 @@ function DayNightToggle() {
     let initial = 'night';
     try {
       const saved = window.localStorage.getItem('jash_theme_mode');
-      initial = saved || (window.matchMedia?.('(prefers-color-scheme: light)')?.matches ? 'day' : 'night');
+      initial = saved === 'day' || saved === 'night' ? saved : 'night';
     } catch {}
     setMode(initial);
     document.documentElement.classList.toggle('day-mode', initial === 'day');

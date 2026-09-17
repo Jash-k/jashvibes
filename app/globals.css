@@ -1929,14 +1929,17 @@ html.day-mode .jv-st-page { background: var(--st-bg); color: var(--st-ink); }
 
 /* ============================================================================
    Live TV — Broadcast Wall (`app/live/page.js`)
-   The page never scrolls: the section is exactly the viewport minus the header
-   (sm+) and the 72 px mobile dock (<lg), and only the wall (plus the left pane
-   on short desktop windows) scrolls inside its own box. Desktop gets a dense
-   logo wall, mobile a 3-column grid, TV (>=1700 px) oversized tiles and focus.
+   The body never scrolls. Below lg the section is one scrolling region (the
+   pinned sticky strip keeps the player on top while the wall flows beneath
+   it — a phone cannot fit player + card + browser + wall any other way);
+   on lg+ the section locks and only the wall (plus the left pane on short
+   windows) scrolls inside its own box. Desktop gets a dense logo wall,
+   mobile a 3-column grid, TV (>=1700 px) oversized tiles and focus.
    ========================================================================= */
 .jv-lv-section {
   height: calc(100dvh - 76px - env(safe-area-inset-bottom, 0px));
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 @media (min-width: 640px) {
   .jv-lv-section {
@@ -1946,6 +1949,7 @@ html.day-mode .jv-st-page { background: var(--st-bg); color: var(--st-ink); }
 @media (min-width: 1024px) {
   .jv-lv-section {
     height: calc(100dvh - var(--live-header-h, 84px) - 2.5rem);
+    overflow: hidden;
   }
   .jv-lv-left {
     max-height: 100%;
@@ -1980,6 +1984,11 @@ html.day-mode .jv-st-page { background: var(--st-bg); color: var(--st-ink); }
 }
 @media (min-width: 1700px) {
   .jv-lv-wall { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 12px; }
+}
+@media (max-width: 1023px) {
+  /* The wall flows in the section's single scroll instead of self-scrolling. */
+  .jv-lv-wallcol { flex: none; display: block; }
+  .jv-lv-wall { overflow: visible; }
 }
 .jv-lv-wallnote { grid-column: 1 / -1; }
 .jv-lv-tile { position: relative; min-width: 0; }
