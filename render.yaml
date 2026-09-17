@@ -1,0 +1,46 @@
+# Render Blueprint — JaSH ViBeS on the Node runtime (no Docker).
+#
+# Deploy: Render dashboard → New → Blueprint → point at this repo, then fill
+# the `sync: false` env vars in the dashboard (DB, TMDB, PASS). Everything the
+# app can derive on its own (keep-alive URL, external port) stays unset.
+#
+# Notes
+# - `npm ci --include=dev`: the build needs tailwind/postcss, but Render sets
+#   NODE_ENV=production for Node services — without --include=dev the install
+#   would strip them and the CSS build would fail.
+# - `npm run start` binds -H 0.0.0.0 -p ${PORT:-7860}; Render supplies PORT.
+# - /api/health answers without auth, so it is a valid health check path.
+# - `output: 'standalone'` in next.config.mjs only affects the Docker image;
+#   `next start` is the normal Node path.
+
+services:
+  - type: web
+    name: jashvibes
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      # Required — set real values in the dashboard (sync: false = prompt).
+      - key: DB
+        sync: false
+      - key: TMDB
+        sync: false
+      - key: PASS
+        sync: false
+      # Recommended — a panel password only if you want one; unset = disabled
+      # (no default password exists any more).
+      - key: LIVE_TV_PASS
+        sync: false
+      # Revocation knob — change this string any time to invalidate every
+      # issued session cookie / ?token= link without changing the password.
+      - key: SESSION_EPOCH
+        sync: false
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=384
