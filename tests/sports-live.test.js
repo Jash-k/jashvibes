@@ -156,86 +156,60 @@ describe('sportsLive resolver', () => {
   });
 });
 
-describe('On Air Grid board contract', () => {
+describe('Live Streams board contract (round 25)', () => {
   const feed = read('components/sports/SportsFeed.js');
 
-  test('the hero exists exactly once, is fed by the resolver, and its WATCH button takes focus on load', () => {
-    assert.equal((feed.match(/jv-sg-hero\b/g) || []).length >= 2, true, 'hero CSS hooks present');
-    assert.match(feed, /import \{ heroNote, otherLiveEntries, pickHeroSource, rankPlayableSources \} from '@\/lib\/sportsLive';/);
-    assert.match(feed, /autoFocus=\{heroIsMatch\}/, 'the hero button owns focus the moment the page loads — one D-pad press on a TV');
-    assert.match(feed, /▶ WATCH LIVE/);
-    assert.match(feed, /aria-label=\{`Watch live: \$\{hero\.label\}`\}/);
+  test('the wall is streams only: no scores, fixtures, results, hubs or channels anywhere', () => {
+    for (const gone of ['jv-sg-hero', 'Also live', 'Finished', 'Today', 'jv-sg-chans', 'channelReadiness', 'channelLine', 'CHANNELS_URL', 'hubTabs', 'fetchHub', 'ReplaysBox', 'resolveVideo', 'nextUp', 'countdownLine']) {
+      assert.ok(!feed.includes(gone), `the minimal board must not contain "${gone}"`);
+    }
   });
 
-  test('watching is the stage: one JashPlayer mount outside the hub, the Video tab keeps its own', () => {
-    assert.equal((feed.match(/<JashPlayer/g) || []).length, 2, 'stage + hub Video tab — the channels box lost its inline player');
-    assert.match(feed, /jv-sg-stage/);
-    assert.match(feed, /setPlaying\(null\)/, 'stop returns to the board');
+  test('one stage, one player, the chain and its honesty survive the rewrite', () => {
+    assert.equal((feed.match(/<JashPlayer/g) || []).length, 1, 'the stage is the only player');
+    assert.match(feed, /import \{ rankPlayableSources \} from '@\/lib\/sportsLive';/);
+    assert.match(feed, /onFatal: onStageFatal/, 'a dead attempt moves the stage down the chain');
+    assert.match(feed, /onStatus: onStageStatus/, 'connecting/buffering is printed instead of a black frame');
+    assert.match(feed, /switching to/, 'the switch is announced');
+    assert.match(feed, /This stream did not open/, 'an exhausted chain gets the honest card with Try again');
     assert.match(feed, /createLiveTvPolicy\(streamChannel\(/);
   });
 
-  test('the token hot-swap is scheduled, not polled: two reads as expiry nears, then a quiet URL swap', () => {
-    assert.match(feed, /5 \* 60_000/, 'first refresh five minutes before the token dies');
-    assert.match(feed, /45_000/, 'second refresh 45 seconds before');
-    assert.match(feed, /token refreshed · back on the live edge/);
-    assert.match(feed, /swapTimersRef/, 'the timers are cleared on unmount and on every swap');
+  test('the deep link is a remote control: /sports/hub/{source}/{id} opens that stream', () => {
+    assert.match(feed, /autoOpened\.current = key;/);
+    assert.match(feed, /initialOpen/);
   });
 
-  test('the grid sections are content-gated, channels are not on the board, and the card is honest', () => {
-    for (const label of ['Also live', 'Today', 'Finished']) {
-      assert.ok(feed.includes(label), `grid section "${label}" exists`);
-    }
-    assert.ok(!feed.includes('jv-sg-chans'), 'the channels section is gone from the sports board entirely');
-    assert.ok(!/channelReadiness|channelLine|channelCounts/.test(feed), 'no key vocabulary anywhere on the sports page');
-    assert.ok(!feed.includes('CHANNELS_URL'), 'the board no longer even asks the channels route');
-    assert.match(feed, /disabled=\{!entry\}/, 'a card with nothing to play shows a disabled button, not a broken promise');
-  });
-
-  test('the sources walls are gone: healthy feeds are named, asleep ones are one quiet line', () => {
-    assert.ok(!/className=\{source\.ok \? 'ok' : 'no'\}/.test(feed), 'no red per-source failure list');
-    assert.match(feed, /score feed.*asleep/, 'sleeping feeds collapse to one muted sentence');
-    assert.match(feed, /on air via/, 'healthy playlists are named in the footer');
-    assert.match(feed, /the live playlists carry the board/, 'the sheet says what is carrying the board');
-  });
-
-  test('playback is a chain: direct, then the proxy, then the next feed, then the truth', () => {
-    assert.match(feed, /onFatal: onStageFatal/, 'a dead attempt moves the stage down the chain');
-    assert.match(feed, /onStatus: onStageStatus/, 'the stage shows connecting\/buffering instead of a black frame');
-    assert.match(feed, /switching to/, 'the switch is announced');
-    assert.match(feed, /This stream did not open/, 'exhausted chains get the honest card, with a Try again');
-    assert.match(feed, /chainByMatch/, 'grid cards get the same fallback depth as the hero');
-    assert.match(feed, /retries through this server/, 'the proxy step is printed, not hidden');
-  });
-
-  test('the empty-hero state is the next fixture with a countdown — never a fake play button', () => {
-    assert.match(feed, /Nothing is on air yet · next fixture/);
-    assert.match(feed, /countdownLine\(nextUp, now\)/);
-  });
-
-  test('the truth rules survive the rebuild: no invented scores, no storage reads, no frames', () => {
+  test('the truth rules survive: no invented state, no storage, no frames, quiet sources', () => {
     for (const banned of ['iframe', 'localStorage', 'dangerouslySetInnerHTML', '/match-center', '/sports/player']) {
       const code = feed.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, '').replace(/^\s*\/\/.*$/gm, '');
       assert.ok(!code.includes(banned), `the board must not use ${banned}`);
     }
-    assert.match(feed, /seededHub\.current = key;/, 'deep links still fetch their own hub');
+    assert.match(feed, /Nothing is on air right now/, 'an empty wall says so, plainly');
+    assert.match(feed, /on air via/, 'healthy playlists are named in the footer');
+    assert.match(feed, /asleep/, 'sleeping playlists are one quiet phrase, not a wall');
+    assert.match(feed, /Only streams whose manifest answered/, 'the working-streams promise is printed');
   });
 });
 
 describe('On Air Grid styles', () => {
   const css = read('app/globals.css');
 
-  test('the jv-sg block lives inside the sports slice and obeys its contract', () => {
+  test('the jv-sg/jv-sc block lives inside the sports slice and obeys its contract', () => {
     const block = css.slice(css.indexOf('.jv-sp-page {'));
-    assert.ok(block.includes('.jv-sg-hero {'), 'the grid styles are part of the sports block');
+    assert.ok(block.includes('.jv-sc-card {'), 'the wall styles are part of the sports block');
     const code = block.replace(/\/\*[\s\S]*?\*\//g, '');
     const sg = code.slice(code.indexOf('.jv-sg-'));
-    assert.ok(!sg.includes('!important'), 'no !important in jv-sg either');
+    assert.ok(!sg.includes('!important'), 'no !important in jv-sg/jv-sc either');
     const sizes = [...sg.matchAll(/font-size: ([\d.]+)px/g)].map(([, value]) => Number(value));
-    assert.ok(sizes.length > 10, 'the grid sets real type sizes');
-    assert.ok(Math.min(...sizes) >= 11, `smallest grid type is ${Math.min(...sizes)}px`);
-    assert.match(css, /\.jv-sg-watch:focus-visible \{ outline: 3px solid var\(--sp-amber\)/, 'the amber D-pad ring on the one button that matters');
-    assert.match(css, /\.jv-sg-play:focus-visible \{ outline: 3px solid var\(--sp-amber\)/, 'and on every grid play button');
+    assert.ok(sizes.length > 10, 'the wall sets real type sizes');
+    assert.ok(Math.min(...sizes) >= 11, `smallest wall type is ${Math.min(...sizes)}px`);
+    assert.match(css, /\.jv-sc-play:focus-visible \{ outline: 3px solid var\(--sp-amber\)/, 'the amber D-pad ring on the play button that matters');
+    assert.match(css, /\.jv-sg-watch:focus-visible \{ outline: 3px solid var\(--sp-amber\)/, 'and on the stage retry button');
+    assert.match(css, /\.jv-sg-feedchip:focus-visible \{ outline: 3px solid var\(--sp-amber\)/, 'and on the language/zap chips');
+    assert.match(css, /\.jv-sc-play \{[^}]*min-height: 44px/, 'touch targets stay at 44 px or more');
     assert.match(css, /@media \(min-width: 1600px\)/, '10-foot sizes scale up on big screens');
+    assert.match(css, /@media \(max-width: 860px\)/, 'and tighten on phones');
   });
 
   test('readiness labels keep their meaning on the grid cards', () => {

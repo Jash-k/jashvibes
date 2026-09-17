@@ -133,6 +133,31 @@ describe('normalizeM3uEntry: playlist rows become the ONE board shape', () => {
     assert.equal(item.source, 'sonyliv');
   });
 
+  test('only working streams survive: an entry whose manifest does not answer is hidden, and said', async () => {
+    const playlist = [
+      '#EXTM3U',
+      freshFanDate(),
+      '#EXTINF:-1 tvg-id="1" tvg-name="Alive XI v Dead XI" tvg-language="English" group-title="Cricket",ENG | Alive XI v Dead XI',
+      'https://alive.example/live.m3u8',
+      '#EXTINF:-1 tvg-id="2" tvg-name="Ended A v Ended B" tvg-language="English" group-title="Cricket",ENG | Ended A v Ended B',
+      'https://dead.example/live.m3u8',
+    ].join('\n');
+    const calls = [];
+    const fetchImpl = async (url) => {
+      calls.push(String(url));
+      if (String(url).includes('dead.example')) return { ok: false, status: 404, json: async () => ({}), text: async () => 'not found' };
+      if (String(url).includes('alive.example')) return { ok: true, status: 200, json: async () => ({}), text: async () => '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nseg.ts' };
+      if (String(url).includes('.m3u')) return { ok: true, status: 200, json: async () => ({}), text: async () => playlist };
+      return { ok: false, status: 404, json: async () => ({}), text: async () => 'nope' };
+    };
+    const result = await loadM3uSource({ kind: 'fancode', url: 'https://example/fan.m3u', fetchImpl, env: {}, now: NOW });
+    assert.equal(result.ok, true);
+    assert.equal(result.rows.length, 1, 'the dead entry is hidden before it is ever a card');
+    assert.equal(result.rows[0].id, '1');
+    assert.match(result.note, /1 entry not answering \(hidden\)/, 'what was hidden is said, not silently dropped');
+    assert.equal(calls.filter((url) => url.includes('.m3u8')).length, 2, 'every entry was asked, with its own headers');
+  });
+
   test('loadM3uSource drops a provably old playlist (ok:false, rows still described)', async () => {
     const calls = [];
     const fetchImpl = async (url) => {
