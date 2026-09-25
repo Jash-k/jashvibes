@@ -17,9 +17,6 @@ import dynamic from 'next/dynamic';
  *
  * The placeholder is the player's own shell styling so the sheet that holds it
  * does not visibly "flash in" when the real component swaps in.
- *
- * /player-lab imports JashPlayer directly on purpose: it is the fixture
- * harness for the player itself and should never test the lazy wrapper.
  */
 
 function PlayerLoadingShell() {

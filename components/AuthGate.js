@@ -30,9 +30,9 @@ async function fetchJsonWithRetry(url, options = {}, retries = 2) {
         const isHtml = contentType.includes('text/html') || /^\s*</.test(text);
         const error = new Error(
           response.status === 503
-            ? 'Hugging Face is temporarily unavailable (503). Wait a few seconds and try again.'
+            ? 'The server is temporarily unavailable (503). Wait a few seconds and try again.'
             : isHtml
-              ? 'Server returned an HTML error page instead of JSON. This is usually a Hugging Face proxy/startup issue; try again in a few seconds.'
+              ? 'Server returned an HTML error page instead of JSON. This is usually a proxy/startup issue; try again in a few seconds.'
               : `Server returned ${contentType || 'a non-JSON response'} instead of JSON.`,
         );
         error.status = response.status;

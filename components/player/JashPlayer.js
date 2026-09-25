@@ -7,7 +7,6 @@
  *   /classics/[id]    <JashPlayer playbackPolicy={createStreamPolicy(stream)} />
  *   /live             <JashPlayer playbackPolicy={createLiveTvPolicy(ch)} compact />
  *   /stremio-watch    <JashPlayer source={{url}} library={{watchKey, entry}} />
- *   /sports          <JashPlayer source={{url}} playbackPolicy={createLiveTvPolicy(channel)} live />
  *
  * It owns UI only. Media behaviour lives in usePlaybackEngine, and
  * source-specific rules (Jio tokens, ClearKeys, Pocket proxying) live in

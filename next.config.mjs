@@ -15,48 +15,36 @@ const securityHeaders = [
 const apiSecurityHeaders = securityHeaders.filter((h) => h.key !== 'X-Robots-Tag');
 
 /*
- * The sports board used to be three surfaces (/match-center, /match/live and a standalone /sports/player).
- * The Single Feed design replaced all three with one rail tab at /sports, and the old pages are deleted —
- * these redirect the URLs people have bookmarked or that are still inside a service worker's cache.
- * Not permanent on purpose: a 301 gets pinned by the browser for months and cannot be walked back.
+ * Sections that were removed outright (`/sports`, `/match-center`, `/anime`, …). The URLs live in
+ * people's bookmarks and in a service worker's cache, so they redirect to the homepage instead of
+ * 404ing. Not permanent on purpose: a 301 gets pinned by the browser for months and cannot be
+ * walked back.
  */
-const SPORTS_REDIRECTS = [
-  { source: '/match-center/:path*', destination: '/sports', permanent: false },
-  { source: '/match/live', destination: '/sports', permanent: false },
-  { source: '/match/:path*', destination: '/sports', permanent: false },
-  { source: '/sports/player/:path*', destination: '/sports', permanent: false },
+const REMOVED_SECTION_REDIRECTS = [
+  { source: '/sports/:path*', destination: '/', permanent: false },
+  { source: '/sports', destination: '/', permanent: false },
+  { source: '/match-center/:path*', destination: '/', permanent: false },
+  { source: '/match/:path*', destination: '/', permanent: false },
+  { source: '/anime/:path*', destination: '/', permanent: false },
+  { source: '/anime', destination: '/', permanent: false },
 ];
-
-/*
- * `/anime` was a TMDB animation catalogue. The section is gone — Tamil anime at `/anime/tamil` is the
- * anime destination now — and the old URL redirects rather than 404ing, because it sits in people's
- * bookmarks and in a service worker's cache. Not permanent on purpose: a 301 gets pinned for months.
- */
-const ANIME_REDIRECT = [{ source: '/anime', destination: '/anime/tamil', permanent: false }];
 
 const nextConfig = {
   reactStrictMode: true,
-  // Emit .next/standalone so the Docker runtime image needs no node_modules
-  // (see Dockerfile multi-stage build). `next start` (Render Node deploy)
-  // still works normally with this option set.
+  // Emit .next/standalone so a container image would need no node_modules.
+  // `next start` (the Render Node deploy) works normally with this option set.
   output: 'standalone',
   // Do not advertise the framework in response headers.
   poweredByHeader: false,
   async redirects() {
-    return [...SPORTS_REDIRECTS, ...ANIME_REDIRECT];
+    return [...REMOVED_SECTION_REDIRECTS];
   },
   async headers() {
     return [
       {
-        // Every API response is unframmable except the one page proxy, which exists to be framed by
-        // /anime/tamil/source. `X-Frame-Options` here would beat the SAMEORIGIN the route sets, because
-        // config headers are applied after the response, so that path is skipped and restated below.
-        source: '/api/((?!anime/tamil/page).*)',
+        // Every API response is unframmable.
+        source: '/api/:path*',
         headers: apiSecurityHeaders,
-      },
-      {
-        source: '/api/anime/tamil/page',
-        headers: apiSecurityHeaders.filter((h) => h.key !== 'X-Frame-Options'),
       },
       {
         source: '/((?!api/).*)',

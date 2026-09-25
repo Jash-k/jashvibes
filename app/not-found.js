@@ -3,7 +3,7 @@ import Link from 'next/link';
 /*
  * app/not-found.js — the branded 404.
  *
- * The app redirects its own retired URLs (/anime, /match-center/*) via
+ * The app redirects its own retired URLs (/anime, /sports, /match-center/*) via
  * next.config, so a 404 now means a stale bookmark or a mistyped hash —
  * both are people who meant to reach the app. The default Next 404 is an
  * unstyled dead end; this one keeps the cinema chrome and offers the two
