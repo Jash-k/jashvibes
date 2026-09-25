@@ -195,7 +195,7 @@ export default function TvTab() {
         <div className="jv-ad-toolbar" style={{ marginTop: 0 }}>
           <div style={{ flex: 1, minWidth: 220 }}>
             <p className="jv-ad-card-title">Auto-sync sources</p>
-            <p className="jv-ad-card-sub">Re-syncs every live source on a timer (default hourly — the GitHub sports packs regenerate their stream URLs every few hours) and health-probes the cricket pack after each pass. v10.2.0 also onboarded three verified sports sources: Cricket 4K Pack, Willow &amp; FAST TV, and a Sony Sports backup.</p>
+            <p className="jv-ad-card-sub">Re-syncs every live source on a timer (default hourly) and then health-probes the sports source — checks now follow the HLS chain down to a real video segment, so manifest-only streams (the v10.2.0 lesson) are flagged dead automatically. v10.2.1 onboarded Romaxa55's nightly-verified sports playlist.</p>
           </div>
           <button type="button" className="jv-ad-btn is-amber" onClick={runAutoSync} disabled={autoToggling || autoStatus?.running}>
             {autoStatus?.running ? 'Syncing…' : 'Sync now'}
