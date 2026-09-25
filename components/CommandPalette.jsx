@@ -124,6 +124,17 @@ export default function CommandPalette({ open, onClose }) {
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Quick Navigation</p>
               <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
                 <Link
+                  href="/admin"
+                  onClick={() => onClose(false)}
+                  className="flex items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition hover:border-amber-500/50 hover:bg-amber-500/10"
+                >
+                  <span className="grid h-8 w-8 place-items-center rounded-xl bg-amber-500/20 text-amber-400">⚙</span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-white">Admin</p>
+                    <p className="truncate text-[10px] text-zinc-500">Control room</p>
+                  </div>
+                </Link>
+                <Link
                   href="/live"
                   onClick={() => onClose(false)}
                   className="flex items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition hover:border-red-500/50 hover:bg-red-500/10"

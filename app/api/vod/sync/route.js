@@ -6,6 +6,7 @@ import {
   matchMovieToTMDB,
   runLimitedConcurrency,
 } from '@/lib/vodM3u';
+import { getActiveVodSources } from '@/lib/vodSources';
 import { verifyRequestToken } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
@@ -48,7 +49,8 @@ function mergeByKey(entries = []) {
 
 async function syncVod() {
   const syncBatch = new Date().toISOString();
-  const { entries, sources, errors } = await fetchVodEntriesFromSources();
+  const sources = await getActiveVodSources();
+  const { entries, errors } = await fetchVodEntriesFromSources({ sources });
   const grouped = mergeByKey(entries);
   const syncLimit = Number(process.env.VOD_LIMIT || process.env.CLASSICS_LIMIT || 0);
   const workItems = syncLimit > 0 ? grouped.slice(0, syncLimit) : grouped;
@@ -115,7 +117,7 @@ async function syncVod() {
     ok,
     syncBatch,
     sourceCount: sources.length,
-    hardcodedSources: true,
+    sourceRegistry: 'mongodb (admin-managed, env/hardcoded only seeds it)',
     sources: sources.map((source) => ({ label: source.label, url: source.url })),
     parsedEntries: entries.length,
     groupedTitles: grouped.length,

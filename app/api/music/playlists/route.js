@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { deleteImportedPlaylist, listImportedPlaylists, updateImportedPlaylist } from '@/lib/musicPlaylistStore';
 import { searchPlaylists } from '@/lib/musicApi';
 import { importSpotifyPlaylist } from '@/lib/spotifyPlaylistImport';
+import { verifyRequestToken } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,9 @@ function isAuthorized(request) {
   const configuredPassword = process.env.PASS || process.env.SPACE_PASSWORD || process.env.APP_PASSWORD || '';
   const adminToken = process.env.MUSIC_ADMIN_TOKEN || process.env.SYNC || '';
   if (!configuredPassword && !adminToken) return true;
+  // The signed-in owner's HttpOnly session cookie authorizes playlist management
+  // (this is how the admin panel's Music tab calls this API with no extra headers).
+  if (verifyRequestToken(request)) return true;
   const token = request.headers.get('x-jash-token') || request.headers.get('x-music-admin-token') || new URL(request.url).searchParams.get('token') || '';
   if (adminToken && token === adminToken) return true;
   if (configuredPassword && token === accessToken(configuredPassword)) return true;

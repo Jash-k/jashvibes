@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getStremioCatalog, getStremioStreams } from '@/lib/stremioAddon';
+import { warmStremioRegistry } from '@/lib/stremioRegistry';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -125,6 +126,7 @@ async function checkByTitleSearch({ type, title, year, preferredSource, season, 
 }
 
 export async function GET(request) {
+  await warmStremioRegistry();
   try {
     const { searchParams } = new URL(request.url);
     const type = normalizeType(searchParams.get('type'));

@@ -295,9 +295,6 @@ export default function MusicCurtains() {
   const [homeWarning, setHomeWarning] = useState('');
   const [favorites, setFavorites] = useState([]);
   const [recents, setRecents] = useState([]);
-  const [importText, setImportText] = useState('');
-  const [importStatus, setImportStatus] = useState('idle');
-  const [importMessage, setImportMessage] = useState('');
 
   useEffect(() => {
     try {
@@ -919,98 +916,12 @@ export default function MusicCurtains() {
     return data.items || [];
   }
 
-  async function importSpotifyPlaylists() {
-    const raw = importText.trim();
-    if (!raw) { setImportMessage('Paste one or more public Spotify playlist links first.'); return; }
-    try {
-      setImportStatus('importing');
-      setImportMessage('Importing Spotify playlists and matching songs on JioSaavn...');
-      const response = await fetch('/api/music/playlists', {
-        method: 'POST',
-        cache: 'no-store',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ urlsText: raw }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.error || 'Spotify import failed');
-      await refreshImportedPlaylists();
-      setImportText('');
-      setCenterTab('playlists');
-      setImportStatus(data.ok ? 'done' : 'error');
-      const imported = data.imported || [];
-      const failed = data.failed || 0;
-      const firstError = (data.results || []).find((item) => !item.ok)?.error || '';
-      setImportMessage(`Imported ${imported.length} playlist${imported.length === 1 ? '' : 's'}${failed ? ` • ${failed} failed${firstError ? `: ${firstError}` : ''}` : ''}.`);
-    } catch (err) {
-      setImportStatus('error');
-      setImportMessage(err.message || 'Spotify import failed');
-    }
-  }
 
-  async function renameImportedPlaylist(playlist) {
-    const title = window.prompt('Playlist name', playlist.title || '');
-    if (!title || title.trim() === playlist.title) return;
-    try {
-      setImportStatus('saving');
-      const response = await fetch('/api/music/playlists', {
-        method: 'PATCH',
-        cache: 'no-store',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ id: playlist.id, title: title.trim() }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.error || 'Rename failed');
-      await refreshImportedPlaylists();
-      setImportStatus('done');
-      setImportMessage('Playlist renamed.');
-    } catch (err) {
-      setImportStatus('error');
-      setImportMessage(err.message || 'Rename failed');
-    }
-  }
 
-  async function deleteImportedPlaylist(playlist) {
-    if (!window.confirm(`Delete playlist “${playlist.title}”?`)) return;
-    try {
-      setImportStatus('saving');
-      const response = await fetch(`/api/music/playlists?id=${encodeURIComponent(playlist.id)}`, {
-        method: 'DELETE',
-        cache: 'no-store',
-        headers: authHeaders(),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.error || 'Delete failed');
-      await refreshImportedPlaylists();
-      setImportStatus('done');
-      setImportMessage('Playlist deleted.');
-      if (selectedCollection?.type === 'playlist' && selectedCollection.title === playlist.title) setSelectedCollection(null);
-    } catch (err) {
-      setImportStatus('error');
-      setImportMessage(err.message || 'Delete failed');
-    }
-  }
 
-  async function resyncImportedPlaylist(playlist) {
-    if (!playlist?.sourceUrl) return;
-    try {
-      setImportStatus('importing');
-      setImportMessage(`Refreshing ${playlist.title} from Spotify...`);
-      const response = await fetch('/api/music/playlists', {
-        method: 'POST',
-        cache: 'no-store',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ url: playlist.sourceUrl }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.error || 'Refresh failed');
-      await refreshImportedPlaylists();
-      setImportStatus('done');
-      setImportMessage(`Refreshed ${playlist.title}.`);
-    } catch (err) {
-      setImportStatus('error');
-      setImportMessage(err.message || 'Refresh failed');
-    }
-  }
+
+  const [importStatus, setImportStatus] = useState('idle');
+  const [importMessage, setImportMessage] = useState('');
 
   async function mutateImportedPlaylistTrack(action, track = null, query = '') {
     if (!selectedCollection?.id) return;
@@ -1362,9 +1273,7 @@ export default function MusicCurtains() {
                           <button type="button" className="ll-pill" disabled={!showSongCrud} onClick={() => addImportedTrack()}>add song</button>
                           <button type="button" className="ll-pill" disabled={!showSongCrud} onClick={() => replaceImportedTrack(selectedCollection.tracks?.[0])}>replace first</button>
                           <button type="button" className="ll-pill" disabled={!showSongCrud} onClick={() => removeImportedTrack(selectedCollection.tracks?.[0])}>remove first</button>
-                          <button type="button" className="ll-pill" onClick={() => resyncImportedPlaylist(selectedCollection)}>re-sync</button>
                         </div>
-                        {importMessage ? <LlNote>{importMessage}</LlNote> : null}
                       </div>
                     ) : null}
                   </section>
@@ -1492,9 +1401,6 @@ export default function MusicCurtains() {
                                 <span className="ll-row-artist">{playlist.count || playlist.tracks?.length || 0} tracks · {playlist.owner || 'imported'}</span></span>
                             </button>
                             <span className="ll-row-tools">
-                              {playlist.sourceUrl ? <button type="button" className="ll-row-fav" onClick={() => resyncImportedPlaylist(playlist)} title="Re-sync from Spotify">⟳</button> : null}
-                              <button type="button" className="ll-row-fav" onClick={() => renameImportedPlaylist(playlist)} title="Rename">✎</button>
-                              <button type="button" className="ll-row-fav" onClick={() => deleteImportedPlaylist(playlist)} title="Delete">🗑</button>
                             </span>
                           </li>
                         ))}
@@ -1568,16 +1474,6 @@ export default function MusicCurtains() {
                     {recents.length ? <LlTrackList tracks={recents} activeKey={activeKeyValue} favoriteSet={favoriteSet}
                       onPlay={(track) => playTrack(track, recents, true)} onFavorite={toggleFavorite} onPrefetch={prefetchTrack} />
                       : <LlNote>No history yet.</LlNote>}
-                    <div className="ll-import">
-                      <p className="ll-label">Spotify playlist sync · tracks are matched and played through the music source only</p>
-                      <textarea className="ll-input ll-textarea" rows="3" value={importText} placeholder="https://open.spotify.com/playlist/…"
-                        onChange={(event) => setImportText(event.target.value)} />
-                      <div className="ll-crud-row">
-                        <button type="button" className="ll-pill" onClick={() => importSpotifyPlaylists()}>{importStatus === 'loading' ? 'importing…' : 'import'}</button>
-                        <button type="button" className="ll-pill" onClick={() => refreshImportedPlaylists()}>reload list</button>
-                      </div>
-                      {importMessage ? <LlNote tone={importStatus === 'error' ? 'error' : 'info'}>{importMessage}</LlNote> : null}
-                    </div>
                   </section>
                 </div>
               ) : centerTab === 'queue' ? (

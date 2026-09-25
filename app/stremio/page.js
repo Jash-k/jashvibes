@@ -381,10 +381,23 @@ export default function StremioPage() {
         if (cancelled) return;
         const list = readCatalogOptions(data.manifest?.catalogs || []);
         let savedPins = [];
+        // Global pins first (Mongo — the same shelf on every device), the
+        // per-device localStorage copy stays as the offline fallback.
         try {
-          const raw = JSON.parse(window.localStorage.getItem(SELECTED_KEY) || '[]');
-          if (Array.isArray(raw)) savedPins = raw.map((key) => list.find((item) => catalogKey(item) === key)).filter(Boolean);
-        } catch { /* a corrupt key just means "nothing pinned yet" */ }
+          const pinsResponse = await fetch('/api/stremio/pins', { cache: 'no-store' });
+          if (pinsResponse.ok) {
+            const pinsData = await pinsResponse.json().catch(() => ({}));
+            if (Array.isArray(pinsData.pins) && pinsData.pins.length) {
+              savedPins = pinsData.pins.map((key) => list.find((item) => catalogKey(item) === key)).filter(Boolean);
+            }
+          }
+        } catch { /* offline: fall through to the device copy */ }
+        if (!savedPins.length) {
+          try {
+            const raw = JSON.parse(window.localStorage.getItem(SELECTED_KEY) || '[]');
+            if (Array.isArray(raw)) savedPins = raw.map((key) => list.find((item) => catalogKey(item) === key)).filter(Boolean);
+          } catch { /* a corrupt key just means "nothing pinned yet" */ }
+        }
         const prefs = readSessionCache(SHELF_KEY, CACHE_TTL) || {};
         const chosen = savedPins.length ? savedPins : getDefaultPins(list, data.tamilCatalogs || {});
         setManifest(data.manifest || null);
@@ -418,7 +431,14 @@ export default function StremioPage() {
 
   useEffect(() => {
     if (!pinned.length) return;
-    try { window.localStorage.setItem(SELECTED_KEY, JSON.stringify(pinned.map(catalogKey))); } catch { /* private mode */ }
+    const keys = pinned.map(catalogKey);
+    try { window.localStorage.setItem(SELECTED_KEY, JSON.stringify(keys)); } catch { /* private mode */ }
+    // Write through to the global shelf so every device sees the same order.
+    fetch('/api/stremio/pins', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keys }),
+    }).catch(() => {});
   }, [pinned]);
 
   useEffect(() => {

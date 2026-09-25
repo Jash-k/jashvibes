@@ -110,6 +110,8 @@ function getClientIp(request) {
 export async function middleware(request) {
   const { pathname } = request.nextUrl;
 
+  if (pathname === '/admin') return adminPageGate(request);
+
   for (const rule of RATE_RULES) {
     if (pathname.startsWith(rule.prefix)) {
       if (rule.methods && !rule.methods.includes(request.method)) continue;
@@ -126,6 +128,10 @@ export async function middleware(request) {
 
   if (PUBLIC_PATHS.has(pathname)) return NextResponse.next();
   if (SELF_TOKENIZED_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return NextResponse.next();
+  // Admin APIs enforce their OWN realm (ADMIN_PASS, DB-backed epoch — see
+  // lib/adminAuth.js). Gating them here too would demand the theatre password
+  // first and make the two realms inseparable; the spec keeps them independent.
+  if (pathname.startsWith('/api/admin/')) return NextResponse.next();
 
   const password = process.env.PASS || process.env.SPACE_PASSWORD || process.env.APP_PASSWORD || '';
   // When no password is configured the app is intentionally open (dev mode).
@@ -149,6 +155,20 @@ export async function middleware(request) {
   );
 }
 
+/**
+ * The /admin page itself: when ADMIN_PASS is configured but no admin cookie is
+ * present, redirect to the admin gate state (the page also enforces this
+ * server-side — this redirect just avoids a flash of the locked shell).
+ * Coarse on purpose: cookie PRESENCE only, real verification is Node-side
+ * where the DB-backed epoch can be honoured.
+ */
+function adminPageGate(request) {
+  const adminConfigured = Boolean(String(process.env.ADMIN_PASS || '').trim());
+  if (!adminConfigured) return NextResponse.rewrite(new URL('/404', request.url));
+  if (request.cookies.get('jash_admin')?.value) return NextResponse.next();
+  return NextResponse.next(); // no cookie yet: the page renders its own password gate
+}
+
 export const config = {
-  matcher: ['/api/:path*'],
+  matcher: ['/api/:path*', '/admin'],
 };

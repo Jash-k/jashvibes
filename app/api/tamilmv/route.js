@@ -3,6 +3,7 @@ import dbConnect from '@/lib/db';
 import { scrapeTamilMV } from '@/lib/tamilmvScraper';
 import { verifyRequestToken } from '@/lib/serverAuth';
 import { applyMatchesToItems, findMatchesForItems } from '@/lib/titleMatch';
+import { applyOverridesToPayload, loadOverrideMap } from '@/lib/catalogAdmin';
 import { parseReleaseQuality, labelForTier } from '@/lib/quality';
 
 export const runtime = 'nodejs';
@@ -101,6 +102,17 @@ async function saveScrape(payload) {
     },
     { upsert: true }
   );
+}
+
+/** Admin overrides (hide / pin / manual corrections), applied at read time. */
+async function withOverrides(payload) {
+  try {
+    const overrideMap = await loadOverrideMap();
+    if (!overrideMap.size) return payload;
+    return applyOverridesToPayload(payload, overrideMap);
+  } catch {
+    return payload; // overrides must never take the catalog down
+  }
 }
 
 function cacheAgeMs(doc) {
@@ -286,7 +298,7 @@ export async function GET(request) {
         }
         return NextResponse.json(
           {
-            ...paginatePayload(await withTitleMatches(cached), paging, maxCacheLimit),
+            ...paginatePayload(await withOverrides(await withTitleMatches(cached)), paging, maxCacheLimit),
             cached: true,
             from: 'mongodb-cache',
             syncDue,
@@ -329,7 +341,7 @@ export async function GET(request) {
 
     return NextResponse.json(
       {
-        ...paginatePayload(await withTitleMatches(cached || payload), paging, maxCacheLimit),
+        ...paginatePayload(await withOverrides(await withTitleMatches(cached || payload)), paging, maxCacheLimit),
         cached: false,
         from: manual ? 'manual-sync' : 'live-scrape',
         synced: true,
@@ -344,7 +356,7 @@ export async function GET(request) {
       if (cached) {
         return NextResponse.json(
           {
-            ...paginatePayload(await withTitleMatches(cached), paging, maxCacheLimit),
+            ...paginatePayload(await withOverrides(await withTitleMatches(cached)), paging, maxCacheLimit),
             cached: true,
             from: 'stale-mongodb-cache',
             warning: error.message || 'Live scrape failed; showing cached data.',

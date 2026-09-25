@@ -22,21 +22,6 @@ function safeEqual(a, b) {
 }
 
 /**
- * Secondary unlock password for the Live TV service panel. Curation/demo
- * deployments use a friendlier password than the owner PASS. Overridable via
- * LIVE_TV_PASS (or TV_PASS).
- *
- * Security: there is deliberately NO default. The old fallback ('tv2010') was
- * documented in the README, so any deployment that never set the env var was
- * effectively public — and a panel login issues the same session token as the
- * main password. With nothing configured, the panel password path is simply
- * disabled and only PASS unlocks the app.
- */
-function getTvPanelPassword() {
-  return String(process.env.LIVE_TV_PASS || process.env.TV_PASS || '').trim();
-}
-
-/**
  * Sets the HttpOnly session cookie.
  * - sameSite 'none' + secure in production so the cookie also works when the
  *   app is embedded (e.g. inside a Hugging Face Spaces iframe).
@@ -112,12 +97,9 @@ export async function POST(request) {
       return withSessionCookie(NextResponse.json({ success: true, token: expectedToken }), expectedToken);
     }
 
-    const tvPanelPassword = getTvPanelPassword();
-    // The panel path participates only when a panel password is actually
-    // configured — an unset env var must never widen the front door.
-    const passwordOk = Boolean(password) &&
-      (safeEqual(password, configuredPassword) ||
-        (Boolean(tvPanelPassword) && safeEqual(password, tvPanelPassword)));
+    // One front door: only PASS unlocks the app. The old panel-password path
+    // (LIVE_TV_PASS) was retired when admin moved to /admin with ADMIN_PASS.
+    const passwordOk = Boolean(password) && safeEqual(password, configuredPassword);
 
     if (!passwordOk) {
       return NextResponse.json(

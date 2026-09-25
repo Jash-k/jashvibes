@@ -38,6 +38,10 @@ services:
       # issued session cookie / ?token= link without changing the password.
       - key: SESSION_EPOCH
         sync: false
+      # Admin control room (/admin) — a UNIQUE password, separate from PASS.
+      # Unset = the admin panel stays hidden and its APIs answer 503.
+      - key: ADMIN_PASS
+        sync: false
       - key: NODE_ENV
         value: production
       - key: NEXT_TELEMETRY_DISABLED

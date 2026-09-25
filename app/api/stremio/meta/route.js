@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getStremioMeta } from '@/lib/stremioAddon';
+import { warmStremioRegistry } from '@/lib/stremioRegistry';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
+  await warmStremioRegistry();
   try {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') === 'series' ? 'series' : 'movie';

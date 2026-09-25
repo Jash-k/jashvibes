@@ -73,6 +73,12 @@ export default function RailNav({ onOpenSearch }) {
             <span className="jv-rail-label">Search</span>
           </button>
         ) : null}
+        <Link href="/admin" className="jv-rail-item" title="Admin — the control room">
+          <span className="grid h-8 w-8 place-items-center rounded-xl border border-amber-400/30 bg-amber-400/10 text-amber-300">
+            <span aria-hidden="true" className="text-[15px] leading-none">⚙</span>
+          </span>
+          <span className="jv-rail-label">Admin</span>
+        </Link>
       </div>
     </nav>
   );

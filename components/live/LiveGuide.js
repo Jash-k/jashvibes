@@ -70,7 +70,7 @@ export function useLiveGuide({ channels = [], activeId = '', intervalMs = 60_000
         if (force) {
           await fetch('/api/live-epg/guide', {
             method: 'POST',
-            headers: { 'content-type': 'application/json', ...(await tokenHeaders()) },
+            headers: { 'content-type': 'application/json', ...(await {}) },
             body: JSON.stringify({ action: 'refresh', channels: JSON.parse(payload) }),
           }).catch(() => null);
         }
@@ -135,12 +135,6 @@ export function useLiveGuide({ channels = [], activeId = '', intervalMs = 60_000
   }, [activeId, load]);
 
   return { rows, status, at, loading, error, refresh, get: (id) => rows.get(String(id || '')) || null };
-}
-
-async function tokenHeaders() {
-  // The service panel keeps its token in localStorage; the POST is panel-only, so read it lazily.
-  const token = typeof window === 'undefined' ? '' : window.localStorage.getItem('jash_live_service_token') || '';
-  return token ? { 'x-service-token': token } : {};
 }
 
 /* ---------------------------------------------------------------------- pieces */
