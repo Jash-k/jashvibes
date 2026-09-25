@@ -380,6 +380,7 @@ export default function LandingPage() {
     const left = getHistory().find((entry) => entry?.href && hasArt(entry));
     if (left) {
       return {
+        key: left.key || '',
         title: left.title || 'Untitled',
         type: left.type || 'movie',
         year: left.year || '',

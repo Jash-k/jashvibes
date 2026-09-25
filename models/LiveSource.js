@@ -10,6 +10,7 @@ const LiveSourceSchema = new mongoose.Schema({
   priority: { type: Number, default: 99, index: true },
   headers: { type: Object, default: {} },
   autoPurge: { type: Boolean, default: false },
+  titleFilter: { type: String, default: '' },
   channelCount: { type: Number, default: 0 },
   selectedCount: { type: Number, default: 0 },
   mappedCount: { type: Number, default: 0 },

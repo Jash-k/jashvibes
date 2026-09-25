@@ -1,4 +1,6 @@
+
 import net from 'node:net';
+import dns from 'node:dns/promises';
 import { NextResponse } from 'next/server';
 import { isPlaylistResponse, rewritePlaylist } from '@/lib/player/playlistRewrite';
 
@@ -28,6 +30,33 @@ function isBlockedHost(hostname = '') {
   return false;
 }
 
+
+/**
+ * Resolve-then-verify: hostname blocklists do not stop a DNS name that ANSWERS
+ * with a private/loopback/metadata address (DNS rebinding to 169.254.169.254).
+ * Every address the name resolves to must be public, else the fetch is refused.
+ */
+async function assertPublicHost(hostname = '') {
+  const host = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
+  if (net.isIP(host)) return; // literal IPs were already checked by isBlockedHost
+  let addresses;
+  try {
+    addresses = await dns.lookup(host, { all: true, verbatim: true });
+  } catch {
+    throw new Error('host does not resolve');
+  }
+  for (const { address } of addresses) {
+    if (net.isIP(address) === 6) {
+      const low = address.toLowerCase();
+      if (low === '::1' || low.startsWith('fc') || low.startsWith('fd') || low.startsWith('fe80') || low === '::') {
+        throw new Error('host resolves to a private address');
+      }
+      continue;
+    }
+    if (isPrivateIPv4(address)) throw new Error('host resolves to a private address');
+  }
+}
+
 function pickHeader(request, names = []) {
   for (const name of names) {
     const value = request.headers.get(name);
@@ -53,6 +82,12 @@ async function proxy(request) {
 
     if (!['http:', 'https:'].includes(target.protocol) || isBlockedHost(target.hostname)) {
       return NextResponse.json({ error: 'Blocked live proxy host' }, { status: 400 });
+    }
+
+    try {
+      await assertPublicHost(target.hostname);
+    } catch (error) {
+      return NextResponse.json({ error: 'Blocked live proxy host', reason: error.message }, { status: 400 });
     }
 
     const upstreamHeaders = new Headers();

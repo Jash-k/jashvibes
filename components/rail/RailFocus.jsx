@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { removeHistoryEntry } from '@/lib/watchStore';
 
 /**
  * RailFocus — the banner half of Rail OS: one title, its own artwork, and the way back into it.
@@ -60,6 +61,23 @@ export default function RailFocus({ slide = null, eyebrow = 'Now on your shelf' 
               Not matched yet — bind it in the rows below
             </span>
           )}
+          {slide.href && slide.progress > 0 ? (
+            <button
+              type="button"
+              className="jv-focus-ghost"
+              title="Remove from Continue Watching"
+              aria-label={`Remove ${slide.title} from Continue Watching`}
+              onClick={(event) => {
+                event.preventDefault();
+                if (slide.key) removeHistoryEntry(slide.key);
+              }}
+            >
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" fill="none" />
+              </svg>
+              Cancel resume
+            </button>
+          ) : null}
           {slide.href && slide.progress > 0 ? (
             <Link href={slide.libraryHref || '/my-list?tab=history'} className="jv-focus-ghost">
               All unfinished

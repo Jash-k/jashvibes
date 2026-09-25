@@ -60,6 +60,84 @@ export default function TvTab() {
 
   useEffect(() => { if (panelOpen) document.body.style.overflow = 'hidden'; return () => { document.body.style.overflow = ''; }; }, [panelOpen]);
 
+  const [autoConfig, setAutoConfig] = useState(null);
+  const [autoStatus, setAutoStatus] = useState(null);
+  const [autoToggling, setAutoToggling] = useState(false);
+  const [autoNote, setAutoNote] = useState(null);
+  const autoEnabled = autoConfig ? autoConfig.enabled !== false : true;
+
+  const loadAutoSync = useCallback(async () => {
+    try {
+      const response = await fetch('/api/admin/tv/auto-sync', { cache: 'no-store' });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.ok) {
+        setAutoConfig(data.config);
+        setAutoStatus(data.status);
+      }
+    } catch { /* the card keeps its env defaults */ }
+  }, []);
+
+  useEffect(() => { loadAutoSync(); }, [loadAutoSync]);
+  // While a run is live, poll like the ReTro sync does — the work happens in
+  // the server background, this is purely a status light.
+  useEffect(() => {
+    if (!autoStatus?.running) return undefined;
+    const timer = setTimeout(loadAutoSync, 5000);
+    return () => clearTimeout(timer);
+  }, [autoStatus, loadAutoSync]);
+
+  async function runAutoSync() {
+    setAutoToggling(true);
+    try {
+      const response = await fetch('/api/admin/tv/auto-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runNow: true }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) throw new Error(data.error || 'Could not start auto-sync');
+      setAutoStatus(data.status);
+      setAutoNote({ kind: null, text: data.started ? 'Sync started in the background — status updates here every few seconds.' : 'A sync is already running.' });
+    } catch (err) {
+      setAutoNote({ kind: 'bad', text: err.message });
+    } finally {
+      setAutoToggling(false);
+    }
+  }
+
+  async function toggleAuto() {
+    setAutoToggling(true);
+    try {
+      const response = await fetch('/api/admin/tv/auto-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !autoEnabled }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) throw new Error(data.error || 'Could not update auto-sync');
+      setAutoConfig(data.config);
+      setAutoStatus(data.status);
+      setAutoNote({ kind: 'ok', text: data.config.enabled ? 'Auto-sync resumed.' : 'Auto-sync paused — the timer keeps ticking but skips runs until you resume it.' });
+    } catch (err) {
+      setAutoNote({ kind: 'bad', text: err.message });
+    } finally {
+      setAutoToggling(false);
+    }
+  }
+
+  const autoSummary = (() => {
+    if (autoStatus?.running) return 'Running now — this card live-updates…';
+    const finished = autoStatus?.finishedAt;
+    if (!finished) return 'No run yet on this instance. The first scheduled pass starts ~2 min after boot.';
+    const sync = autoStatus?.result?.sync;
+    const okCount = Array.isArray(sync) ? sync.filter((row) => row.ok).length : 0;
+    const total = Array.isArray(sync) ? sync.length : 0;
+    const sweepRes = autoStatus?.result?.sweep;
+    const sweepText = sweepRes && Number.isFinite(sweepRes.checked) ? ` · sweep ${sweepRes.checked} ch, ${sweepRes.dead} dead` : '';
+    const errText = autoStatus?.error ? ` · ${autoStatus.error}` : '';
+    return `Last pass ${new Date(finished).toLocaleTimeString()} — ${okCount}/${total} sources synced${sweepText}${errText}`;
+  })();
+
   async function sweep() {
     setSweeping(true);
     setNote({ kind: null, text: 'Sweeping channels — probing streams, this can take up to a minute…' });
@@ -111,6 +189,23 @@ export default function TvTab() {
             ))}
           </div>
         ) : null}
+      </div>
+
+      <div className="jv-ad-card">
+        <div className="jv-ad-toolbar" style={{ marginTop: 0 }}>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <p className="jv-ad-card-title">Auto-sync sources</p>
+            <p className="jv-ad-card-sub">Re-syncs every live source on a timer (default hourly — the GitHub sports packs regenerate their stream URLs every few hours) and health-probes the cricket pack after each pass. v10.2.0 also onboarded three verified sports sources: Cricket 4K Pack, Willow &amp; FAST TV, and a Sony Sports backup.</p>
+          </div>
+          <button type="button" className="jv-ad-btn is-amber" onClick={runAutoSync} disabled={autoToggling || autoStatus?.running}>
+            {autoStatus?.running ? 'Syncing…' : 'Sync now'}
+          </button>
+          <button type="button" className={`jv-ad-btn ${autoEnabled ? 'is-primary' : ''}`} onClick={toggleAuto} disabled={autoToggling}>
+            {autoEnabled ? 'Auto: ON' : 'Auto: OFF'}
+          </button>
+        </div>
+        <p className={`jv-ad-note ${autoStatus?.error ? 'is-bad' : ''}`}>{autoSummary}</p>
+        {autoNote ? <p className={`jv-ad-note ${autoNote.kind ? `is-${autoNote.kind}` : ''}`}>{autoNote.text}</p> : null}
       </div>
 
       {panelOpen ? (

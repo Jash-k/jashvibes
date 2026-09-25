@@ -1,13 +1,16 @@
 import './globals.css';
 import 'shaka-player/dist/controls.css';
-import { Playfair_Display } from 'next/font/google';
+import localFont from 'next/font/local';
 import AuthGate from '@/components/AuthGate';
 import PWARegister from '@/components/PWARegister';
 import FullscreenOrientationLock from '@/components/FullscreenOrientationLock';
 
-const playfairDisplay = Playfair_Display({
-  subsets: ['latin'],
-  weight: ['700', '900'],
+// Self-hosted variable font: the build must never depend on Google Fonts being
+// reachable (a blocked fetch during a Render build fails the whole deploy).
+const playfairDisplay = localFont({
+  src: './fonts/playfair-display-variable.woff2',
+  weight: '400 900',
+  style: 'normal',
   variable: '--font-display',
   display: 'swap',
 });

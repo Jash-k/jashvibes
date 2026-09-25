@@ -57,4 +57,18 @@ export async function register() {
   for (const t of [firstTimer, timer]) { try { t.unref?.(); } catch {} }
 
   console.info(`[keepalive] started: ${url} every ${intervalMinutes} min`);
+
+  // Hourly live-source auto-sync (v10.2.0). Shares the sync engine with the
+  // admin endpoint; LIVE_SYNC_MINUTES=0 (or >=720) turns it off. Runs in this
+  // same process, single-flight, and never blocks a request. The build-time
+  // NEXT_RUNTIME guard matters: instrumentation also bundles for edge, and a
+  // statically-traced import would pull node built-ins into that bundle.
+  if (process.env.NEXT_RUNTIME === 'nodejs') {
+    try {
+      const { registerLiveAutoSyncScheduler } = await import('@/lib/liveAutoSync');
+      registerLiveAutoSyncScheduler();
+    } catch (error) {
+      console.error('[live-auto-sync] scheduler failed to register:', error?.message || error);
+    }
+  }
 }

@@ -78,6 +78,7 @@ so hidden rows are always restorable from the **Hidden** filter.
 | `JIO_LIVE_COOKIE` | Jio fallback token |
 | `CRON_SECRET` / `SCRAPE_TOKEN` / `SEED_TOKEN` / `SYNC_TOKEN` | tokens for admin/cron routes |
 | `KEEPALIVE` / `KEEPALIVE_MINUTES` | keep-alive on/off + interval |
+| `LIVE_SYNC_MINUTES` | live sources auto-sync interval (default 60, `0` = off) |
 
 See `.env.example` for the full annotated list. The ReTro `VOD` sources and Stremio `STREMIO`/`STREMIO_WATCH`
 addons now act as **first-run seeds only** — manage them from the admin panel after that.

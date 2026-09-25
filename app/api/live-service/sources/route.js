@@ -30,7 +30,7 @@ export async function POST(request) {
     const sourceId = String(body.sourceId || body.id || sourceIdFromLabel(label)).trim();
     const doc = await LiveSource.findOneAndUpdate(
       { sourceId },
-      { $set: { sourceId, label, url, type: body.type === 'json' ? 'json' : 'm3u', enabled: body.enabled !== false, trustTamil: Boolean(body.trustTamil), priority: Number(body.priority ?? 50), autoPurge: Boolean(body.autoPurge) } },
+      { $set: { sourceId, label, url, type: body.type === 'json' ? 'json' : 'm3u', enabled: body.enabled !== false, trustTamil: Boolean(body.trustTamil), priority: Number(body.priority ?? 50), autoPurge: Boolean(body.autoPurge), titleFilter: String(body.titleFilter || '').trim() } },
       { upsert: true, new: true },
     );
     return json({ ok: true, source: toClientSource(doc) });
@@ -45,7 +45,7 @@ export async function PATCH(request) {
     const sourceId = String(body.sourceId || body.id || '').trim();
     if (!sourceId) return json({ ok: false, error: 'sourceId is required' }, 400);
     const patch = {};
-    ['label', 'url', 'type', 'enabled', 'trustTamil', 'priority', 'autoPurge'].forEach((key) => { if (body[key] !== undefined) patch[key] = body[key]; });
+    ['label', 'url', 'type', 'enabled', 'trustTamil', 'priority', 'autoPurge', 'titleFilter'].forEach((key) => { if (body[key] !== undefined) patch[key] = body[key]; });
     if (patch.type && !['m3u', 'json'].includes(patch.type)) patch.type = 'm3u';
     const doc = await LiveSource.findOneAndUpdate({ sourceId }, { $set: patch }, { new: true });
     if (!doc) return json({ ok: false, error: 'Source not found' }, 404);
