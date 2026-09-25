@@ -1,12 +1,5 @@
 import { NextResponse } from 'next/server';
-import dbConnect from '@/lib/db';
-import VodItem, { ensureVodTextIndexSafe } from '@/models/VodItem';
-import {
-  fetchVodEntriesFromSources,
-  matchMovieToTMDB,
-  runLimitedConcurrency,
-} from '@/lib/vodM3u';
-import { getActiveVodSources } from '@/lib/vodSources';
+import { getVodSyncStatus, runVodSync } from '@/lib/vodSync';
 import { verifyRequestToken } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
@@ -24,126 +17,32 @@ function isAuthorized(request) {
   return Boolean(token) && token === expected;
 }
 
-function mergeByKey(entries = []) {
-  const map = new Map();
-  for (const entry of entries) {
-    const existing = map.get(entry.key);
-    if (!existing) {
-      map.set(entry.key, { ...entry, streams: [entry.stream] });
-      continue;
-    }
-    existing.streams.push(entry.stream);
-    if (!existing.year && entry.year) existing.year = entry.year;
-  }
-
-  return [...map.values()].map((item) => {
-    const seen = new Set();
-    item.streams = item.streams.filter((stream) => {
-      if (!stream?.url || seen.has(stream.url)) return false;
-      seen.add(stream.url);
-      return true;
-    });
-    return item;
-  });
-}
-
-async function syncVod() {
-  const syncBatch = new Date().toISOString();
-  const sources = await getActiveVodSources();
-  const { entries, errors } = await fetchVodEntriesFromSources({ sources });
-  const grouped = mergeByKey(entries);
-  const syncLimit = Number(process.env.VOD_LIMIT || process.env.CLASSICS_LIMIT || 0);
-  const workItems = syncLimit > 0 ? grouped.slice(0, syncLimit) : grouped;
-
-  let matched = 0;
-  let unmatched = 0;
-  let stored = 0;
-
-  await dbConnect();
-  await ensureVodTextIndexSafe();
-
-  await runLimitedConcurrency(workItems, Number(process.env.VOD_CONCURRENCY || 3), async (item) => {
-    let tmdb = null;
-    try {
-      tmdb = await matchMovieToTMDB({ title: item.title, year: item.year });
-    } catch (error) {
-      console.warn('[vod/sync] TMDB match failed:', item.title, error.message);
-    }
-
-    if (tmdb?.tmdbId) matched += 1;
-    else unmatched += 1;
-
-    const key = tmdb?.tmdbId ? `tmdb:movie:${tmdb.tmdbId}` : item.key;
-    const streams = item.streams || [];
-    const sourcesList = [...new Set(streams.map((stream) => stream.source).filter(Boolean))];
-
-    const setPayload = {
-      key,
-      title: tmdb?.title || item.title,
-      normalizedTitle: item.normalizedTitle,
-      type: 'movie',
-      year: tmdb?.year || item.year || undefined,
-      releaseDate: tmdb?.releaseDate || (item.year ? new Date(`${item.year}-01-01`) : undefined),
-      tmdbId: tmdb?.tmdbId || undefined,
-      tmdbMatched: Boolean(tmdb?.tmdbId),
-      originalTitle: tmdb?.originalTitle || '',
-      synopsis: tmdb?.synopsis || '',
-      posterUrl: tmdb?.posterUrl || streams.find((stream) => stream.logo)?.logo || '',
-      backdropUrl: tmdb?.backdropUrl || '',
-      rating: tmdb?.rating || 0,
-      voteCount: tmdb?.voteCount || 0,
-      language: tmdb?.language || '',
-      genres: tmdb?.genres || [],
-      syncBatch,
-      lastSyncedAt: new Date(),
-    };
-
-    await VodItem.updateOne(
-      { key },
-      {
-        $set: {
-          ...setPayload,
-          sources: sourcesList,
-          streams,
-        },
-      },
-      { upsert: true },
-    );
-    stored += 1;
-  });
-
-  const ok = stored > 0;
-  return {
-    ok,
-    syncBatch,
-    sourceCount: sources.length,
-    sourceRegistry: 'mongodb (admin-managed, env/hardcoded only seeds it)',
-    sources: sources.map((source) => ({ label: source.label, url: source.url })),
-    parsedEntries: entries.length,
-    groupedTitles: grouped.length,
-    processed: workItems.length,
-    stored,
-    matched,
-    unmatched,
-    errors,
-    message: ok
-      ? `Synced ${stored} classics.`
-      : 'No classics were synced. Your VOD source URLs returned no playable M3U entries. Re-upload/update VOD, VOD_EROS, or VOD_AHA env URLs.',
-  };
-}
-
-export async function GET(request) {
+/**
+ * The awaited form of the classics sync, for token/cron callers. If a sync is
+ * already running, the live status is returned instead of stacking a second.
+ */
+async function handle(request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: 'Unauthorized VOD sync token' }, { status: 401 });
   }
-
   try {
-    const result = await syncVod();
+    const status = getVodSyncStatus();
+    if (status.running) {
+      return NextResponse.json(
+        { ok: false, alreadyRunning: true, ...status, message: 'A sync is already running.' },
+        { headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+    const result = await runVodSync();
     return NextResponse.json(result, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     console.error('[api/vod/sync] Error:', error);
     return NextResponse.json({ ok: false, error: error.message || 'VOD sync failed' }, { status: 500 });
   }
+}
+
+export async function GET(request) {
+  return handle(request);
 }
 
 export const POST = GET;

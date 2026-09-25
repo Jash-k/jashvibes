@@ -1,10 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
- * ReTro tab — CRUD over the classics VOD sources (first run seeds from the
- * old hardcoded/env list) plus the sync trigger and an items browser.
+ * ReTro tab — sources CRUD + background sync with live status, and the
+ * titles manager (search, edit title/year, re-match to TMDB, remove).
  */
 export default function RetroTab() {
   const [sources, setSources] = useState([]);
@@ -13,8 +13,16 @@ export default function RetroTab() {
   const [note, setNote] = useState(null);
   const [form, setForm] = useState({ name: '', url: '' });
   const [busy, setBusy] = useState('');
-  const [browser, setBrowser] = useState({ items: [], total: 0, q: '' });
-  const [browserLoading, setBrowserLoading] = useState(false);
+  const [sync, setSync] = useState(null); // live sync status from the poll
+
+  // titles manager state
+  const [items, setItems] = useState([]);
+  const [itemsMeta, setItemsMeta] = useState({ total: 0, page: 1, pages: 1 });
+  const [itemsQuery, setItemsQuery] = useState('');
+  const [itemsPage, setItemsPage] = useState(1);
+  const [itemsLoading, setItemsLoading] = useState(false);
+
+  const syncTimerRef = useRef(null);
 
   const load = useCallback(async () => {
     setStatus('loading');
@@ -30,22 +38,49 @@ export default function RetroTab() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
-
-  const loadBrowser = useCallback(async (q = '') => {
-    setBrowserLoading(true);
+  const loadItems = useCallback(async (q = itemsQuery, page = itemsPage) => {
+    setItemsLoading(true);
     try {
-      const params = new URLSearchParams({ limit: '24' });
+      const params = new URLSearchParams({ page: String(page), pageSize: '25' });
       if (q) params.set('q', q);
-      const response = await fetch(`/api/vod?${params.toString()}`, { cache: 'no-store' });
+      const response = await fetch(`/api/admin/vod/items?${params.toString()}`, { cache: 'no-store' });
       const data = await response.json().catch(() => ({}));
-      setBrowser({ items: data.items || [], total: data.total || 0, q });
+      if (!response.ok || !data.ok) throw new Error(data.error || 'Read failed');
+      setItems(data.items || []);
+      setItemsMeta({ total: data.total || 0, page: data.page || 1, pages: data.pages || 1 });
     } catch {
-      setBrowser((current) => ({ ...current, items: [] }));
+      setItems([]);
     } finally {
-      setBrowserLoading(false);
+      setItemsLoading(false);
     }
-  }, []);
+  }, [itemsQuery, itemsPage]);
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadItems(itemsQuery, 1); /* eslint-disable-line react-hooks/exhaustive-deps */ }, []);
+  useEffect(() => {
+    const timer = setTimeout(() => loadItems(itemsQuery, 1), 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemsQuery]);
+
+  // ── background sync + status poll ────────────────────────────────────────
+  const pollStatus = useCallback(async () => {
+    try {
+      const response = await fetch('/api/admin/vod/sources/sync', { cache: 'no-store' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) return;
+      setSync(data.status);
+      if (data.status.running) {
+        clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = setTimeout(pollStatus, 5000);
+      } else if (data.status.finishedAt && data.status.result) {
+        setNote({ kind: data.status.result.ok ? 'ok' : 'bad', text: data.status.result.message + (data.status.error ? ` (error: ${data.status.error})` : '') });
+        await Promise.all([load(), loadItems(itemsQuery, 1)]);
+      }
+    } catch { /* transient */ }
+  }, [load, loadItems, itemsQuery]);
+
+  useEffect(() => () => clearTimeout(syncTimerRef.current), []);
 
   async function addSource(event) {
     event.preventDefault();
@@ -109,9 +144,9 @@ export default function RetroTab() {
     await patchSource(source, { name }, 'Renamed.');
   }
 
-  async function syncAll() {
+  async function startSync() {
     setBusy('sync');
-    setNote({ kind: null, text: 'Syncing every enabled source through the classics importer — this fetches M3Us and matches TMDB, so give it a minute…' });
+    setNote(null);
     try {
       const response = await fetch('/api/admin/vod/sources/sync', {
         method: 'POST',
@@ -119,9 +154,55 @@ export default function RetroTab() {
         body: JSON.stringify({}),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.ok) throw new Error(data.error || 'Sync failed');
-      setNote({ kind: 'ok', text: `${data.message || 'Synced.'} (${data.stored ?? '?'} titles stored)` });
-      await Promise.all([load(), loadBrowser(browser.q)]);
+      if (!response.ok || !data.ok) throw new Error(data.error || 'Could not start');
+      setSync({ running: data.status?.running ?? true, startedAt: data.status?.startedAt || Date.now(), result: null, error: '' });
+      setNote({ kind: null, text: data.message });
+      clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = setTimeout(pollStatus, 4000);
+    } catch (err) {
+      setNote({ kind: 'bad', text: err.message });
+    } finally {
+      setBusy('');
+    }
+  }
+
+  // ── titles CRUD ──────────────────────────────────────────────────────────
+  async function editItem(item) {
+    const title = window.prompt('Title', item.title || '');
+    if (title == null) return;
+    const year = window.prompt('Year', item.year ? String(item.year) : '');
+    if (year == null) return;
+    setBusy(item._id);
+    try {
+      const response = await fetch('/api/admin/vod/items', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item._id, title: title.trim() || item.title, year: year.trim() }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) throw new Error(data.error || 'Update failed');
+      setNote({ kind: 'ok', text: 'Title updated.' });
+      await loadItems(itemsQuery, itemsMeta.page);
+    } catch (err) {
+      setNote({ kind: 'bad', text: err.message });
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function rematchItem(item) {
+    setBusy(item._id);
+    setNote({ kind: null, text: `Re-matching "${item.title}" against TMDB…` });
+    try {
+      const response = await fetch('/api/admin/vod/items/rematch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item._id }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) throw new Error(data.error || 'Re-match failed');
+      setNote({ kind: data.matched ? 'ok' : null, text: data.message });
+      await loadItems(itemsQuery, itemsMeta.page);
     } catch (err) {
       setNote({ kind: 'bad', text: err.message });
     } finally {
@@ -130,15 +211,19 @@ export default function RetroTab() {
   }
 
   async function deleteItem(item) {
-    if (!window.confirm(`Remove "${item.title}" from ReTro?`)) return;
-    setBusy(item._id || item.id);
+    if (!window.confirm(`Remove "${item.title}" from ReTro? It returns on the next sync if its source still lists it.`)) return;
+    setBusy(item._id);
     try {
-      await fetch(`/api/admin/vod/items?id=${encodeURIComponent(item._id || item.id)}`, { method: 'DELETE' });
-      await loadBrowser(browser.q);
+      await fetch(`/api/admin/vod/items?id=${item._id}`, { method: 'DELETE' });
+      setNote({ kind: 'ok', text: 'Title removed.' });
+      await loadItems(itemsQuery, itemsMeta.page);
     } finally {
       setBusy('');
     }
   }
+
+  const syncRunning = Boolean(sync?.running);
+  const syncElapsed = sync?.startedAt && syncRunning ? Math.round((Date.now() - new Date(sync.startedAt).getTime()) / 1000) : null;
 
   return (
     <div>
@@ -155,12 +240,16 @@ export default function RetroTab() {
       </form>
 
       <div className="jv-ad-toolbar">
-        <button type="button" className="jv-ad-btn is-green" onClick={syncAll} disabled={busy === 'sync'}>{busy === 'sync' ? 'Syncing…' : 'Sync all sources'}</button>
-        <button type="button" className="jv-ad-btn" onClick={() => loadBrowser(browser.q)} disabled={browserLoading}>{browserLoading ? 'Loading…' : 'Reload items'}</button>
+        <button type="button" className="jv-ad-btn is-green" onClick={startSync} disabled={busy === 'sync' || syncRunning}>
+          {syncRunning ? `Syncing… ${syncElapsed !== null ? `${syncElapsed}s` : ''}` : 'Sync all sources'}
+        </button>
+        <button type="button" className="jv-ad-btn" onClick={() => loadItems(itemsQuery, itemsMeta.page)} disabled={itemsLoading}>Reload titles</button>
+        {syncRunning ? <span style={{ color: 'var(--ad-faint)', fontSize: 12 }}>running in the background — this panel polls every 5 s</span> : null}
       </div>
 
       {note ? <p className={`jv-ad-note ${note.kind ? `is-${note.kind}` : ''}`}>{note.text}</p> : null}
       {error ? <p className="jv-ad-note is-bad">{error}</p> : null}
+      {sync?.error ? <p className="jv-ad-note is-bad">Last sync error: {sync.error}</p> : null}
       {status === 'loading' ? <p className="jv-ad-empty">Loading sources…</p> : null}
 
       {sources.length ? (
@@ -187,31 +276,44 @@ export default function RetroTab() {
       ) : null}
 
       <div className="jv-ad-card">
-        <p className="jv-ad-card-title">Items browser {browser.total ? `· ${browser.total} titles` : ''}</p>
+        <p className="jv-ad-card-title">Titles manager {itemsMeta.total ? `· ${itemsMeta.total} titles` : ''}</p>
+        <p className="jv-ad-card-sub">Edit the stored title/year, force a re-match against TMDB, or remove a title entirely.</p>
         <div className="jv-ad-toolbar">
           <div className="jv-ad-search">
-            <input
-              className="jv-ad-input"
-              placeholder="Search synced classics…"
-              onKeyDown={(event) => { if (event.key === 'Enter') loadBrowser(event.currentTarget.value); }}
-            />
+            <input className="jv-ad-input" value={itemsQuery} onChange={(event) => setItemsQuery(event.target.value)} placeholder="Search synced classics…" />
           </div>
         </div>
-        {browser.items.length ? (
-          <div className="jv-ad-table">
-            {browser.items.map((item) => (
-              <div key={item._id || item.key} className="jv-ad-row">
-                {item.posterUrl ? <img className="jv-ad-row-img" style={{ width: 34, height: 48 }} src={item.posterUrl} alt="" loading="lazy" /> : <span className="jv-ad-row-ico">🎬</span>}
-                <div className="jv-ad-row-who"><b>{item.title}</b><span>{item.year || '—'} · {item.sources?.join(', ') || item.source || ''}</span></div>
-                <div className="jv-ad-actions">
-                  <button type="button" className="jv-ad-btn is-sm is-danger" onClick={() => deleteItem(item)}>Remove</button>
+
+        {itemsLoading && !items.length ? <p className="jv-ad-empty" style={{ padding: 18 }}>Loading…</p> : null}
+        {!itemsLoading && !items.length ? <p className="jv-ad-empty" style={{ padding: 18 }}>No titles yet — run a sync, or nothing matches this search.</p> : null}
+
+        {items.length ? (
+          <>
+            <div className="jv-ad-table" style={{ marginTop: 8 }}>
+              {items.map((item) => (
+                <div key={item._id} className="jv-ad-row">
+                  {item.posterUrl ? <img className="jv-ad-row-img" style={{ width: 34, height: 48 }} src={item.posterUrl} alt="" loading="lazy" /> : <span className="jv-ad-row-ico">🎬</span>}
+                  <div className="jv-ad-row-who">
+                    <b>{item.title}{item.year ? ` (${item.year})` : ''}</b>
+                    <span>{item.tmdbMatched ? `✓ TMDB ${item.tmdbId}` : '○ unmatched'}{item.sources?.length ? ` · ${item.sources.join(', ')}` : ''}{item.rating ? ` · ★${item.rating.toFixed(1)}` : ''}</span>
+                  </div>
+                  <div className="jv-ad-actions">
+                    <button type="button" className="jv-ad-btn is-sm" disabled={busy === item._id} onClick={() => editItem(item)}>Edit</button>
+                    <button type="button" className="jv-ad-btn is-sm is-amber" disabled={busy === item._id} onClick={() => rematchItem(item)}>Re-match</button>
+                    <button type="button" className="jv-ad-btn is-sm is-danger" disabled={busy === item._id} onClick={() => deleteItem(item)}>Remove</button>
+                  </div>
                 </div>
+              ))}
+            </div>
+            {itemsMeta.pages > 1 ? (
+              <div className="jv-ad-pager">
+                <button type="button" className="jv-ad-btn is-sm" disabled={itemsMeta.page <= 1} onClick={() => { const p = itemsMeta.page - 1; setItemsPage(p); loadItems(itemsQuery, p); }}>‹ Prev</button>
+                <span>page {itemsMeta.page} / {itemsMeta.pages}</span>
+                <button type="button" className="jv-ad-btn is-sm" disabled={itemsMeta.page >= itemsMeta.pages} onClick={() => { const p = itemsMeta.page + 1; setItemsPage(p); loadItems(itemsQuery, p); }}>Next ›</button>
               </div>
-            ))}
-          </div>
-        ) : (
-          <p className="jv-ad-empty" style={{ padding: 18 }}>Run a sync (or press Enter in the search) to see titles here.</p>
-        )}
+            ) : null}
+          </>
+        ) : null}
       </div>
     </div>
   );

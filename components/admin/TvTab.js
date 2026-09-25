@@ -1,8 +1,37 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Component, useCallback, useEffect, useState } from 'react';
 import LiveServicePanel from '@/components/live/LiveServicePanel';
 import { useLiveGuide } from '@/components/live/LiveGuide';
+
+/**
+ * A crash inside the panel should never take the whole admin screen down —
+ * this boundary keeps the tab alive and SHOWS the real error, so a problem
+ * is one screenshot away from a diagnosis.
+ */
+class PanelBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="jv-ad-card" style={{ borderColor: 'rgba(244,63,94,0.4)' }}>
+          <p className="jv-ad-card-title" style={{ color: 'var(--ad-red)' }}>The service panel hit an error</p>
+          <p className="jv-ad-card-sub" style={{ fontFamily: 'ui-monospace, monospace' }}>{String(this.state.error?.message || this.state.error)}</p>
+          <button type="button" className="jv-ad-btn is-sm" style={{ marginTop: 10 }} onClick={() => this.setState({ error: null })}>Try again</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 /**
  * TV tab — the full service panel (extracted from /live) plus the one-button
@@ -85,13 +114,15 @@ export default function TvTab() {
       </div>
 
       {panelOpen ? (
-        <LiveServicePanel
-          open
-          epg={epg}
-          onClose={() => setPanelOpen(false)}
-          onPreview={() => {}}
-          onMainRefresh={() => setNote({ kind: 'ok', text: 'Panel changes saved.' })}
-        />
+        <PanelBoundary>
+          <LiveServicePanel
+            open
+            epg={epg}
+            onClose={() => setPanelOpen(false)}
+            onPreview={() => {}}
+            onMainRefresh={() => setNote({ kind: 'ok', text: 'Panel changes saved.' })}
+          />
+        </PanelBoundary>
       ) : null}
     </div>
   );

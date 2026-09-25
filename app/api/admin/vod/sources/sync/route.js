@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDeny } from '@/lib/adminAuth';
-import { selfApi } from '@/lib/selfApi';
+import { getVodSyncStatus, startVodSyncInBackground } from '@/lib/vodSync';
 import { getActiveVodSources } from '@/lib/vodSources';
 import VodSource from '@/models/VodSource';
 
@@ -8,37 +8,49 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * POST /api/admin/vod/sources/sync — run the full ReTro import through the
- * existing (tested) /api/vod/sync endpoint, then stamp per-source status.
- * {id?} — a single source id is recorded; omit to sync everything.
+ * GET  /api/admin/vod/sources/sync — live sync status (the panel polls this).
+ * POST {id?} — START the sync in the background and answer instantly; a full
+ *              classics sync (M3U fetches + TMDB matching) runs minutes, so
+ *              awaiting it inside one HTTP request was the timeout the panel
+ *              kept hitting.
  */
+export async function GET(request) {
+  const deny = await adminDeny(request);
+  if (deny) return deny;
+  return NextResponse.json({ ok: true, status: getVodSyncStatus() }, { headers: { 'Cache-Control': 'no-store' } });
+}
+
 export async function POST(request) {
   const deny = await adminDeny(request);
   if (deny) return deny;
   try {
-    const body = await request.json().catch(() => ({}));
-    const result = await selfApi(request, '/api/vod/sync', { method: 'POST' });
+    const started = startVodSyncInBackground();
 
-    const active = await getActiveVodSources();
-    const now = new Date();
-    const stamp = {
-      lastSyncAt: now,
-      lastError: (result?.errors || [])[0] || '',
-      itemCount: Number(result?.stored) || 0,
-    };
-    if (body?.id) {
-      await VodSource.findByIdAndUpdate(body.id, { $set: stamp });
-    } else {
-      await Promise.allSettled(
-        active.filter((source) => source.id).map((source) => VodSource.findByIdAndUpdate(source.id, { $set: stamp })),
-      );
+    // Stamp the sources bookkeeping in the background too (best-effort; the
+    // engine result lands in the status the panel polls).
+    if (started.started) {
+      (async () => {
+        try {
+          const active = await getActiveVodSources();
+          await Promise.allSettled(
+            active.filter((source) => source.id).map((source) =>
+              VodSource.findByIdAndUpdate(source._id || source.id, { $set: { lastSyncAt: new Date() } })),
+          );
+        } catch { /* status already reports the truth */ }
+      })();
     }
 
     return NextResponse.json(
-      { ok: true, message: result?.message || 'Classics synced.', ...result },
+      {
+        ok: true,
+        message: started.started
+          ? 'Sync started in the background — this tab polls until it finishes.'
+          : 'A sync is already running.',
+        ...started,
+      },
       { headers: { 'Cache-Control': 'no-store' } },
     );
   } catch (error) {
-    return NextResponse.json({ ok: false, error: error.message || 'VOD sync failed' }, { status: 500 });
+    return NextResponse.json({ ok: false, error: error.message || 'Could not start the sync' }, { status: 500 });
   }
 }
