@@ -38,6 +38,10 @@ import {
  * and the remaining lists grow in these steps on demand.
  */
 const PANEL_PAGE_SIZE = 200;
+
+function normalize(value = '') {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
 const ROW_STEP = 400;
 
 /**

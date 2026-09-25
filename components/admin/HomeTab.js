@@ -51,13 +51,14 @@ function MatchDialog({ row, onClose, onMatched }) {
 
   async function bind(candidate) {
     setBinding(candidate.tmdbId);
+    const bindTitle = row.title || row.rawTitle || '';
     setError('');
     try {
       const response = await fetch('/api/title-match', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: row.title,
+          title: bindTitle,
           year: String(row.year || ''),
           type: row.type,
           query: String(candidate.tmdbId),
@@ -85,7 +86,7 @@ function MatchDialog({ row, onClose, onMatched }) {
       const response = await fetch('/api/title-match', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: row.title, year: String(row.year || ''), type: row.type, query: value }),
+        body: JSON.stringify({ title: row.title || row.rawTitle || '', year: String(row.year || ''), type: row.type, query: value }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Match failed');
