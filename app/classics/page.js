@@ -85,6 +85,7 @@ function TitleRow({ item }) {
   const score = Number(item.rating) || 0;
   const genres = item.genres?.slice(0, 3).join(', ');
   const sources = item.sources?.length ? item.sources.join(' + ') : 'source unlabelled';
+  const isMoviesda = item.sources?.some((source) => /moviesda/i.test(String(source)));
 
   return (
     <Link href={`/classics/${item.id}`} className="jv-dec-row">
@@ -103,7 +104,7 @@ function TitleRow({ item }) {
         <span className="jv-dec-art jv-dec-art-none" aria-hidden="true">{String(item.title || '??').slice(0, 2).toUpperCase()}</span>
       )}
       <span className="jv-dec-info">
-        <span className="jv-dec-name">{item.title}</span>
+        <span className="jv-dec-name">{item.title}{isMoviesda ? <span className="jv-dec-src-chip">moviesda</span> : null}</span>
         <span className="jv-dec-meta">
           {genres ? `${genres} · ` : ''}{score ? `${score.toFixed(1)} · ` : 'unmatched · '}{sources}
           {item.streamsCount ? ` · ${item.streamsCount} stream${item.streamsCount === 1 ? '' : 's'}` : ' · no stream yet'}
@@ -328,6 +329,11 @@ export default function TamilClassicsPage() {
         ? 'No year on record'
         : `The ${decadeLabel(decade)}`;
   const span = ruler.minYear && ruler.maxYear ? `${ruler.minYear} — ${ruler.maxYear}` : 'no years yet';
+  // v10.5.0: the shelf splits into "New" (2020s →, where the moviesda drops
+  // land) and the older archive. Same rows, same source labels; only the
+  // grouping is new. Tabs without 2020s titles render exactly as before.
+  const newItems = useMemo(() => items.filter((item) => Number(item.year) >= 2020), [items]);
+  const archiveItems = useMemo(() => items.filter((item) => !(Number(item.year) >= 2020)), [items]);
 
   return (
     <>
@@ -437,7 +443,14 @@ export default function TamilClassicsPage() {
 
             {items.length ? (
               <section className="jv-dec-shelf" id="jv-dec-shelf" aria-label={`${heading} — ${total || items.length} titles`}>
-                {items.map((item) => <TitleRow key={rowKey(item)} item={item} />)}
+                {newItems.length ? (
+                  <>
+                    <h3 className="jv-dec-section">New <span>2020s →</span> {newItems.length}</h3>
+                    {newItems.map((item) => <TitleRow key={rowKey(item)} item={item} />)}
+                    {archiveItems.length ? <h3 className="jv-dec-section">Archive <span>before 2020</span> {archiveItems.length}</h3> : null}
+                  </>
+                ) : null}
+                {archiveItems.map((item) => <TitleRow key={rowKey(item)} item={item} />)}
               </section>
             ) : null}
 

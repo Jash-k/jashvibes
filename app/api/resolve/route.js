@@ -10,6 +10,8 @@ import {
   createStremioAttempt,
   resolveStremioProvider,
 } from '@/lib/providers/stremioProvider';
+import VodItem from '@/models/VodItem';
+import { orderBySourcePriority, sourceRank } from '@/lib/player/sourcePriority';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -239,9 +241,78 @@ export async function GET(request) {
 
       // If Stremio had no stream, fall back to Global Mirchi probe
       if (!stremioSucceeded) {
+        // v10.5.0 locked priority — tier 2 (direct MP4) then tier 3 (onestream
+        // iframe), pulled straight from the ReTro VOD catalog, before the
+        // embed providers (Mirchi etc.). Best-effort: a dead Mongo or an
+        // unmatched tmdbId just skips the tier.
+        let vodPick = null;
+        try {
+          const vodItem = await VodItem.findOne({
+            tmdbId: Number(tmdbId),
+            type: 'movie',
+            'streams.0': { $exists: true },
+          }).lean();
+          const ranked = orderBySourcePriority(vodItem?.streams || []);
+          const direct = ranked.find((stream) => sourceRank(stream) === 1) || null;
+          const embed = ranked.find((stream) => sourceRank(stream) === 2) || null;
+          if (direct || embed) {
+            const others = ranked.filter((s) => s !== direct && s !== embed);
+            const otherDirects = others.filter((s) => sourceRank(s) === 1);
+            const otherEmbeds = others.filter((s) => sourceRank(s) === 2);
+            const providerUrls = uniqueList(
+              (resolved.providers || []).flatMap((p) => [p.streamUrl, ...(p.fallbacks || [])]),
+            );
+            const fbUrls = [
+              ...otherDirects.map((s) => s.url),
+              ...(direct ? otherEmbeds.map((s) => s.url) : []),
+              ...providerUrls,
+            ];
+            const fbTypes = [
+              ...otherDirects.map(() => 'direct'),
+              ...(direct ? otherEmbeds.map(() => 'embed') : []),
+              ...providerUrls.map(() => 'embed'),
+            ];
+            vodPick = {
+              pick: direct || embed,
+              isEmbed: !direct,
+              fallbacks: uniqueList(fbUrls),
+              fallbackTypes: fbUrls.length === fbTypes.length ? fbTypes : fbTypes.slice(0, fbUrls.length),
+            };
+          }
+        } catch { /* VOD tier is optional */ }
+
+        if (vodPick) {
+          const picked = vodPick.pick;
+          selected = {
+            id: vodPick.isEmbed ? 'vod-embed' : 'vod-mp4',
+            provider: picked.source || 'VOD',
+            label: picked.label || picked.source || 'VOD',
+            streamUrl: picked.url,
+            streamType: vodPick.isEmbed ? 'embed' : '',
+            fallbacks: vodPick.fallbacks,
+            fallbackTypes: vodPick.fallbackTypes,
+            selectedStreamId: '',
+            availableStreams: [],
+            health: null,
+          };
+          attempts = [
+            {
+              providerId: selected.id,
+              provider: selected.provider,
+              label: selected.label,
+              status: 'available',
+              streamUrl: selected.streamUrl,
+              reason: vodPick.isEmbed
+                ? 'Stremio had no stream and no direct MP4; Auto Priority picked the VOD onestream-iframe tier.'
+                : 'Stremio had no stream; Auto Priority picked the VOD direct-MP4 tier.',
+            },
+            ...attempts,
+          ];
+        }
+
         let mirchiUsable = false;
         const mirchiAttemptIndex = attempts.findIndex((attempt) => attempt.providerId === 'mirchi');
-        if (mirchiAttemptIndex !== -1) {
+        if (mirchiAttemptIndex !== -1 && !vodPick) {
           const probe = await checkEmbedUrl(attempts[mirchiAttemptIndex].streamUrl, 4200);
           const softBlocked = !probe.ok && probe.status === 403;
           mirchiUsable = probe.ok || softBlocked;
@@ -262,7 +333,7 @@ export async function GET(request) {
         }
 
         // If Global Mirchi also failed, fall back to the first available third-party embed
-        if (!mirchiUsable) {
+        if (!mirchiUsable && !vodPick) {
           const fallback = resolved.providers.find((provider) => provider.id !== 'mirchi');
           if (fallback) {
             selected = fallback;
@@ -368,13 +439,16 @@ export async function GET(request) {
         providerId: selected.id,
         label: selected.label,
         streamFallbacks: selected.fallbacks || [],
+        streamFallbackTypes:
+          selected.fallbackTypes ||
+          (selected.fallbacks || []).map(() => (selected.id === 'stremio' ? 'direct' : 'embed')),
         selectedStreamId: selected.selectedStreamId || '',
         availableStreams: selected.availableStreams || [],
         health: selected.health || null,
         attempts,
         savedToMongoDB: saveResult.saved,
         savedSources: saveResult.sources || [],
-        mode: selected.id === 'stremio' ? 'stremio-direct-provider' : 'local-embed-provider-module',
+        mode: selected.id === 'stremio' ? 'stremio-direct-provider' : String(selected.id || '').startsWith('vod') ? 'vod-direct-provider' : 'local-embed-provider-module',
       },
       {
         headers: {

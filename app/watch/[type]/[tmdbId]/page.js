@@ -100,6 +100,9 @@ export default function WatchByTMDBPage() {
   const [popupBlocker, setPopupBlocker] = useState(true);
   const [streamUrl, setStreamUrl] = useState('');
   const [streamFallbacks, setStreamFallbacks] = useState([]);
+  // v10.5.0: per-fallback kind ('direct' | 'embed') — lets "Next source" hop
+  // between MP4 files and onestream iframes without re-resolving.
+  const [streamFallbackTypes, setStreamFallbackTypes] = useState([]);
   const [streamChoiceIndex, setStreamChoiceIndex] = useState(0);
   const [streamType, setStreamType] = useState('embed');
   const [status, setStatus] = useState('loading');
@@ -112,6 +115,18 @@ export default function WatchByTMDBPage() {
   const streamChoices = useMemo(() => [...new Set([streamUrl, ...(streamFallbacks || [])].filter(Boolean))], [streamUrl, streamFallbacks]);
   const currentStreamUrl = streamChoices[streamChoiceIndex] || streamUrl;
   const activePlayerUrl = playerMode === 'trailer' ? trailerUrl : currentStreamUrl;
+  // v10.5.0: kind of the URL actually on screen. "Next source" can hop between
+  // direct MP4s and onestream iframes, so the renderer choice and the player's
+  // kind follow the active URL — not whichever source resolved first.
+  const typeByUrl = useMemo(() => {
+    const map = new Map();
+    if (streamUrl) map.set(streamUrl, streamType);
+    (streamFallbacks || []).forEach((url, i) => {
+      if (url && !map.has(url)) map.set(url, streamFallbackTypes[i] || streamType);
+    });
+    return map;
+  }, [streamUrl, streamFallbacks, streamFallbackTypes, streamType]);
+  const activeStreamType = typeByUrl.get(currentStreamUrl) || streamType;
   const [error, setError] = useState('');
   const [resolvedProviderId, setResolvedProviderId] = useState('');
   const [stremioStreams, setStremioStreams] = useState([]);
@@ -287,6 +302,7 @@ export default function WatchByTMDBPage() {
 
         setStreamUrl(data.streamUrl);
         setStreamFallbacks(data.streamFallbacks || []);
+        setStreamFallbackTypes(data.streamFallbackTypes || []);
         setStreamChoiceIndex(0);
         setStreamType(data.streamType || 'embed');
         setStatus('ready');
@@ -342,7 +358,7 @@ export default function WatchByTMDBPage() {
     }
   };
 
-  const directStreamActive = playerMode === 'stream' && isDirectPlayerType(streamType, activePlayerUrl);
+  const directStreamActive = playerMode === 'stream' && isDirectPlayerType(activeStreamType, activePlayerUrl);
 
   useEffect(() => { setFrameLoaded(false); }, [activePlayerUrl]);
   useEffect(() => {
@@ -624,7 +640,7 @@ export default function WatchByTMDBPage() {
               <JashPlayer
                 source={{
                   url: activePlayerUrl,
-                  kind: detectKind(activePlayerUrl, { streamType: streamType }),
+                  kind: detectKind(activePlayerUrl, { streamType: activeStreamType }),
                   label: watchSources[streamChoiceIndex]?.label || '',
                   // Kept from the old element: the snapshot button needs a
                   // CORS-readable buffer, and these CDNs do send the header.
