@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import JashPlayer from '@/components/player/JashPlayerLazy';
 import { createStreamPolicy } from '@/lib/player/policy/stream';
+import { detectKind } from '@/lib/player/kind';
 import { tmdbImageSrcSet } from '@/lib/tmdbPoster';
 
 export default function ClassicPlayerPage() {
@@ -21,6 +22,18 @@ export default function ClassicPlayerPage() {
   const activeStream = streams[streamIndex] || streams[0] || null;
   const watchKey = `retro:${id}`;
 
+  // v10.4.0 embed tier: sources of type 'iframe' are player PAGES (e.g.
+  // moviesda/onestream), not media files. They run inside a sandboxed frame —
+  // the frame loads the upstream player in the user's browser, which is the
+  // only context those servers serve video to. Sandbox deliberately omits
+  // allow-popups and allow-top-navigation: the upstream ad scripts stay
+  // trapped inside the rectangle. Sort embeds last so direct files win.
+  const orderedStreams = useMemo(() => {
+    const rank = (s) => (String(s?.type || '') === 'iframe' ? 1 : 0);
+    return [...streams].sort((a, b) => rank(a) - rank(b));
+  }, [streams]);
+  const activeIndexInOrdered = Math.max(0, orderedStreams.indexOf(activeStream));
+
   useEffect(() => {
     async function loadItem() {
       try {
@@ -30,8 +43,9 @@ export default function ClassicPlayerPage() {
         if (!response.ok) throw new Error(data?.error || 'Unable to load ReTro title');
         const loadedStreams = data.item?.streams || [];
         const ahaIndex = loadedStreams.findIndex((stream) => String(stream.source || '').toLowerCase().includes('aha'));
+        const firstDirect = loadedStreams.findIndex((stream) => String(stream.type || '') !== 'iframe');
         setItem(data.item);
-        setStreamIndex(ahaIndex >= 0 ? ahaIndex : 0);
+        setStreamIndex(ahaIndex >= 0 ? ahaIndex : firstDirect >= 0 ? firstDirect : 0);
         setStatus('ready');
       } catch (err) {
         setError(err.message || 'Unable to load ReTro title');
@@ -49,13 +63,16 @@ export default function ClassicPlayerPage() {
   );
 
   const sourcesForPlayer = useMemo(
-    () => streams.map((stream, index) => ({
+    () => orderedStreams.map((stream, index) => ({
       url: stream.url,
       label: stream.label || stream.source || `Stream ${index + 1}`,
       format: stream.format || 'HLS',
     })),
-    [streams],
+    [orderedStreams],
   );
+
+  const activeKind = detectKind(activeStream?.url || '', { streamType: activeStream?.type === 'iframe' ? 'embed' : '' });
+  const embedActive = activeKind === 'embed';
 
   const libraryEntry = useMemo(() => {
     if (typeof window === 'undefined' || !item) return null;
@@ -92,6 +109,30 @@ export default function ClassicPlayerPage() {
                 <div className="pointer-events-none absolute -inset-4 z-0 opacity-30 blur-3xl bg-gradient-to-tr from-amber-500/20 via-emerald-600/20 to-cyan-600/20" />
 
                 <div className="relative z-10 aspect-video h-full w-full bg-black fullscreen:h-[100dvh] fullscreen:w-[100dvw] fullscreen:aspect-auto">
+                  {embedActive ? (
+                    <div className="relative h-full w-full">
+                      <iframe
+                        key={activeStream?.url}
+                        title={item.title || 'Embedded player'}
+                        src={activeStream?.url}
+                        className="h-full w-full border-0 bg-black"
+                        allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
+                        allowFullScreen
+                        referrerPolicy="no-referrer-when-downgrade"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setStreamIndex((activeIndexInOrdered + 1) % orderedStreams.length)}
+                        className="absolute right-2 top-2 z-10 rounded-lg border border-white/20 bg-black/70 px-2.5 py-1.5 text-[11px] font-bold text-zinc-200 backdrop-blur transition hover:border-amber-400 hover:text-white"
+                      >
+                        Embed not working? Next source ▸
+                      </button>
+                      <p className="pointer-events-none absolute bottom-2 left-2 z-10 rounded-lg bg-black/70 px-2 py-1 text-[10px] font-semibold text-zinc-400 backdrop-blur">
+                        Embedded source — served by the upstream player. Ads stay inside this box.
+                      </p>
+                    </div>
+                  ) : (
                   <JashPlayer
                     playbackPolicy={playbackPolicy}
                     source={{ url: activeStream?.url || '', label: activeStream?.label || activeStream?.source || '' }}
@@ -112,6 +153,7 @@ export default function ClassicPlayerPage() {
                     }}
                     className="h-full w-full"
                   />
+                  )}
                 </div>
               </div>
 
