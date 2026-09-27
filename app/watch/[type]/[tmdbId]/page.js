@@ -135,16 +135,6 @@ export default function WatchByTMDBPage() {
     return map;
   }, [streamUrl, streamFallbacks, streamFallbackTypes, streamType]);
   const activeStreamType = typeByUrl.get(currentStreamUrl) || streamType;
-  // v10.6.2: URLs that come from the Stremio addon — the only sources mounted
-  // with crossOrigin (their CDNs answer CORS; moviesda hosts do not).
-  const stremioUrls = useMemo(() => {
-    const set = new Set();
-    (stremioStreams || []).forEach((stream) => {
-      if (stream?.url) set.add(stream.url);
-      if (stream?.streamUrl) set.add(stream.streamUrl);
-    });
-    return set;
-  }, [stremioStreams]);
   // v10.5.1: tier labels from the resolver win over filename-derived ones, so
   // the picker reads Stremio → Direct MP4 → iframe → Mirchi in plain words.
   const labelByUrl = useMemo(() => {
@@ -157,6 +147,17 @@ export default function WatchByTMDBPage() {
   const [error, setError] = useState('');
   const [resolvedProviderId, setResolvedProviderId] = useState('');
   const [stremioStreams, setStremioStreams] = useState([]);
+  // v10.6.2: URLs that come from the Stremio addon — the only sources mounted
+  // with crossOrigin (their CDNs answer CORS; moviesda hosts do not).
+  const stremioUrls = useMemo(() => {
+    const set = new Set();
+    (stremioStreams || []).forEach((stream) => {
+      if (stream?.url) set.add(stream.url);
+      if (stream?.streamUrl) set.add(stream.streamUrl);
+    });
+    return set;
+  }, [stremioStreams]);
+
   const [selectedStremioStreamId, setSelectedStremioStreamId] = useState('');
   const [resolvedStremioStreamId, setResolvedStremioStreamId] = useState('');
   const activeProvider = playerMode === 'trailer' ? 'trailer' : (resolvedProviderId || provider);
