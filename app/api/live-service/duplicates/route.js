@@ -10,7 +10,7 @@ function json(data, status = 200) { return NextResponse.json(data, { status, hea
 
 export async function GET(request) {
   try {
-    requireServiceAuth(request);
+    await requireServiceAuth(request);
     await dbConnect();
     const { searchParams } = new URL(request.url);
     const sourceId = searchParams.get('sourceId') || '';
@@ -29,7 +29,7 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    requireServiceAuth(request);
+    await requireServiceAuth(request);
     await dbConnect();
     const body = await request.json().catch(() => ({}));
     const keepId = body.keepId || body.channelId;

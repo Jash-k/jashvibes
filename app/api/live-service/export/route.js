@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   try {
-    requireServiceAuth(request);
+    await requireServiceAuth(request);
     await dbConnect();
     const [sources, channels, profiles] = await Promise.all([
       LiveSource.find({}).sort({ priority: 1 }).lean(),

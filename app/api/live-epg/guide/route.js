@@ -123,7 +123,7 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    requireServiceAuth(request);
+    await requireServiceAuth(request);
     const body = await request.json().catch(() => ({}));
     const action = String(body?.action || '').trim();
     if (action !== 'refresh') return json({ ok: false, error: `unsupported action: ${action || '(none)'}` }, 400);

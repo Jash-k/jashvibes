@@ -11,7 +11,7 @@ function json(data, status = 200) { return NextResponse.json(data, { status, hea
 
 export async function GET(request) {
   try {
-    requireServiceAuth(request);
+    await requireServiceAuth(request);
     await ensureLiveServiceSeeded();
     const profiles = await LiveProfile.find({}).sort({ order: 1, name: 1 }).lean();
     return json({ ok: true, profiles });
@@ -20,7 +20,7 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    requireServiceAuth(request);
+    await requireServiceAuth(request);
     await dbConnect();
     const body = await request.json().catch(() => ({}));
     const name = String(body.name || '').trim();
@@ -33,7 +33,7 @@ export async function POST(request) {
 
 export async function PATCH(request) {
   try {
-    requireServiceAuth(request);
+    await requireServiceAuth(request);
     await dbConnect();
     const body = await request.json().catch(() => ({}));
     const profileId = body.profileId || body.id;
@@ -45,7 +45,7 @@ export async function PATCH(request) {
 
 export async function DELETE(request) {
   try {
-    requireServiceAuth(request);
+    await requireServiceAuth(request);
     await dbConnect();
     const { searchParams } = new URL(request.url);
     const profileId = searchParams.get('profileId') || searchParams.get('id') || '';

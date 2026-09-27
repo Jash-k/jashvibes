@@ -39,7 +39,7 @@ async function nextCatalogPosition(catalogId, increment = 100) {
 
 export async function GET(request) {
   try {
-    requireServiceAuth(request);
+    await requireServiceAuth(request);
     await ensureLiveServiceSeeded();
     const { searchParams } = new URL(request.url);
     const sourceId = searchParams.get('sourceId') || '';
@@ -119,7 +119,7 @@ export async function GET(request) {
 
 export async function PATCH(request) {
   try {
-    requireServiceAuth(request);
+    await requireServiceAuth(request);
     await dbConnect();
     const body = await request.json().catch(() => ({}));
     const ids = Array.isArray(body.ids) ? body.ids.filter(Boolean) : [body.channelId || body.id].filter(Boolean);
@@ -247,7 +247,7 @@ export async function PATCH(request) {
 
 export async function DELETE(request) {
   try {
-    requireServiceAuth(request);
+    await requireServiceAuth(request);
     await dbConnect();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('channelId') || searchParams.get('id') || '';

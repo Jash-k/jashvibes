@@ -13,7 +13,7 @@ function json(data, status = 200) { return NextResponse.json(data, { status, hea
 
 export async function POST(request) {
   try {
-    requireServiceAuth(request);
+    await requireServiceAuth(request);
     await dbConnect();
     const body = await request.json().catch(() => ({}));
     let sources = Array.isArray(body.sources) ? body.sources : [];

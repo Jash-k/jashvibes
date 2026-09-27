@@ -8,7 +8,7 @@ function json(data, status = 200) { return NextResponse.json(data, { status, hea
 
 export async function POST(request) {
   try {
-    requireServiceAuth(request);
+    await requireServiceAuth(request);
     const body = await request.json().catch(() => ({}));
     const sourceId = String(body.sourceId || '').trim();
     const includeAll = body.includeAll !== false;
