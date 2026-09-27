@@ -233,6 +233,7 @@ export default function WatchByTMDBPage() {
       tmdbId: String(tmdbId),
       title,
       year: String(titleMeta?.year || ''),
+      search: '1',
     });
     fetch(`/api/moviesda/match?${params.toString()}`, { signal: controller.signal })
       .then((response) => (response.ok ? response.json() : { match: null }))
@@ -532,8 +533,9 @@ export default function WatchByTMDBPage() {
     const cards = [...WATCH_SERVER_OPTIONS];
     if (!moviesdaMatch) return cards;
     const extra = [];
-    if (moviesdaMatch.mp4Count) {
-      extra.push({ id: 'mp4', name: 'Direct MP4', label: `moviesda • ${moviesdaMatch.mp4Count} file${moviesdaMatch.mp4Count === 1 ? '' : 's'}` });
+    if (moviesdaMatch.mp4Count || moviesdaMatch.source === 'search') {
+      const files = moviesdaMatch.mp4Count || 0;
+      extra.push({ id: 'mp4', name: 'Direct MP4', label: files ? `moviesda • ${files} file${files === 1 ? '' : 's'}` : 'moviesda • fresh links' });
     }
     if (moviesdaMatch.embedCount) {
       extra.push({ id: 'iframe', name: 'iframe', label: `onestream • ${moviesdaMatch.embedCount} embed${moviesdaMatch.embedCount === 1 ? '' : 's'}` });

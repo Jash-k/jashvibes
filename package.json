@@ -1,6 +1,6 @@
 {
   "name": "jashvibes",
-  "version": "10.6.3",
+  "version": "10.7.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

@@ -8,6 +8,7 @@
  */
 import { NextResponse } from 'next/server';
 import { matchMoviesda } from '@/lib/moviesdaSource';
+import { searchMoviesdaMovie } from '@/lib/moviesda/resolve';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,11 +20,19 @@ export async function GET(request) {
     // The scraper indexes movies only.
     if (type !== 'movie') return NextResponse.json({ match: null }, { headers: { 'Cache-Control': 'no-store' } });
 
-    const match = await matchMoviesda({
-      tmdbId: params.get('tmdbId'),
-      title: params.get('title'),
-      year: params.get('year'),
-    });
+    const title = params.get('title');
+    const year = Number(params.get('year')) || 0;
+    let match = await matchMoviesda({ tmdbId: params.get('tmdbId'), title, year });
+
+    // v10.7.0 hybrid: index miss → live search on moviesda (URL guess, then
+    // A–Z listing). Cached 6h server-side; costs upstream fetches only for
+    // titles the scraper data does not know yet.
+    if (!match && params.get('search') === '1' && title) {
+      const pageUrl = await searchMoviesdaMovie(title, year).catch(() => null);
+      if (pageUrl) {
+        match = { title, year, pageUrl, tmdbId: 0, mp4Count: 0, embedCount: 0, source: 'search' };
+      }
+    }
     return NextResponse.json(
       {
         match: match

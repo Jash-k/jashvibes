@@ -257,7 +257,12 @@ export async function GET(request) {
         // empty walk falls through to Mirchi unchanged.
         if (moviesdaMatch) {
           try {
-            const fresh = await resolveMoviesdaMovie(moviesdaMatch.pageUrl);
+            // AUTO never stalls playback long: a tight budget (default 12s)
+            // returns whatever the walk found; the cold case falls through to
+            // Mirchi while the background warm-up fills the cache.
+            const fresh = await resolveMoviesdaMovie(moviesdaMatch.pageUrl, {
+              budgetMs: Number(process.env.MOVIESDA_AUTO_BUDGET_MS || 12000),
+            });
             const mp4s = sortByQuality(fresh.mp4s || []);
             const embeds = sortByQuality(fresh.embeds || []);
             if (mp4s.length || embeds.length) {
