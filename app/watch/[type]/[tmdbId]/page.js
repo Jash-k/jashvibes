@@ -135,6 +135,16 @@ export default function WatchByTMDBPage() {
     return map;
   }, [streamUrl, streamFallbacks, streamFallbackTypes, streamType]);
   const activeStreamType = typeByUrl.get(currentStreamUrl) || streamType;
+  // v10.6.2: URLs that come from the Stremio addon — the only sources mounted
+  // with crossOrigin (their CDNs answer CORS; moviesda hosts do not).
+  const stremioUrls = useMemo(() => {
+    const set = new Set();
+    (stremioStreams || []).forEach((stream) => {
+      if (stream?.url) set.add(stream.url);
+      if (stream?.streamUrl) set.add(stream.streamUrl);
+    });
+    return set;
+  }, [stremioStreams]);
   // v10.5.1: tier labels from the resolver win over filename-derived ones, so
   // the picker reads Stremio → Direct MP4 → iframe → Mirchi in plain words.
   const labelByUrl = useMemo(() => {
@@ -225,7 +235,16 @@ export default function WatchByTMDBPage() {
     });
     fetch(`/api/moviesda/match?${params.toString()}`, { signal: controller.signal })
       .then((response) => (response.ok ? response.json() : { match: null }))
-      .then((data) => setMoviesdaMatch(data.match || null))
+      .then((data) => {
+        const match = data.match || null;
+        setMoviesdaMatch(match);
+        // v10.6.2: warm the walk right away — by the time the user clicks
+        // DIRECT MP4, fresh links are already cached server-side and the
+        // switch is instant.
+        if (match?.pageUrl) {
+          fetch(`/api/moviesda/resolve?pageUrl=${encodeURIComponent(match.pageUrl)}`).catch(() => {});
+        }
+      })
       .catch(() => { /* background check is optional */ });
     return () => controller.abort();
   }, [tmdbId, type, isSeries, isLegacyOttUrl, titleMeta?.title, titleMeta?.year]);
@@ -715,9 +734,12 @@ export default function WatchByTMDBPage() {
                   url: activePlayerUrl,
                   kind: detectKind(activePlayerUrl, { streamType: activeStreamType }),
                   label: watchSources[streamChoiceIndex]?.label || '',
-                  // Kept from the old element: the snapshot button needs a
-                  // CORS-readable buffer, and these CDNs do send the header.
-                  crossOrigin: 'anonymous',
+                  // v10.6.2: crossOrigin ONLY where the CDN is known to answer
+                  // CORS (the Stremio/Telegram streams — the snapshot button
+                  // needs the readable buffer there). moviesda hosts serve the
+                  // video fine but send no ACAO header, so requesting it in
+                  // CORS mode made the browser refuse playback entirely.
+                  crossOrigin: stremioUrls.has(activePlayerUrl) ? 'anonymous' : undefined,
                 }}
                 display={{
                   title: directPlayerTitle,
@@ -774,6 +796,11 @@ export default function WatchByTMDBPage() {
               <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-zinc-950">
                 <div className="h-10 w-10 animate-spin rounded-full border-4 border-zinc-700 border-t-red-600" />
                 <p className="text-xs font-bold text-zinc-400">Loading {playerMode === 'trailer' ? 'trailer' : 'player'}…</p>
+                {activeStreamType === 'embed' ? (
+                  <p className="max-w-xs text-center text-[10px] font-semibold text-zinc-600">
+                    Embed sources load the upstream player first — ads may show before the video. DIRECT MP4 starts faster.
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </div>
