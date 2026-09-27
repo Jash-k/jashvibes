@@ -10,8 +10,8 @@ import {
   createStremioAttempt,
   resolveStremioProvider,
 } from '@/lib/providers/stremioProvider';
-import VodItem from '@/models/VodItem';
-import { orderBySourcePriority, sourceRank } from '@/lib/player/sourcePriority';
+import { matchMoviesda } from '@/lib/moviesdaSource';
+import { resolveMoviesdaMovie, sortByQuality } from '@/lib/moviesda/resolve';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,42 +22,6 @@ function normalizeType(type) {
 
 function uniqueList(items) {
   return [...new Set((items || []).filter(Boolean))];
-}
-
-// ---- v10.5.1 locked source tiers from the ReTro VOD catalog ----
-// Stremio -> direct MP4 -> onestream iframe -> Mirchi -> rest. These helpers
-// load tiers 2 and 3 so the watch page can offer them as next sources no
-// matter whether Stremio succeeded.
-async function loadVodTiers(tmdbId) {
-  try {
-    const vodItem = await VodItem.findOne({
-      tmdbId: Number(tmdbId),
-      type: 'movie',
-      'streams.0': { $exists: true },
-    }).lean();
-    const ranked = orderBySourcePriority(vodItem?.streams || []);
-    return {
-      directs: ranked.filter((stream) => sourceRank(stream) === 1),
-      embeds: ranked.filter((stream) => sourceRank(stream) === 2),
-    };
-  } catch {
-    return { directs: [], embeds: [] };
-  }
-}
-
-function vodTierEntries(tiers) {
-  return [
-    ...tiers.directs.map((s) => ({
-      url: s.url,
-      type: 'direct',
-      label: ['Direct MP4', s.source, s.quality].filter(Boolean).join(' • '),
-    })),
-    ...tiers.embeds.map((s) => ({
-      url: s.url,
-      type: 'embed',
-      label: ['iframe', s.source, s.quality].filter(Boolean).join(' • '),
-    })),
-  ];
 }
 
 async function getImdbIdForProvider({ tmdbId, type }) {
@@ -194,6 +158,8 @@ export async function GET(request) {
     const stremioStreamId = searchParams.get('stremioStreamId') || '';
     const quality = (searchParams.get('quality') || '').toLowerCase();
     const rawRequestedProvider = String(provider || 'auto').toLowerCase();
+    const paramTitle = String(searchParams.get('title') || '');
+    const paramYear = Number(searchParams.get('year')) || 0;
     // TamilOTT was removed; stale client/bookmarked requests fold into auto.
     const requestedProvider = rawRequestedProvider === 'tamilott' ? 'auto' : rawRequestedProvider;
     if (!hasValidTmdbId) {
@@ -236,11 +202,13 @@ export async function GET(request) {
       sourcesToSave = resolved.providers;
     }
 
-    // v10.5.2: load the ReTro VOD tiers once — Direct MP4 then onestream
-    // iframe. Exposed as server cards on the watch page and used inside the
-    // auto chain between Stremio and the embed providers.
-    let vodTiers = { directs: [], embeds: [] };
-    if (hasValidTmdbId) vodTiers = await loadVodTiers(tmdbId);
+    // v10.6.0: does the moviesda scraper data know this title? Index lookup
+    // only (cached raw GitHub files) — playable links are minted fresh when a
+    // tier is actually picked.
+    let moviesdaMatch = null;
+    if (hasValidTmdbId) {
+      moviesdaMatch = await matchMoviesda({ tmdbId, title: paramTitle, year: paramYear }).catch(() => null);
+    }
 
     // Auto chain: Stremio direct-file streams FIRST for all titles (including PreDVD/theatrical
     // and digital releases). If Stremio addon has no stream or is unreachable, Auto Priority
@@ -281,95 +249,61 @@ export async function GET(request) {
         attempts = [failedStremioAttempt, ...attempts];
       }
 
-      // v10.5.1: even when Stremio plays, expose the locked tiers below it —
-      // direct MP4, then onestream iframe, then the embed providers — as
-      // labelled next sources in the player's source list.
-      if (stremioSucceeded) {
-        const tiers = vodTiers;
-        const stremioFbCount = (selected.fallbacks || []).length;
-        const extras = [
-          ...vodTierEntries(tiers),
-          ...(resolved.providers || []).map((provider) => ({
-            url: provider.streamUrl,
-            type: 'embed',
-            label: `${provider.provider || provider.id} embed`,
-          })),
-        ];
-        const used = new Set([selected.streamUrl, ...(selected.fallbacks || [])]);
-        const clean = extras.filter((entry) => entry.url && !used.has(entry.url) && (used.add(entry.url), true));
-        if (clean.length) {
-          selected.fallbacks = [...(selected.fallbacks || []), ...clean.map((entry) => entry.url)];
-          selected.fallbackTypes = [...Array(stremioFbCount).fill('direct'), ...clean.map((entry) => entry.type)];
-          selected.fallbackLabels = [...Array(stremioFbCount).fill(''), ...clean.map((entry) => entry.label)];
-        }
-      }
-
       // If Stremio had no stream, fall back to Global Mirchi probe
       if (!stremioSucceeded) {
-        // v10.5.0 locked priority — tier 2 (direct MP4) then tier 3 (onestream
-        // iframe), pulled straight from the ReTro VOD catalog, before the
-        // embed providers (Mirchi etc.). Best-effort: a dead Mongo or an
-        // unmatched tmdbId just skips the tier.
-        let vodPick = null;
-        try {
-          const tiers = vodTiers;
-          const direct = tiers.directs[0] || null;
-          const embed = tiers.embeds[0] || null;
-          if (direct || embed) {
-            const picked = direct || embed;
-            const rest = vodTierEntries(tiers).filter((entry) => entry.url !== picked.url);
-            const providerEntries = (resolved.providers || []).map((provider) => ({
-              url: provider.streamUrl,
-              type: 'embed',
-              label: `${provider.provider || provider.id} embed`,
-            }));
-            const seen = new Set([picked.url]);
-            const clean = [...rest, ...providerEntries].filter(
-              (entry) => entry.url && !seen.has(entry.url) && (seen.add(entry.url), true),
-            );
-            vodPick = {
-              pick: picked,
-              isEmbed: !direct,
-              fallbacks: clean.map((entry) => entry.url),
-              fallbackTypes: clean.map((entry) => entry.type),
-              fallbackLabels: clean.map((entry) => entry.label),
-            };
-          }
-        } catch { /* VOD tier is optional */ }
-
-        if (vodPick) {
-          const picked = vodPick.pick;
-          selected = {
-            id: vodPick.isEmbed ? 'vod-embed' : 'vod-mp4',
-            provider: picked.source || 'VOD',
-            label: [vodPick.isEmbed ? 'iframe' : 'Direct MP4', picked.source, picked.quality].filter(Boolean).join(' • '),
-            streamUrl: picked.url,
-            streamType: vodPick.isEmbed ? 'embed' : 'direct',
-            fallbacks: vodPick.fallbacks,
-            fallbackTypes: vodPick.fallbackTypes,
-            fallbackLabels: vodPick.fallbackLabels,
-            selectedStreamId: '',
-            availableStreams: [],
-            health: null,
-          };
-          attempts = [
-            {
-              providerId: selected.id,
-              provider: selected.provider,
-              label: selected.label,
-              status: 'available',
-              streamUrl: selected.streamUrl,
-              reason: vodPick.isEmbed
-                ? 'Stremio had no stream and no direct MP4; Auto Priority picked the VOD onestream-iframe tier.'
-                : 'Stremio had no stream; Auto Priority picked the VOD direct-MP4 tier.',
-            },
-            ...attempts,
-          ];
+        // v10.6.0 locked priority — when the moviesda data knows this title,
+        // mint fresh direct links (walks the hop chain, ~seconds) and play the
+        // best MP4 before any embed provider. Best-effort: no match or an
+        // empty walk falls through to Mirchi unchanged.
+        if (moviesdaMatch) {
+          try {
+            const fresh = await resolveMoviesdaMovie(moviesdaMatch.pageUrl);
+            const mp4s = sortByQuality(fresh.mp4s || []);
+            const embeds = sortByQuality(fresh.embeds || []);
+            if (mp4s.length || embeds.length) {
+              const pick = mp4s[0] || null;
+              const rest = [
+                ...mp4s.filter((q) => q !== pick).map((q) => ({ url: q.url, type: 'direct', label: `Direct MP4 • moviesda • ${q.quality}` })),
+                ...embeds.map((q) => ({ url: q.url, type: 'embed', label: `iframe • moviesda • ${q.quality}` })),
+                ...(resolved.providers || []).map((provider) => ({
+                  url: provider.streamUrl,
+                  type: 'embed',
+                  label: `${provider.provider || provider.id} embed`,
+                })),
+              ];
+              selected = {
+                id: pick ? 'vod-mp4' : 'vod-embed',
+                provider: 'moviesda',
+                label: pick
+                  ? `Direct MP4 • moviesda • ${pick.quality || 'HD'}`
+                  : `iframe • moviesda • ${embeds[0].quality || 'HD'}`,
+                streamUrl: pick ? pick.url : embeds[0].url,
+                streamType: pick ? 'direct' : 'embed',
+                fallbacks: rest.map((entry) => entry.url),
+                fallbackTypes: rest.map((entry) => entry.type),
+                fallbackLabels: rest.map((entry) => entry.label),
+                selectedStreamId: '',
+                availableStreams: [],
+                health: null,
+              };
+              attempts = [
+                {
+                  providerId: selected.id,
+                  provider: 'moviesda',
+                  label: selected.label,
+                  status: 'available',
+                  streamUrl: selected.streamUrl,
+                  reason: 'Stremio had no stream; Auto Priority resolved a fresh moviesda source.',
+                },
+                ...attempts,
+              ];
+            }
+          } catch { /* moviesda tier is best-effort */ }
         }
 
         let mirchiUsable = false;
         const mirchiAttemptIndex = attempts.findIndex((attempt) => attempt.providerId === 'mirchi');
-        if (mirchiAttemptIndex !== -1 && !vodPick) {
+        if (mirchiAttemptIndex !== -1 && !selected) {
           const probe = await checkEmbedUrl(attempts[mirchiAttemptIndex].streamUrl, 4200);
           const softBlocked = !probe.ok && probe.status === 403;
           mirchiUsable = probe.ok || softBlocked;
@@ -378,7 +312,7 @@ export async function GET(request) {
             health: { ok: mirchiUsable, status: probe.status, finalUrl: probe.finalUrl, softBlocked },
             status: mirchiUsable ? 'available' : 'failed',
             reason: probe.ok
-              ? 'Stremio had no stream for this title, so Auto Priority fell back to Global Mirchi (embed probe passed).'
+              ? 'Stremio had no stream, so Auto Priority fell back to Global Mirchi (embed probe passed).'
               : softBlocked
                 ? 'Stremio had no stream; Global Mirchi blocks server checks (403) but usually loads in the browser.'
                 : `Global Mirchi also did not respond (probe ${probe.status || probe.error || 'failed'}). Trying remaining embeds next.`,
@@ -390,7 +324,7 @@ export async function GET(request) {
         }
 
         // If Global Mirchi also failed, fall back to the first available third-party embed
-        if (!mirchiUsable && !vodPick) {
+        if (!mirchiUsable && !selected) {
           const fallback = resolved.providers.find((provider) => provider.id !== 'mirchi');
           if (fallback) {
             selected = fallback;
@@ -406,7 +340,7 @@ export async function GET(request) {
           }
         }
       }
-    } else if (requestedProvider === 'stremio' && hasValidTmdbId) {
+    } else if (requestedProvider === 'stremio' && hasValidTmdbId) {    } else if (requestedProvider === 'stremio' && hasValidTmdbId) {
       try {
         const stremioResult = await resolveStremioProvider({
           tmdbId,
@@ -444,36 +378,46 @@ export async function GET(request) {
         );
       }
     } else if ((requestedProvider === 'mp4' || requestedProvider === 'iframe') && hasValidTmdbId) {
-      // v10.5.2: manual Direct MP4 / iframe server cards on the watch page.
-      const wantsEmbed = requestedProvider === 'iframe';
-      const pick = wantsEmbed
-        ? (vodTiers.embeds[0] || vodTiers.directs[0] || null)
-        : (vodTiers.directs[0] || null);
-      if (!pick) {
+      // v10.6.0: Direct MP4 / iframe server cards — links are minted fresh at
+      // click time from the stable moviesda page URL (stored direct URLs rot
+      // within hours).
+      if (!moviesdaMatch) {
         return NextResponse.json(
-          { error: `No ${wantsEmbed ? 'iframe' : 'Direct MP4'} source in the ReTro catalog for this title`, attempts },
+          { error: 'This title is not in the moviesda source yet', attempts },
           { status: 404 },
         );
       }
-      const entries = vodTierEntries(vodTiers).filter((entry) => entry.url !== pick.url);
-      const providerEntries = (resolved.providers || []).map((provider) => ({
-        url: provider.streamUrl,
-        type: 'embed',
-        label: `${provider.provider || provider.id} embed`,
-      }));
-      const seen = new Set([pick.url]);
-      const clean = [...entries, ...providerEntries].filter(
-        (entry) => entry.url && !seen.has(entry.url) && (seen.add(entry.url), true),
-      );
+      const wantsEmbed = requestedProvider === 'iframe';
+      const fresh = await resolveMoviesdaMovie(moviesdaMatch.pageUrl);
+      const mp4s = sortByQuality(fresh.mp4s || []);
+      const embeds = sortByQuality(fresh.embeds || []);
+      const pool = wantsEmbed ? (embeds.length ? embeds : mp4s) : (mp4s.length ? mp4s : embeds);
+      if (!pool.length) {
+        return NextResponse.json(
+          { error: `moviesda walk returned no ${wantsEmbed ? 'iframe' : 'direct MP4'} links for this title`, attempts },
+          { status: 404 },
+        );
+      }
+      const pickedIsEmbed = pool === embeds;
+      const pick = pool[0];
+      const rest = [
+        ...mp4s.map((q) => ({ url: q.url, type: 'direct', label: `Direct MP4 • moviesda • ${q.quality}` })),
+        ...embeds.map((q) => ({ url: q.url, type: 'embed', label: `iframe • moviesda • ${q.quality}` })),
+        ...(resolved.providers || []).map((provider) => ({
+          url: provider.streamUrl,
+          type: 'embed',
+          label: `${provider.provider || provider.id} embed`,
+        })),
+      ].filter((entry) => entry.url && entry.url !== pick.url);
       selected = {
-        id: wantsEmbed ? 'vod-embed' : 'vod-mp4',
-        provider: pick.source || 'VOD',
-        label: [wantsEmbed ? 'iframe' : 'Direct MP4', pick.source, pick.quality].filter(Boolean).join(' • '),
+        id: pickedIsEmbed ? 'vod-embed' : 'vod-mp4',
+        provider: 'moviesda',
+        label: `${pickedIsEmbed ? 'iframe' : 'Direct MP4'} • moviesda • ${pick.quality || 'HD'}`,
         streamUrl: pick.url,
-        streamType: sourceRank(pick) === 2 ? 'embed' : 'direct',
-        fallbacks: clean.map((entry) => entry.url),
-        fallbackTypes: clean.map((entry) => entry.type),
-        fallbackLabels: clean.map((entry) => entry.label),
+        streamType: pickedIsEmbed ? 'embed' : 'direct',
+        fallbacks: rest.map((entry) => entry.url),
+        fallbackTypes: rest.map((entry) => entry.type),
+        fallbackLabels: rest.map((entry) => entry.label),
         selectedStreamId: '',
         availableStreams: [],
         health: null,
@@ -481,11 +425,11 @@ export async function GET(request) {
       attempts = [
         {
           providerId: selected.id,
-          provider: selected.provider,
+          provider: 'moviesda',
           label: selected.label,
           status: 'available',
           streamUrl: selected.streamUrl,
-          reason: `Selected ${wantsEmbed ? 'iframe' : 'Direct MP4'} server manually from the ReTro catalog.`,
+          reason: `Selected ${wantsEmbed ? 'iframe' : 'Direct MP4'} server manually; links resolved fresh from moviesda.`,
         },
         ...attempts,
       ];
@@ -546,10 +490,7 @@ export async function GET(request) {
           selected.fallbackTypes ||
           (selected.fallbacks || []).map(() => (selected.id === 'stremio' ? 'direct' : 'embed')),
         streamFallbackLabels: selected.fallbackLabels || [],
-        vodTiers: {
-          directs: vodTiers.directs.map((s) => ({ url: s.url, quality: s.quality || '', source: s.source || '' })),
-          embeds: vodTiers.embeds.map((s) => ({ url: s.url, quality: s.quality || '', source: s.source || '' })),
-        },
+
         selectedStreamId: selected.selectedStreamId || '',
         availableStreams: selected.availableStreams || [],
         health: selected.health || null,

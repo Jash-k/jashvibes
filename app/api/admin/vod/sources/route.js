@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { adminDeny } from '@/lib/adminAuth';
 import { seedVodSourcesIfEmpty } from '@/lib/vodSources';
 import VodSource from '@/models/VodSource';
+import VodItem from '@/models/VodItem';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -63,12 +64,18 @@ export async function PATCH(request) {
   }
 }
 
-/** DELETE ?id= — remove a source (its already-synced items stay until the next sync). */
+/** DELETE ?id= — remove a source AND purge its synced VodItems (v10.6.0:
+    full removal — the catalog keeps no entries from a withdrawn source). */
 export async function DELETE(request) {
   const deny = await adminDeny(request);
   if (deny) return deny;
   const id = new URL(request.url).searchParams.get('id') || '';
   if (!id) return NextResponse.json({ ok: false, error: 'Missing id' }, { status: 400 });
-  await VodSource.findByIdAndDelete(id);
-  return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } });
+  const doc = await VodSource.findByIdAndDelete(id);
+  let purgedItems = 0;
+  if (doc?.name) {
+    const result = await VodItem.deleteMany({ sources: doc.name }).catch(() => null);
+    purgedItems = result?.deletedCount || 0;
+  }
+  return NextResponse.json({ ok: true, purgedItems }, { headers: { 'Cache-Control': 'no-store' } });
 }

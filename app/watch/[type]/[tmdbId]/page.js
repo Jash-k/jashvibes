@@ -109,9 +109,10 @@ export default function WatchByTMDBPage() {
   const [streamFallbackLabels, setStreamFallbackLabels] = useState([]);
   const [streamChoiceIndex, setStreamChoiceIndex] = useState(0);
   const [streamType, setStreamType] = useState('embed');
-  // v10.5.2: ReTro VOD tiers for this title — rendered as Direct MP4 / iframe
-  // server cards when the catalog has them.
-  const [vodTiers, setVodTiers] = useState({ directs: [], embeds: [] });
+  // v10.6.0: background moviesda match for this title — the resolve API never
+  // waits for this; when it lands, the Direct MP4 / iframe server cards turn
+  // clickable. Links are minted fresh at click time (stored ones rot).
+  const [moviesdaMatch, setMoviesdaMatch] = useState(null);
   const [status, setStatus] = useState('loading');
   const [trailerUrl, setTrailerUrl] = useState('');
   const [trailerTitle, setTrailerTitle] = useState('');
@@ -204,6 +205,30 @@ export default function WatchByTMDBPage() {
     loadMeta();
     return () => { cancelled = true; };
   }, [type, tmdbId, isLegacyOttUrl]);
+
+  // v10.6.0: background moviesda check — runs in parallel with the resolve,
+  // never blocks first paint of the stream. Movies only (the scraper indexes
+  // movies), and only once the TMDB meta gives us a real title.
+  useEffect(() => {
+    if (isLegacyOttUrl || isSeries || !tmdbId) {
+      setMoviesdaMatch(null);
+      return undefined;
+    }
+    const title = titleMeta?.title || titleMeta?.name || '';
+    if (!title) return undefined;
+    const controller = new AbortController();
+    const params = new URLSearchParams({
+      type: String(type || 'movie'),
+      tmdbId: String(tmdbId),
+      title,
+      year: String(titleMeta?.year || ''),
+    });
+    fetch(`/api/moviesda/match?${params.toString()}`, { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : { match: null }))
+      .then((data) => setMoviesdaMatch(data.match || null))
+      .catch(() => { /* background check is optional */ });
+    return () => controller.abort();
+  }, [tmdbId, type, isSeries, isLegacyOttUrl, titleMeta?.title, titleMeta?.year]);
 
   const resolveUrl = useMemo(() => {
     if (!type || !tmdbId || isLegacyOttUrl) return null;
@@ -302,7 +327,19 @@ export default function WatchByTMDBPage() {
         setStreamType('embed');
         setPlayerMode('stream');
 
-        const response = await fetch(resolveUrl, {
+        // v10.6.0: append the title/year from metaRef at fetch time — no
+        // resolveUrl dependency, so arriving TMDB meta never restarts the
+        // stream. The server matches moviesda by tmdbId first, title+year as
+        // a stopgap until the scraper's TMDB secret lands.
+        let fetchUrl = resolveUrl;
+        const meta = metaRef.current || null;
+        if (meta?.title || meta?.name) {
+          const extra = new URLSearchParams({ title: meta.title || meta.name });
+          if (meta.year) extra.set('year', String(meta.year));
+          fetchUrl = `${resolveUrl}&${extra.toString()}`;
+        }
+
+        const response = await fetch(fetchUrl, {
           method: 'GET',
           signal: controller.signal,
           headers: { Accept: 'application/json' },
@@ -310,7 +347,6 @@ export default function WatchByTMDBPage() {
 
         const data = await response.json();
         setResolvedProviderId(data.providerId || '');
-        setVodTiers(data.vodTiers || { directs: [], embeds: [] });
         setStremioStreams(data.availableStreams || []);
         setResolvedStremioStreamId(data.selectedStreamId || '');
 
@@ -469,25 +505,24 @@ export default function WatchByTMDBPage() {
 
   const isFav = pageMounted ? isFavoriteItem(watchKey) : false;
 
-  // v10.5.2: the locked tier cards sit between Stremio and Global Mirchi —
-  // they only render when the ReTro catalog actually holds sources for this
-  // exact TMDB id.
+  // v10.6.0: the locked tier cards sit between Stremio and Global Mirchi —
+  // they only render (and are only clickable) when the background moviesda
+  // match found this title in the scraper data.
   const serverOptions = useMemo(() => {
     const cards = [...WATCH_SERVER_OPTIONS];
-    const mp4Count = vodTiers.directs.length;
-    const embedCount = vodTiers.embeds.length;
+    if (!moviesdaMatch) return cards;
     const extra = [];
-    if (mp4Count) {
-      extra.push({ id: 'mp4', name: 'Direct MP4', label: `moviesda • ${mp4Count} file${mp4Count === 1 ? '' : 's'}` });
+    if (moviesdaMatch.mp4Count) {
+      extra.push({ id: 'mp4', name: 'Direct MP4', label: `moviesda • ${moviesdaMatch.mp4Count} file${moviesdaMatch.mp4Count === 1 ? '' : 's'}` });
     }
-    if (embedCount) {
-      extra.push({ id: 'iframe', name: 'iframe', label: `onestream • ${embedCount} embed${embedCount === 1 ? '' : 's'}` });
+    if (moviesdaMatch.embedCount) {
+      extra.push({ id: 'iframe', name: 'iframe', label: `onestream • ${moviesdaMatch.embedCount} embed${moviesdaMatch.embedCount === 1 ? '' : 's'}` });
     }
     if (!extra.length) return cards;
     const insertAt = cards.findIndex((card) => card.id === 'mirchi');
     cards.splice(insertAt >= 0 ? insertAt : cards.length - 1, 0, ...extra);
     return cards;
-  }, [vodTiers]);
+  }, [moviesdaMatch]);
 
   const handleProviderSelect = (providerId) => {
     setProvider(providerId);
