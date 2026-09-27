@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getFreshJioCookie, getLiveTVChannels, injectJioCookie } from '@/lib/liveTv';
+import { getFreshJioCookie, getLiveTVChannels, getDefaultLiveSources, injectJioCookie } from '@/lib/liveTv';
 import { getLiveCatalogState } from '@/lib/liveService';
 import { isJioChannel } from '@/lib/jioPlayback';
 import { buildCatalogSummary, LIVE_CATALOGS } from '@/lib/liveCatalogs';
@@ -18,7 +18,20 @@ function sourceList(sources = []) {
   }));
 }
 
-function decorateInitialJioFallback(payload = {}) {
+/** v10.8.0: the sources strip must never be empty — Mongo docs when the DB
+    has them (fresh sync includes them), code defaults otherwise. */
+async function sourcesForArea() {
+  try {
+    const LiveSource = (await import('@/models/LiveSource')).default;
+    const docs = await LiveSource.find({}).sort({ priority: 1 }).lean();
+    if (docs.length) return sourceList(docs);
+  } catch { /* DB down — fall through to defaults */ }
+  return getDefaultLiveSources().map((item) => ({
+    id: item.id, label: item.label, url: item.url, type: item.type, priority: item.priority ?? 99,
+  }));
+}
+
+async function decorateInitialJioFallback(payload = {}) {
   const channels = (payload.channels || []).map((channel, index) => ({
     ...channel,
     catalogs: [{ catalogId: 'main', position: (index + 1) * 100 }],
@@ -32,6 +45,7 @@ function decorateInitialJioFallback(payload = {}) {
     channels,
     count: channels.length,
     catalogs: buildCatalogSummary(channels),
+    sources: payload.sources?.length ? payload.sources : await sourcesForArea(),
     catalogConfigured: false,
     initialFallback: true,
     fromDb: false,
@@ -80,7 +94,7 @@ export async function GET(request) {
       } catch (dbError) {
         console.warn('[api/live-tv] DB unavailable, falling back to initial Jio channels:', dbError.message);
         const fallback = await getLiveTVChannels({ source: 'jio-tamil', playableOnly, workingOnly: false });
-        return NextResponse.json(decorateInitialJioFallback(fallback), {
+        return NextResponse.json(await decorateInitialJioFallback(fallback), {
           headers: { 'Cache-Control': 'no-store, max-age=0' },
         });
       }
@@ -88,7 +102,7 @@ export async function GET(request) {
       // First-use bootstrap only: load Jio so the TV page remains useful before
       // the administrator has synced and manually mapped the first channel.
       const fallback = await getLiveTVChannels({ source: 'jio-tamil', playableOnly, workingOnly: false });
-      return NextResponse.json(decorateInitialJioFallback(fallback), {
+      return NextResponse.json(await decorateInitialJioFallback(fallback), {
         headers: { 'Cache-Control': 'no-store, max-age=0' },
       });
     }
