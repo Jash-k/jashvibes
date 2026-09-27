@@ -236,6 +236,12 @@ export async function GET(request) {
       sourcesToSave = resolved.providers;
     }
 
+    // v10.5.2: load the ReTro VOD tiers once — Direct MP4 then onestream
+    // iframe. Exposed as server cards on the watch page and used inside the
+    // auto chain between Stremio and the embed providers.
+    let vodTiers = { directs: [], embeds: [] };
+    if (hasValidTmdbId) vodTiers = await loadVodTiers(tmdbId);
+
     // Auto chain: Stremio direct-file streams FIRST for all titles (including PreDVD/theatrical
     // and digital releases). If Stremio addon has no stream or is unreachable, Auto Priority
     // cascades to Global Mirchi embed next, then the remaining third-party embeds (VidLink, Videasy, etc.).
@@ -279,7 +285,7 @@ export async function GET(request) {
       // direct MP4, then onestream iframe, then the embed providers — as
       // labelled next sources in the player's source list.
       if (stremioSucceeded) {
-        const tiers = await loadVodTiers(tmdbId);
+        const tiers = vodTiers;
         const stremioFbCount = (selected.fallbacks || []).length;
         const extras = [
           ...vodTierEntries(tiers),
@@ -306,7 +312,7 @@ export async function GET(request) {
         // unmatched tmdbId just skips the tier.
         let vodPick = null;
         try {
-          const tiers = await loadVodTiers(tmdbId);
+          const tiers = vodTiers;
           const direct = tiers.directs[0] || null;
           const embed = tiers.embeds[0] || null;
           if (direct || embed) {
@@ -437,6 +443,52 @@ export async function GET(request) {
           { status: 404 },
         );
       }
+    } else if ((requestedProvider === 'mp4' || requestedProvider === 'iframe') && hasValidTmdbId) {
+      // v10.5.2: manual Direct MP4 / iframe server cards on the watch page.
+      const wantsEmbed = requestedProvider === 'iframe';
+      const pick = wantsEmbed
+        ? (vodTiers.embeds[0] || vodTiers.directs[0] || null)
+        : (vodTiers.directs[0] || null);
+      if (!pick) {
+        return NextResponse.json(
+          { error: `No ${wantsEmbed ? 'iframe' : 'Direct MP4'} source in the ReTro catalog for this title`, attempts },
+          { status: 404 },
+        );
+      }
+      const entries = vodTierEntries(vodTiers).filter((entry) => entry.url !== pick.url);
+      const providerEntries = (resolved.providers || []).map((provider) => ({
+        url: provider.streamUrl,
+        type: 'embed',
+        label: `${provider.provider || provider.id} embed`,
+      }));
+      const seen = new Set([pick.url]);
+      const clean = [...entries, ...providerEntries].filter(
+        (entry) => entry.url && !seen.has(entry.url) && (seen.add(entry.url), true),
+      );
+      selected = {
+        id: wantsEmbed ? 'vod-embed' : 'vod-mp4',
+        provider: pick.source || 'VOD',
+        label: [wantsEmbed ? 'iframe' : 'Direct MP4', pick.source, pick.quality].filter(Boolean).join(' • '),
+        streamUrl: pick.url,
+        streamType: sourceRank(pick) === 2 ? 'embed' : 'direct',
+        fallbacks: clean.map((entry) => entry.url),
+        fallbackTypes: clean.map((entry) => entry.type),
+        fallbackLabels: clean.map((entry) => entry.label),
+        selectedStreamId: '',
+        availableStreams: [],
+        health: null,
+      };
+      attempts = [
+        {
+          providerId: selected.id,
+          provider: selected.provider,
+          label: selected.label,
+          status: 'available',
+          streamUrl: selected.streamUrl,
+          reason: `Selected ${wantsEmbed ? 'iframe' : 'Direct MP4'} server manually from the ReTro catalog.`,
+        },
+        ...attempts,
+      ];
     } else if (hasValidTmdbId) {
       // Manual selection of embed provider (mirchi, vidlink, videasy, etc.)
       if (requestedProvider === 'mirchi') {
@@ -494,6 +546,10 @@ export async function GET(request) {
           selected.fallbackTypes ||
           (selected.fallbacks || []).map(() => (selected.id === 'stremio' ? 'direct' : 'embed')),
         streamFallbackLabels: selected.fallbackLabels || [],
+        vodTiers: {
+          directs: vodTiers.directs.map((s) => ({ url: s.url, quality: s.quality || '', source: s.source || '' })),
+          embeds: vodTiers.embeds.map((s) => ({ url: s.url, quality: s.quality || '', source: s.source || '' })),
+        },
         selectedStreamId: selected.selectedStreamId || '',
         availableStreams: selected.availableStreams || [],
         health: selected.health || null,

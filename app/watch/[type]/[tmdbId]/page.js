@@ -58,7 +58,7 @@ function shouldUseObjectPlayer(provider, streamUrl) {
 }
 
 const WATCH_SERVER_OPTIONS = [
-  { id: 'auto', name: 'Auto', label: 'Stremio → Mirchi' },
+  { id: 'auto', name: 'Auto', label: 'Stremio → MP4 → iframe → Mirchi' },
   { id: 'stremio', name: 'Stremio', label: 'Direct files' },
   { id: 'mirchi', name: 'Global Mirchi', label: 'Embed' },
   { id: 'vidlink', name: 'VidLink', label: 'Embed' },
@@ -109,6 +109,9 @@ export default function WatchByTMDBPage() {
   const [streamFallbackLabels, setStreamFallbackLabels] = useState([]);
   const [streamChoiceIndex, setStreamChoiceIndex] = useState(0);
   const [streamType, setStreamType] = useState('embed');
+  // v10.5.2: ReTro VOD tiers for this title — rendered as Direct MP4 / iframe
+  // server cards when the catalog has them.
+  const [vodTiers, setVodTiers] = useState({ directs: [], embeds: [] });
   const [status, setStatus] = useState('loading');
   const [trailerUrl, setTrailerUrl] = useState('');
   const [trailerTitle, setTrailerTitle] = useState('');
@@ -307,6 +310,7 @@ export default function WatchByTMDBPage() {
 
         const data = await response.json();
         setResolvedProviderId(data.providerId || '');
+        setVodTiers(data.vodTiers || { directs: [], embeds: [] });
         setStremioStreams(data.availableStreams || []);
         setResolvedStremioStreamId(data.selectedStreamId || '');
 
@@ -465,6 +469,26 @@ export default function WatchByTMDBPage() {
 
   const isFav = pageMounted ? isFavoriteItem(watchKey) : false;
 
+  // v10.5.2: the locked tier cards sit between Stremio and Global Mirchi —
+  // they only render when the ReTro catalog actually holds sources for this
+  // exact TMDB id.
+  const serverOptions = useMemo(() => {
+    const cards = [...WATCH_SERVER_OPTIONS];
+    const mp4Count = vodTiers.directs.length;
+    const embedCount = vodTiers.embeds.length;
+    const extra = [];
+    if (mp4Count) {
+      extra.push({ id: 'mp4', name: 'Direct MP4', label: `moviesda • ${mp4Count} file${mp4Count === 1 ? '' : 's'}` });
+    }
+    if (embedCount) {
+      extra.push({ id: 'iframe', name: 'iframe', label: `onestream • ${embedCount} embed${embedCount === 1 ? '' : 's'}` });
+    }
+    if (!extra.length) return cards;
+    const insertAt = cards.findIndex((card) => card.id === 'mirchi');
+    cards.splice(insertAt >= 0 ? insertAt : cards.length - 1, 0, ...extra);
+    return cards;
+  }, [vodTiers]);
+
   const handleProviderSelect = (providerId) => {
     setProvider(providerId);
     setLastProvider(watchKey, providerId);
@@ -535,7 +559,7 @@ export default function WatchByTMDBPage() {
                 <p className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.24em] text-zinc-500"><Icon name="gear" className="h-3.5 w-3.5" /> Servers</p>
               </div>
               <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-7">
-                {WATCH_SERVER_OPTIONS.map((server) => {
+                {serverOptions.map((server) => {
                   const active = provider === server.id;
                   return (
                     <button
