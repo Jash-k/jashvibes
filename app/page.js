@@ -357,6 +357,89 @@ function CatalogRow({ id, label, items = [], info, status, error, onMore, onItem
   );
 }
 
+/**
+ * The Vault rail (v10.9.0) — "Freshly Vaulted".
+ *
+ * The homepage's window into mv_vault: the newest vaulted titles as a horizontal
+ * strip, each tile opening the vault's instant embed player directly via
+ * `/vault?play=<id>` — one click from home to watching. Reads the same
+ * `/api/vault` payload the vault page caches, so the first visit warms the
+ * session cache both surfaces share and the strip costs no extra upstream hits.
+ * Renders nothing while loading (the rows below already own the fold) and
+ * nothing on failure — a dead vault must not blank the homepage.
+ */
+const VAULT_CACHE_KEY = 'jash:vault:v1';
+const VAULT_RAIL_SIZE = 14;
+
+function VaultRail() {
+  const [items, setItems] = useState([]);
+
+  useEffect(() => {
+    let alive = true;
+    const paint = (payload) => {
+      if (!alive || !payload?.movies?.length) return;
+      const newest = payload.movies
+        .slice()
+        .sort((a, b) => String(b.addedAt || '').localeCompare(String(a.addedAt || '')))
+        .slice(0, VAULT_RAIL_SIZE);
+      setItems(newest);
+    };
+
+    paint(readSessionCache(VAULT_CACHE_KEY, 30 * 60 * 1000));
+    fetch('/api/vault')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (payload?.movies) writeSessionCache(VAULT_CACHE_KEY, payload);
+        paint(payload);
+      })
+      .catch(() => { /* homepage stays as it was */ });
+    return () => { alive = false; };
+  }, []);
+
+  if (!items.length) return null;
+
+  return (
+    <section aria-labelledby="row-vault" className="jv-row">
+      <div className="mb-2.5 flex flex-wrap items-end justify-between gap-x-3 gap-y-1.5">
+        <div className="flex items-baseline gap-2">
+          <h2 id="row-vault" className="jv-vault-rail-heading text-lg font-black tracking-tight sm:text-2xl">⚡ Freshly Vaulted</h2>
+          <span className="jv-vault-rail-tag">THE VAULT</span>
+        </div>
+        <Link
+          href="/vault"
+          className="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-300/80 transition hover:text-cyan-200"
+        >
+          Open the vault ▸
+        </Link>
+      </div>
+      <div className="jv-row-strip" role="list">
+        {items.map((movie) => (
+          <div key={movie.id} className="jv-row-tile" role="listitem">
+            <Link href={`/vault?play=${encodeURIComponent(movie.id)}`} className="jv-vault-rail-card" title={`Play ${movie.title}`}>
+              {movie.poster ? (
+                <img src={movie.poster} alt="" aria-hidden="true" loading="lazy" decoding="async" className="jv-vault-rail-poster" />
+              ) : (
+                <span className="jv-vault-rail-poster jv-vault-poster-none" aria-hidden="true">{String(movie.title || '??').slice(0, 2).toUpperCase()}</span>
+              )}
+              <span className="jv-vault-rail-name">{movie.title}</span>
+              <span className="jv-vault-rail-meta">
+                {movie.year || '—'}
+                {movie.quality ? <span className={movie.quality === '1080p' ? 'jv-vault-chip jv-vault-chip-hd' : 'jv-vault-chip jv-vault-chip-hq'}>{movie.quality}</span> : null}
+              </span>
+            </Link>
+          </div>
+        ))}
+        <div className="jv-row-tile">
+          <Link href="/vault" className="jv-vault-rail-more" aria-label="Open the vault">
+            <span className="text-2xl" aria-hidden="true">⚡</span>
+            <span className="mt-1 text-[11px] font-black uppercase tracking-[0.16em]">browse all</span>
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function LandingPage() {
   const [movies, setMovies] = useState([]);
   const [series, setSeries] = useState([]);
@@ -560,6 +643,7 @@ export default function LandingPage() {
       <RailFocus slide={focusSlide} eyebrow={focusSlide?.progress > 0 ? 'Where you left off' : 'Fresh from the scrape'} />
 
       <section className="mx-auto flex w-full max-w-[1500px] flex-col gap-7 px-4 pb-20 pt-5 sm:px-6 sm:gap-9 lg:px-8">
+        <VaultRail />
         {scrapeStatus === 'error' && scrapeError ? (
           <RowStatus tone="error">{scrapeError}</RowStatus>
         ) : null}
