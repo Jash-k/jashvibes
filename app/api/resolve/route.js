@@ -24,6 +24,42 @@ function uniqueList(items) {
   return [...new Set((items || []).filter(Boolean))];
 }
 
+// ---- v10.5.1 locked source tiers from the ReTro VOD catalog ----
+// Stremio -> direct MP4 -> onestream iframe -> Mirchi -> rest. These helpers
+// load tiers 2 and 3 so the watch page can offer them as next sources no
+// matter whether Stremio succeeded.
+async function loadVodTiers(tmdbId) {
+  try {
+    const vodItem = await VodItem.findOne({
+      tmdbId: Number(tmdbId),
+      type: 'movie',
+      'streams.0': { $exists: true },
+    }).lean();
+    const ranked = orderBySourcePriority(vodItem?.streams || []);
+    return {
+      directs: ranked.filter((stream) => sourceRank(stream) === 1),
+      embeds: ranked.filter((stream) => sourceRank(stream) === 2),
+    };
+  } catch {
+    return { directs: [], embeds: [] };
+  }
+}
+
+function vodTierEntries(tiers) {
+  return [
+    ...tiers.directs.map((s) => ({
+      url: s.url,
+      type: 'direct',
+      label: ['Direct MP4', s.source, s.quality].filter(Boolean).join(' • '),
+    })),
+    ...tiers.embeds.map((s) => ({
+      url: s.url,
+      type: 'embed',
+      label: ['iframe', s.source, s.quality].filter(Boolean).join(' • '),
+    })),
+  ];
+}
+
 async function getImdbIdForProvider({ tmdbId, type }) {
   if (!tmdbId) return '';
   const mediaType = normalizeType(type) === 'series' ? 'tv' : 'movie';
@@ -239,6 +275,29 @@ export async function GET(request) {
         attempts = [failedStremioAttempt, ...attempts];
       }
 
+      // v10.5.1: even when Stremio plays, expose the locked tiers below it —
+      // direct MP4, then onestream iframe, then the embed providers — as
+      // labelled next sources in the player's source list.
+      if (stremioSucceeded) {
+        const tiers = await loadVodTiers(tmdbId);
+        const stremioFbCount = (selected.fallbacks || []).length;
+        const extras = [
+          ...vodTierEntries(tiers),
+          ...(resolved.providers || []).map((provider) => ({
+            url: provider.streamUrl,
+            type: 'embed',
+            label: `${provider.provider || provider.id} embed`,
+          })),
+        ];
+        const used = new Set([selected.streamUrl, ...(selected.fallbacks || [])]);
+        const clean = extras.filter((entry) => entry.url && !used.has(entry.url) && (used.add(entry.url), true));
+        if (clean.length) {
+          selected.fallbacks = [...(selected.fallbacks || []), ...clean.map((entry) => entry.url)];
+          selected.fallbackTypes = [...Array(stremioFbCount).fill('direct'), ...clean.map((entry) => entry.type)];
+          selected.fallbackLabels = [...Array(stremioFbCount).fill(''), ...clean.map((entry) => entry.label)];
+        }
+      }
+
       // If Stremio had no stream, fall back to Global Mirchi probe
       if (!stremioSucceeded) {
         // v10.5.0 locked priority — tier 2 (direct MP4) then tier 3 (onestream
@@ -247,36 +306,27 @@ export async function GET(request) {
         // unmatched tmdbId just skips the tier.
         let vodPick = null;
         try {
-          const vodItem = await VodItem.findOne({
-            tmdbId: Number(tmdbId),
-            type: 'movie',
-            'streams.0': { $exists: true },
-          }).lean();
-          const ranked = orderBySourcePriority(vodItem?.streams || []);
-          const direct = ranked.find((stream) => sourceRank(stream) === 1) || null;
-          const embed = ranked.find((stream) => sourceRank(stream) === 2) || null;
+          const tiers = await loadVodTiers(tmdbId);
+          const direct = tiers.directs[0] || null;
+          const embed = tiers.embeds[0] || null;
           if (direct || embed) {
-            const others = ranked.filter((s) => s !== direct && s !== embed);
-            const otherDirects = others.filter((s) => sourceRank(s) === 1);
-            const otherEmbeds = others.filter((s) => sourceRank(s) === 2);
-            const providerUrls = uniqueList(
-              (resolved.providers || []).flatMap((p) => [p.streamUrl, ...(p.fallbacks || [])]),
+            const picked = direct || embed;
+            const rest = vodTierEntries(tiers).filter((entry) => entry.url !== picked.url);
+            const providerEntries = (resolved.providers || []).map((provider) => ({
+              url: provider.streamUrl,
+              type: 'embed',
+              label: `${provider.provider || provider.id} embed`,
+            }));
+            const seen = new Set([picked.url]);
+            const clean = [...rest, ...providerEntries].filter(
+              (entry) => entry.url && !seen.has(entry.url) && (seen.add(entry.url), true),
             );
-            const fbUrls = [
-              ...otherDirects.map((s) => s.url),
-              ...(direct ? otherEmbeds.map((s) => s.url) : []),
-              ...providerUrls,
-            ];
-            const fbTypes = [
-              ...otherDirects.map(() => 'direct'),
-              ...(direct ? otherEmbeds.map(() => 'embed') : []),
-              ...providerUrls.map(() => 'embed'),
-            ];
             vodPick = {
-              pick: direct || embed,
+              pick: picked,
               isEmbed: !direct,
-              fallbacks: uniqueList(fbUrls),
-              fallbackTypes: fbUrls.length === fbTypes.length ? fbTypes : fbTypes.slice(0, fbUrls.length),
+              fallbacks: clean.map((entry) => entry.url),
+              fallbackTypes: clean.map((entry) => entry.type),
+              fallbackLabels: clean.map((entry) => entry.label),
             };
           }
         } catch { /* VOD tier is optional */ }
@@ -286,11 +336,12 @@ export async function GET(request) {
           selected = {
             id: vodPick.isEmbed ? 'vod-embed' : 'vod-mp4',
             provider: picked.source || 'VOD',
-            label: picked.label || picked.source || 'VOD',
+            label: [vodPick.isEmbed ? 'iframe' : 'Direct MP4', picked.source, picked.quality].filter(Boolean).join(' • '),
             streamUrl: picked.url,
-            streamType: vodPick.isEmbed ? 'embed' : '',
+            streamType: vodPick.isEmbed ? 'embed' : 'direct',
             fallbacks: vodPick.fallbacks,
             fallbackTypes: vodPick.fallbackTypes,
+            fallbackLabels: vodPick.fallbackLabels,
             selectedStreamId: '',
             availableStreams: [],
             health: null,
@@ -442,6 +493,7 @@ export async function GET(request) {
         streamFallbackTypes:
           selected.fallbackTypes ||
           (selected.fallbacks || []).map(() => (selected.id === 'stremio' ? 'direct' : 'embed')),
+        streamFallbackLabels: selected.fallbackLabels || [],
         selectedStreamId: selected.selectedStreamId || '',
         availableStreams: selected.availableStreams || [],
         health: selected.health || null,

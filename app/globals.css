@@ -1563,9 +1563,7 @@ html.day-mode .jv-dec-page {
 .jv-dec-skel-row { height: 4.4rem; border-radius: 10px; background: linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.075) 40%, rgba(255, 255, 255, 0.03) 80%); background-size: 220% 100%; animation: jv-dec-shimmer 1200ms linear infinite; }
 @keyframes jv-dec-shimmer { to { background-position: -220% 0; } }
 
-/* ---- v10.5.0 New (2020s →) section + source chips */
-.jv-dec-section { position: relative; z-index: 1; margin: 1.35rem 0.2rem 0.4rem; display: flex; align-items: baseline; gap: 0.6rem; font: 800 0.72rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.18em; text-transform: uppercase; color: #f5b84d; }
-.jv-dec-section span { color: #6e6e7d; letter-spacing: 0.12em; }
+/* ---- v10.5.1 source chip */
 .jv-dec-src-chip { display: inline-block; margin-left: 0.45rem; padding: 0.08rem 0.4rem; border: 1px solid rgba(245, 184, 77, 0.4); border-radius: 999px; background: rgba(245, 184, 77, 0.08); font: 700 0.6rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.08em; text-transform: uppercase; color: #f5b84d; vertical-align: middle; }
 
 @media (prefers-reduced-motion: reduce) {

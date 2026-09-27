@@ -329,11 +329,6 @@ export default function TamilClassicsPage() {
         ? 'No year on record'
         : `The ${decadeLabel(decade)}`;
   const span = ruler.minYear && ruler.maxYear ? `${ruler.minYear} — ${ruler.maxYear}` : 'no years yet';
-  // v10.5.0: the shelf splits into "New" (2020s →, where the moviesda drops
-  // land) and the older archive. Same rows, same source labels; only the
-  // grouping is new. Tabs without 2020s titles render exactly as before.
-  const newItems = useMemo(() => items.filter((item) => Number(item.year) >= 2020), [items]);
-  const archiveItems = useMemo(() => items.filter((item) => !(Number(item.year) >= 2020)), [items]);
 
   return (
     <>
@@ -443,14 +438,7 @@ export default function TamilClassicsPage() {
 
             {items.length ? (
               <section className="jv-dec-shelf" id="jv-dec-shelf" aria-label={`${heading} — ${total || items.length} titles`}>
-                {newItems.length ? (
-                  <>
-                    <h3 className="jv-dec-section">New <span>2020s →</span> {newItems.length}</h3>
-                    {newItems.map((item) => <TitleRow key={rowKey(item)} item={item} />)}
-                    {archiveItems.length ? <h3 className="jv-dec-section">Archive <span>before 2020</span> {archiveItems.length}</h3> : null}
-                  </>
-                ) : null}
-                {archiveItems.map((item) => <TitleRow key={rowKey(item)} item={item} />)}
+                {items.map((item) => <TitleRow key={rowKey(item)} item={item} />)}
               </section>
             ) : null}
 

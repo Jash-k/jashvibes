@@ -103,6 +103,10 @@ export default function WatchByTMDBPage() {
   // v10.5.0: per-fallback kind ('direct' | 'embed') — lets "Next source" hop
   // between MP4 files and onestream iframes without re-resolving.
   const [streamFallbackTypes, setStreamFallbackTypes] = useState([]);
+  // v10.5.1: resolver-provided labels for the fallback sources ("Direct MP4 •
+  // moviesda • 1080p", "iframe • …", "Global Mirchi embed") so the source list
+  // names the tier instead of just the filename.
+  const [streamFallbackLabels, setStreamFallbackLabels] = useState([]);
   const [streamChoiceIndex, setStreamChoiceIndex] = useState(0);
   const [streamType, setStreamType] = useState('embed');
   const [status, setStatus] = useState('loading');
@@ -127,6 +131,15 @@ export default function WatchByTMDBPage() {
     return map;
   }, [streamUrl, streamFallbacks, streamFallbackTypes, streamType]);
   const activeStreamType = typeByUrl.get(currentStreamUrl) || streamType;
+  // v10.5.1: tier labels from the resolver win over filename-derived ones, so
+  // the picker reads Stremio → Direct MP4 → iframe → Mirchi in plain words.
+  const labelByUrl = useMemo(() => {
+    const map = new Map();
+    (streamFallbacks || []).forEach((url, i) => {
+      if (url && streamFallbackLabels[i]) map.set(url, streamFallbackLabels[i]);
+    });
+    return map;
+  }, [streamFallbacks, streamFallbackLabels]);
   const [error, setError] = useState('');
   const [resolvedProviderId, setResolvedProviderId] = useState('');
   const [stremioStreams, setStremioStreams] = useState([]);
@@ -303,6 +316,7 @@ export default function WatchByTMDBPage() {
         setStreamUrl(data.streamUrl);
         setStreamFallbacks(data.streamFallbacks || []);
         setStreamFallbackTypes(data.streamFallbackTypes || []);
+        setStreamFallbackLabels(data.streamFallbackLabels || []);
         setStreamChoiceIndex(0);
         setStreamType(data.streamType || 'embed');
         setStatus('ready');
@@ -373,8 +387,8 @@ export default function WatchByTMDBPage() {
   // in order: stream meta → parsed from the URL filename ("1080p 2.9GB") →
   // "Source N". Same helper the player uses internally, so labels agree.
   const watchSources = useMemo(
-    () => buildSourceList({ urls: streamChoices, streams: stremioStreams, labelFor: (url) => parseUrlSourceLabel(url) }),
-    [streamChoices, stremioStreams],
+    () => buildSourceList({ urls: streamChoices, streams: stremioStreams, labelFor: (url) => labelByUrl.get(url) || parseUrlSourceLabel(url) }),
+    [streamChoices, stremioStreams, labelByUrl],
   );
 
   // The Stremio Quality dropdown must describe the stream that is *playing*,
