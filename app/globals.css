@@ -2489,3 +2489,26 @@ html.day-mode [data-dvp="ambient"] { background-color: rgba(0, 0, 0, 0.75) !impo
   transition: border-color 150ms ease, background 150ms ease;
 }
 .jv-vault-rail-more:hover { border-color: rgba(34, 211, 238, 0.8); background: rgba(34, 211, 238, 0.09); }
+
+/* ── vault: web series (v10.9.1) ────────────────────────────────────────
+   A series tile keeps the quality chip top-right and gains an episode badge
+   top-left, mirroring it, so both read at a glance on a small card. */
+.jv-vault-chip-series {
+  right: auto;
+  left: 0.4rem;
+  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.55);
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.28);
+}
+/* episode count sits inline with the year on the caption row */
+.jv-vault-ep-count {
+  margin-left: 0.3rem;
+  border-radius: 0.3rem;
+  padding: 0 0.28rem;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fde68a;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+}

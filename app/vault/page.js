@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import RailNav from '@/components/rail/RailNav';
 import Icon from '@/components/Icons';
 import { readSessionCache, writeSessionCache } from '@/lib/clientCache';
+import { episodeLabel, groupEpisodes } from '@/lib/vaultEpisodes';
 
 /**
  * The Vault — "Neon Control Deck" (v10.9.0).
@@ -20,6 +21,12 @@ import { readSessionCache, writeSessionCache } from '@/lib/clientCache';
  * decade wave or typing is instant with zero round-trips. The server's 30-minute
  * upstream cache (lib/vault.js) is the freshness contract; `?force=1` is the
  * escape hatch when you want the just-finished scrape letter *now*.
+ *
+ * Series (v10.9.1): a record with `kind: 'series'` carries one embed per quality
+ * per episode. The tile gets an episode badge and the player gains an episode
+ * strip, so a 20-episode show is a playable season rather than a wall of
+ * "1080p · #7"-style chips. Movies are untouched — `groupEpisodes` returns
+ * nothing for them and every code path falls back to the original behaviour.
  *
  * Playback: tiles open the instant embed player — a modal iframe pointed at the
  * onestream embed, no route change, no resolve round-trip. Embeds are sorted
@@ -100,7 +107,9 @@ function VaultTile({ movie, onPlay }) {
       type="button"
       className="jv-vault-card group"
       onClick={() => onPlay(movie)}
-      title={`Play ${movie.title}${movie.year ? ` (${movie.year})` : ''}`}
+      title={movie.isSeries
+        ? `Play ${movie.title}${movie.year ? ` (${movie.year})` : ''} — ${movie.episodeCount} episode${movie.episodeCount === 1 ? '' : 's'}`
+        : `Play ${movie.title}${movie.year ? ` (${movie.year})` : ''}`}
     >
       {movie.poster ? (
         <img
@@ -119,6 +128,12 @@ function VaultTile({ movie, onPlay }) {
 
       {movie.quality ? <span className={qualityChipClass(movie.quality)}>{movie.quality}</span> : null}
 
+      {movie.isSeries ? (
+        <span className="jv-vault-chip jv-vault-chip-series">
+          {movie.episodeCount ? `${movie.episodeCount} EP` : 'SERIES'}
+        </span>
+      ) : null}
+
       <span className="jv-vault-play" aria-hidden="true">
         <Icon name="play" className="h-7 w-7" />
       </span>
@@ -127,6 +142,7 @@ function VaultTile({ movie, onPlay }) {
         <span className="jv-vault-name">{movie.title}</span>
         <span className="jv-vault-meta">
           {movie.year || '—'}
+          {movie.isSeries ? <span className="jv-vault-ep-count">{movie.episodeCount} ep</span> : null}
           {movie.rating ? <span className="jv-vault-star">★ {movie.rating.toFixed(1)}</span> : null}
         </span>
       </span>
@@ -138,8 +154,31 @@ function VaultTile({ movie, onPlay }) {
 
 function EmbedPlayer({ movie, onClose }) {
   const embeds = movie.embeds || [];
+
+  // A series carries `season`/`episode` on every embed, so the episodes are
+  // regrouped here (movies produce an empty list and behave exactly as before).
+  const episodes = useMemo(() => (movie.isSeries ? groupEpisodes(embeds) : []), [movie.isSeries, embeds]);
+
+  const [episodeIndex, setEpisodeIndex] = useState(0);
   const [index, setIndex] = useState(0);
-  const active = embeds[index];
+
+  const episode = episodes[episodeIndex] || null;
+  const sources = episode ? episode.embeds : embeds;
+  const safeIndex = Math.min(index, Math.max(0, sources.length - 1));
+  const active = sources[safeIndex];
+
+  const selectEpisode = useCallback((next) => {
+    setEpisodeIndex(next);
+    setIndex(0); // a new episode always opens on its best source
+  }, []);
+
+  // "dead stream? next" walks this episode's qualities first, then the next
+  // episode — for a movie that is simply the next source.
+  const nextSource = useCallback(() => {
+    if (sources.length > 1 && safeIndex < sources.length - 1) { setIndex(safeIndex + 1); return; }
+    if (episodes.length > 1 && episodeIndex < episodes.length - 1) { selectEpisode(episodeIndex + 1); return; }
+    setIndex(0);
+  }, [sources.length, safeIndex, episodes.length, episodeIndex, selectEpisode]);
 
   // Scroll lock + Escape to close + arrow keys hop sources.
   useEffect(() => {
@@ -147,15 +186,15 @@ function EmbedPlayer({ movie, onClose }) {
     document.body.style.overflow = 'hidden';
     const onKey = (event) => {
       if (event.key === 'Escape') onClose();
-      if (event.key === 'ArrowRight' && index < embeds.length - 1) setIndex(index + 1);
-      if (event.key === 'ArrowLeft' && index > 0) setIndex(index - 1);
+      if (event.key === 'ArrowRight' && safeIndex < sources.length - 1) setIndex(safeIndex + 1);
+      if (event.key === 'ArrowLeft' && safeIndex > 0) setIndex(safeIndex - 1);
     };
     window.addEventListener('keydown', onKey);
     return () => {
       document.body.style.overflow = previous;
       window.removeEventListener('keydown', onKey);
     };
-  }, [index, embeds.length, onClose]);
+  }, [safeIndex, sources.length, onClose]);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/92 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label={movie.title}>
@@ -168,7 +207,9 @@ function EmbedPlayer({ movie, onClose }) {
               {movie.title}{movie.year ? <span className="text-zinc-500"> · {movie.year}</span> : null}
             </p>
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">
-              vault embed {index + 1} / {embeds.length}
+              {episode
+                ? `${episodeLabel(episode)} · episode ${episodeIndex + 1} / ${episodes.length} · source ${safeIndex + 1} / ${sources.length}`
+                : `vault embed ${safeIndex + 1} / ${embeds.length}`}
             </p>
           </div>
           <button
@@ -194,22 +235,41 @@ function EmbedPlayer({ movie, onClose }) {
           />
         </div>
 
+        {/* episode picker — series only, and only when there is a choice to make */}
+        {episodes.length > 1 ? (
+          <div className="jv-vault-pills mt-2.5" aria-label="Episode">
+            {episodes.map((entry, entryIndex) => (
+              <button
+                key={`${entry.season}:${entry.episode}`}
+                type="button"
+                onClick={() => selectEpisode(entryIndex)}
+                aria-pressed={entryIndex === episodeIndex}
+                className={entryIndex === episodeIndex ? 'jv-vault-pill jv-vault-pill-on' : 'jv-vault-pill'}
+              >
+                {episodeLabel(entry)}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-          {embeds.map((embed, embedIndex) => (
+          {sources.map((embed, embedIndex) => (
             <button
               key={`${embed.url}-${embedIndex}`}
               type="button"
               onClick={() => setIndex(embedIndex)}
-              aria-pressed={embedIndex === index}
-              className={embedIndex === index ? 'jv-vault-src-chip jv-vault-src-on' : 'jv-vault-src-chip'}
+              aria-pressed={embedIndex === safeIndex}
+              className={embedIndex === safeIndex ? 'jv-vault-src-chip jv-vault-src-on' : 'jv-vault-src-chip'}
             >
-              {String(embed.quality || 'stream').toLowerCase()} · #{embedIndex + 1}
+              {episode
+                ? String(embed.quality || 'stream').toLowerCase()
+                : `${String(embed.quality || 'stream').toLowerCase()} · #${embedIndex + 1}`}
             </button>
           ))}
-          {embeds.length > 1 ? (
+          {sources.length > 1 || (episode && episodeIndex < episodes.length - 1) ? (
             <button
               type="button"
-              onClick={() => setIndex((index + 1) % embeds.length)}
+              onClick={nextSource}
               className="jv-vault-src-chip ml-auto"
             >
               dead stream? next ▸
