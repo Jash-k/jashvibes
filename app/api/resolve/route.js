@@ -183,10 +183,19 @@ export async function GET(request) {
         season,
         episode,
         language,
-        provider,
+        // Force Mirchi-only embed catalogue — third-party embeds are retired.
+        provider: requestedProvider === 'auto' || requestedProvider === 'stremio' || requestedProvider === 'mp4' || requestedProvider === 'iframe'
+          ? 'mirchi'
+          : provider,
       });
+      // Keep only Mirchi in the embed provider list (drop VidLink/VidEasy/…).
+      resolved.providers = (resolved.providers || []).filter((entry) => entry.id === 'mirchi');
+      resolved.attempts = (resolved.attempts || []).filter((entry) => entry.providerId === 'mirchi');
+      if (resolved.selected && resolved.selected.id !== 'mirchi') {
+        resolved.selected = resolved.providers[0] || null;
+      }
 
-      selected = await chooseHealthyVidSrcMirror(resolved.selected);
+      selected = resolved.selected;
       attempts = resolved.attempts.map((attempt) => {
         if (attempt.providerId !== selected.id) return attempt;
         return {
@@ -210,9 +219,8 @@ export async function GET(request) {
       moviesdaMatch = await matchMoviesda({ tmdbId, title: paramTitle, year: paramYear }).catch(() => null);
     }
 
-    // Auto chain: Stremio direct-file streams FIRST for all titles (including PreDVD/theatrical
-    // and digital releases). If Stremio addon has no stream or is unreachable, Auto Priority
-    // cascades to Global Mirchi embed next, then the remaining third-party embeds (VidLink, Videasy, etc.).
+    // Auto chain (locked): Stremio → Direct MP4 (moviesda) → Global Mirchi.
+    // Onestream / moviesda iframe / VidLink / VidEasy / VidZee / VidRock are removed.
     if (requestedProvider === 'auto' && hasValidTmdbId) {
       let stremioSucceeded = false;
       try {
@@ -258,32 +266,28 @@ export async function GET(request) {
         if (moviesdaMatch) {
           try {
             // AUTO never stalls playback long: a tight budget (default 12s)
-            // returns whatever the walk found; the cold case falls through to
-            // Mirchi while the background warm-up fills the cache.
+            // returns whatever direct MP4s the walk found; empty → Mirchi.
             const fresh = await resolveMoviesdaMovie(moviesdaMatch.pageUrl, {
               budgetMs: Number(process.env.MOVIESDA_AUTO_BUDGET_MS || 12000),
             });
-            const mp4s = sortByQuality(fresh.mp4s || []);
-            const embeds = sortByQuality(fresh.embeds || []);
-            if (mp4s.length || embeds.length) {
-              const pick = mp4s[0] || null;
-              const rest = [
-                ...mp4s.filter((q) => q !== pick).map((q) => ({ url: q.url, type: 'direct', label: `Direct MP4 • moviesda • ${q.quality}` })),
-                ...embeds.map((q) => ({ url: q.url, type: 'embed', label: `iframe • moviesda • ${q.quality}` })),
-                ...(resolved.providers || []).map((provider) => ({
-                  url: provider.streamUrl,
-                  type: 'embed',
-                  label: `${provider.provider || provider.id} embed`,
-                })),
-              ];
+            // Direct MP4 only — ignore any embeds the walker still returns.
+            const mp4s = sortByQuality((fresh.mp4s || []).filter((q) => q?.url && !/onestream/i.test(q.url)));
+            if (mp4s.length) {
+              const pick = mp4s[0];
+              const rest = mp4s
+                .filter((q) => q !== pick)
+                .map((q) => ({ url: q.url, type: 'direct', label: `Direct MP4 • moviesda • ${q.quality}` }));
+              // Mirchi stays available as a manual/auto fallback after the MP4 list.
+              const mirchi = (resolved.providers || []).find((provider) => provider.id === 'mirchi');
+              if (mirchi?.streamUrl) {
+                rest.push({ url: mirchi.streamUrl, type: 'embed', label: 'Global Mirchi embed' });
+              }
               selected = {
-                id: pick ? 'vod-mp4' : 'vod-embed',
+                id: 'vod-mp4',
                 provider: 'moviesda',
-                label: pick
-                  ? `Direct MP4 • moviesda • ${pick.quality || 'HD'}`
-                  : `iframe • moviesda • ${embeds[0].quality || 'HD'}`,
-                streamUrl: pick ? pick.url : embeds[0].url,
-                streamType: pick ? 'direct' : 'embed',
+                label: `Direct MP4 • moviesda • ${pick.quality || 'HD'}`,
+                streamUrl: pick.url,
+                streamType: 'direct',
                 fallbacks: rest.map((entry) => entry.url),
                 fallbackTypes: rest.map((entry) => entry.type),
                 fallbackLabels: rest.map((entry) => entry.label),
@@ -298,7 +302,7 @@ export async function GET(request) {
                   label: selected.label,
                   status: 'available',
                   streamUrl: selected.streamUrl,
-                  reason: 'Stremio had no stream; Auto Priority resolved a fresh moviesda source.',
+                  reason: 'Stremio had no stream; Auto Priority resolved a fresh moviesda direct MP4.',
                 },
                 ...attempts,
               ];
@@ -328,22 +332,8 @@ export async function GET(request) {
           }
         }
 
-        // If Global Mirchi also failed, fall back to the first available third-party embed
-        if (!mirchiUsable && !selected) {
-          const fallback = resolved.providers.find((provider) => provider.id !== 'mirchi');
-          if (fallback) {
-            selected = fallback;
-            sourcesToSave = resolved.providers;
-            const fallbackIndex = attempts.findIndex((attempt) => attempt.providerId === fallback.id);
-            if (fallbackIndex !== -1) {
-              attempts[fallbackIndex] = {
-                ...attempts[fallbackIndex],
-                status: 'available',
-                reason: `Stremio and Global Mirchi were unavailable; Auto Priority fell back to ${fallback.provider}.`,
-              };
-            }
-          }
-        }
+        // Third-party embeds (VidLink/VidEasy/…) are intentionally NOT used.
+        // If Mirchi also failed and no MP4 was found, selected stays null → 404 below.
       }
     } else if (requestedProvider === 'stremio' && hasValidTmdbId) {    } else if (requestedProvider === 'stremio' && hasValidTmdbId) {
       try {
@@ -382,44 +372,41 @@ export async function GET(request) {
           { status: 404 },
         );
       }
-    } else if ((requestedProvider === 'mp4' || requestedProvider === 'iframe') && hasValidTmdbId) {
-      // v10.6.0: Direct MP4 / iframe server cards — links are minted fresh at
-      // click time from the stable moviesda page URL (stored direct URLs rot
-      // within hours).
+    } else if (requestedProvider === 'iframe' && hasValidTmdbId) {
+      return NextResponse.json(
+        { error: 'iframe / onestream embeds are disabled on the watch page. Use Stremio, Direct MP4, or Global Mirchi — or open the title from The Vault.', attempts },
+        { status: 410 },
+      );
+    } else if (requestedProvider === 'mp4' && hasValidTmdbId) {
+      // Direct MP4 server card — links minted fresh from the stable moviesda pageUrl.
       if (!moviesdaMatch) {
         return NextResponse.json(
           { error: 'This title is not in the moviesda source yet', attempts },
           { status: 404 },
         );
       }
-      const wantsEmbed = requestedProvider === 'iframe';
       const fresh = await resolveMoviesdaMovie(moviesdaMatch.pageUrl);
-      const mp4s = sortByQuality(fresh.mp4s || []);
-      const embeds = sortByQuality(fresh.embeds || []);
-      const pool = wantsEmbed ? (embeds.length ? embeds : mp4s) : (mp4s.length ? mp4s : embeds);
-      if (!pool.length) {
+      const mp4s = sortByQuality((fresh.mp4s || []).filter((q) => q?.url && !/onestream/i.test(q.url)));
+      if (!mp4s.length) {
         return NextResponse.json(
-          { error: `moviesda walk returned no ${wantsEmbed ? 'iframe' : 'direct MP4'} links for this title`, attempts },
+          { error: 'moviesda walk returned no direct MP4 links for this title', attempts },
           { status: 404 },
         );
       }
-      const pickedIsEmbed = pool === embeds;
-      const pick = pool[0];
+      const pick = mp4s[0];
       const rest = [
-        ...mp4s.map((q) => ({ url: q.url, type: 'direct', label: `Direct MP4 • moviesda • ${q.quality}` })),
-        ...embeds.map((q) => ({ url: q.url, type: 'embed', label: `iframe • moviesda • ${q.quality}` })),
-        ...(resolved.providers || []).map((provider) => ({
-          url: provider.streamUrl,
-          type: 'embed',
-          label: `${provider.provider || provider.id} embed`,
-        })),
-      ].filter((entry) => entry.url && entry.url !== pick.url);
+        ...mp4s.filter((q) => q !== pick).map((q) => ({ url: q.url, type: 'direct', label: `Direct MP4 • moviesda • ${q.quality}` })),
+      ];
+      const mirchi = (resolved.providers || []).find((provider) => provider.id === 'mirchi');
+      if (mirchi?.streamUrl) {
+        rest.push({ url: mirchi.streamUrl, type: 'embed', label: 'Global Mirchi embed' });
+      }
       selected = {
-        id: pickedIsEmbed ? 'vod-embed' : 'vod-mp4',
+        id: 'vod-mp4',
         provider: 'moviesda',
-        label: `${pickedIsEmbed ? 'iframe' : 'Direct MP4'} • moviesda • ${pick.quality || 'HD'}`,
+        label: `Direct MP4 • moviesda • ${pick.quality || 'HD'}`,
         streamUrl: pick.url,
-        streamType: pickedIsEmbed ? 'embed' : 'direct',
+        streamType: 'direct',
         fallbacks: rest.map((entry) => entry.url),
         fallbackTypes: rest.map((entry) => entry.type),
         fallbackLabels: rest.map((entry) => entry.label),
@@ -434,12 +421,19 @@ export async function GET(request) {
           label: selected.label,
           status: 'available',
           streamUrl: selected.streamUrl,
-          reason: `Selected ${wantsEmbed ? 'iframe' : 'Direct MP4'} server manually; links resolved fresh from moviesda.`,
+          reason: 'Selected Direct MP4 server manually; links resolved fresh from moviesda.',
         },
         ...attempts,
       ];
     } else if (hasValidTmdbId) {
-      // Manual selection of embed provider (mirchi, vidlink, videasy, etc.)
+      // Manual selection — only Global Mirchi remains as an embed provider.
+      const blocked = ['vidlink', 'videasy', 'vidzee', 'vidrock', 'vidsrc', 'vidnest', 'screenscape'];
+      if (blocked.includes(requestedProvider)) {
+        return NextResponse.json(
+          { error: `${requestedProvider} embeds are disabled. Use Auto, Stremio, Direct MP4, or Global Mirchi.`, attempts },
+          { status: 410 },
+        );
+      }
       if (requestedProvider === 'mirchi') {
         const mirchiAttemptIndex = attempts.findIndex((attempt) => attempt.providerId === 'mirchi');
         if (mirchiAttemptIndex !== -1) {

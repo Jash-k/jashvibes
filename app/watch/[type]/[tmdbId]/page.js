@@ -58,14 +58,12 @@ function shouldUseObjectPlayer(provider, streamUrl) {
 }
 
 const WATCH_SERVER_OPTIONS = [
-  { id: 'auto', name: 'Auto', label: 'Stremio → MP4 → iframe → Mirchi' },
+  { id: 'auto', name: 'Auto', label: 'Stremio → MP4 → Mirchi' },
   { id: 'stremio', name: 'Stremio', label: 'Direct files' },
   { id: 'mirchi', name: 'Global Mirchi', label: 'Embed' },
-  { id: 'vidlink', name: 'VidLink', label: 'Embed' },
-  { id: 'videasy', name: 'VidEasy', label: 'Embed' },
-  { id: 'vidzee', name: 'VidZee', label: 'Backup' },
-  { id: 'vidrock', name: 'VidRock', label: 'Tamil first' },
 ];
+
+const BLOCKED_SERVER_IDS = new Set(['vidlink', 'videasy', 'vidzee', 'vidrock', 'vidsrc', 'vidnest', 'screenscape', 'iframe']);
 
 export default function WatchByTMDBPage() {
   const params = useParams();
@@ -101,16 +99,16 @@ export default function WatchByTMDBPage() {
   const [streamUrl, setStreamUrl] = useState('');
   const [streamFallbacks, setStreamFallbacks] = useState([]);
   // v10.5.0: per-fallback kind ('direct' | 'embed') — lets "Next source" hop
-  // between MP4 files and onestream iframes without re-resolving.
+  // between Stremio / Direct MP4 / Mirchi sources without re-resolving.
   const [streamFallbackTypes, setStreamFallbackTypes] = useState([]);
   // v10.5.1: resolver-provided labels for the fallback sources ("Direct MP4 •
-  // moviesda • 1080p", "iframe • …", "Global Mirchi embed") so the source list
+  // moviesda • 1080p", "Global Mirchi embed") so the source list
   // names the tier instead of just the filename.
   const [streamFallbackLabels, setStreamFallbackLabels] = useState([]);
   const [streamChoiceIndex, setStreamChoiceIndex] = useState(0);
   const [streamType, setStreamType] = useState('embed');
   // v10.6.0: background moviesda match for this title — the resolve API never
-  // waits for this; when it lands, the Direct MP4 / iframe server cards turn
+  // waits for this; when it lands, the Direct MP4 server card turns
   // clickable. Links are minted fresh at click time (stored ones rot).
   const [moviesdaMatch, setMoviesdaMatch] = useState(null);
   const [status, setStatus] = useState('loading');
@@ -136,7 +134,7 @@ export default function WatchByTMDBPage() {
   }, [streamUrl, streamFallbacks, streamFallbackTypes, streamType]);
   const activeStreamType = typeByUrl.get(currentStreamUrl) || streamType;
   // v10.5.1: tier labels from the resolver win over filename-derived ones, so
-  // the picker reads Stremio → Direct MP4 → iframe → Mirchi in plain words.
+  // the picker reads Stremio → Direct MP4 → Mirchi in plain words.
   const labelByUrl = useMemo(() => {
     const map = new Map();
     (streamFallbacks || []).forEach((url, i) => {
@@ -176,7 +174,7 @@ export default function WatchByTMDBPage() {
   useEffect(() => {
     try {
       const saved = getLastProvider(watchKey);
-      if (saved && saved !== provider) setProvider(saved);
+      if (saved && saved !== provider && !BLOCKED_SERVER_IDS.has(String(saved).toLowerCase())) setProvider(saved);
     } catch {}
     setProviderChecked(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -537,9 +535,6 @@ export default function WatchByTMDBPage() {
       const files = moviesdaMatch.mp4Count || 0;
       extra.push({ id: 'mp4', name: 'Direct MP4', label: files ? `moviesda • ${files} file${files === 1 ? '' : 's'}` : 'moviesda • fresh links' });
     }
-    if (moviesdaMatch.embedCount) {
-      extra.push({ id: 'iframe', name: 'iframe', label: `onestream • ${moviesdaMatch.embedCount} embed${moviesdaMatch.embedCount === 1 ? '' : 's'}` });
-    }
     if (!extra.length) return cards;
     const insertAt = cards.findIndex((card) => card.id === 'mirchi');
     cards.splice(insertAt >= 0 ? insertAt : cards.length - 1, 0, ...extra);
@@ -717,7 +712,7 @@ export default function WatchByTMDBPage() {
                 <div className="h-12 w-12 animate-spin rounded-full border-4 border-zinc-700 border-t-red-600" />
                 <div>
                   <p className="font-semibold text-white">Resolving stream provider...</p>
-                  <p className="mt-2 text-sm text-zinc-400">{provider === 'auto' ? 'Checking Stremio first, then Global Mirchi, then fallback servers if needed.' : 'Generating stream URL from TMDB ID.'}</p>
+                  <p className="mt-2 text-sm text-zinc-400">{provider === 'auto' ? 'Checking Stremio first, then Direct MP4, then Global Mirchi.' : 'Generating stream URL from TMDB ID.'}</p>
                 </div>
               </div>
             ) : null}

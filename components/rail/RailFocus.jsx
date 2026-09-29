@@ -21,11 +21,17 @@ import { removeHistoryEntry } from '@/lib/watchStore';
  * a light panel with a dark title over a dark poster is exactly the "hero is not visible and the title
  * looks blurred" report. Artwork keeps its own light.
  */
-export default function RailFocus({ slide = null, eyebrow = 'Now on your shelf' }) {
+export default function RailFocus({ slide = null, eyebrow = 'Now on your shelf', onWatchOpen = null }) {
   if (!slide) return null;
 
   const art = slide.backdropUrl || slide.posterUrl;
   const meta = [slide.year, slide.type === 'series' ? 'Series' : 'Movie', ...(slide.chips || [])].filter(Boolean).join('  ·  ');
+
+  const handleWatch = (event) => {
+    if (!onWatchOpen || !slide.href) return;
+    event.preventDefault();
+    onWatchOpen(slide);
+  };
 
   return (
     <section aria-label="Featured title" className="jv-focus relative overflow-hidden border-b border-white/10">
@@ -50,7 +56,7 @@ export default function RailFocus({ slide = null, eyebrow = 'Now on your shelf' 
 
         <div className="mt-1 flex flex-wrap items-center gap-2">
           {slide.href ? (
-            <Link href={slide.href} className="jv-focus-cta">
+            <Link href={slide.href} className="jv-focus-cta" onClick={handleWatch}>
               <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
                 <path d="M8 5v14l11-7z" />
               </svg>

@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CommandPalette from '@/components/CommandPalette';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 import { POSTER_SIZES_ATTR, tmdbImageSrcSet } from '@/lib/tmdbPoster';
@@ -44,6 +45,37 @@ function watchHref(item) {
     : '';
   return `/watch/${item.type}/${item.tmdbId}${episode}${watchQualityParam(item, Boolean(episode))}`;
 }
+
+
+/**
+ * Homepage click path (locked):
+ *   1. Ask /api/vault/match (TMDB → IMDb → title+year)
+ *   2. If hit → open vault embed player (/vault?play=<id>)
+ *   3. Else → normal /watch/{type}/{tmdbId} behaviour (no onestream embeds there)
+ */
+async function resolveOpenHref(item, { signal } = {}) {
+  const fallback = watchHref(item);
+  if (!item) return fallback;
+  try {
+    const params = new URLSearchParams();
+    if (item.tmdbId) params.set('tmdbId', String(item.tmdbId));
+    if (item.imdbId) params.set('imdbId', String(item.imdbId));
+    if (item.title) params.set('title', String(item.title));
+    const year = item.year || String(item.releaseDate || '').slice(0, 4);
+    if (year) params.set('year', String(year));
+    const response = await fetch(`/api/vault/match?${params.toString()}`, {
+      signal,
+      cache: 'no-store',
+    });
+    if (!response.ok) return fallback;
+    const data = await response.json().catch(() => ({}));
+    if (data?.playHref) return data.playHref;
+  } catch (error) {
+    if (error?.name === 'AbortError') throw error;
+  }
+  return fallback;
+}
+
 
 function MatchDialog({ item, onClose, onMatched }) {
   const [query, setQuery] = useState('');
@@ -136,10 +168,13 @@ function QualityDebugLine({ items = [] }) {
 }
 
 function MediaCard({ item, onItemMatched, delay = 0 }) {
+  const router = useRouter();
   const [matchOpen, setMatchOpen] = useState(false);
+  const [opening, setOpening] = useState(false);
   const hasTMDB = Boolean(item.tmdbId);
   const href = hasTMDB ? watchHref(item) : undefined;
-  const Wrapper = hasTMDB ? Link : 'div';
+  // Always a div — we intercept the click so vault can win before /watch.
+  const Wrapper = 'div';
   const qualityChip = item?.type === 'series'
     ? { label: 'Series', cls: 'border-white/15 bg-black/60 text-zinc-200' }
     : { ...itemQualityChip(item), fallback: true };
@@ -149,8 +184,39 @@ function MediaCard({ item, onItemMatched, delay = 0 }) {
   return (
     <>
       <Wrapper
-        href={href}
-        className={`jv-card group relative block overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 shadow-lg shadow-black/25 transition duration-300 active:scale-[0.99] hover:border-amber-400/50 hover:bg-zinc-900 hover:shadow-2xl hover:shadow-red-950/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 sm:rounded-3xl sm:shadow-xl ${hasTMDB ? '' : 'cursor-pointer'}`}
+        role={hasTMDB ? 'link' : undefined}
+        tabIndex={hasTMDB ? 0 : undefined}
+        aria-busy={opening || undefined}
+        onClick={async (event) => {
+          if (!hasTMDB || opening) return;
+          // Let nested buttons (fav / match) win
+          if (event.target.closest('button, a[href]')) return;
+          event.preventDefault();
+          setOpening(true);
+          try {
+            const target = await resolveOpenHref(item);
+            if (target) router.push(target);
+          } catch {
+            if (href) router.push(href);
+          } finally {
+            setOpening(false);
+          }
+        }}
+        onKeyDown={async (event) => {
+          if (!hasTMDB || opening) return;
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          setOpening(true);
+          try {
+            const target = await resolveOpenHref(item);
+            if (target) router.push(target);
+          } catch {
+            if (href) router.push(href);
+          } finally {
+            setOpening(false);
+          }
+        }}
+        className={`jv-card group relative block overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 shadow-lg shadow-black/25 transition duration-300 active:scale-[0.99] hover:border-amber-400/50 hover:bg-zinc-900 hover:shadow-2xl hover:shadow-red-950/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 sm:rounded-3xl sm:shadow-xl cursor-pointer ${opening ? 'opacity-80' : ''}`}
         onPointerMove={(event) => {
           if (event.pointerType !== 'mouse') return;
           const rect = event.currentTarget.getBoundingClientRect();
@@ -444,6 +510,34 @@ export default function LandingPage() {
   const [movies, setMovies] = useState([]);
   const [series, setSeries] = useState([]);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const router = useRouter();
+  const openTitle = useCallback(async (itemOrSlide) => {
+    const item = itemOrSlide?.title
+      ? {
+          tmdbId: itemOrSlide.tmdbId,
+          imdbId: itemOrSlide.imdbId,
+          title: itemOrSlide.title,
+          year: itemOrSlide.year,
+          type: itemOrSlide.type,
+          season: itemOrSlide.season,
+          episode: itemOrSlide.episode,
+          releaseDate: itemOrSlide.releaseDate,
+        }
+      : itemOrSlide;
+    // History resumes keep their original href (may already be /vault or /watch)
+    if (itemOrSlide?.libraryHref && itemOrSlide.progress > 0) {
+      router.push(itemOrSlide.libraryHref || itemOrSlide.href);
+      return;
+    }
+    try {
+      const target = await resolveOpenHref(item);
+      if (target) router.push(target);
+      else if (itemOrSlide?.href) router.push(itemOrSlide.href);
+    } catch {
+      if (itemOrSlide?.href) router.push(itemOrSlide.href);
+    }
+  }, [router]);
+
   const [scrapeStatus, setScrapeStatus] = useState('loading');
   const [scrapeError, setScrapeError] = useState('');
   const [paging, setPaging] = useState({
@@ -467,6 +561,8 @@ export default function LandingPage() {
         title: left.title || 'Untitled',
         type: left.type || 'movie',
         year: left.year || '',
+        tmdbId: left.tmdbId || null,
+        imdbId: left.imdbId || '',
         href: left.href,
         libraryHref: left.href,
         posterUrl: left.posterUrl || left.backdropUrl || '',
@@ -484,6 +580,8 @@ export default function LandingPage() {
       title: fresh.title || 'Untitled',
       type: fresh.type || 'movie',
       year: fresh.year || '',
+      tmdbId: fresh.tmdbId || null,
+      imdbId: fresh.imdbId || '',
       href,
       posterUrl: fresh.posterUrl || fresh.backdropUrl || '',
       backdropUrl: fresh.backdropUrl || fresh.posterUrl || '',
@@ -640,7 +738,7 @@ export default function LandingPage() {
       <RailNav
         onOpenSearch={() => setPaletteOpen(true)}
       />
-      <RailFocus slide={focusSlide} eyebrow={focusSlide?.progress > 0 ? 'Where you left off' : 'Fresh from the scrape'} />
+      <RailFocus slide={focusSlide} eyebrow={focusSlide?.progress > 0 ? 'Where you left off' : 'Fresh from the scrape'} onWatchOpen={openTitle} />
 
       <section className="mx-auto flex w-full max-w-[1500px] flex-col gap-7 px-4 pb-20 pt-5 sm:px-6 sm:gap-9 lg:px-8">
         <VaultRail />

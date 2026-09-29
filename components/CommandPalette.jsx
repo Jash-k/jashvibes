@@ -75,6 +75,25 @@ export default function CommandPalette({ open, onClose }) {
     };
   }, [query]);
 
+
+  async function openResult(item) {
+    if (!item?.tmdbId && !item?.title) return;
+    try {
+      const params = new URLSearchParams();
+      if (item.tmdbId) params.set('tmdbId', String(item.tmdbId));
+      if (item.imdbId) params.set('imdbId', String(item.imdbId));
+      if (item.title) params.set('title', String(item.title));
+      if (item.year) params.set('year', String(item.year));
+      const response = await fetch(`/api/vault/match?${params.toString()}`, { cache: 'no-store' });
+      const data = await response.json().catch(() => ({}));
+      if (data?.playHref) {
+        router.push(data.playHref);
+        return;
+      }
+    } catch { /* fall through */ }
+    if (item.tmdbId) router.push(`/watch/${item.type || 'movie'}/${item.tmdbId}`);
+  }
+
   const handleKeyDownList = (e) => {
     if (!results.length) return;
     if (e.key === 'ArrowDown') {
@@ -87,7 +106,7 @@ export default function CommandPalette({ open, onClose }) {
       const selected = results[selectedIndex];
       if (selected) {
         onClose(false);
-        router.push(`/watch/${selected.type}/${selected.tmdbId}`);
+        openResult(selected);
       }
     }
   };
@@ -186,6 +205,7 @@ export default function CommandPalette({ open, onClose }) {
                   <Link
                     key={`${item.type}-${item.tmdbId}`}
                     href={`/watch/${item.type}/${item.tmdbId}`}
+                    onClick={(event) => { event.preventDefault(); onClose(false); openResult(item); }}
                     onClick={() => onClose(false)}
                     onMouseEnter={() => setSelectedIndex(index)}
                     className={`flex items-center gap-3.5 rounded-2xl p-2.5 transition ${
