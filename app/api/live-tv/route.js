@@ -68,7 +68,7 @@ export async function GET(request) {
         // Once any manual catalog mapping exists, the database catalog is the
         // only source for the main panel—even if the active profile currently
         // has zero visible channels. Raw source channels must never leak back in.
-        if (state.configured) {
+        if (state.configured || state.channels) {
           let hydratedChannels = state.channels;
           if (hydratedChannels.some((channel) => isJioChannel(channel))) {
             const jioCookie = await getFreshJioCookie();
@@ -92,11 +92,7 @@ export async function GET(request) {
           }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
         }
       } catch (dbError) {
-        console.warn('[api/live-tv] DB unavailable, falling back to initial Jio channels:', dbError.message);
-        const fallback = await getLiveTVChannels({ source: 'jio-tamil', playableOnly, workingOnly: false });
-        return NextResponse.json(await decorateInitialJioFallback(fallback), {
-          headers: { 'Cache-Control': 'no-store, max-age=0' },
-        });
+        return NextResponse.json({ error: 'Saved Live catalogue is temporarily unavailable. Your mappings have not been reset.', channels: [], fromDb: false, initialFallback: false }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
       }
 
       // First-use bootstrap only: load Jio so the TV page remains useful before

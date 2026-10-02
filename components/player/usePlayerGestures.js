@@ -164,8 +164,9 @@ export function usePlayerGestures({
 
       if (gesture.type === 'brightness' || gesture.type === 'volume') {
         const el = videoEl || engine.videoEl;
-        const step = (gesture.magnitude - magnitudeRef.current) / Math.max(160, state.rectHeight || 320);
-        magnitudeRef.current = gesture.magnitude;
+        const signedMagnitude = gesture.magnitude * (event.clientY < state.startY ? 1 : -1);
+        const step = (signedMagnitude - magnitudeRef.current) / Math.max(160, state.rectHeight || 320);
+        magnitudeRef.current = signedMagnitude;
         if (gesture.type === 'brightness') {
           const next = Math.min(1, Math.max(0.15, (Number(el?.style?.filter?.match(/([\d.]+)\)?$/)?.[1]) || 1) + step));
           engine.setBrightness(next);

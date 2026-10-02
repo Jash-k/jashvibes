@@ -1,3 +1,4 @@
+import { requireServiceAuth } from '@/lib/serverAuth';
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { searchSongs } from '@/lib/musicApi';
@@ -10,20 +11,6 @@ import {
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-function accessToken(password = '') {
-  return crypto.createHash('sha256').update(`jash-theatre:${password}`).digest('hex');
-}
-
-function isAuthorized(request) {
-  const configuredPassword = process.env.PASS || process.env.SPACE_PASSWORD || process.env.APP_PASSWORD || '';
-  const adminToken = process.env.MUSIC_ADMIN_TOKEN || process.env.SYNC || '';
-  if (!configuredPassword && !adminToken) return true;
-  const token = request.headers.get('x-jash-token') || request.headers.get('x-music-admin-token') || new URL(request.url).searchParams.get('token') || '';
-  if (adminToken && token === adminToken) return true;
-  if (configuredPassword && token === accessToken(configuredPassword)) return true;
-  return false;
-}
 
 function pickBestTrack(items = []) {
   const safe = (items || []).filter(Boolean);
@@ -43,7 +30,7 @@ async function findSaavnTrack(query = '') {
 }
 
 export async function PATCH(request) {
-  if (!isAuthorized(request)) return NextResponse.json({ error: 'Unauthorized playlist track update' }, { status: 401 });
+  try { await requireServiceAuth(request); } catch (e) { return NextResponse.json({ error: e.message }, { status: e.status || 401 }); }
 
   try {
     const body = await request.json().catch(() => ({}));

@@ -1,4 +1,5 @@
 'use client';
+import { claimMediaFocus } from '@/lib/player/mediaFocus';
 
 /**
  * usePlaybackEngine — the ONLY code in JaSH ViBeS that attaches media to a
@@ -686,6 +687,7 @@ export function usePlaybackEngine(options = {}) {
       commitStatus('error', mapped.message);
       try {
         handlersRef.current.onError?.(mapped);
+        handlersRef.current.onFatal?.(mapped);
       } catch {}
       return;
     }
@@ -696,17 +698,28 @@ export function usePlaybackEngine(options = {}) {
       const mapped = { kind: 'unknown', message: 'No playable URL was resolved for this source.', retriable: false, action: 'none' };
       setErrorInfo(mapped);
       commitStatus('error', mapped.message);
+      handlersRef.current.onFatal?.(mapped);
       return;
     }
 
     const kind = source.kind && source.kind !== 'auto' ? source.kind : detectKind(url);
-    const useShaka = needsEngine(url, kind, { allowNativeHls: allowNativeHlsRef.current });
+    const useShaka = needsEngine(url, kind, { allowNativeHls: allowNativeHlsRef.current && source.allowNativeHls !== false && !source.hasDrm });
     const suppliedDrm = dropDrm ? {} : source.drm || {};
     const hasDrm = Boolean(suppliedDrm?.clearKeys && Object.keys(suppliedDrm.clearKeys).length) || Boolean(suppliedDrm?.servers);
     activePolicy.lastDrm = hasDrm;
 
     if (source.crossOrigin) el.setAttribute('crossOrigin', source.crossOrigin);
     else el.removeAttribute?.('crossOrigin');
+
+    const timeoutMs = Number(activePolicy.loadTimeoutMs || DEFAULT_LOAD_TIMEOUT_MS);
+    timeoutRef.current = window.setTimeout(() => {
+      if (!isAlive(generation)) return;
+      if ((videoRef.current?.readyState ?? 0) >= 2) return;
+      failureRef.current?.(
+        { kind: 'timeout', code: 'LOAD_TIMEOUT', message: `This source did not start within ${Math.round(timeoutMs / 1000)}s.`, retriable: true, action: 'rotate-source' },
+        'timeout',
+      );
+    }, timeoutMs);
 
     try {
       if (useShaka) {
@@ -717,6 +730,7 @@ export function usePlaybackEngine(options = {}) {
           const mapped = { kind: 'codec', message: 'This browser cannot play adaptive streams (no MediaSource support).', retriable: false, action: 'rotate-source' };
           setErrorInfo(mapped);
           commitStatus('error', mapped.message);
+          handlersRef.current.onFatal?.(mapped);
           return;
         }
 
@@ -777,15 +791,6 @@ export function usePlaybackEngine(options = {}) {
     }
     if (!isAlive(generation)) return;
 
-    const timeoutMs = Number(activePolicy.loadTimeoutMs || DEFAULT_LOAD_TIMEOUT_MS);
-    timeoutRef.current = window.setTimeout(() => {
-      if (!isAlive(generation)) return;
-      if ((videoRef.current?.readyState ?? 0) >= 2) return;
-      failureRef.current?.(
-        { kind: 'timeout', code: 'LOAD_TIMEOUT', message: `This source did not start within ${Math.round(timeoutMs / 1000)}s.`, retriable: true, action: 'rotate-source' },
-        'timeout',
-      );
-    }, timeoutMs);
 
     el.volume = clamp(prefsRef.current.volume, 1, 0, 1);
     el.muted = false;
@@ -941,7 +946,9 @@ export function usePlaybackEngine(options = {}) {
     setAttemptNote(action.message);
     if (action.hold) return;
 
+    const recoveryGeneration = generationRef.current;
     window.setTimeout(async () => {
+      if (!mountedRef.current || generationRef.current !== recoveryGeneration) return;
       try {
         if (action.positionPreserved && el) {
           // Prefer the live position, then the last position we commanded, then
@@ -1049,6 +1056,7 @@ export function usePlaybackEngine(options = {}) {
     };
 
     const onPlay = () => {
+      claimMediaFocus('video');
       userWantsPlayRef.current = true;
       setPlaying(true);
       setStatus((current) => (current === 'buffering' || current === 'recovering' || current === 'loading' || current === 'error' ? 'ready' : current));

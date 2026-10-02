@@ -15,7 +15,7 @@ export async function POST(request) {
     const body = await request.json().catch(() => ({}));
     const sourceId = String(body.sourceId || '').trim();
     const mode = body.mode || 'unused';
-    const filter = {};
+    const filter = { mappingManaged: { $ne: true }, epgOverride: null }; // explicit unmaps/guide choices are protected
     if (sourceId) filter.sourceId = sourceId;
     if (mode === 'broken') {
       filter.workingStatus = 'broken';

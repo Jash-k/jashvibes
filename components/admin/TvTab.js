@@ -42,7 +42,9 @@ export default function TvTab() {
   const [sweeping, setSweeping] = useState(false);
   const [note, setNote] = useState(null);
   const [dead, setDead] = useState([]);
-  const guide = useLiveGuide({});
+  const [guideChannels, setGuideChannels] = useState([]);
+  useEffect(() => { fetch('/api/live-service/channels?mapped=1&limit=1000', { cache: 'no-store' }).then((r) => r.json()).then((d) => setGuideChannels(d.channels || [])).catch(() => {}); }, [panelOpen]);
+  const guide = useLiveGuide({ channels: guideChannels });
 
   const refreshGuideFeed = useCallback(async () => {
     try { await guide.refresh(); } catch { /* the panel shows its own status */ }

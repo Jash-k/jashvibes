@@ -98,6 +98,17 @@ function safeEqual(a, b) {
   return diff === 0;
 }
 
+async function verifyEdgeSession(token, password) {
+  const parts = String(token).split('.');
+  if (parts.length !== 4 || parts[0] !== 'v1' || !/^\d+$/.test(parts[1]) || !/^\d+$/.test(parts[2]) || !/^[a-f0-9]{64}$/.test(parts[3])) return false;
+  const issued = Number(parts[1]), expiry = Number(parts[2]), now = Math.floor(Date.now() / 1000);
+  const ttl = (Math.min(180, Math.max(1, Number(process.env.SESSION_TTL_DAYS || 30))) || 30) * 86400;
+  if (issued > now + 60 || expiry <= now || expiry <= issued || expiry - issued > ttl + 1) return false;
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(sessionSeed(password)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`theatre:${parts.slice(0, 3).join('.')}`));
+  return safeEqual(parts[3], Array.from(new Uint8Array(sig), (b) => b.toString(16).padStart(2, '0')).join(''));
+}
+
 function getClientIp(request) {
   const cf = request.headers.get('cf-connecting-ip');
   if (cf) return cf.trim();
@@ -107,7 +118,7 @@ function getClientIp(request) {
   return forwarded.split(',')[0].trim() || 'unknown';
 }
 
-export async function middleware(request) {
+export async function proxy(request) {
   const { pathname } = request.nextUrl;
 
   if (pathname === '/admin') return adminPageGate(request);
@@ -131,13 +142,14 @@ export async function middleware(request) {
   // Admin APIs enforce their OWN realm (ADMIN_PASS, DB-backed epoch — see
   // lib/adminAuth.js). Gating them here too would demand the theatre password
   // first and make the two realms inseparable; the spec keeps them independent.
-  if (pathname.startsWith('/api/admin/')) return NextResponse.next();
+  if (pathname.startsWith('/api/admin/') || pathname.startsWith('/api/live-service/')) return NextResponse.next();
 
+  if (['/api/music/playlist/tracks', '/api/title-match'].includes(pathname) && request.method !== 'GET') return NextResponse.next();
   const password = process.env.PASS || process.env.SPACE_PASSWORD || process.env.APP_PASSWORD || '';
   // When no password is configured the app is intentionally open (dev mode).
-  if (!password) return NextResponse.next();
+  if (!password) return NextResponse.json({ error: 'Password protection is not configured. Set PASS before deployment.' }, { status: 503 });
 
-  const expected = await sha256Hex(sessionSeed(password));
+
   const presented =
     request.cookies.get(SESSION_COOKIE)?.value ||
     request.headers.get('x-jash-token') ||
@@ -145,7 +157,7 @@ export async function middleware(request) {
     request.nextUrl.searchParams.get('token') ||
     '';
 
-  if (presented && safeEqual(presented, expected)) {
+  if (presented && await verifyEdgeSession(presented, password)) {
     return NextResponse.next();
   }
 

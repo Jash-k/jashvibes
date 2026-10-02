@@ -18,6 +18,11 @@ export async function GET(request) {
     // "Sync now" uses it after a scrape letter finishes and you want it now.
     const force = new URL(request.url).searchParams.has('force');
     const payload = await loadVault({ force });
+    const id = new URL(request.url).searchParams.get('id');
+    if (id) {
+      const movie = payload.movies.find((item) => item.id === id);
+      return NextResponse.json({ movie: movie || null }, { status: movie ? 200 : 404, headers: { 'Cache-Control': 'private, max-age=60' } });
+    }
     return NextResponse.json(payload, {
       headers: {
         'Cache-Control': 'private, max-age=300, stale-while-revalidate=600',

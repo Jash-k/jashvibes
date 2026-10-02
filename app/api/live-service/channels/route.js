@@ -1,3 +1,4 @@
+import { setSetting } from '@/models/Setting';
 import { NextResponse } from 'next/server';
 import { requireServiceAuth } from '@/lib/serverAuth';
 import dbConnect from '@/lib/db';
@@ -113,7 +114,7 @@ export async function GET(request) {
       channels: docs,
     });
   } catch (error) {
-    return json({ ok: false, error: error.message }, error.status || 500);
+    return json({ ok: false, error: error.name === 'VersionError' ? 'This channel changed concurrently. Refresh and retry.' : error.message }, error.name === 'VersionError' ? 409 : error.status || 500);
   }
 }
 
@@ -125,6 +126,7 @@ export async function PATCH(request) {
     const ids = Array.isArray(body.ids) ? body.ids.filter(Boolean) : [body.channelId || body.id].filter(Boolean);
     if (!ids.length) return json({ ok: false, error: 'channel id is required' }, 400);
 
+    await LiveChannel.updateMany({ channelId: { $in: ids }, __v: { $exists: false } }, { $set: { __v: 0 } });
     const docs = await LiveChannel.find({ channelId: { $in: ids } });
     if (!docs.length) return json({ ok: false, error: 'Channel not found' }, 404);
 
@@ -174,11 +176,12 @@ export async function PATCH(request) {
       let memberships = normalizeCatalogMemberships(doc.catalogs || []);
       let catalogMutation = false;
 
-      if (action === 'toggleCatalog') {
+      if (action === 'setCatalog' || action === 'toggleCatalog') {
         if (!catalogId) return json({ ok: false, error: 'Valid catalogId is required' }, 400);
         const exists = memberships.some((item) => item.catalogId === catalogId);
-        if (exists) memberships = memberships.filter((item) => item.catalogId !== catalogId);
-        else memberships.push({ catalogId, position: await allocatePosition(catalogId) });
+        const enabled = action === 'setCatalog' ? body.enabled === true : !exists;
+        if (!enabled) memberships = memberships.filter((item) => item.catalogId !== catalogId);
+        else if (!exists) memberships.push({ catalogId, position: await allocatePosition(catalogId) });
         catalogMutation = true;
       } else if (action === 'setCatalogs' || Array.isArray(body.catalogIds)) {
         const wanted = [...new Set((body.catalogIds || []).map((item) => String(item || '').toLowerCase()).filter(isLiveCatalogId))];
@@ -210,20 +213,26 @@ export async function PATCH(request) {
         doc.catalogs = normalizeCatalogMemberships(memberships);
         // Mapping is the publish action. Removing the final mapping unpublishes it.
         doc.selected = doc.catalogs.length > 0;
+        doc.mappingManaged = true;
+        await setSetting('live_catalog_initialized', { initialized: true });
       }
 
       if (body.selected !== undefined && !catalogMutation) doc.selected = Boolean(body.selected);
       // The guide binding is a user decision, so it must survive whatever the next source sync writes:
       // tvgId is only re-derived when the field is empty (see lib/liveTv). An empty epgId is a real
       // state — "no guide for this channel" — not a missing field, hence the explicit action check.
-      if (action === 'setEpg' || body.epgId !== undefined) doc.tvgId = String(body.epgId || '').trim().slice(0, 120);
+      if (action === 'setEpg' || body.epgId !== undefined) {
+        doc.epgOverride = String(body.epgId || '').trim().slice(0, 120);
+        doc.tvgId = doc.epgOverride;
+      }
+      if (action === 'resetEpg') { doc.epgOverride = null; doc.tvgId = doc.sourceTvgId || ''; }
 
       if (action === 'hide') doc.hidden = true;
       if (action === 'unhide') doc.hidden = false;
       if (action === 'favorite') doc.favorite = true;
       if (action === 'unfavorite') doc.favorite = false;
 
-      ['customName', 'customLogo', 'category', 'profiles', 'workingStatus'].forEach((key) => {
+      ['customName', 'customLogo', 'category', 'profiles', 'workingStatus', 'logicalChannelId'].forEach((key) => {
         if (body[key] !== undefined) doc[key] = body[key];
       });
       if (body.order !== undefined && Number.isFinite(Number(body.order))) doc.order = Math.max(0, Number(body.order));
@@ -241,7 +250,7 @@ export async function PATCH(request) {
       channels: updated.map(toClientChannel),
     });
   } catch (error) {
-    return json({ ok: false, error: error.message }, error.status || 500);
+    return json({ ok: false, error: error.name === 'VersionError' ? 'This channel changed concurrently. Refresh and retry.' : error.message }, error.name === 'VersionError' ? 409 : error.status || 500);
   }
 }
 
@@ -257,6 +266,6 @@ export async function DELETE(request) {
     if (doc?.sourceId) await recalcSourceCounts(doc.sourceId);
     return json({ ok: true, removed: true });
   } catch (error) {
-    return json({ ok: false, error: error.message }, error.status || 500);
+    return json({ ok: false, error: error.name === 'VersionError' ? 'This channel changed concurrently. Refresh and retry.' : error.message }, error.name === 'VersionError' ? 409 : error.status || 500);
   }
 }

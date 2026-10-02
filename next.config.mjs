@@ -1,12 +1,28 @@
 /** @type {import('next').NextConfig} */
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'" + (process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''),
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https: http:",
+  "font-src 'self' data:",
+  "connect-src 'self' https: http: wss: ws:",
+  "media-src 'self' blob: https: http:",
+  "frame-src 'self' https: http:",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join('; ');
+
 const securityHeaders = [
+  { key: 'Content-Security-Policy', value: contentSecurityPolicy },
   // Stop MIME-type sniffing of responses (prevents script/JSON confusion attacks).
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   // Don't leak our URL to third-party embed/media servers.
   { key: 'Referrer-Policy', value: 'no-referrer' },
   // Basic browser feature lockdown. Note: no X-Frame-Options because the app
   // is intentionally embedded (Hugging Face Spaces iframe / smart-TV wrappers).
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=()' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
   // Clickjacking protection for API responses (routes are not meant to be framed).
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
@@ -31,6 +47,7 @@ const REMOVED_SECTION_REDIRECTS = [
 
 const nextConfig = {
   reactStrictMode: true,
+  allowedDevOrigins: ['*.e2b.app', 'localhost', '127.0.0.1'],
   // Emit .next/standalone so a container image would need no node_modules.
   // `next start` (the Render Node deploy) works normally with this option set.
   output: 'standalone',

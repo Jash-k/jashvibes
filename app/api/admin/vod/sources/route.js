@@ -74,8 +74,9 @@ export async function DELETE(request) {
   const doc = await VodSource.findByIdAndDelete(id);
   let purgedItems = 0;
   if (doc?.name) {
-    const result = await VodItem.deleteMany({ sources: doc.name }).catch(() => null);
-    purgedItems = result?.deletedCount || 0;
+    await VodItem.updateMany({ sources: doc.name }, { $pull: { sources: doc.name, streams: { source: doc.name } } });
+    const result = await VodItem.deleteMany({ streams: { $size: 0 } });
+    purgedItems = result.deletedCount || 0;
   }
   return NextResponse.json({ ok: true, purgedItems }, { headers: { 'Cache-Control': 'no-store' } });
 }

@@ -40,7 +40,7 @@ function lineupPayload(channels = []) {
     channels
       .filter((channel) => channel?.id || channel?.name)
       .slice(0, 500)
-      .map((channel) => [String(channel.id || channel.channelId || ''), String(channel.name || ''), String(channel.tvgId || '')]),
+      .map((channel) => [String(channel.id || channel.channelId || ''), String(channel.name || ''), String(channel.tvgId || ''), channel.epgOverride ?? null]),
   );
 }
 

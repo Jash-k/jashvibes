@@ -1,3 +1,4 @@
+import { safeFetch, publicDestination, readLimitedText } from '@/lib/server/safeFetch';
 
 import net from 'node:net';
 import dns from 'node:dns/promises';
@@ -7,55 +8,8 @@ import { isPlaylistResponse, rewritePlaylist } from '@/lib/player/playlistRewrit
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function isPrivateIPv4(hostname = '') {
-  const parts = hostname.split('.').map((part) => Number(part));
-  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
-  const [a, b] = parts;
-  return (
-    a === 10 ||
-    a === 127 ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    a === 0
-  );
-}
-
-function isBlockedHost(hostname = '') {
-  const host = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
-  if (!host) return true;
-  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return true;
-  if (host === '::1' || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80')) return true;
-  if (net.isIP(host) === 4 && isPrivateIPv4(host)) return true;
-  return false;
-}
-
-
-/**
- * Resolve-then-verify: hostname blocklists do not stop a DNS name that ANSWERS
- * with a private/loopback/metadata address (DNS rebinding to 169.254.169.254).
- * Every address the name resolves to must be public, else the fetch is refused.
- */
-async function assertPublicHost(hostname = '') {
-  const host = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
-  if (net.isIP(host)) return; // literal IPs were already checked by isBlockedHost
-  let addresses;
-  try {
-    addresses = await dns.lookup(host, { all: true, verbatim: true });
-  } catch {
-    throw new Error('host does not resolve');
-  }
-  for (const { address } of addresses) {
-    if (net.isIP(address) === 6) {
-      const low = address.toLowerCase();
-      if (low === '::1' || low.startsWith('fc') || low.startsWith('fd') || low.startsWith('fe80') || low === '::') {
-        throw new Error('host resolves to a private address');
-      }
-      continue;
-    }
-    if (isPrivateIPv4(address)) throw new Error('host resolves to a private address');
-  }
-}
+function isBlockedHost(hostname = '') { return !hostname; }
+async function assertPublicHost(hostname) { await publicDestination(`https://${hostname}`); }
 
 function pickHeader(request, names = []) {
   for (const name of names) {
@@ -97,6 +51,8 @@ async function proxy(request) {
     const range = pickHeader(request, ['range', 'Range']);
     const accept = pickHeader(request, ['accept', 'Accept']);
 
+    const rawHeaders = searchParams.get('hd') || '{}';
+    try { for (const [name, value] of Object.entries(JSON.parse(rawHeaders))) { if (/^(host|connection|content-length|transfer-encoding|upgrade)$/i.test(name) || value == null) continue; upstreamHeaders.set(name, String(value)); } } catch { return NextResponse.json({ error: 'Invalid source headers' }, { status: 400 }); }
     if (ua) upstreamHeaders.set('User-Agent', ua);
     if (referer) upstreamHeaders.set('Referer', referer);
     if (cookie) upstreamHeaders.set('Cookie', cookie);
@@ -110,11 +66,19 @@ async function proxy(request) {
       try { upstreamHeaders.set('Origin', new URL(referer).origin); } catch { /* keep target-only */ }
     }
 
-    const upstream = await fetch(target.href, {
-      method: request.method === 'HEAD' ? 'HEAD' : 'GET',
+    let requestBody;
+    if (request.method === 'POST') {
+      const reader = request.body?.getReader(); const chunks = []; let size = 0;
+      if (reader) { while (true) { const { done, value } = await reader.read(); if (done) break; size += value.byteLength; if (size > 1024 * 1024) { await reader.cancel(); return NextResponse.json({ error: 'Licence request body exceeds 1 MiB.' }, { status: 413 }); } chunks.push(Buffer.from(value)); } }
+      requestBody = Buffer.concat(chunks); upstreamHeaders.set('Content-Type', request.headers.get('content-type') || 'application/octet-stream');
+    }
+    const upstream = await safeFetch(target.href, {
+      method: request.method === 'HEAD' ? 'HEAD' : request.method === 'POST' ? 'POST' : 'GET',
+      body: requestBody,
       headers: upstreamHeaders,
       redirect: 'follow',
       cache: 'no-store',
+      signal: request.signal,
     });
 
     /* A playlist is not piped — it is REWRITTEN, so every variant, audio track,
@@ -123,15 +87,16 @@ async function proxy(request) {
        "cards show but the stream does not play" failure. */
     const contentType = upstream.headers.get('content-type') || '';
     if (request.method !== 'HEAD' && upstream.ok && isPlaylistResponse({ url: target.href, contentType })) {
-      const playlistText = await upstream.text();
+      const playlistText = await readLimitedText(upstream);
       const proxyBase = `${new URL(request.url).origin}/api/live-proxy`;
       const extras = new URLSearchParams();
+      if (rawHeaders !== '{}') extras.set('hd', rawHeaders);
       if (ua) extras.set('ua', ua);
       if (referer) extras.set('ref', referer);
       if (cookie) extras.set('ck', cookie);
       const extraQuery = extras.toString();
       const rewritten = rewritePlaylist(playlistText, {
-        baseUrl: target.href,
+        baseUrl: upstream.url || target.href,
         wrap: (child) => `${proxyBase}?u=${encodeURIComponent(child)}${extraQuery ? `&${extraQuery}` : ''}`,
       });
       return new Response(rewritten, {
@@ -147,6 +112,7 @@ async function proxy(request) {
     }
 
     const headers = new Headers();
+    headers.set('X-Jash-Upstream-Url', upstream.url);
     const copyHeaders = [
       'content-type',
       'content-length',
@@ -194,3 +160,5 @@ export async function OPTIONS() {
     },
   });
 }
+
+export async function POST(request) { return proxy(request); }

@@ -11,6 +11,11 @@ const LiveChannelSchema = new mongoose.Schema({
   sourceId: { type: String, required: true, index: true },
   source: { type: String, default: '' },
   tvgId: { type: String, default: '' },
+  sourceTvgId: { type: String, default: '' },
+  epgOverride: { type: String, default: null },
+  mappingManaged: { type: Boolean, default: false, index: true },
+  // Set an identical nonempty ID only for explicitly mapped same-channel alternatives.
+  logicalChannelId: { type: String, default: '', index: true },
   name: { type: String, required: true, index: true },
   normalizedName: { type: String, index: true },
   customName: { type: String, default: '' },
@@ -40,15 +45,13 @@ const LiveChannelSchema = new mongoose.Schema({
   referer: { type: String, default: '' },
   headers: { type: Object, default: {} },
   workingStatus: { type: String, enum: ['unknown', 'working', 'broken'], default: 'unknown', index: true },
-  // v10.2.2 self-healing: two consecutive failed probes de-map a channel from
-  // its catalog (autoHidden marks it as ours, not the admin's, so a later
-  // passing probe restores it automatically).
+  // Health is independent of the desired catalogue. Never erase memberships.
   failStreak: { type: Number, default: 0 },
   autoHidden: { type: Boolean, default: false },
   lastCheckedAt: { type: Date, default: null },
   lastSeenAt: { type: Date, default: Date.now, index: true },
   importHash: { type: String, default: '', index: true },
-}, { timestamps: true });
+}, { timestamps: true, optimisticConcurrency: true });
 
 LiveChannelSchema.index({ sourceId: 1, normalizedName: 1 });
 LiveChannelSchema.index({ selected: 1, hidden: 1, order: 1 });

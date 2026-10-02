@@ -36,13 +36,14 @@ function parseLineup(raw = '') {
     .slice(0, MAX_CHANNELS)
     .map((entry) => {
       if (Array.isArray(entry)) {
-        const [id, name, tvgId] = entry;
-        return { id: String(id || ''), name: String(name || ''), tvgId: String(tvgId || '') };
+        const [id, name, tvgId, epgOverride = null] = entry;
+        return { id: String(id || ''), name: String(name || ''), tvgId: String(tvgId || ''), epgOverride };
       }
       return {
         id: String(entry?.id || entry?.channelId || ''),
         name: String(entry?.name || ''),
         tvgId: String(entry?.tvgId || entry?.epgId || ''),
+        epgOverride: entry?.epgOverride ?? null,
       };
     })
     .filter((entry) => entry.id || entry.name);
@@ -95,7 +96,7 @@ export async function GET(request) {
     const dayFor = String(url.searchParams.get('day') || '');
 
     const guide = await getGuide({ channels: lineup, at });
-    const etag = `W/"${guide.status.loadedAt || 0}-${lineupFingerprint(lineup)}-${dayFor}"`;
+    const etag = `W/"${guide.status.loadedAt || 0}-${lineupFingerprint(lineup)}-${dayFor}-${Math.floor(at / 25000)}"`;
     if (url.searchParams.get('if-none-match') === etag || request.headers.get('if-none-match') === etag) {
       return new NextResponse(null, { status: 304, headers: { ETag: etag } });
     }

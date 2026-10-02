@@ -22,6 +22,10 @@ export async function register() {
   if (keepaliveStarted) return;
   keepaliveStarted = true;
 
+  if (process.env.NEXT_RUNTIME === 'nodejs') {
+    try { const { registerLiveAutoSyncScheduler } = await import('@/lib/liveAutoSync'); registerLiveAutoSyncScheduler(); } catch (error) { console.error('[live-auto-sync]', error.message); }
+  }
+
   if (String(process.env.KEEPALIVE || '1') === '0') {
     console.info('[keepalive] disabled via KEEPALIVE=0');
     return;
@@ -31,7 +35,7 @@ export async function register() {
   const base = String(
     process.env.RENDER_EXTERNAL_URL ||
     process.env.SITE_URL ||
-    `http://127.0.0.1:${process.env.PORT || 3000}`,
+    `http://127.0.0.1:${process.env.PORT || 7860}`,
   ).replace(/\/+$/, '');
   const url = `${base}/api/health`;
 
@@ -58,17 +62,4 @@ export async function register() {
 
   console.info(`[keepalive] started: ${url} every ${intervalMinutes} min`);
 
-  // Hourly live-source auto-sync (v10.2.0). Shares the sync engine with the
-  // admin endpoint; LIVE_SYNC_MINUTES=0 (or >=720) turns it off. Runs in this
-  // same process, single-flight, and never blocks a request. The build-time
-  // NEXT_RUNTIME guard matters: instrumentation also bundles for edge, and a
-  // statically-traced import would pull node built-ins into that bundle.
-  if (process.env.NEXT_RUNTIME === 'nodejs') {
-    try {
-      const { registerLiveAutoSyncScheduler } = await import('@/lib/liveAutoSync');
-      registerLiveAutoSyncScheduler();
-    } catch (error) {
-      console.error('[live-auto-sync] scheduler failed to register:', error?.message || error);
-    }
-  }
 }

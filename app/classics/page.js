@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { watchHref } from '@/lib/watch/policy';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import RailNav from '@/components/rail/RailNav';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
@@ -88,7 +89,7 @@ function TitleRow({ item }) {
   const isMoviesda = item.sources?.some((source) => /moviesda/i.test(String(source)));
 
   return (
-    <Link href={`/classics/${item.id}`} className="jv-dec-row">
+    <Link href={watchHref(item, 'retro')} className="jv-dec-row">
       {item.posterUrl ? (
         <img
           className="jv-dec-art"

@@ -14,7 +14,7 @@ export async function GET(request) {
   try {
     await requireServiceAuth(request);
     await ensureLiveServiceSeeded();
-    const sources = await LiveSource.find({}).sort({ priority: 1, label: 1 }).lean();
+    const sources = await LiveSource.find({ deleted: { $ne: true } }).sort({ priority: 1, label: 1 }).lean();
     return json({ ok: true, sources: sources.map(toClientSource) });
   } catch (error) { return json({ ok: false, error: error.message }, error.status || 500); }
 }
@@ -30,7 +30,7 @@ export async function POST(request) {
     const sourceId = String(body.sourceId || body.id || sourceIdFromLabel(label)).trim();
     const doc = await LiveSource.findOneAndUpdate(
       { sourceId },
-      { $set: { sourceId, label, url, type: body.type === 'json' ? 'json' : 'm3u', enabled: body.enabled !== false, trustTamil: Boolean(body.trustTamil), priority: Number(body.priority ?? 50), autoPurge: Boolean(body.autoPurge), titleFilter: String(body.titleFilter || '').trim() } },
+      { $set: { deleted: false, sourceId, label, url, headers: body.headers || {}, type: body.type === 'json' ? 'json' : 'm3u', enabled: body.enabled !== false, trustTamil: Boolean(body.trustTamil), priority: Number(body.priority ?? 50), autoPurge: Boolean(body.autoPurge), titleFilter: String(body.titleFilter || '').trim() } },
       { upsert: true, new: true },
     );
     return json({ ok: true, source: toClientSource(doc) });
@@ -45,7 +45,7 @@ export async function PATCH(request) {
     const sourceId = String(body.sourceId || body.id || '').trim();
     if (!sourceId) return json({ ok: false, error: 'sourceId is required' }, 400);
     const patch = {};
-    ['label', 'url', 'type', 'enabled', 'trustTamil', 'priority', 'autoPurge', 'titleFilter'].forEach((key) => { if (body[key] !== undefined) patch[key] = body[key]; });
+    ['label', 'url', 'type', 'enabled', 'trustTamil', 'priority', 'autoPurge', 'titleFilter', 'headers'].forEach((key) => { if (body[key] !== undefined) patch[key] = body[key]; });
     if (patch.type && !['m3u', 'json'].includes(patch.type)) patch.type = 'm3u';
     const doc = await LiveSource.findOneAndUpdate({ sourceId }, { $set: patch }, { new: true });
     if (!doc) return json({ ok: false, error: 'Source not found' }, 404);
@@ -61,7 +61,7 @@ export async function DELETE(request) {
     const sourceId = String(searchParams.get('sourceId') || searchParams.get('id') || '').trim();
     const deleteChannels = searchParams.get('channels') === '1';
     if (!sourceId) return json({ ok: false, error: 'sourceId is required' }, 400);
-    await LiveSource.deleteOne({ sourceId });
+    await LiveSource.updateOne({ sourceId }, { $set: { deleted: true, enabled: false } });
     let removedChannels = 0;
     if (deleteChannels) {
       const res = await LiveChannel.deleteMany({ sourceId, 'catalogs.0': { $exists: false }, favorite: { $ne: true } });

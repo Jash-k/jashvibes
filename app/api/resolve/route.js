@@ -335,7 +335,7 @@ export async function GET(request) {
         // Third-party embeds (VidLink/VidEasy/…) are intentionally NOT used.
         // If Mirchi also failed and no MP4 was found, selected stays null → 404 below.
       }
-    } else if (requestedProvider === 'stremio' && hasValidTmdbId) {    } else if (requestedProvider === 'stremio' && hasValidTmdbId) {
+    } else if (requestedProvider === 'stremio' && hasValidTmdbId) {
       try {
         const stremioResult = await resolveStremioProvider({
           tmdbId,

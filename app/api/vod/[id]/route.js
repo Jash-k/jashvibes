@@ -15,7 +15,7 @@ export async function GET(_request, { params }) {
 
     await dbConnect();
     const item = await VodItem.findById(id).lean();
-    if (!item) return NextResponse.json({ error: 'VOD item not found' }, { status: 404 });
+    if (!item || item.hidden) return NextResponse.json({ error: 'VOD item not found' }, { status: 404 });
 
     // If older syncs stored the same stream URL without DRM keys and a newer sync
     // stored it with keys, prefer the keyed copy so Aha ClearKey streams work.

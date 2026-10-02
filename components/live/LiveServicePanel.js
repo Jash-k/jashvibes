@@ -291,6 +291,8 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
   const [channelStats, setChannelStats] = useState({ total: 0, mapped: 0, unmapped: 0 });
   const [orderCatalog, setOrderCatalog] = useState('main');
   const [activeProfile, setActiveProfile] = useState('default');
+  const mutationQueues = useRef(new Map());
+  const [pendingChannels, setPendingChannels] = useState(new Set());
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [previewChannel, setPreviewChannel] = useState(null);
@@ -498,6 +500,16 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
   }
 
   async function channelAction(channel, action, patch = {}) {
+    const id = channel.channelId || channel.id;
+    const previous = mutationQueues.current.get(id) || Promise.resolve();
+    const task = previous.catch(() => {}).then(() => performChannelAction(channel, action, patch));
+    mutationQueues.current.set(id, task);
+    setPendingChannels((v) => new Set([...v, id]));
+    try { return await task; } finally {
+      if (mutationQueues.current.get(id) === task) { mutationQueues.current.delete(id); setPendingChannels((v) => { const next = new Set(v); next.delete(id); return next; }); }
+    }
+  }
+  async function performChannelAction(channel, action, patch = {}) {
     try {
       const wasMapped = Boolean(channel.mapped || getChannelCatalogIds(channel).length);
       const data = await api('/api/live-service/channels', {
@@ -505,7 +517,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
         body: JSON.stringify({ channelId: channel.channelId || channel.id, action, ...patch }),
       });
       const updates = data.channels || [];
-      if (!updates.length) return;
+      if (!updates.length) throw new Error('The server did not confirm the saved channel. Refresh and retry.');
       const requestedId = channel.channelId || channel.id;
       const updated = updates.find((item) => (item.channelId || item.id) === requestedId) || updates[0];
       const isMapped = Boolean(updated.mapped || getChannelCatalogIds(updated).length);
@@ -553,7 +565,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
   }
 
   async function toggleCatalog(channel, catalogId) {
-    await channelAction(channel, 'toggleCatalog', { catalogId });
+    await channelAction(channel, 'setCatalog', { catalogId, enabled: !getChannelCatalogIds(channel).includes(catalogId) });
   }
 
   async function setCatalogPosition(channel, catalogId) {
@@ -785,7 +797,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
                     {serverFilter?.q ? ` • search: “${serverFilter.q}”` : ''}
                     {serverFilter && serverFilter.map !== 'all' ? ` • ${serverFilter.map}` : ''}
                   </p>
-                  {channelRowsFiltered.map((channel) => <ChannelManagerRow key={channel.channelId} channel={channel} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} onCatalogToggle={toggleCatalog} onPosition={setCatalogPosition} />)}
+                  {channelRowsFiltered.map((channel) => <ChannelManagerRow key={channel.channelId} channel={channel} busy={pendingChannels.has(channel.channelId || channel.id)} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} onCatalogToggle={toggleCatalog} onPosition={setCatalogPosition} />)}
                   <PanelPager
                     page={channelsPage}
                     total={channelsPageInfo.total || channelStats.total || 0}
@@ -808,7 +820,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
                     <input value={mainPanelQuery} onChange={(event) => setMainPanelQuery(event.target.value)} placeholder="Search main panel" className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none" />
                   </div>
                 </div>
-                {mainPanelFiltered.slice(0, rowLimit).map((channel) => <ChannelManagerRow key={channel.channelId || channel.id} channel={channel} selectedMode positionCatalog={mainPanelCategory === 'all' ? '' : mainPanelCategory} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} onCatalogToggle={toggleCatalog} onPosition={setCatalogPosition} />)}
+                {mainPanelFiltered.slice(0, rowLimit).map((channel) => <ChannelManagerRow key={channel.channelId || channel.id} channel={channel} busy={pendingChannels.has(channel.channelId || channel.id)} selectedMode positionCatalog={mainPanelCategory === 'all' ? '' : mainPanelCategory} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} onCatalogToggle={toggleCatalog} onPosition={setCatalogPosition} />)}
                 {mainPanelFiltered.length > rowLimit ? <RowShowMore shown={rowLimit} total={mainPanelFiltered.length} onMore={() => startTransition(() => setRowLimit((current) => current + ROW_STEP))} /> : null}
                 {!mainPanelFiltered.length ? <p className="rounded-2xl border border-white/10 p-5 text-center text-sm text-zinc-500">No main panel channels for this filter.</p> : null}
               </div> : null}
@@ -819,7 +831,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
                   <p className="mt-1 text-xs leading-5 text-zinc-400">A channel can have a different position in every catalog. Use arrows for quick changes or click its position badge to enter an exact number.</p>
                   <select value={orderCatalog} onChange={(event) => setOrderCatalog(event.target.value)} className="mt-3 w-full rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white sm:max-w-xs">{LIVE_CATALOGS.map((catalog) => <option key={catalog.id} value={catalog.id}>{catalog.name}</option>)}</select>
                 </div>
-                {orderedCatalogChannels.slice(0, rowLimit).map((channel) => <ChannelManagerRow key={channel.channelId} channel={channel} selectedMode positionCatalog={orderCatalog} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} onCatalogToggle={toggleCatalog} onPosition={setCatalogPosition} onUp={(ch) => reorder(ch, -10)} onDown={(ch) => reorder(ch, 10)} />)}
+                {orderedCatalogChannels.slice(0, rowLimit).map((channel) => <ChannelManagerRow key={channel.channelId} channel={channel} busy={pendingChannels.has(channel.channelId || channel.id)} selectedMode positionCatalog={orderCatalog} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} onCatalogToggle={toggleCatalog} onPosition={setCatalogPosition} onUp={(ch) => reorder(ch, -10)} onDown={(ch) => reorder(ch, 10)} />)}
                 {orderedCatalogChannels.length > rowLimit ? <RowShowMore shown={rowLimit} total={orderedCatalogChannels.length} onMore={() => startTransition(() => setRowLimit((current) => current + ROW_STEP))} /> : null}
                 {!orderedCatalogChannels.length ? <p className="rounded-2xl border border-white/10 p-5 text-center text-sm text-zinc-500">No channels mapped to {catalogLabel(orderCatalog)}.</p> : null}
               </div> : null}
@@ -841,7 +853,7 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
               </div> : null}
 
               {tab === 'epg' ? <LiveEpgPanel channels={selectedChannels} onAction={channelAction} epg={epg} /> : null}
-              {tab === 'duplicates' ? <div className="space-y-3">{duplicates.map((group) => <div key={group.key} className="rounded-3xl border border-white/10 bg-white/[0.03] p-3"><p className="mb-2 text-sm font-black">{group.key} • {group.count}</p><div className="space-y-2">{group.channels.map((channel) => <ChannelManagerRow key={channel.channelId} channel={channel} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} />)}</div></div>)}{!duplicates.length ? <p className="rounded-2xl border border-white/10 p-5 text-center text-sm text-zinc-500">Click Find duplicates in Tools.</p> : null}</div> : null}
+              {tab === 'duplicates' ? <div className="space-y-3">{duplicates.map((group) => <div key={group.key} className="rounded-3xl border border-white/10 bg-white/[0.03] p-3"><p className="mb-2 text-sm font-black">{group.key} • {group.count}</p><div className="space-y-2">{group.channels.map((channel) => <ChannelManagerRow key={channel.channelId} channel={channel} busy={pendingChannels.has(channel.channelId || channel.id)} onPreview={(ch) => { setPreviewChannel(ch); onPreview?.(ch); }} onAction={channelAction} />)}</div></div>)}{!duplicates.length ? <p className="rounded-2xl border border-white/10 p-5 text-center text-sm text-zinc-500">Click Find duplicates in Tools.</p> : null}</div> : null}
             </main>
 
             <aside className="min-h-0 space-y-3 overflow-y-auto rounded-3xl border border-white/10 bg-black/25 p-3">
@@ -894,6 +906,7 @@ function ChannelManagerRow({
   onAction,
   onCatalogToggle,
   onPosition,
+  busy = false,
   selectedMode = false,
   positionCatalog = '',
   onUp,
@@ -910,7 +923,7 @@ function ChannelManagerRow({
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
             <p className="truncate text-sm font-black text-white">{channel.name}</p>
-            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${mapped ? 'bg-green-500/15 text-green-200' : 'bg-zinc-500/15 text-zinc-400'}`}>{mapped ? 'Mapped' : 'Unmapped'}</span>
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${mapped ? 'bg-green-500/15 text-green-200' : 'bg-zinc-500/15 text-zinc-400'}`}>{busy ? 'Saving…' : mapped ? 'Mapped' : 'Unmapped'}</span>
           </div>
           <p className="truncate text-xs text-zinc-500">{channel.category} • {channel.source} • {channel.format?.toUpperCase()} • {channel.workingStatus}</p>
           {mapped ? <div className="mt-1 flex flex-wrap gap-1">{catalogIds.map((id) => <button key={id} type="button" onClick={() => onPosition?.(channel, id)} className="rounded-full bg-red-500/15 px-2 py-0.5 text-[9px] font-bold text-red-100" title="Set exact position">{catalogLabel(id)} · {getCatalogPosition(channel, id)}</button>)}</div> : null}
@@ -920,13 +933,14 @@ function ChannelManagerRow({
       {onCatalogToggle ? <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
         {LIVE_CATALOGS.map((catalog) => {
           const active = catalogIds.includes(catalog.id);
-          return <button key={catalog.id} type="button" onClick={() => onCatalogToggle(channel, catalog.id)} className={`rounded-xl border px-2 py-1.5 text-[10px] font-black transition ${active ? 'border-green-400/45 bg-green-500/20 text-green-100' : 'border-white/10 bg-black/20 text-zinc-400 hover:border-red-400/50 hover:text-white'}`}>{active ? '✓ ' : ''}{catalog.name}</button>;
+          return <button key={catalog.id} type="button" disabled={busy} onClick={() => onCatalogToggle(channel, catalog.id)} className={`rounded-xl border px-2 py-1.5 text-[10px] font-black transition ${active ? 'border-green-400/45 bg-green-500/20 text-green-100' : 'border-white/10 bg-black/20 text-zinc-400 hover:border-red-400/50 hover:text-white'}`}>{active ? '✓ ' : ''}{catalog.name}</button>;
         })}
       </div> : null}
 
       <div className="mt-2 flex flex-wrap gap-1.5">
+        <button type="button" disabled={busy} onClick={() => { const logicalChannelId = window.prompt('Same-channel group ID (use the identical ID ONLY for the same channel across sources). Empty removes grouping.', channel.logicalChannelId || ''); if (logicalChannelId != null) onAction?.(channel, 'setLogicalChannel', { logicalChannelId: logicalChannelId.trim().slice(0, 120) }); }} className="rounded-full border border-white/10 px-2 py-1 text-[11px]">Alternative group</button>
         <button type="button" onClick={() => onPreview?.(channel)} className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-black">Preview</button>
-        {mapped ? <button type="button" onClick={() => onAction?.(channel, 'unmap')} className="rounded-full border border-orange-400/30 px-2.5 py-1 text-[11px] font-black text-orange-100">Unmap all</button> : null}
+        {mapped ? <button type="button" disabled={busy} onClick={() => onAction?.(channel, 'unmap')} className="rounded-full border border-orange-400/30 px-2.5 py-1 text-[11px] font-black text-orange-100">Unmap all</button> : null}
         <button type="button" onClick={() => onAction?.(channel, channel.favorite ? 'unfavorite' : 'favorite')} className="rounded-full border border-yellow-400/30 px-2.5 py-1 text-[11px] font-black text-yellow-100">{channel.favorite ? '★' : '☆'}</button>
         <button type="button" onClick={() => onAction?.(channel, channel.hidden ? 'unhide' : 'hide')} className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-black">{channel.hidden ? 'Unhide' : 'Hide'}</button>
         {selectedMode && positionCatalog && focusedPosition < 999999 && (onUp || onDown) ? <>

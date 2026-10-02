@@ -1,133 +1,90 @@
-# JaSH ViBeS 🎬
+# JaSH ViBeS 11
 
-Tamil-first private streaming hub — movies & series, live TV, music, and retro classics in one Next.js app —
-with a full **admin control room** (`/admin`) that manages every section.
+Tamil-first browsing, a unified on-demand Watch page, curated Live TV and a lyrics-first Music workspace. Refactored from version 10.9.0, commit `9554091fd88e01cd5bfc157d1b85f14650b0524f`.
 
-> Personal, single-tenant deployment. Host only sources you are authorized to access.
+## Quick start
 
----
-
-## Sections
-
-| Section | Route | What it does |
-|---|---|---|
-| **Home** | `/` | TamilMV daily catalog + TMDB posters, ⌘K search, Continue Watching & My List |
-| **Live** | `/live` | Live TV channels + XMLTV guide |
-| **Music** | `/music` | Albums · Artists · Playlists, synced lyrics (play-only) |
-| **ReTro** | `/classics` | Vintage Tamil cinema from VOD M3U catalogs + TMDB matching |
-| **Stremio** | `/stremio` | Your Stremio addon as an in-app catalog + direct-file player |
-| **Admin** | `/admin` | The control room — CRUD over every section (see below) |
-
-One unified player (JashPlayer) everywhere: resume, quality picker, subtitles, gestures, PiP, A-B loop, DVR detection.
-
----
-
-## Admin control room
-
-Enter from the **⚙ Admin** gear at the bottom of the desktop rail (also in the ⌘K palette), or open `/admin` directly.
-It opens with its own password — **`ADMIN_PASS`**, unique and separate from the theatre password. Unset = the whole
-admin surface stays hidden and its APIs answer `503`.
-
-| Tab | What you control |
-|---|---|
-| **Home** | Every scraped title with its **complete raw title before parsing** (expandable rows + copy), TMDB **match picker** (search posters or paste a link/id), **remove from home** (restorable, survives re-syncs), **pin to top**, permanent **title/year/quality overrides**, **Sync now / Purge cache** buttons, and **Kill admin sessions** |
-| **Music** | All playlist management (Spotify import, rename, reorder, hide, delete) — `/music` itself is play-only |
-| **TV** | The full Live TV service panel (sources, manual mapping, catalog order, EPG bindings, backups) + one-click **health sweep** |
-| **ReTro** | CRUD over the classics VOD **sources** (add/edit/enable/delete + sync), items browser with removal |
-| **Stremio** | Addon **registry** CRUD with manifest **health checks**, and the **global shelf pins** (same order on every device) |
-
-Admin sessions last **12 h**; "Kill admin sessions" revokes every admin cookie instantly (no redeploy).
-Removing a home title hides it via an override list — deletes would be undone by the next TamilMV sync,
-so hidden rows are always restorable from the **Hidden** filter.
-
-
----
-
-## Deploy on Render (free tier)
-
-1. Push this repo to GitHub.
-2. Render dashboard → **New → Blueprint** → pick the repo (`render.yaml` is detected automatically).
-3. Fill the env vars it prompts for (see table below), then **Apply**.
-4. Done — health checks run against `/api/health`, and the built-in keep-alive pings it every 10 min so the instance never sleeps.
-
-### Environment variables
-
-**Required**
-
-| Key | Example |
-|---|---|
-| `DB` | `mongodb+srv://USER:PASS@CLUSTER.mongodb.net/jash_theatre?retryWrites=true&w=majority` |
-| `TMDB` | your TMDB v3 API key |
-| `PASS` | your private unlock password |
-| `ADMIN_PASS` | the admin control room password (unique; unset = admin disabled) |
-
-**Optional**
-
-| Key | Purpose |
-|---|---|
-| `LIVE_TV_PASS` | separate password for the /live Service panel (unset = disabled) |
-| `SESSION_EPOCH` | change any string to revoke every issued session instantly |
-| `SESSION_TTL_DAYS` | session cookie lifetime (default `180`) |
-| `TAMILMV` | scraper domain when the default moves |
-| `PROVIDERS` | embed provider priority order |
-| `STREMIO` | your Stremio addon manifest URL |
-| `VOD` | ReTro M3U sources (`Name\|url,...`) |
-| `EMBEDS` | /embed-browser buttons (`Label\|url,...`) |
-| `SAAVN` | music API mirror |
-| `LIVE_EPG_URL` | custom XMLTV guide feed (default: Pocket-EPG) |
-| `JIO_LIVE_COOKIE` | Jio fallback token |
-| `CRON_SECRET` / `SCRAPE_TOKEN` / `SEED_TOKEN` / `SYNC_TOKEN` | tokens for admin/cron routes |
-| `KEEPALIVE` / `KEEPALIVE_MINUTES` | keep-alive on/off + interval |
-| `LIVE_SYNC_MINUTES` | live sources auto-sync interval (default 60, `0` = off) |
-
-See `.env.example` for the full annotated list. The ReTro `VOD` sources and Stremio `STREMIO`/`STREMIO_WATCH`
-addons now act as **first-run seeds only** — manage them from the admin panel after that.
-
----
-
-## Run locally
+Use **Node 22 LTS** (minimum supported by dependencies: 20.9).
 
 ```bash
-npm install
-npm run dev          # http://localhost:3000
-```
-
-Production check:
-
-```bash
+cp .env.example .env.local
+# Fill PASS, ADMIN_PASS, DB and your metadata/provider configuration.
+npm ci
 npm run build
-npm run start        # binds 0.0.0.0:${PORT:-7860}
+npm start
 ```
 
-## Scripts
+The server binds `0.0.0.0` on `PORT` (default **7860**). For development: `npm run dev -- --port 7860`.
 
-| Command | What it does |
+**This is a source distribution.** Dependencies and generated builds are deliberately not included. A working MongoDB database, viewer/owner passwords and upstream configuration are required for a full deployment. No credentials are included.
+
+## Behaviour
+
+| Entry point | Auto source order |
 |---|---|
-| `npm run dev` | dev server |
-| `npm run build` | production build |
-| `npm run start` | production server |
+| Home / Vault | Vault → Stremio → Direct MP4 → Mirchi |
+| ReTro | Item's Aha/Eros streams → Vault → Stremio → Direct MP4 → Mirchi |
+| Stremio | Stremio → Vault → Direct MP4 → Mirchi |
 
----
+All on-demand cards open **Watch**. Season/episode identity, resolution and source are separate controls. Unidentified Home titles open Watch and can be matched there. Legacy Vault/ReTro/Stremio player links are redirected rather than removed.
 
-## Security model
+- Cross-origin iframe `load` is **not video playback verification**. Iframe failure requires **Try next source** or the provider menu; there is no blind timeout-based provider switch.
+- Auto native/Shaka errors try bounded alternatives, then advance. An explicitly selected provider stays selected until you choose another.
+- Live TV remains on `/live`. Explicit same-channel alternative groups can recover in Auto; there is no movie-provider fallback or fuzzy channel-name switching.
+- **Manual Live map/unmap choices are authoritative.** Sync registers new candidates as unmapped. Health does not delete catalogue memberships. Empty catalogues stay empty; database failure is reported instead of masquerading as raw Jio fallback.
+- Music has a library/lyrics split on desktop, four navigation tabs on mobile, a persistent audio controller, queue drawer and bitrate changes that retain position. Browsing does not replace the queue. Music yields audio focus to Watch/Live; exhausted same-track recovery offers Retry/Skip.
 
-- `middleware.js` authenticates **every `/api/*` request** against a session token (SHA-256 of `jash-theatre:PASS[:SESSION_EPOCH]`).
-- Session travels as an HttpOnly cookie (`jash_access`), or `x-jash-token` / `?token=` for external tools (DevTools → Cookies to fetch it).
-- Exempt: `/api/auth` (rate-limited login), `/api/health` (probes), `/api/cron/tamilmv` (own `CRON` secret).
-- Rate limits on expensive routes; proxies block private/loopback hosts; admin routes fail closed.
+See [approved behaviour](docs/BEHAVIOUR.md), [architecture](docs/ARCHITECTURE.md) and [changes](CHANGELOG.md).
 
----
+## Deploy
 
-## Structure
+### Node service (Render / Koyeb / VPS)
 
-```txt
-app/            pages (/, /live, /music, /classics, /stremio, /watch, /admin) + ~60 API routes
-components/     AuthGate, rail/dock nav, CommandPalette, player/, live/, music/, admin/
-lib/            scrapers, providers, player policy modules, auth, stores
-models/         Mongoose schemas
-public/         PWA manifest, service worker, icons
-middleware.js   API auth firewall + rate limiting
-render.yaml     Render Blueprint (Node runtime, free tier)
+- Build command: `npm ci && npm run build`
+- Start command: `npm start`
+- Add configuration through the platform's secret/environment settings; do not commit `.env.local`.
+- Health endpoint: `/api/health`. Database/source health is a separate concern.
+- Use `PORT` supplied by your host, or 7860. Set `SITE_URL` to the HTTPS public origin when available.
+
+### Docker / Hugging Face Spaces
+
+```bash
+docker build -t jashvibes .
+docker run --env-file .env.local -p 7860:7860 jashvibes
 ```
 
-**Stack:** Next.js 15 (App Router) · React 19 · Tailwind CSS 3 · Mongoose 8 · Shaka Player 4
+The image uses Node 22, Next standalone output and explicit `HOSTNAME=0.0.0.0` / `PORT=7860`. Secrets are injected **at runtime**. The same source can use ordinary `npm start`; a standalone launch must set `PORT` explicitly.
+
+Do not expose MongoDB directly to browsers. Use a persistent managed database; a container filesystem is not the mapping store. Multiple app replicas can each run the in-process scheduler; use a single scheduler instance or `LIVE_SYNC_MINUTES=0` on the others.
+
+## Upgrade from 10.9
+
+1. **Back up MongoDB** and exported Live configuration first.
+2. Preserve your database URI and existing source settings. Deploy this source with a fresh install/build; don't copy an old `.next` directory.
+3. Viewer and owner tokens now contain signed expiry timestamps. **Sign in again** after upgrading; old indefinite hash tokens are not accepted.
+4. Live source deletion uses tombstones so defaults do not resurrect. Ordinary refresh/sync does not reset memberships. User-managed/unmapped rows are protected from automatic purging.
+5. Reapply any choices already erased by the old auto-mapping/health code, or restore them from your backup. Their old intent cannot be inferred reliably from erased records.
+6. Check owner source configuration, run sync, then publish new Live channels manually. Use **Alternative group** only for the identical channel across providers.
+7. Validate your actual source headers, licensed media/DRM and deployment region/device. A build or metadata response is not proof of playback.
+
+ReTro source deletion removes that source's streams while retaining shared titles. Manual metadata and removed-title overrides survive subsequent sync. Disabled/empty source registries are authoritative.
+
+## Test
+
+```bash
+npm run check             # parse source modules and validate local imports
+npm test                  # deterministic unit / mocked API-policy regression tests
+npx playwright install chromium --with-deps
+npm run dev -- --port 7860 # separate terminal; use a temporary test PASS
+npm run test:browser       # UI flows; local API fixtures, no real licences/media
+```
+
+Browser tests mock catalogues and use a generated tone plus a synthetic iframe. Production-DB persistence, real DRM, geo-restricted services and Docker runtime require your own deployment acceptance checks. See [verification scope](docs/VERIFICATION.md).
+
+## Sources and limitations
+
+The app retains Vault, configured Stremio addons, Moviesda direct-file discovery, Mirchi, ReTro M3U/JSON sources, Live source feeds and Saavn/LRCLIB music integration. Third-party availability, URL expiry, supported codecs and entitlement are outside the app's control. Configure a working `SAAVN_API` / `SAAVN_MIRRORS`: the old public Render default was observed returning 404. Album detail failures are no longer hidden by presenting unrelated search songs as the requested album.
+
+The remote Worker adapter is **not an active shipped stream relay**. Direct playback and the authenticated server relay are the supported transport paths. Proxies validate/pin public DNS destinations, validate redirect hops, bound header/idle waits and retain the correct playlist base. They do not provide access rights, defeat DRM or solve every codec/region restriction.
+
+Use only providers, streams and credentials you are authorized to access. This project does not distribute media, DRM credentials or production secrets.

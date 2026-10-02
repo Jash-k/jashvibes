@@ -93,14 +93,16 @@ export function JashPlayer(props) {
     live: liveProp,
     fallbackUrls,
     activeSource,
-    onPickSource,
-    nextEpisode,
+    onPickSource: onPickSourceProp,
+    nextEpisode: nextEpisodeProp,
     onPrev,
     onNext,
     title,
     poster,
   } = props;
 
+  const onPickSource = lineup.onPickSource || onPickSourceProp;
+  const nextEpisode = lineup.nextEpisode || nextEpisodeProp;
   const coarse = useCoarsePointer();
   const landscapePhone = useLandscapePhone();
   const online = useOnlineStatus();
@@ -245,6 +247,9 @@ export function JashPlayer(props) {
   const [frozenFrame, setFrozenFrame] = useState('');
 
   const { status, statusMessage, attemptNote, errorInfo, playing, time, model, prefs, tracks, stats, resumePrompt } = engine;
+  useEffect(() => {
+    on.onQualityApi?.({ heights: [...new Set((tracks.video || []).map((v) => Number(v.height)).filter(Boolean))].sort((a, b) => b - a), auto: prefs.qualityAuto, height: prefs.qualityHeight, select: engine.selectQualityHeight, setAuto: engine.setAutoQuality });
+  }, [tracks.video, prefs.qualityHeight, prefs.qualityAuto, on.onQualityApi, engine.selectQualityHeight, engine.setAutoQuality]);
   const canSeek = Boolean(model.canSeek) && status === 'ready';
   const live = Boolean(model.live);
   const win = model.window;
@@ -575,7 +580,7 @@ export function JashPlayer(props) {
           flash({ kind: 'badge', label: 'Speed', value: '1×' });
           break;
         case 'toggleFullscreen':
-          toggleFullscreen(wrapRef.current);
+          toggleFullscreen(props.fullscreenTargetRef?.current || wrapRef.current);
           break;
         case 'togglePip':
           togglePip();
@@ -640,7 +645,7 @@ export function JashPlayer(props) {
           else if (contextMenu) setContextMenu(null);
           else if (menu) setMenu(null);
           else if (locked) setLocked(false);
-          else if (isFullscreen) toggleFullscreen(wrapRef.current);
+          else if (isFullscreen) toggleFullscreen(props.fullscreenTargetRef?.current || wrapRef.current);
           break;
         case 'toggleBrowser':
           if (liveBrowser) setBrowserOpen((value) => !value);
@@ -1353,7 +1358,7 @@ export function JashPlayer(props) {
               <button
                 type="button"
                 data-jash-command="toggleFullscreen"
-                onClick={() => toggleFullscreen(wrapRef.current)}
+                onClick={() => toggleFullscreen(props.fullscreenTargetRef?.current || wrapRef.current)}
                 aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
                 className="grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95"
               >

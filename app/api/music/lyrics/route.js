@@ -39,6 +39,7 @@ function stripSyncedLyrics(value = '') {
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, {
     cache: 'no-store',
+    signal: AbortSignal.timeout(10000),
     ...options,
     headers: {
       Accept: 'application/json',

@@ -14,7 +14,7 @@ export default mongoose.models.Setting || mongoose.model('Setting', SettingSchem
 /** Read one setting value (or the fallback). */
 export async function getSetting(key, fallback = null) {
   const doc = await (mongoose.models.Setting || mongoose.model('Setting', SettingSchema))
-    .findOne({ key }).lean().catch(() => null);
+    .findOne({ key }).lean();
   return doc?.value ?? fallback;
 }
 

@@ -1,3 +1,4 @@
+import { safeFetch, publicDestination, readLimitedText } from '@/lib/server/safeFetch';
 import net from 'node:net';
 import dns from 'node:dns/promises';
 import { NextResponse } from 'next/server';
@@ -5,54 +6,8 @@ import { NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function isPrivateIPv4(hostname = '') {
-  const parts = hostname.split('.').map((part) => Number(part));
-  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
-  const [a, b] = parts;
-  return (
-    a === 10 ||
-    a === 127 ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    a === 0
-  );
-}
-
-function isBlockedHost(hostname = '') {
-  const host = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
-  if (!host) return true;
-  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return true;
-  if (host === '::1' || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80')) return true;
-  if (net.isIP(host) === 4 && isPrivateIPv4(host)) return true;
-  return false;
-}
-
-
-/**
- * Resolve-then-verify: hostname blocklists do not stop a DNS name that ANSWERS
- * with a private/loopback/metadata address (DNS rebinding to 169.254.169.254).
- */
-async function assertPublicHost(hostname = '') {
-  const host = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
-  if (net.isIP(host)) return; // literal IPs were already checked by isBlockedHost
-  let addresses;
-  try {
-    addresses = await dns.lookup(host, { all: true, verbatim: true });
-  } catch {
-    throw new Error('host does not resolve');
-  }
-  for (const { address } of addresses) {
-    if (net.isIP(address) === 6) {
-      const low = address.toLowerCase();
-      if (low === '::1' || low.startsWith('fc') || low.startsWith('fd') || low.startsWith('fe80') || low === '::') {
-        throw new Error('host resolves to a private address');
-      }
-      continue;
-    }
-    if (isPrivateIPv4(address)) throw new Error('host resolves to a private address');
-  }
-}
+function isBlockedHost(hostname = '') { return !hostname; }
+async function assertPublicHost(hostname) { await publicDestination(`https://${hostname}`); }
 
 function pickHeader(request, names = []) {
   for (const name of names) {
@@ -92,17 +47,20 @@ async function proxy(request) {
     const range = pickHeader(request, ['range', 'Range']);
     const accept = pickHeader(request, ['accept', 'Accept']);
 
+    const rawHeaders = searchParams.get('hd') || '{}';
+    try { for (const [name, value] of Object.entries(JSON.parse(rawHeaders))) { if (/^(host|connection|content-length|transfer-encoding|upgrade)$/i.test(name) || value == null) continue; headers.set(name, String(value)); } } catch { return NextResponse.json({ error: 'Invalid source headers' }, { status: 400 }); }
     if (ua) headers.set('User-Agent', ua);
     if (referer) headers.set('Referer', referer);
     if (cookie) headers.set('Cookie', cookie);
     if (range) headers.set('Range', range);
     headers.set('Accept', accept || '*/*');
 
-    const upstream = await fetch(target.href, {
+    const upstream = await safeFetch(target.href, {
       method: request.method === 'HEAD' ? 'HEAD' : 'GET',
       headers,
       redirect: 'follow',
       cache: 'no-store',
+      signal: request.signal,
     });
 
     const responseHeaders = new Headers();

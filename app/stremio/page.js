@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { watchHref } from '@/lib/watch/policy';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import EmbedSiteLinks from '@/components/EmbedSiteLinks';
 import RailNav from '@/components/rail/RailNav';
@@ -109,7 +110,7 @@ function Ruler({ tabs, value, pinnedCount, onChange, onOpenCatalogs }) {
 }
 
 function ShelfCard({ item }) {
-  const href = `/stremio-watch/${item.type}/${encodeURIComponent(item.id)}?source=catalog`;
+  const href = watchHref(item, 'stremio');
   const year = String(item.releaseInfo || item.year || '').slice(0, 4);
   const score = Number(item.rating) ? Number(item.rating).toFixed(1) : '';
 
@@ -381,25 +382,28 @@ export default function StremioPage() {
         if (cancelled) return;
         const list = readCatalogOptions(data.manifest?.catalogs || []);
         let savedPins = [];
+        let pinsConfigured = false;
         // Global pins first (Mongo — the same shelf on every device), the
         // per-device localStorage copy stays as the offline fallback.
         try {
           const pinsResponse = await fetch('/api/stremio/pins', { cache: 'no-store' });
           if (pinsResponse.ok) {
             const pinsData = await pinsResponse.json().catch(() => ({}));
-            if (Array.isArray(pinsData.pins) && pinsData.pins.length) {
+            if (Array.isArray(pinsData.pins) && pinsData.configured) {
+              pinsConfigured = true;
               savedPins = pinsData.pins.map((key) => list.find((item) => catalogKey(item) === key)).filter(Boolean);
             }
           }
         } catch { /* offline: fall through to the device copy */ }
-        if (!savedPins.length) {
+        if (!pinsConfigured) {
           try {
             const raw = JSON.parse(window.localStorage.getItem(SELECTED_KEY) || '[]');
+            if (window.localStorage.getItem(SELECTED_KEY) != null) pinsConfigured = true;
             if (Array.isArray(raw)) savedPins = raw.map((key) => list.find((item) => catalogKey(item) === key)).filter(Boolean);
           } catch { /* a corrupt key just means "nothing pinned yet" */ }
         }
         const prefs = readSessionCache(SHELF_KEY, CACHE_TTL) || {};
-        const chosen = savedPins.length ? savedPins : getDefaultPins(list, data.tamilCatalogs || {});
+        const chosen = pinsConfigured ? savedPins : getDefaultPins(list, data.tamilCatalogs || {});
         setManifest(data.manifest || null);
         setOptions(list);
         setPinned(chosen);
@@ -430,7 +434,7 @@ export default function StremioPage() {
   }, [status, activeCatalog, activeCatalogKey, shelf, run]);
 
   useEffect(() => {
-    if (!pinned.length) return;
+    if (status !== 'ready') return;
     const keys = pinned.map(catalogKey);
     try { window.localStorage.setItem(SELECTED_KEY, JSON.stringify(keys)); } catch { /* private mode */ }
     // Write through to the global shelf so every device sees the same order.
@@ -439,7 +443,7 @@ export default function StremioPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ keys }),
     }).catch(() => {});
-  }, [pinned]);
+  }, [pinned, status]);
 
   useEffect(() => {
     if (!activeCatalogKey) return;

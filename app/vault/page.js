@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { watchHref } from '@/lib/watch/policy';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import RailNav from '@/components/rail/RailNav';
 import Icon from '@/components/Icons';
@@ -152,147 +154,7 @@ function VaultTile({ movie, onPlay }) {
 
 /* ── instant embed player ───────────────────────────────────────────── */
 
-function EmbedPlayer({ movie, onClose }) {
-  const embeds = movie.embeds || [];
 
-  // A series carries `season`/`episode` on every embed, so the episodes are
-  // regrouped here (movies produce an empty list and behave exactly as before).
-  const episodes = useMemo(() => (movie.isSeries ? groupEpisodes(embeds) : []), [movie.isSeries, embeds]);
-
-  const [episodeIndex, setEpisodeIndex] = useState(0);
-  const [index, setIndex] = useState(0);
-
-  const episode = episodes[episodeIndex] || null;
-  const sources = episode ? episode.embeds : embeds;
-  const safeIndex = Math.min(index, Math.max(0, sources.length - 1));
-  const active = sources[safeIndex];
-
-  const selectEpisode = useCallback((next) => {
-    setEpisodeIndex(next);
-    setIndex(0); // a new episode always opens on its best source
-  }, []);
-
-  // "dead stream? next" walks this episode's qualities first, then the next
-  // episode — for a movie that is simply the next source.
-  const nextSource = useCallback(() => {
-    if (sources.length > 1 && safeIndex < sources.length - 1) { setIndex(safeIndex + 1); return; }
-    if (episodes.length > 1 && episodeIndex < episodes.length - 1) { selectEpisode(episodeIndex + 1); return; }
-    setIndex(0);
-  }, [sources.length, safeIndex, episodes.length, episodeIndex, selectEpisode]);
-
-  // Scroll lock + Escape to close + arrow keys hop sources.
-  useEffect(() => {
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const onKey = (event) => {
-      if (event.key === 'Escape') onClose();
-      if (event.key === 'ArrowRight' && safeIndex < sources.length - 1) setIndex(safeIndex + 1);
-      if (event.key === 'ArrowLeft' && safeIndex > 0) setIndex(safeIndex - 1);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => {
-      document.body.style.overflow = previous;
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [safeIndex, sources.length, onClose]);
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/92 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label={movie.title}>
-      <button type="button" aria-label="Close player" className="absolute inset-0 cursor-default" onClick={onClose} tabIndex={-1} />
-
-      <div className="jv-vault-deck relative z-10 w-full max-w-5xl">
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-black tracking-wide text-cyan-200 sm:text-base">
-              {movie.title}{movie.year ? <span className="text-zinc-500"> · {movie.year}</span> : null}
-            </p>
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">
-              {episode
-                ? `${episodeLabel(episode)} · episode ${episodeIndex + 1} / ${episodes.length} · source ${safeIndex + 1} / ${sources.length}`
-                : `vault embed ${safeIndex + 1} / ${embeds.length}`}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-white/15 bg-white/[0.04] p-2 text-zinc-300 transition hover:border-cyan-400/60 hover:text-white"
-            aria-label="Close"
-          >
-            <Icon name="close" className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-cyan-400/25 bg-black shadow-[0_0_40px_rgba(34,211,238,0.12)]">
-          <iframe
-            key={active?.url}
-            title={`${movie.title} — embedded player`}
-            src={active?.url}
-            className="h-full w-full border-0 bg-black"
-            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
-            allowFullScreen
-            referrerPolicy="no-referrer-when-downgrade"
-          />
-        </div>
-
-        {/* episode picker — series only, and only when there is a choice to make */}
-        {episodes.length > 1 ? (
-          <div className="jv-vault-pills mt-2.5" aria-label="Episode">
-            {episodes.map((entry, entryIndex) => (
-              <button
-                key={`${entry.season}:${entry.episode}`}
-                type="button"
-                onClick={() => selectEpisode(entryIndex)}
-                aria-pressed={entryIndex === episodeIndex}
-                className={entryIndex === episodeIndex ? 'jv-vault-pill jv-vault-pill-on' : 'jv-vault-pill'}
-              >
-                {episodeLabel(entry)}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-          {sources.map((embed, embedIndex) => (
-            <button
-              key={`${embed.url}-${embedIndex}`}
-              type="button"
-              onClick={() => setIndex(embedIndex)}
-              aria-pressed={embedIndex === safeIndex}
-              className={embedIndex === safeIndex ? 'jv-vault-src-chip jv-vault-src-on' : 'jv-vault-src-chip'}
-            >
-              {episode
-                ? String(embed.quality || 'stream').toLowerCase()
-                : `${String(embed.quality || 'stream').toLowerCase()} · #${embedIndex + 1}`}
-            </button>
-          ))}
-          {sources.length > 1 || (episode && episodeIndex < episodes.length - 1) ? (
-            <button
-              type="button"
-              onClick={nextSource}
-              className="jv-vault-src-chip ml-auto"
-            >
-              dead stream? next ▸
-            </button>
-          ) : null}
-          {movie.pageUrl ? (
-            <a
-              href={movie.pageUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="jv-vault-src-chip"
-            >
-              source page ↗
-            </a>
-          ) : null}
-        </div>
-        <p className="mt-1.5 text-[10px] font-semibold text-zinc-600">
-          Embedded source — served by the upstream player. Ads stay inside this box.
-        </p>
-      </div>
-    </div>
-  );
-}
 
 /* ── skeletons & notes ──────────────────────────────────────────────── */
 
@@ -320,7 +182,8 @@ export default function VaultPage() {
   const [sort, setSort] = useState('newest');
   const [letter, setLetter] = useState('');
   const [visible, setVisible] = useState(GRID_STEP);
-  const [playMovie, setPlayMovie] = useState(null);
+  const router = useRouter();
+  const openWatch = useCallback((movie) => router.push(watchHref(movie, 'vault')), [router]);
 
   const sentinelRef = useRef(null);
   const playHandledRef = useRef(false);
@@ -361,15 +224,8 @@ export default function VaultPage() {
     playHandledRef.current = true;
     if (!id) return;
     const movie = data.movies.find((entry) => entry.id === id);
-    if (movie) setPlayMovie(movie);
+    if (movie) router.replace(watchHref(movie, 'vault'));
   }, [data]);
-
-  const closePlayer = useCallback(() => {
-    setPlayMovie(null);
-    if (new URLSearchParams(window.location.search).has('play')) {
-      window.history.replaceState(null, '', '/vault');
-    }
-  }, []);
 
   /* Facets + letter index, derived from the full list. */
   const facets = data?.facets;
@@ -650,7 +506,7 @@ export default function VaultPage() {
               <>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                   {shown.map((movie) => (
-                    <VaultTile key={movie.id} movie={movie} onPlay={setPlayMovie} />
+                    <VaultTile key={movie.id} movie={movie} onPlay={openWatch} />
                   ))}
                 </div>
                 {visible < filtered.length ? (
@@ -668,7 +524,7 @@ export default function VaultPage() {
         </div>
       </section>
 
-      {playMovie ? <EmbedPlayer movie={playMovie} onClose={closePlayer} /> : null}
+
     </main>
   );
 }

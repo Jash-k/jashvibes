@@ -15,6 +15,7 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const query = {
+      type: searchParams.get('type') || '',
       tmdbId: searchParams.get('tmdbId') || '',
       imdbId: searchParams.get('imdbId') || '',
       title: searchParams.get('title') || '',

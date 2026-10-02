@@ -83,7 +83,7 @@ export async function GET(request) {
 
     // Everything except the year window. The ruler counts per decade against *this*, so switching
     // decades shows real numbers for the other decades instead of zeroing out the one you left.
-    const shelfFilter = {};
+    const shelfFilter = { hidden: { $ne: true } };
     if (q) shelfFilter.$text = { $search: q };
     if (source && source !== 'all') shelfFilter.sources = source;
     if (genre && genre !== 'all') shelfFilter.genres = genre;

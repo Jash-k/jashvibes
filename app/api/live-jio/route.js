@@ -1,3 +1,4 @@
+import { safeFetch } from '@/lib/server/safeFetch';
 import { NextResponse } from 'next/server';
 import { getFreshJioCookie, getJioChannelAccess } from '@/lib/liveTv';
 import {
@@ -42,7 +43,7 @@ async function fetchAllowedJio(url, options, cookie, redirects = 3) {
   if (!current) throw new Error('Blocked Jio playback host');
 
   for (let attempt = 0; attempt <= redirects; attempt += 1) {
-    const response = await fetch(current.href, { ...options, redirect: 'manual' });
+    const response = await safeFetch(current.href, { ...options, redirect: 'manual' });
     if (![301, 302, 303, 307, 308].includes(response.status)) return response;
     const location = response.headers.get('location');
     const next = location

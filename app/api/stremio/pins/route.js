@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { verifyRequestToken } from '@/lib/serverAuth';
+import { requireServiceAuth, verifyRequestToken } from '@/lib/serverAuth';
 import dbConnect from '@/lib/db';
+import { getSetting, setSetting } from '@/models/Setting';
 import StremioPin from '@/models/StremioPin';
 
 export const runtime = 'nodejs';
@@ -22,16 +23,15 @@ export async function GET(request) {
   }
   await dbConnect();
   const pins = await StremioPin.find({}).sort({ sortOrder: 1 }).lean();
-  return NextResponse.json({ ok: true, pins: pins.map((pin) => pin.catalogKey) }, { headers: { 'Cache-Control': 'no-store' } });
+  return NextResponse.json({ ok: true, configured: Boolean(await getSetting('stremio_pins_initialized', false)) || pins.length > 0, pins: pins.map((pin) => pin.catalogKey) }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function PUT(request) {
-  if (!verifyRequestToken(request)) {
-    return NextResponse.json({ error: 'Unlock JaSH ViBeS first.' }, { status: 401 });
-  }
+  try { await requireServiceAuth(request); } catch (err) { return NextResponse.json({ error: err.message }, { status: err.status || 401 }); }
   const body = await request.json().catch(() => ({}));
   const keys = (Array.isArray(body?.keys) ? body.keys : []).map((key) => String(key)).filter(Boolean).slice(0, 40);
   await dbConnect();
+  await setSetting('stremio_pins_initialized', true);
   await StremioPin.deleteMany({});
   if (keys.length) {
     await StremioPin.insertMany(keys.map((key, index) => ({ catalogKey: key, sortOrder: (index + 1) * 10 }))).catch(() => {});
@@ -40,9 +40,7 @@ export async function PUT(request) {
 }
 
 export async function DELETE(request) {
-  if (!verifyRequestToken(request)) {
-    return NextResponse.json({ error: 'Unlock JaSH ViBeS first.' }, { status: 401 });
-  }
+  try { await requireServiceAuth(request); } catch (err) { return NextResponse.json({ error: err.message }, { status: err.status || 401 }); }
   const key = new URL(request.url).searchParams.get('key') || '';
   await dbConnect();
   if (key) await StremioPin.deleteOne({ catalogKey: key });

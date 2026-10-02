@@ -5,6 +5,7 @@ const LiveSourceSchema = new mongoose.Schema({
   label: { type: String, required: true },
   type: { type: String, enum: ['m3u', 'json'], default: 'm3u' },
   url: { type: String, required: true },
+  deleted: { type: Boolean, default: false, index: true },
   enabled: { type: Boolean, default: true, index: true },
   trustTamil: { type: Boolean, default: false },
   priority: { type: Number, default: 99, index: true },

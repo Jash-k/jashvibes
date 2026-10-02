@@ -59,6 +59,7 @@ function clearSessionCookie(response) {
  * nothing to brute force, and the answer is one boolean.
  */
 export async function GET(request) {
+  if (!getConfiguredPassword()) return NextResponse.json({ success: false, configured: false, error: 'Set PASS to configure viewer access.' }, { status: 503 });
   const token = request.cookies.get(SESSION_COOKIE)?.value || '';
   const valid = await isValidAccessToken(token);
   if (!valid) return NextResponse.json({ success: false, error: 'No active session' }, { status: 401 });
@@ -94,7 +95,7 @@ export async function POST(request) {
         );
       }
 
-      return withSessionCookie(NextResponse.json({ success: true, token: expectedToken }), expectedToken);
+      return withSessionCookie(NextResponse.json({ success: true, token }), token);
     }
 
     // One front door: only PASS unlocks the app. The old panel-password path

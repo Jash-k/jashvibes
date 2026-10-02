@@ -190,6 +190,17 @@ export default function LiveTVPage() {
   // Every live-source quirk — Jio token resolution, ClearKey, header rewriting,
   // the Pocket proxy, DVR/streaming config and the retry order — lives in the
   // policy, so the main panel and the service-panel preview cannot drift.
+  const [liveSourceMode, setLiveSourceMode] = useState('auto');
+  const liveTried = useRef(new Set());
+  const [liveSourceError, setLiveSourceError] = useState('');
+  const alternatives = useMemo(() => active?.logicalChannelId ? channels.filter((c) => c.logicalChannelId === active.logicalChannelId && c.playable) : active ? [active] : [], [channels, active]);
+  function failLiveSource() {
+    if (!active) return;
+    liveTried.current.add(active.id);
+    const next = alternatives.find((c) => !liveTried.current.has(c.id));
+    if (liveSourceMode === 'auto' && next && liveTried.current.size < 3) { setActive(next); setLiveSourceError(''); }
+    else setLiveSourceError('Recovery exhausted. Retry this source or explicitly choose a mapped alternative.');
+  }
   const livePolicy = useMemo(() => {
     if (!active) return null;
     const base = createLiveTvPolicy(active, {
@@ -251,6 +262,7 @@ export default function LiveTVPage() {
 
   const selectChannel = useCallback((channel, { remember = true } = {}) => {
     if (!channel) return;
+    liveTried.current = new Set(); setLiveSourceMode('auto'); setLiveSourceError('');
     setActive((current) => {
       if (remember && current?.id && current.id !== channel.id) setLastViewed(current);
       return channel;
@@ -409,6 +421,7 @@ export default function LiveTVPage() {
                   library={{ watchKey: `live:${active.id}`, persist: false }}
                   policy={shellPolicy}
                   liveBrowser={liveBrowser}
+                  on={{ onFatal: failLiveSource }}
                   onPrev={() => navigateChannel(-1)}
                   onNext={() => navigateChannel(1)}
                 />
@@ -424,6 +437,10 @@ export default function LiveTVPage() {
               )}
 
               </div>
+            </div>
+            <div className="my-3 flex flex-wrap items-center gap-3 text-xs text-zinc-400">
+              <label>Source <select aria-label="Live source" className="ml-2 rounded-lg border border-white/15 bg-zinc-950 px-3 py-2 text-white" value={liveSourceMode === 'auto' ? 'auto' : active?.id || 'auto'} onChange={(event) => { const id = event.target.value; setLiveSourceMode(id === 'auto' ? 'auto' : 'manual'); liveTried.current = new Set(); setLiveSourceError(''); if (id !== 'auto') { const candidate = alternatives.find((c) => c.id === id); if (candidate) setActive(candidate); } }}><option value="auto">Auto · same channel only</option>{alternatives.map((c) => <option key={c.id} value={c.id}>{c.source || c.name}</option>)}</select></label>
+              {liveSourceError ? <span role="alert" className="text-red-300">{liveSourceError}</span> : null}
             </div>
             {guideCompact ? (
               <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5 self-center py-0.5">

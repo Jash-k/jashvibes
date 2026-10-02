@@ -79,7 +79,9 @@ export async function PATCH(request) {
       patch.year = Number.isFinite(year) && year > 1900 && year < 2100 ? year : undefined;
     }
 
-    const doc = await VodItem.findByIdAndUpdate(id, { $set: patch }, { new: true, runValidators: true })
+    await dbConnect();
+    const protectedPatch = { ...patch, ...Object.fromEntries(Object.entries(patch).map(([key, value]) => [`overrides.${key}`, value])) };
+    const doc = await VodItem.findByIdAndUpdate(id, { $set: protectedPatch }, { new: true, runValidators: true })
       .select('title year tmdbMatched sources posterUrl')
       .lean();
     if (!doc) return NextResponse.json({ ok: false, error: 'Title not found' }, { status: 404 });
@@ -95,7 +97,7 @@ export async function DELETE(request) {
   const id = new URL(request.url).searchParams.get('id') || '';
   if (!id) return NextResponse.json({ ok: false, error: 'Missing id' }, { status: 400 });
   await dbConnect();
-  const result = await VodItem.findByIdAndDelete(id);
+  const result = await VodItem.findByIdAndUpdate(id, { $set: { hidden: true, 'overrides.hidden': true } });
   if (!result) return NextResponse.json({ ok: false, error: 'Title not found' }, { status: 404 });
   return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } });
 }

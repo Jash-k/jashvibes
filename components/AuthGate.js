@@ -109,6 +109,7 @@ function DayNightToggle() {
 }
 
 export default function AuthGate({ children }) {
+  const pathname = usePathname();
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState('checking');
@@ -186,6 +187,7 @@ export default function AuthGate({ children }) {
     setStatus('locked');
   }
 
+  if (pathname.startsWith('/admin')) return <>{children}</>;
   if (status === 'checking') {
     return (
       <main className="flex min-h-dvh items-center justify-center bg-black text-zinc-100">

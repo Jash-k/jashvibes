@@ -1,3 +1,4 @@
+import { requireServiceAuth } from '@/lib/serverAuth';
 import { NextResponse } from 'next/server';
 import { verifyRequestToken } from '@/lib/serverAuth';
 import { matchAndStore } from '@/lib/titleMatch';
@@ -14,6 +15,7 @@ const NO_STORE = { 'Cache-Control': 'no-store, max-age=0' };
  * persisted and the poster's new TMDB-bound metadata is returned.
  */
 export async function POST(request) {
+  try { await requireServiceAuth(request); } catch (e) { return NextResponse.json({ error: e.message }, { status: e.status || 401 }); }
   if (!verifyRequestToken(request)) {
     return NextResponse.json({ error: 'Sign in to match titles.' }, { status: 401, headers: NO_STORE });
   }

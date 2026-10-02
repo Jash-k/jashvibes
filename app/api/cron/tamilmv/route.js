@@ -37,6 +37,7 @@ export async function GET(request) {
       includeTvShows: false,
     });
 
+    if (!(payload.movies || []).length && !(payload.series || []).length) return NextResponse.json({ ok: false, saved: false, error: 'Source returned no titles; the previous catalogue was preserved.' }, { status: 502 });
     const mongoose = await dbConnect();
     await mongoose.connection.db.collection(COLLECTION_NAME).updateOne(
       { key: 'latest' },

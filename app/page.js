@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { watchHref as unifiedWatchHref } from '@/lib/watch/policy';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CommandPalette from '@/components/CommandPalette';
@@ -38,43 +39,8 @@ function watchQualityParam(item, hasQuery = false) {
  * The single shape of a watch link on this page. MediaCard and the focus panel both need it, and two
  * copies of a URL builder is how one of them ends up dropping the quality hint.
  */
-function watchHref(item) {
-  if (!item?.tmdbId) return undefined;
-  const episode = item.type === 'series' && (item.season || item.episode)
-    ? `?season=${item.season || 1}&episode=${item.episode || 1}`
-    : '';
-  return `/watch/${item.type}/${item.tmdbId}${episode}${watchQualityParam(item, Boolean(episode))}`;
-}
-
-
-/**
- * Homepage click path (locked):
- *   1. Ask /api/vault/match (TMDB → IMDb → title+year)
- *   2. If hit → open vault embed player (/vault?play=<id>)
- *   3. Else → normal /watch/{type}/{tmdbId} behaviour (no onestream embeds there)
- */
-async function resolveOpenHref(item, { signal } = {}) {
-  const fallback = watchHref(item);
-  if (!item) return fallback;
-  try {
-    const params = new URLSearchParams();
-    if (item.tmdbId) params.set('tmdbId', String(item.tmdbId));
-    if (item.imdbId) params.set('imdbId', String(item.imdbId));
-    if (item.title) params.set('title', String(item.title));
-    const year = item.year || String(item.releaseDate || '').slice(0, 4);
-    if (year) params.set('year', String(year));
-    const response = await fetch(`/api/vault/match?${params.toString()}`, {
-      signal,
-      cache: 'no-store',
-    });
-    if (!response.ok) return fallback;
-    const data = await response.json().catch(() => ({}));
-    if (data?.playHref) return data.playHref;
-  } catch (error) {
-    if (error?.name === 'AbortError') throw error;
-  }
-  return fallback;
-}
+function watchHref(item) { return unifiedWatchHref(item, 'home'); }
+async function resolveOpenHref(item) { return watchHref(item); }
 
 
 function MatchDialog({ item, onClose, onMatched }) {
@@ -172,7 +138,7 @@ function MediaCard({ item, onItemMatched, delay = 0 }) {
   const [matchOpen, setMatchOpen] = useState(false);
   const [opening, setOpening] = useState(false);
   const hasTMDB = Boolean(item.tmdbId);
-  const href = hasTMDB ? watchHref(item) : undefined;
+  const href = watchHref(item);
   // Always a div — we intercept the click so vault can win before /watch.
   const Wrapper = 'div';
   const qualityChip = item?.type === 'series'
@@ -184,11 +150,11 @@ function MediaCard({ item, onItemMatched, delay = 0 }) {
   return (
     <>
       <Wrapper
-        role={hasTMDB ? 'link' : undefined}
-        tabIndex={hasTMDB ? 0 : undefined}
+        role="link"
+        tabIndex={0}
         aria-busy={opening || undefined}
         onClick={async (event) => {
-          if (!hasTMDB || opening) return;
+          if (opening) return;
           // Let nested buttons (fav / match) win
           if (event.target.closest('button, a[href]')) return;
           event.preventDefault();
@@ -203,7 +169,7 @@ function MediaCard({ item, onItemMatched, delay = 0 }) {
           }
         }}
         onKeyDown={async (event) => {
-          if (!hasTMDB || opening) return;
+          if (opening) return;
           if (event.key !== 'Enter' && event.key !== ' ') return;
           event.preventDefault();
           setOpening(true);
@@ -481,7 +447,7 @@ function VaultRail() {
       <div className="jv-row-strip" role="list">
         {items.map((movie) => (
           <div key={movie.id} className="jv-row-tile" role="listitem">
-            <Link href={`/vault?play=${encodeURIComponent(movie.id)}`} className="jv-vault-rail-card" title={`Play ${movie.title}`}>
+            <Link href={unifiedWatchHref(movie, 'vault')} className="jv-vault-rail-card" title={`Play ${movie.title}`}>
               {movie.poster ? (
                 <img src={movie.poster} alt="" aria-hidden="true" loading="lazy" decoding="async" className="jv-vault-rail-poster" />
               ) : (

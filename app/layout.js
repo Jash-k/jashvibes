@@ -3,6 +3,7 @@ import 'shaka-player/dist/controls.css';
 import localFont from 'next/font/local';
 import AuthGate from '@/components/AuthGate';
 import PWARegister from '@/components/PWARegister';
+import MusicProvider from '@/components/music/MusicProvider';
 import FullscreenOrientationLock from '@/components/FullscreenOrientationLock';
 
 // Self-hosted variable font: the build must never depend on Google Fonts being
@@ -55,28 +56,12 @@ export default function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="JaSH ViBeS" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                try {
-                  var originalFetch = window.fetch;
-                  Object.defineProperty(window, 'fetch', {
-                    get: function() { return originalFetch; },
-                    set: function(v) { console.warn('Attempt to overwrite fetch blocked.'); },
-                    configurable: true,
-                    enumerable: true
-                  });
-                } catch (e) {}
-              })();
-            `,
-          }}
-        />
+
       </head>
       <body>
         <PWARegister />
         <FullscreenOrientationLock />
-        <AuthGate>{children}</AuthGate>
+        <AuthGate><MusicProvider>{children}</MusicProvider></AuthGate>
       </body>
     </html>
   );

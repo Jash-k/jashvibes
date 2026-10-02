@@ -1,4 +1,6 @@
 'use client';
+import { watchHref } from '@/lib/watch/policy';
+
 
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
@@ -76,23 +78,7 @@ export default function CommandPalette({ open, onClose }) {
   }, [query]);
 
 
-  async function openResult(item) {
-    if (!item?.tmdbId && !item?.title) return;
-    try {
-      const params = new URLSearchParams();
-      if (item.tmdbId) params.set('tmdbId', String(item.tmdbId));
-      if (item.imdbId) params.set('imdbId', String(item.imdbId));
-      if (item.title) params.set('title', String(item.title));
-      if (item.year) params.set('year', String(item.year));
-      const response = await fetch(`/api/vault/match?${params.toString()}`, { cache: 'no-store' });
-      const data = await response.json().catch(() => ({}));
-      if (data?.playHref) {
-        router.push(data.playHref);
-        return;
-      }
-    } catch { /* fall through */ }
-    if (item.tmdbId) router.push(`/watch/${item.type || 'movie'}/${item.tmdbId}`);
-  }
+  function openResult(item) { router.push(watchHref(item, 'home')); }
 
   const handleKeyDownList = (e) => {
     if (!results.length) return;
@@ -204,9 +190,8 @@ export default function CommandPalette({ open, onClose }) {
                 return (
                   <Link
                     key={`${item.type}-${item.tmdbId}`}
-                    href={`/watch/${item.type}/${item.tmdbId}`}
+                    href={watchHref(item, 'home')}
                     onClick={(event) => { event.preventDefault(); onClose(false); openResult(item); }}
-                    onClick={() => onClose(false)}
                     onMouseEnter={() => setSelectedIndex(index)}
                     className={`flex items-center gap-3.5 rounded-2xl p-2.5 transition ${
                       active
