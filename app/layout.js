@@ -1,5 +1,4 @@
 import './globals.css';
-import 'shaka-player/dist/controls.css';
 import localFont from 'next/font/local';
 import AuthGate from '@/components/AuthGate';
 import PWARegister from '@/components/PWARegister';

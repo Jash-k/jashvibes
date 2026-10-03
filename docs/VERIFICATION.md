@@ -1,5 +1,9 @@
 # Verification scope
 
+> **Note for the deploy bundle.** The test suite named below is not part of this distribution (removed with
+> CI). What remains verifiable inside the bundle is `npm run check`, `npm run build` and `/api/health`. This
+> section is kept as the record of what was executed against the code, including what it does **not** prove.
+
 ## Executed against this refactor
 
 | Check | Result / scope |

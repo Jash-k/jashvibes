@@ -11,7 +11,7 @@
   --ad-panel-2: #151021;
   --ad-ink: #f4f2f8;
   --ad-dim: #a29fb3;
-  --ad-faint: #6f6c80;
+  --ad-faint: #8a879c; /* was #6f6c80 = 3.66:1 on --ad-panel-2 */
   --ad-line: rgba(255, 255, 255, 0.09);
   --ad-line-soft: rgba(255, 255, 255, 0.05);
   --ad-red: #f43f5e;
@@ -36,7 +36,7 @@ html.day-mode .jv-ad-page {
   --ad-panel-2: #f5f0e8;
   --ad-ink: #1c1420;
   --ad-dim: #5c5566;
-  --ad-faint: #8d8698;
+  --ad-faint: #6b6478; /* was #8d8698 = 3.09:1 on --ad-panel-2 */
   --ad-line: rgba(28, 20, 32, 0.12);
   --ad-line-soft: rgba(28, 20, 32, 0.06);
   --ad-red: #e11d48;

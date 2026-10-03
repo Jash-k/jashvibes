@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import { scrapeTamilMV } from '@/lib/tamilmvScraper';
-import dbConnect from '@/lib/db';
+import { scrapeCollection } from '@/lib/tamilmvPayload';
 import { verifyRequestToken } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const COLLECTION_NAME = 'tamilmv_scrapes';
 
 function isAuthorized(request) {
   // A logged-in owner (valid app session) may always trigger the cron.
@@ -38,8 +37,7 @@ export async function GET(request) {
     });
 
     if (!(payload.movies || []).length && !(payload.series || []).length) return NextResponse.json({ ok: false, saved: false, error: 'Source returned no titles; the previous catalogue was preserved.' }, { status: 502 });
-    const mongoose = await dbConnect();
-    await mongoose.connection.db.collection(COLLECTION_NAME).updateOne(
+    await (await scrapeCollection()).updateOne(
       { key: 'latest' },
       {
         $set: {

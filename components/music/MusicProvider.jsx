@@ -44,6 +44,7 @@ function useMusicController(enabled) {
   const [trending, setTrending] = useState({ status: 'idle', items: [], error: '' });
   const [fresh, setFresh] = useState({ status: 'idle', tracks: [], albums: [], error: '' });
   const [lyricAutoScroll, setLyricAutoScroll] = useState(true);
+  // Wired in the Lyric Lounge's Focus toggle: dims every line but the one being sung.
   const [lyricBlur, setLyricBlur] = useState(false);
   const [lyricOffset, setLyricOffset] = useState(0);
   const [crudQuery, setCrudQuery] = useState('');
@@ -729,10 +730,16 @@ function useMusicController(enabled) {
   const effectiveVolume = muted ? 0 : Math.min(1, Math.max(0, Number(volume) || 0));
   const volumeIcon = effectiveVolume === 0 ? '🔇' : effectiveVolume < 0.45 ? '🔉' : '🔊';
   useEffect(() => {
-    if (showLyrics && lyricAutoScroll && activeLyricRef.current) {
-      activeLyricRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
-  }, [showLyrics, activeLyricLineIndex, centerTab]);
+    if (!showLyrics || !lyricAutoScroll || !activeLyricRef.current) return;
+    // Smooth scrolling is motion, and a listener who asked for less of it should not
+    // get a 30-line glide every time the song moves on. `lyricAutoScroll` is in the
+    // deps because "Resume follow" has to actually resume the following.
+    const reduced =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    activeLyricRef.current.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });
+  }, [showLyrics, lyricAutoScroll, activeLyricLineIndex, centerTab]);
 
   /* ───────────────────────────── new design surface ───────────────────────────── */
 
@@ -835,7 +842,7 @@ function useMusicController(enabled) {
   }
   function addToQueue(track) { setQueue((q) => dedupeQueue([...q, track])); }
   function backToAlbums() { ++collectionGeneration.current; collectionRequest.current?.abort(); setSelectedCollection(null); setCollectionStatus('idle'); setCenterTab('albums'); }
-  return { videoRef, home, status, error, setError, homeWarning, loadHome, query, setQuery, searchResults, searchStatus, selectedCollection, collectionStatus, openAlbum, openArtist, openPlaylist, backToAlbums, queueTracks, playTrack, playNext, playPrevious, addToQueue, retryTrack, playingTrack, activeKey, currentTime, duration, quality, setQuality, qualityChips, playerStatus, isPlaying, togglePlay, seekTo, volume, changeVolume, toggleMute, muted, shuffleEnabled, setShuffleEnabled, repeatMode, cycleRepeat, favorites, favoriteSet, favoriteTracks, recents, toggleFavorite, centerTab, setCenterTab, lyrics, lyricsData, lyricsStatus, openLyrics, syncedLyricLines, activeLyricLineIndex, lyricRows, plainLyricLines, lyricAutoScroll, setLyricAutoScroll, lyricOffset, setLyricOffset, activeLyricRef, facetLists, facet, loadFacet, allShelfSongs, shelfCollections, trending, loadTrending, fresh, loadFresh, refreshImportedPlaylists, listeningMode, toggleListeningMode, pocketMode, enterPocketMode, setPocketMode, showSongCrud, setShowSongCrud, crudQuery, setCrudQuery, addImportedTrack, replaceImportedTrack, removeImportedTrack };
+  return { videoRef, home, status, error, setError, homeWarning, loadHome, query, setQuery, searchResults, searchStatus, selectedCollection, collectionStatus, openAlbum, openArtist, openPlaylist, backToAlbums, queueTracks, playTrack, playNext, playPrevious, addToQueue, retryTrack, playingTrack, activeKey, currentTime, duration, quality, setQuality, qualityChips, playerStatus, isPlaying, togglePlay, seekTo, volume, changeVolume, toggleMute, muted, shuffleEnabled, setShuffleEnabled, repeatMode, cycleRepeat, favorites, favoriteSet, favoriteTracks, recents, toggleFavorite, centerTab, setCenterTab, lyrics, lyricsData, lyricsStatus, openLyrics, syncedLyricLines, activeLyricLineIndex, lyricRows, plainLyricLines, lyricAutoScroll, setLyricAutoScroll, lyricOffset, setLyricOffset, activeLyricRef, lyricBlur, setLyricBlur, facetLists, facet, loadFacet, allShelfSongs, shelfCollections, trending, loadTrending, fresh, loadFresh, refreshImportedPlaylists, listeningMode, toggleListeningMode, pocketMode, enterPocketMode, setPocketMode, showSongCrud, setShowSongCrud, crudQuery, setCrudQuery, addImportedTrack, replaceImportedTrack, removeImportedTrack };
 
 }
 const MusicContext = createContext(null);

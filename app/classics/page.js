@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import RailNav from '@/components/rail/RailNav';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 import { POSTER_SIZES_ATTR, tmdbImageSrcSet } from '@/lib/tmdbPoster';
+import { revealStyle, useReveal } from '@/lib/useReveal';
 import {
   DECADE_MAX_PAGES,
   DECADE_PAGE_LIMIT,
@@ -82,14 +83,14 @@ function Ruler({ decades, undated, everything, value, onChange }) {
   );
 }
 
-function TitleRow({ item }) {
+function TitleRow({ item, index = 0 }) {
   const score = Number(item.rating) || 0;
   const genres = item.genres?.slice(0, 3).join(', ');
   const sources = item.sources?.length ? item.sources.join(' + ') : 'source unlabelled';
   const isMoviesda = item.sources?.some((source) => /moviesda/i.test(String(source)));
 
   return (
-    <Link href={watchHref(item, 'retro')} className="jv-dec-row">
+    <Link href={watchHref(item, 'retro')} className="jv-dec-row" data-reveal style={revealStyle(index)}>
       {item.posterUrl ? (
         <img
           className="jv-dec-art"
@@ -331,6 +332,10 @@ export default function TamilClassicsPage() {
         : `The ${decadeLabel(decade)}`;
   const span = ruler.minYear && ruler.maxYear ? `${ruler.minYear} — ${ruler.maxYear}` : 'no years yet';
 
+  // Re-arms on the decade/sort AND the count: two decades can hold the same number
+  // of titles, and "Keep loading" appends without changing the decade.
+  const revealRef = useReveal(`${decade}|${sort}|${items.length}`);
+
   return (
     <>
       <RailNav />
@@ -438,8 +443,8 @@ export default function TamilClassicsPage() {
             ) : null}
 
             {items.length ? (
-              <section className="jv-dec-shelf" id="jv-dec-shelf" aria-label={`${heading} — ${total || items.length} titles`}>
-                {items.map((item) => <TitleRow key={rowKey(item)} item={item} />)}
+              <section ref={revealRef} className="jv-dec-shelf" id="jv-dec-shelf" aria-label={`${heading} — ${total || items.length} titles`}>
+                {items.map((item, index) => <TitleRow key={rowKey(item)} item={item} index={index} />)}
               </section>
             ) : null}
 

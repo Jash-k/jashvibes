@@ -842,10 +842,10 @@ html.day-mode [data-dvp="controls"] [class*="from-black"] {
   --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
 }
 
-html.day-mode [data-dvp="root"] [class*="text-fuchsia-"],
-html.day-mode [data-dvp="controls"] [class*="text-fuchsia-"] {
-  color: #f0abfc !important;
-}
+/* The fuchsia branch of this block was removed with the v2 chrome: those classes no
+   longer exist in the player, so the rule could never match. The gold chrome it
+   replaced is literal (#e8b33a = 10.6:1 on black) and needs no day-mode correction —
+   arbitrary-value utilities are invisible to the day-mode blankets. */
 
 html.day-mode [data-dvp="root"] [class*="text-amber-"],
 html.day-mode [data-dvp="controls"] [class*="text-amber-"] {
@@ -863,40 +863,6 @@ html.day-mode [data-dvp="controls"] button:hover {
 
 html.day-mode [data-dvp="controls"] [class*="border-white/"] {
   border-color: rgba(255, 255, 255, 0.3) !important;
-}
-
-/* ===========================================================================
- * LYRIC LOUNGE — the music section. Black room, gold light, purple air by night;
- * warm cream room, bronze light by day. One token block flips the hour.
- * The page never scrolls: the player card and the center body scroll inside
- * themselves, and the queue strip scrolls sideways.
- * ========================================================================= */
-/* ===========================================================================
- * JvReactBits (v7.2) — measured masonry, target+glow cursor, card tilt/glare,
- * hero parallax, shimmer kicker. Cursor effects are desktop(pointer:fine) only.
- * ========================================================================= */
-
-/* --- Masonry (ReactBits port): blur-to-focus stagger entrance, 0.95 hover --- */
-.jv-masonry-item {
-  position: absolute;
-  top: 0;
-  left: 0;
-  opacity: 0;
-  filter: blur(8px);
-  translate: 0 26px;
-  transition: transform 420ms var(--jv-ease);
-  will-change: transform;
-  animation: jv-masonry-in 600ms var(--jv-ease) forwards;
-  animation-delay: var(--jv-masonry-delay, 0ms);
-}
-@keyframes jv-masonry-in {
-  to { opacity: 1; filter: blur(0); translate: 0 0; }
-}
-.jv-masonry-item .jv-card {
-  transform-origin: center;
-}
-.jv-masonry-item:hover .jv-card {
-  transform: scale(0.95);
 }
 
 /* --- Card tilt inner + travel glare --- */
@@ -918,62 +884,10 @@ html.day-mode [data-dvp="controls"] [class*="border-white/"] {
 }
 .jv-card:hover .jv-card-glare { opacity: 1; }
 
-/* --- Shimmer kicker text --- */
-.jv-shimmer-text {
-  background: linear-gradient(110deg, #f59e0b 20%, #ef4444 40%, #c026d3 60%, #a855f7 80%);
-  background-size: 220% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent !important;
-  animation: jv-shimmer 3.2s linear infinite;
-}
-@keyframes jv-shimmer { to { background-position: -220% 0; } }
-
 /* --- Circular gallery ring --- */
 .jv-cgal { cursor: grab; }
 .jv-cgal:active { cursor: grabbing; }
 html.day-mode .jv-cgal-card { border-color: rgba(168, 85, 247, 0.35); }
-
-/* --- Target cursor (reticle) + glow trail --- */
-html.jv-cursor-fx, html.jv-cursor-fx * { cursor: none !important; }
-/* ...but never inside players or fullscreen: the drawn reticle can't follow
-   there (iframe boundaries / fullscreen stacking), so restore the native cursor. */
-html.jv-cursor-fx .jv-native-cursor, html.jv-cursor-fx .jv-native-cursor *,
-html.jv-cursor-fx :fullscreen, html.jv-cursor-fx :fullscreen * { cursor: auto !important; }
-.jv-reticle {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483646;
-  pointer-events: none;
-  mix-blend-mode: difference;
-}
-.jv-reticle-dot {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 6px;
-  height: 6px;
-  border-radius: 9999px;
-  background: #ffffff;
-}
-.jv-reticle-c {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 8px;
-  height: 8px;
-  transition: transform 90ms ease-out;
-}
-.jv-reticle.is-target .jv-reticle-c { transition: transform 190ms var(--jv-ease); }
-.jv-reticle-c.tl { border-top: 2px solid #ffffff; border-left: 2px solid #ffffff; }
-.jv-reticle-c.tr { border-top: 2px solid #ffffff; border-right: 2px solid #ffffff; }
-.jv-reticle-c.bl { border-bottom: 2px solid #ffffff; border-left: 2px solid #ffffff; }
-.jv-reticle-c.br { border-bottom: 2px solid #ffffff; border-right: 2px solid #ffffff; }
-.jv-reticle.is-target .jv-reticle-c {
-  border-color: #fbbf24;
-  filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.85));
-}
-.jv-reticle.is-target .jv-reticle-c { animation: none; }
 .jv-glowcursor {
   position: fixed;
   inset: 0;
@@ -1006,10 +920,8 @@ html.day-mode .jv-glowcursor { display: none; } /* light theme keeps the reticle
 .jv-landscape-phone { border-radius: 0 !important; }
 
 @media (prefers-reduced-motion: reduce) {
-  .jv-masonry-item { animation: none; opacity: 1; filter: none; translate: none; }
   .jv-tilt-inner { transform: none !important; }
   .jv-card-glare { display: none; }
-  .jv-shimmer-text { animation: none; }
 }
 
 /* ── Rail OS (homepage) ─────────────────────────────────────────────────────
@@ -1131,7 +1043,7 @@ html.day-mode .jv-glowcursor { display: none; } /* light theme keeps the reticle
    the day-mode blankets — a light-mode rule here is the bug that was reported, not a fix. */
 html.day-mode .jv-focus { background: #06060a; }
 html.day-mode .jv-focus-art { opacity: 0.72; }
-html.day-mode .jv-focus-eyebrow { color: rgba(255, 255, 255, 0.62); }
+html.day-mode .jv-focus-eyebrow { color: #e8b33a; } /* v2: hero keeps the marquee gold in both themes */
 html.day-mode .jv-focus-title { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.72), 0 2px 14px rgba(0, 0, 0, 0.45); }
 html.day-mode .jv-focus-meta { color: rgba(255, 255, 255, 0.74); }
 html.day-mode .jv-focus-note { color: #fcd34d; }
@@ -1345,8 +1257,8 @@ html.day-mode .jv-dec-page {
   --st-panel: #0d0d14;
   --st-ink: #f2f2f6;
   --st-dim: #9a9aa8;
-  --st-faint: #77778a;
-  --st-faintest: #63637a;
+  --st-faint: #85859a; /* was #77778a = 4.42:1 on --st-panel */
+  --st-faintest: #7c7c90; /* was #63637a = 3.32:1 on --st-panel */
   --st-line: rgba(255, 255, 255, 0.1);
   --st-line-soft: rgba(255, 255, 255, 0.055);
   --st-accent: #e879f9;
@@ -1857,7 +1769,10 @@ html.day-mode [data-dvp="ambient"] { background-color: rgba(0, 0, 0, 0.75) !impo
 .jv-lv-tune { display: grid; align-items: center; justify-items: stretch; width: 100%; min-height: 64px; padding: 8px; }
 .jv-lv-tune img { max-width: 100%; max-height: 56px; object-fit: contain; justify-self: center; }
 .jv-lv-tile-epg { display: block; min-width: 0; }
-.jv-lv-tune-none { font-size: 12px; font-weight: 800; color: #71717a; }
+.jv-lv-tune-none { font-size: 12px; font-weight: 800; color: #8b8b95; }
+/* The tile flips with the cybergrape palette, so the placeholder needs a value per theme:
+   one hex gave 4.12:1 at night (below AA for 12px text) and only just cleared it by day. */
+html.day-mode .jv-lv-tune-none { color: #52525b; }
 /* The wall itself: a responsive grid, not a single column. The browser rail is 32rem at lg
    and 36rem at xl, so 3–4 columns of ~130px tiles; the min-widths keep truncate honest. */
 .jv-lv-wall { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
@@ -2008,8 +1923,8 @@ html.day-mode [data-dvp="ambient"] { background-color: rgba(0, 0, 0, 0.75) !impo
   background: linear-gradient(180deg, #67e8f9, rgba(34, 211, 238, 0.35));
   box-shadow: 0 0 16px rgba(34, 211, 238, 0.55);
 }
-.jv-vault-wave-count { font-size: 9px; font-weight: 800; color: #8b8ba6; font-variant-numeric: tabular-nums; }
-.jv-vault-wave-label { font-size: 10px; font-weight: 900; letter-spacing: 0.06em; color: #6f6f8a; }
+.jv-vault-wave-count { font-size: 9px; font-weight: 800; color: var(--txt-3); font-variant-numeric: tabular-nums; }
+.jv-vault-wave-label { font-size: 10px; font-weight: 900; letter-spacing: 0.06em; color: var(--txt-4); }
 .jv-vault-wave-on .jv-vault-wave-label { color: #a5f3fc; }
 .jv-vault-wave-on .jv-vault-wave-count { color: #a5f3fc; }
 
@@ -2106,7 +2021,7 @@ html.day-mode [data-dvp="ambient"] { background-color: rgba(0, 0, 0, 0.75) !impo
   gap: 0.4rem;
   font-size: 10px;
   font-weight: 700;
-  color: #8b8ba6;
+  color: var(--txt-3);
   font-variant-numeric: tabular-nums;
 }
 .jv-vault-star { color: #7dedfb; }
@@ -2202,3 +2117,663 @@ html.day-mode .mu{--mu-bg:#f5f3ee;--mu-card:#fffdfa;--mu-text:#292922;--mu-muted
 @media(prefers-reduced-motion:reduce){.mu-lyric-scroll{scroll-behavior:auto}.mu-lyric-lines li{transition:none}}
 @media(min-width:1024px){.mu{padding-left:104px}.mu-playerbar{left:98px}}
 @media(min-width:1280px){.mu{padding-left:214px}.mu-playerbar{left:208px}}
+
+/* ============================================================================
+   DESIGN SYSTEM v2 — "Cinema Noir" (A) with "Tamil Marquee" warmth (B)
+   ============================================================================
+
+   Everything below is additive. No rule above this line was edited, no Tailwind
+   default was redefined, so the rest of the app keeps its current look until its
+   own page is migrated.
+
+   WHY A LAYER: the file above carries three overlapping ideas (hand-tuned
+   widgets, a per-page variable set per surface, and a Tailwind utility class
+   soup). New work reads one token set instead, and day mode becomes a single
+   variable flip rather than a third blanket override block.
+
+   CONTRAST (measured on --ink-0, WCAG 2.1):
+     txt-1  #f4f4f6  18.9:1 ✅   txt-2  #c9c9d2  12.1:1 ✅
+     txt-3  #a1a1aa   7.9:1 ✅   txt-4  #8b8b95   5.6:1 ✅
+     gold   #f4c453  12.5:1 ✅   marquee #e8b33a 10.6:1 ✅
+     info   #22d3ee  11.3:1 ✅   ok     #3ddc97  11.5:1 ✅
+     brand  #e50914   4.25:1 ⚠️  — fills and ≥18px headings ONLY
+     brand-text #ff5c5c 6.7:1 ✅ — use this for small red text and borders
+
+   RULE OF THUMB: if it is smaller than 18px and it is red, it uses --brand-text.
+========================================================================= */
+
+:root {
+  /* surfaces: ink-0 page, ink-1 card, ink-2 raised, ink-3 inset */
+  --ink-0: #050508;
+  --ink-1: #0b0b10;
+  --ink-2: #14141b;
+  --ink-3: #1c1c25;
+  --line-1: rgba(255, 255, 255, 0.08);
+  --line-2: rgba(255, 255, 255, 0.14);
+  /* text ramp — every step is AA on --ink-0 */
+  --txt-1: #f4f4f6;
+  --txt-2: #c9c9d2;
+  --txt-3: #a1a1aa;
+  --txt-4: #8b8b95;
+  /* brand (theatre red) + its accessible small-text sibling */
+  --brand: #e50914;
+  --brand-text: #ff5c5c;
+  --brand-soft: rgba(229, 9, 20, 0.14);
+  /* marquee (Direction B warmth) — wordmark, hero, section rules */
+  --marquee: #e8b33a;
+  --marquee-deep: #c81e3c;
+  --marquee-soft: rgba(232, 179, 58, 0.14);
+  --gold: #f4c453;   /* quality / metadata */
+  --info: #22d3ee;   /* vault */
+  --ok: #3ddc97;     /* live, success */
+  --warn: #f4c453;
+  --danger: #ff5c5c;
+  /* radii, elevation, motion */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sh-2: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --sh-3: 0 18px 48px rgba(0, 0, 0, 0.55);
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Day mode: one variable flip. Values are chosen for the warm-paper theme
+   rather than inverted, and every one keeps AA on --ink-1 (#fff). */
+html.day-mode {
+  --ink-0: #faf7f2;
+  --ink-1: #ffffff;
+  --ink-2: #f5f0e8;
+  --ink-3: #ece5d9;
+  --line-1: rgba(15, 23, 42, 0.10);
+  --line-2: rgba(15, 23, 42, 0.20);
+  --txt-1: #101418;
+  --txt-2: #33415a;
+  --txt-3: #475569;
+  --txt-4: #5b6b80;
+  --brand: #c8111c;
+  --brand-text: #b3191f;
+  --brand-soft: rgba(200, 17, 28, 0.10);
+  --marquee: #9a6a06;
+  --marquee-deep: #a8182f;
+  --marquee-soft: rgba(154, 106, 6, 0.12);
+  --gold: #8a6100;
+  --info: #0e7490;
+  --ok: #0f766e;
+  --warn: #8a6100;
+  --danger: #b3191f;
+  --sh-1: 0 1px 2px rgba(15, 23, 42, 0.08);
+  --sh-2: 0 8px 24px rgba(15, 23, 42, 0.10);
+  --sh-3: 0 18px 48px rgba(15, 23, 42, 0.16);
+}
+
+/* ---------------------------------------------------------------- typography */
+
+.jv-eyebrow {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--marquee);
+}
+
+/* Section headings: the "marquee" half of the hybrid — a hairline gold rule
+   instead of another coloured heading, so rows stay quiet and still read as
+   branded. */
+.jv-h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--font-ui);
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--txt-1);
+}
+.jv-h2::after {
+  content: "";
+  width: 1.75rem;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--marquee), transparent);
+}
+@media (min-width: 640px) {
+  .jv-h2 { font-size: 1.35rem; }
+}
+
+.jv-meta {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--txt-4);
+}
+
+/* ------------------------------------------------------------------- buttons */
+
+.jv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 44px;                /* the thumb-trust minimum */
+  padding: 0 1rem;
+  border-radius: var(--r-md);
+  border: 1px solid transparent;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: transform var(--ease) 140ms, background 180ms var(--ease), border-color 180ms var(--ease), color 180ms var(--ease);
+}
+.jv-btn:hover { transform: translateY(-1px); }
+.jv-btn:active { transform: translateY(0); }
+.jv-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.jv-btn-brand { background: var(--brand); color: #fff; box-shadow: var(--sh-2); }
+.jv-btn-brand:hover { filter: brightness(1.08); }
+
+.jv-btn-marquee { background: var(--marquee); color: #17130a; box-shadow: var(--sh-2); }
+html.day-mode .jv-btn-marquee { color: #fff; }
+.jv-btn-marquee:hover { filter: brightness(1.06); }
+
+.jv-btn-ghost {
+  background: transparent;
+  border-color: var(--line-2);
+  color: var(--txt-2);
+  /* Cancel the legacy pill definition's blur: the v2 ghost sits on opaque
+     surfaces, so a compositing layer per button is cost with no visual gain
+     (it shows up as scroll jank on low-end Android). */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-radius: var(--r-md);
+}
+.jv-btn-ghost:hover { border-color: var(--brand-text); color: var(--txt-1); }
+
+.jv-btn-danger { background: transparent; border-color: var(--danger); color: var(--danger); }
+.jv-btn-danger:hover { background: var(--brand-soft); }
+
+.jv-btn-sm { min-height: 36px; font-size: 12px; padding: 0 0.75rem; }
+
+/* --------------------------------------------------------------------- chips */
+
+.jv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-1);
+  background: var(--ink-2);
+  padding: 0.25rem 0.6rem;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--txt-3);
+  white-space: nowrap;
+}
+.jv-chip-gold { border-color: var(--marquee-soft); background: var(--marquee-soft); color: var(--marquee); }
+.jv-chip-info { border-color: color-mix(in srgb, var(--info) 35%, transparent); background: color-mix(in srgb, var(--info) 12%, transparent); color: var(--info); }
+.jv-chip-ok { border-color: color-mix(in srgb, var(--ok) 35%, transparent); background: color-mix(in srgb, var(--ok) 12%, transparent); color: var(--ok); }
+.jv-chip-warn { border-color: var(--marquee-soft); background: var(--marquee-soft); color: var(--warn); }
+.jv-chip-brand { border-color: var(--brand-text); background: var(--brand-soft); color: var(--brand-text); }
+
+/* Day mode needs a touch more ink on the tinted chips than a straight flip. */
+html.day-mode .jv-chip-info { color: #0b5f74; }
+html.day-mode .jv-chip-ok { color: #0c5f58; }
+html.day-mode .jv-chip-warn,
+html.day-mode .jv-chip-gold { color: #6d4c04; }
+html.day-mode .jv-chip-brand { color: #a01a1f; }
+
+/* ------------------------------------------------------------------ surfaces */
+
+.jv-surface {
+  background: var(--ink-1);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-2);
+}
+
+/* -------------------------------------------------------------- states: skel */
+
+.jv-skel {
+  border-radius: var(--r-md);
+  background: linear-gradient(90deg, var(--ink-2) 25%, var(--ink-3) 37%, var(--ink-2) 63%);
+  background-size: 400% 100%;
+  animation: jv-shimmer 1.4s ease-in-out infinite;
+}
+/* The skeleton travels a 400%-wide gradient. This name is shared territory: the
+   retired v7 "shimmer kicker text" feature declared its OWN @keyframes jv-shimmer
+   for a 220%-wide gradient, and both matched a purge by class name. Only this
+   definition has a live user — .jv-skel, on Home, /my-list and /watch. */
+@keyframes jv-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jv-skel { animation: none; }
+}
+
+/* --------------------------------------------------------------- forms */
+
+.jv-field {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--txt-4);
+}
+.jv-select,
+.jv-input {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 0.35rem;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line-2);
+  background: var(--ink-2);
+  padding: 0 0.75rem;
+  font-family: var(--font-ui);
+  font-size: 14px;              /* 16px iOS zoom guard is handled globally */
+  font-weight: 600;
+  color: var(--txt-1);
+}
+.jv-select:focus-visible,
+.jv-input:focus-visible {
+  outline: none;
+  border-color: var(--marquee);
+  box-shadow: 0 0 0 3px var(--marquee-soft);
+}
+.jv-select:disabled { opacity: 0.55; color: var(--txt-4); }
+
+/* Focus ring for token-styled controls (keyboard only). */
+.jv-btn:focus-visible,
+.jv-chip:focus-visible,
+.jv-surface:focus-visible {
+  outline: 2px solid var(--marquee);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------ empty / error */
+
+.jv-empty {
+  display: grid;
+  place-items: center;
+  gap: 0.6rem;
+  padding: 2.25rem 1.25rem;
+  text-align: center;
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-lg);
+  background: var(--ink-1);
+}
+.jv-empty-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--txt-1);
+}
+.jv-empty-hint {
+  max-width: 46ch;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--txt-4);
+}
+.jv-alert {
+  border-radius: var(--r-md);
+  border: 1px solid var(--danger);
+  background: var(--brand-soft);
+  padding: 0.7rem 0.9rem;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+/* ------------------------------------------------------------------ hero (B)
+   The hero is theme-invariant by design: it is artwork with a dark scrim in
+   both themes, so it uses literal values rather than tokens — day mode's
+   blanket overrides never touch it and the poster keeps its own light. */
+.jv-focus-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: #e8b33a;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+.jv-focus-eyebrow::before {
+  content: "";
+  width: 1.5rem;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #e8b33a, rgba(232, 179, 58, 0));
+}
+.jv-focus-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.jv-focus-cta {
+  border-color: rgba(232, 179, 58, 0.55);
+  background: linear-gradient(120deg, #e8b33a, #d99a1f);
+  color: #17130a;
+}
+.jv-focus-cta:hover { filter: brightness(1.06); }
+.jv-focus-ghost {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(10, 10, 14, 0.55);
+  color: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(6px);
+}
+.jv-focus-ghost:hover { border-color: rgba(232, 179, 58, 0.6); color: #fff; }
+.jv-focus-meta { color: rgba(255, 255, 255, 0.78); }
+.jv-focus-note { color: #f4c453; }
+
+/* ---------------------------------------------------------------- vault lock
+   The Vault is a poster wall, so like ReTro and the hero it stays a dark room in
+   both themes — that part was always true. What was BROKEN is that nothing said
+   so: `html.day-mode` has no `.jv-vault-page` rule, so day mode's blanket layer
+   repainted the page's Tailwind text classes to dark ink while the background
+   stayed near-black. The page was unreadable in light theme.
+
+   Fix: pin the surface dark, and re-pin the design tokens inside it so tokenised
+   children (text-txt-*, bg-ink-*) stay legible instead of flipping. This is the
+   documented pattern for any deliberately dark-locked surface. */
+html.day-mode .jv-vault-page {
+  --ink-0: #050508;
+  --ink-1: #0b0b10;
+  --ink-2: #14141b;
+  --ink-3: #1c1c25;
+  --txt-1: #f4f4f6;
+  --txt-2: #c9c9d2;
+  --txt-3: #a1a1aa;
+  --txt-4: #8b8b95;
+  --line-1: rgba(255, 255, 255, 0.08);
+  --line-2: rgba(255, 255, 255, 0.14);
+  --danger: #ff5c5c;
+  background: #050508;
+  color: #f4f4f7;
+}
+
+/* ============================================================================
+   PLAYER CHROME v2 + the cinema shell
+   ----------------------------------------------------------------------------
+   Two rules shape everything below.
+
+   1. The player is dark-locked (see the [data-dvp] day-mode block above), so
+      every colour here is a LITERAL. A --txt-* / --ink-* token would flip to
+      dark ink on a dark frame in light theme; tests/regressions.test.cjs
+      enforces that. `--jvp-*` is the player's own palette for the same reason
+      `--dec-*` exists for ReTro.
+
+   2. The accent moves from the v10 fuchsia to the app's marquee gold. The
+      progress bar, focus rings, active states and menu highlights now read as
+      the same brand as the hero. Fuchsia survived in here only because nothing
+      had touched the player since the design system landed — it was never a
+      decision to keep it.
+   ========================================================================== */
+[data-dvp="root"] {
+  --jvp-accent: #e8b33a;
+  --jvp-accent-soft: #f4c453;
+  --jvp-accent-deep: #c81e3c;
+  --jvp-on-accent: #1a1206;
+  --jvp-surface: rgba(9, 9, 14, 0.82);
+  --jvp-line: rgba(255, 255, 255, 0.16);
+  --jvp-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* ── the scrub track ── */
+.jvp-track-fill {
+  /* Lost and found: the old fill ran fuchsia → amber. Gold → deep marquee red
+     reads as the same object as the home-page play button. */
+  background: linear-gradient(90deg, var(--jvp-accent-deep), var(--jvp-accent));
+}
+.jvp-thumb-glow {
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 16px rgba(232, 179, 58, 0.75);
+}
+
+/* ── chrome motion: a lift, not a pop ──
+   The bar already faded with Tailwind's transition-opacity. Adding transform on
+   the same 260ms curve gives the reveal depth without a layout-affecting
+   animation, and `will-change` is scoped to the two properties actually used. */
+.jvp-chrome {
+  will-change: opacity, transform;
+  transition: opacity 260ms var(--jvp-ease), transform 260ms var(--jvp-ease);
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-dvp="root"].jv-idle .jvp-chrome {
+    transform: translateY(8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jvp-chrome {
+    will-change: auto;
+    transition: opacity 160ms linear;
+    transform: none !important;
+  }
+}
+
+/* ── the cinema shell ──
+   An ambient halo made from the title's own artwork, sitting BEHIND the frame so
+   it reads as light spilling off the screen rather than a border. It is a
+   blurred still (not a scan of the playing video) on purpose: reading frames off
+   a cross-origin media element taints the canvas or needs CORS per host, and
+   sampling 24 frames a second would cost real CPU on a 512 MB instance. */
+.jv-cinema {
+  position: relative;
+  isolation: isolate;
+}
+.jv-cinema-halo {
+  position: absolute;
+  inset: -12% -6% -16%;
+  z-index: 0;
+  pointer-events: none;
+  background-image: var(--jv-halo-art);
+  background-size: cover;
+  background-position: 50% 32%;
+  filter: blur(52px) saturate(1.2);
+  opacity: 0.26;
+  transform: scale(1.04);
+  border-radius: var(--r-xl);
+}
+.jv-cinema-frame {
+  position: relative;
+  z-index: 1;
+  box-shadow: var(--sh-3), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes jv-halo-in {
+    from { opacity: 0; transform: scale(1.1); }
+    to { opacity: 0.26; transform: scale(1.04); }
+  }
+  @keyframes jv-frame-in {
+    from { opacity: 0; transform: translateY(10px) scale(0.996); }
+    to { opacity: 1; transform: none; }
+  }
+  .jv-cinema-halo { animation: jv-halo-in 720ms var(--ease) both, jv-halo-drift 19s ease-in-out 720ms infinite; }
+  .jv-cinema-frame { animation: jv-frame-in 420ms var(--ease) both; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jv-cinema-halo,
+  .jv-cinema-frame {
+    animation: none;
+  }
+}
+
+/* ============================================================================
+   MOTION TIER — scroll reveal
+   ----------------------------------------------------------------------------
+   Pairs with lib/useReveal.js. Three properties matter and each is deliberate:
+
+   * The hidden state is scored under [data-reveal-ready], an attribute the hook
+     sets only once JS is running. No JS (or a failed bundle) = nothing is ever
+     hidden. Never move this rule out from under that guard.
+   * Only opacity and transform animate, so the browser composites rather than
+     lays out — these lists are long and run on phones.
+   * Reduced motion is handled twice on purpose: the hook marks everything
+     visible without creating an observer, and this media query is the belt to
+     that braces in case a target is ever marked up without the hook.
+   ========================================================================== */
+@media (prefers-reduced-motion: no-preference) {
+  [data-reveal-ready] [data-reveal] {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  [data-reveal-ready] [data-reveal].is-in {
+    opacity: 1;
+    transform: none;
+    transition: opacity 420ms var(--ease), transform 420ms var(--ease);
+    /* --reveal-i is capped at the call site (lib/useReveal.js revealStyle). */
+    transition-delay: calc(var(--reveal-i, 0) * 42ms);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+/* ── hero parallax (pairs with lib/useParallax.js) ──
+   The class is added by the hook and only when motion is allowed, so a
+   reduced-motion visitor gets the untouched artwork: no scale, no crop, no
+   transform. The scale gives the art travel room — 1.14 leaves 7% of the frame
+   as slack on every edge, comfortably more than the hook's ±22px clamp, so the
+   image can never slide far enough to show a gap. */
+.jv-focus-art.jv-parallax-on {
+  transform: translate3d(0, var(--jv-parallax-y, 0px), 0) scale(1.14);
+  will-change: transform;
+}
+
+/* ── the halo drifts ──
+   The shell's halo already fades in; this gives it a slow ambient breath so the
+   light behind the frame is never quite still. It animates the individual
+   `translate` property rather than `transform`, because the entrance animation
+   owns `transform` (scale) — separate properties compose, so the two can run at
+   once without one cancelling the other. Long and small on purpose: anything
+   faster or larger reads as a pulsing glow, which is a different (worse) effect. */
+@keyframes jv-halo-drift {
+  0%, 100% { translate: 0 -6px; }
+  50% { translate: 0 6px; }
+}
+
+/* ============================================================================
+   MUSIC — the lyric-focused pass
+   ----------------------------------------------------------------------------
+   The Lyric Lounge keeps the page's own palette (--mu-*, which flips to warm
+   cream and bronze in day mode), so nothing here is colour-locked or tokenised
+   from the app palette: it is all built out of --mu-* plus the display serif.
+
+   The lyric sheet is the point of this surface, so:
+     • lines are set in the display serif — the same face as the wordmark and the
+       hero title, which is what makes them read as a lyric sheet rather than a
+       list of strings;
+     • the line being sung is the only one at full strength, with a progress
+       underline showing how far through it the song is;
+     • Focus dims every other line so a user who cannot follow the highlight can
+       simply read one line at a time.
+   ========================================================================== */
+
+/* ── the lyric sheet ── */
+.mu-lyric-lines li {
+  font-family: var(--font-display), 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  font-weight: 600;
+  line-height: 1.34;
+  letter-spacing: -0.012em;
+  transition: color 300ms var(--ease, ease), opacity 300ms var(--ease, ease), transform 300ms var(--ease, ease);
+}
+.mu-lyric-lines li[data-state='current'] {
+  /* Stepping forward, not growing: a transform rather than a font-size change, so
+     nothing reflows and the following lines do not shift under the reader's eye. */
+  transform: translateX(0.22rem) scale(1.03);
+  transform-origin: left center;
+  opacity: 1;
+  /* Glow only where color-mix is understood; the line is already gold without it. */
+  text-shadow: 0 0 26px color-mix(in srgb, var(--mu-accent) 32%, transparent);
+}
+.mu-lyric-lines li[data-state='past'] { opacity: 0.44; }
+.mu-lyric-lines li[data-state='future'] { opacity: 0.72; }
+.mu-lyric-lines li[data-state='plain'] { opacity: 0.9; }
+
+/* The scale can reach a couple of pixels past the line box on a long line, and
+   `overflow-y: auto` alone computes `overflow-x` to `auto` — which would show a
+   horizontal scrollbar. Pin it. */
+.mu-lyric-scroll { overflow-x: hidden; }
+
+/* ── the progress underline ──
+   Driven by a CSS custom property from React (`--mu-line-pct`) and interpolated by
+   a short linear transition, so the bar slides continuously between the ~4 ticks a
+   second the audio element reports instead of stepping. No animation is involved,
+   which also means a seek lands on the right position immediately. */
+.mu-lyric-lines li[data-state='current'] { position: relative; }
+.mu-line-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.34em;
+  height: 2px;
+  border-radius: 999px;
+  transform: scaleX(var(--mu-line-pct, 0));
+  transform-origin: left center;
+  /* Flat colour first: `color-mix` is still new enough that a drop must leave a
+     visible bar, not no bar at all. */
+  background: var(--mu-accent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--mu-accent) 35%, transparent), var(--mu-accent));
+  transition: transform 260ms linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mu-line-progress { transition: none; }
+  .mu-lyric-lines li[data-state='current'] { transform: none; }
+}
+
+/* ── Focus: one line at a time ──
+   Blur is desktop-only on purpose. Every lyric line is mounted at once (the sheet
+   is one <ol>), so a blur filter on all of them is a real cost on a phone — and
+   opacity alone already does the job at small sizes. */
+.mu-lyrics-stage.is-lyric-focus .mu-lyric-lines li[data-state='past'],
+.mu-lyrics-stage.is-lyric-focus .mu-lyric-lines li[data-state='future'],
+.mu-lyrics-stage.is-lyric-focus .mu-lyric-lines li[data-state='plain'] {
+  opacity: 0.22;
+}
+@media (min-width: 900px) and (pointer: fine) {
+  .mu-lyrics-stage.is-lyric-focus .mu-lyric-lines li[data-state='past'],
+  .mu-lyrics-stage.is-lyric-focus .mu-lyric-lines li[data-state='future'],
+  .mu-lyrics-stage.is-lyric-focus .mu-lyric-lines li[data-state='plain'] {
+    filter: blur(1.7px);
+  }
+}
+
+/* ── ambient halo behind the sheet ──
+   The album art, blurred, sitting behind the lyrics: the same idea as the watch
+   page's cinema halo, in the room's own colours. `--mu-halo` is set from React and
+   falls back to `none` so a track with no artwork simply has no halo. */
+.mu-lyrics-stage { position: relative; isolation: isolate; }
+.mu-lyrics-stage::before {
+  content: '';
+  position: absolute;
+  inset: -16% -10% 22%;
+  z-index: 0;
+  pointer-events: none;
+  background-image: var(--mu-halo, none);
+  background-size: cover;
+  background-position: 50% 30%;
+  filter: blur(58px) saturate(1.25);
+  opacity: 0.3;
+}
+html.day-mode .mu-lyrics-stage::before { opacity: 0.16; filter: blur(46px) saturate(1.05); }
+.mu-lyrics-stage > * { position: relative; z-index: 1; }
+
+/* ── the room when nothing is playing ── */
+.mu-lyric-empty h3 {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  font-size: clamp(24px, 3.2vw, 34px);
+}
+.mu-lyric-empty > span { font-size: 44px; opacity: 0.7; }

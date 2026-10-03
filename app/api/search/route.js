@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
-import dbConnect from '@/lib/db';
+import { scrapeCollection } from '@/lib/tamilmvPayload';
 import { fetchTMDB, mapTMDBMovie, mapTMDBSeries } from '@/lib/tmdb';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const TAMILMV_COLLECTION = 'tamilmv_scrapes';
 
 // Helpful Tamil exact-title boosts. TMDB's normal popularity search can bury
 // older Tamil films with generic English titles such as “Citizen”.
@@ -121,8 +120,7 @@ function scoreLocalItem(item, query) {
 
 async function searchLocalTamilMVCache(query) {
   try {
-    const mongoose = await dbConnect();
-    const doc = await mongoose.connection.db.collection(TAMILMV_COLLECTION).findOne({ key: 'latest' });
+    const doc = await (await scrapeCollection()).findOne({ key: 'latest' });
     const items = [...(doc?.movies || []), ...(doc?.series || [])];
 
     return items

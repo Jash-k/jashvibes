@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import { HERO_SRCSET_SIZES, tmdbImageSrcSet } from '@/lib/tmdbPoster';
+import { useParallax } from '@/lib/useParallax';
 
 /**
  * RailFocus — the banner half of Rail OS: one title, its own artwork, and the way back into it.
@@ -14,9 +16,10 @@ import Link from 'next/link';
  * history was removed, so a percentage here would be a permanent 0 and the two ghost buttons would
  * point at a list that does not exist.
  *
- * Nothing about live TV belongs here either: a "Star Vijay HD · …" pill on a movie poster is two
- * products sharing one rectangle, and it read as a bug report even though it was a feature. The channel
- * line lived on `/live`, where the guide actually knows it.
+ * Type note (design system v2): the hero is the one place the display serif is allowed — a Playfair
+ * title over a dark scrim is the whole "Tamil Marquee" idea, and it costs nothing because the font is
+ * already self-hosted for the wordmark. Section headings elsewhere stay in the UI font with a gold
+ * hairline rule, so the warmth reads as branding rather than decoration.
  *
  * The banner is painted dark in *both* themes, which is a layout decision rather than a colour one:
  * day mode's blankets (`app/globals.css`) repaint anything carrying a Tailwind `bg-*`/`text-*` class, so
@@ -24,6 +27,10 @@ import Link from 'next/link';
  * looks blurred" report. Artwork keeps its own light.
  */
 export default function RailFocus({ slide = null, eyebrow = 'Now on your shelf', onWatchOpen = null }) {
+  // Called before the `!slide` guard on purpose: hooks must run in the same order
+  // on every render, and this component returns early when there is no slide.
+  const artRef = useParallax({ strength: 0.07, max: 22 });
+
   if (!slide) return null;
 
   const art = slide.backdropUrl || slide.posterUrl;
@@ -40,10 +47,14 @@ export default function RailFocus({ slide = null, eyebrow = 'Now on your shelf',
       {art ? (
         <img
           src={art}
+          srcSet={tmdbImageSrcSet(art, HERO_SRCSET_SIZES) || undefined}
+          sizes={tmdbImageSrcSet(art, HERO_SRCSET_SIZES) ? '100vw' : undefined}
           alt=""
           aria-hidden="true"
+          ref={artRef}
           className="jv-focus-art"
           loading="eager"
+          fetchPriority="high"
           decoding="async"
         />
       ) : null}
@@ -52,8 +63,10 @@ export default function RailFocus({ slide = null, eyebrow = 'Now on your shelf',
       <div className="relative mx-auto flex w-full max-w-[1500px] flex-col gap-3.5 px-4 pb-8 pt-9 sm:px-6 lg:min-h-[44svh] lg:justify-end lg:px-8 lg:pb-10 lg:pt-16">
         <p className="jv-focus-eyebrow">{eyebrow}</p>
 
-        <h2 className="jv-focus-title">{slide.title}</h2>
-        {meta ? <p className="jv-focus-meta">{meta}</p> : null}
+        <div>
+          <h2 className="jv-focus-title">{slide.title}</h2>
+          {meta ? <p className="jv-focus-meta">{meta}</p> : null}
+        </div>
         {slide.note ? <p className="jv-focus-note">{slide.note}</p> : null}
 
         <div className="mt-1 flex flex-wrap items-center gap-2">

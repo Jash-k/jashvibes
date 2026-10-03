@@ -8,6 +8,8 @@ import RailNav from '@/components/rail/RailNav';
 import Icon from '@/components/Icons';
 import { readSessionCache, writeSessionCache } from '@/lib/clientCache';
 import { episodeLabel, groupEpisodes } from '@/lib/vaultEpisodes';
+import { POSTER_SIZES_ATTR, tmdbImageSrcSet } from '@/lib/tmdbPoster';
+import { revealStyle, useReveal } from '@/lib/useReveal';
 
 /**
  * The Vault — "Neon Control Deck" (v10.9.0).
@@ -103,10 +105,12 @@ function WaveScrubber({ decades, value, onChange, total }) {
 
 /* ── poster tile ────────────────────────────────────────────────────── */
 
-function VaultTile({ movie, onPlay }) {
+function VaultTile({ movie, onPlay, index = 0 }) {
   return (
     <button
       type="button"
+      data-reveal
+      style={revealStyle(index, 6)}
       className="jv-vault-card group"
       onClick={() => onPlay(movie)}
       title={movie.isSeries
@@ -116,6 +120,8 @@ function VaultTile({ movie, onPlay }) {
       {movie.poster ? (
         <img
           src={movie.poster}
+          srcSet={tmdbImageSrcSet(movie.poster) || undefined}
+          sizes={tmdbImageSrcSet(movie.poster) ? POSTER_SIZES_ATTR : undefined}
           alt=""
           aria-hidden="true"
           loading="lazy"
@@ -287,6 +293,10 @@ export default function VaultPage() {
 
   const clearAll = () => { setQuery(''); setDecade('all'); setQuality('any'); setLetter(''); };
 
+  // Keyed on the filters AND the page window: the vault appends as it scrolls, and
+  // two filter combinations can render the same number of tiles.
+  const revealRef = useReveal(`${sort}|${decade}|${query}|${quality}|${letter}|${visible}`);
+
   return (
     <main className="jv-vault-page jv-rail-shift min-h-dvh overflow-x-hidden text-zinc-100">
       <RailNav />
@@ -297,11 +307,11 @@ export default function VaultPage() {
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
             <div>
               <h1 className="jv-vault-title">VAULT</h1>
-              <p className="mt-1 text-[11px] font-black uppercase tracking-[0.22em] text-cyan-100/60">
+              <p className="mt-1 text-[11px] font-black uppercase tracking-[0.22em] text-cyan-200/75">
                 {facets ? (
                   <>
                     {facets.total} movies · {facets.posters} posters · {facets.qualities['1080p']} in 1080p
-                    {data?.fetchedAt ? <span className="text-zinc-600"> · updated {relativeTime(data.fetchedAt)}</span> : null}
+                    {data?.fetchedAt ? <span className="text-txt-4"> · updated {relativeTime(data.fetchedAt)}</span> : null}
                   </>
                 ) : 'loading the deck…'}
               </p>
@@ -312,12 +322,12 @@ export default function VaultPage() {
                 type="button"
                 onClick={forceRefresh}
                 disabled={refreshing}
-                className="jv-vault-glass flex items-center gap-1.5 rounded-lg px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-zinc-300 transition hover:border-cyan-400/50 hover:text-white disabled:opacity-50"
+                className="jv-vault-glass flex items-center gap-1.5 rounded-lg px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-txt-2 transition hover:border-cyan-400/50 hover:text-white disabled:opacity-50"
               >
                 <Icon name="refresh" className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
                 {refreshing ? 'Checking…' : 'Sync now'}
               </button>
-              <span className="jv-vault-glass hidden rounded-lg px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-cyan-200/70 sm:block">
+              <span className="jv-vault-glass hidden rounded-lg px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-cyan-200/85 sm:block">
                 30 min auto-sync
               </span>
             </div>
@@ -332,10 +342,10 @@ export default function VaultPage() {
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search the vault…"
               aria-label="Search movies"
-              className="w-full bg-transparent pl-11 pr-10 py-2.5 text-sm font-semibold text-white placeholder:text-zinc-600 focus:outline-none"
+              className="w-full bg-transparent pl-11 pr-10 py-2.5 text-sm font-semibold text-txt-1 placeholder:text-txt-4 focus:outline-none"
             />
             {query ? (
-              <button type="button" onClick={() => setQuery('')} aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white">
+              <button type="button" onClick={() => setQuery('')} aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-txt-4 hover:text-txt-1">
                 <Icon name="close" className="h-4 w-4" />
               </button>
             ) : null}
@@ -476,11 +486,11 @@ export default function VaultPage() {
           {/* results */}
           <div className="min-w-0 flex-1">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-txt-4">
                 {status === 'ready' ? <>showing <span className="text-cyan-300">{filtered.length}</span> of {data?.movies?.length || 0}</> : '\u00A0'}
               </p>
               {sort !== 'newest' || decade !== 'all' ? (
-                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-600">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-txt-4">
                   {SORTS.find((entry) => entry.id === sort)?.label}{decade !== 'all' ? ` · ${decade}` : ''}
                 </p>
               ) : null}
@@ -490,31 +500,31 @@ export default function VaultPage() {
 
             {status === 'error' ? (
               <div className="jv-vault-glass rounded-2xl p-8 text-center">
-                <p className="text-sm font-bold text-red-300">{error}</p>
+                <p role="alert" className="text-sm font-bold text-danger">{error}</p>
                 <button type="button" onClick={forceRefresh} className="jv-vault-src-chip mt-4">Try again</button>
               </div>
             ) : null}
 
             {status === 'ready' && !filtered.length ? (
               <div className="jv-vault-glass rounded-2xl p-10 text-center">
-                <p className="text-sm font-bold text-zinc-300">Nothing matches that combination.</p>
+                <p className="text-sm font-bold text-txt-2">Nothing matches that combination.</p>
                 <button type="button" onClick={clearAll} className="jv-vault-src-chip mt-4">Clear filters</button>
               </div>
             ) : null}
 
             {status === 'ready' && filtered.length ? (
               <>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-                  {shown.map((movie) => (
-                    <VaultTile key={movie.id} movie={movie} onPlay={openWatch} />
+                <div ref={revealRef} className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                  {shown.map((movie, index) => (
+                    <VaultTile key={movie.id} movie={movie} onPlay={openWatch} index={index} />
                   ))}
                 </div>
                 {visible < filtered.length ? (
-                  <div ref={sentinelRef} className="py-6 text-center text-[11px] font-black uppercase tracking-[0.18em] text-zinc-600">
+                  <div ref={sentinelRef} className="py-6 text-center text-[11px] font-black uppercase tracking-[0.18em] text-txt-4">
                     loading more…
                   </div>
                 ) : (
-                  <div className="py-6 text-center text-[11px] font-black uppercase tracking-[0.18em] text-zinc-700">
+                  <div className="py-6 text-center text-[11px] font-black uppercase tracking-[0.18em] text-txt-4">
                     end of the deck — {filtered.length} films
                   </div>
                 )}

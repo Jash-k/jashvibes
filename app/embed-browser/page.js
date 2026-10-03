@@ -113,7 +113,7 @@ export default function CleanEmbedBrowserPage() {
               value={inputUrl}
               onChange={(event) => setInputUrl(event.target.value)}
               placeholder="Paste site URL..."
-              className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-black px-3 py-2.5 text-base font-semibold text-white outline-none placeholder:text-zinc-600 focus:border-red-500 sm:px-4 sm:py-3 sm:text-sm"
+              className="jv-input !mt-0 min-w-0 flex-1 text-base sm:text-sm"
               autoComplete="off"
               inputMode="url"
             />

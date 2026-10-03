@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminDeny } from '@/lib/adminAuth';
 import { selfApi } from '@/lib/selfApi';
-import dbConnect from '@/lib/db';
+import { scrapeCollection } from '@/lib/tamilmvPayload';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,8 +21,7 @@ export async function POST(request) {
     const mode = body?.mode === 'purge' ? 'purge' : 'sync';
 
     if (mode === 'purge') {
-      const mongoose = await dbConnect();
-      await mongoose.connection.db.collection('tamilmv_scrapes').deleteOne({ key: 'latest' });
+      await (await scrapeCollection()).deleteOne({ key: 'latest' });
       return NextResponse.json(
         { ok: true, purged: true, message: 'Catalog cache purged. The next visit re-scrapes from TamilMV.' },
         { headers: { 'Cache-Control': 'no-store' } },

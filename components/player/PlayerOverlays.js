@@ -9,13 +9,14 @@
 import { memo } from 'react';
 import { Icon, PATHS } from './PlayerIcons';
 import { fmtClock, fmtTime } from '@/lib/player/labels';
+import { tmdbImageSrcSet } from '@/lib/tmdbPoster';
 
 export const Spinner = memo(function Spinner({ label = 'Buffering stream…', tone = 'default' }) {
   return (
     <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/35 backdrop-blur-[1px]">
       <div
-        className={`h-12 w-12 animate-spin rounded-full border-[3.5px] border-white/20 drop-shadow-[0_0_20px_rgba(217,70,239,0.7)] ${
-          tone === 'error' ? 'border-t-red-400' : 'border-t-fuchsia-400'
+        className={`h-12 w-12 animate-spin rounded-full border-[3.5px] border-white/20 drop-shadow-[0_0_20px_rgba(232,179,58,0.65)] ${
+          tone === 'error' ? 'border-t-red-400' : 'border-t-[#e8b33a]'
         }`}
       />
       {label ? <span className="rounded-full bg-black/60 px-3 py-1 text-[11px] font-semibold text-white/90 backdrop-blur">{label}</span> : null}
@@ -38,7 +39,7 @@ export const CenterPulse = memo(function CenterPulse({ pulse }) {
     return (
       <div key={`s-${pulse.kind}-${pulse.id}`} className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
         <div className="flex animate-[jvflash_0.6s_ease-out_forwards] flex-col items-center gap-1 rounded-full bg-black/55 px-7 py-5 backdrop-blur-sm">
-          <Icon d={pulse.kind === 'fwd' ? PATHS.fwd10 : PATHS.back10} className="h-9 w-9 text-fuchsia-300" />
+          <Icon d={pulse.kind === 'fwd' ? PATHS.fwd10 : PATHS.back10} className="h-9 w-9 text-[#e8b33a]" />
           <span className="text-sm font-black text-white">{pulse.kind === 'fwd' ? '+' : '−'}{pulse.amount || 10}s</span>
         </div>
       </div>
@@ -48,7 +49,7 @@ export const CenterPulse = memo(function CenterPulse({ pulse }) {
     return (
       <div key={`b-${pulse.id}`} className="pointer-events-none absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2">
         <div className="animate-[jvflash_0.9s_ease-out_forwards] rounded-full bg-black/70 px-4 py-2 text-center backdrop-blur">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-fuchsia-300/85">{pulse.label}</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#e8b33a]/85">{pulse.label}</p>
           {pulse.value ? <p className="text-[15px] font-black tabular-nums text-white">{pulse.value}</p> : null}
         </div>
       </div>
@@ -59,7 +60,7 @@ export const CenterPulse = memo(function CenterPulse({ pulse }) {
 
 export const HoldBadge = memo(function HoldBadge({ rate }) {
   return (
-    <div className="pointer-events-none absolute left-1/2 top-4 z-20 -translate-x-1/2 rounded-full border border-fuchsia-400/40 bg-black/70 px-3.5 py-1.5 text-xs font-black uppercase tracking-widest text-fuchsia-200 backdrop-blur">
+    <div className="pointer-events-none absolute left-1/2 top-4 z-20 -translate-x-1/2 rounded-full border border-[#e8b33a]/40 bg-black/70 px-3.5 py-1.5 text-xs font-black uppercase tracking-widest text-[#f4c453] backdrop-blur">
       {rate}× speed
     </div>
   );
@@ -101,7 +102,7 @@ export const ErrorCard = memo(function ErrorCard({ info, url, onRetry, onRotate,
               key={action.id}
               type="button"
               onClick={action.onClick}
-              className="min-h-[44px] rounded-full border border-white/15 bg-white/[0.07] px-4 py-2 text-[11px] font-black uppercase tracking-wider text-white transition hover:border-fuchsia-400/60 hover:bg-fuchsia-500/15 hover:text-fuchsia-100"
+              className="min-h-[44px] rounded-full border border-white/15 bg-white/[0.07] px-4 py-2 text-[11px] font-black uppercase tracking-wider text-white transition hover:border-[#e8b33a]/60 hover:bg-[#e8b33a]/15 hover:text-[#f4c453]"
             >
               {action.label || ACTION_COPY[action.id] || 'Retry'}
             </button>
@@ -138,7 +139,7 @@ export const StatsPanel = memo(function StatsPanel({ stats, model, source, statu
   if (source) rows.push(['url', String(source).slice(0, 78)]);
   return (
     <div className="pointer-events-none absolute left-3 top-14 z-30 hidden max-h-[70%] w-[22rem] overflow-hidden rounded-2xl border border-white/10 bg-black/80 p-3 font-mono text-[10.5px] leading-relaxed text-emerald-200/90 backdrop-blur sm:block">
-      <p className="mb-1 font-sans text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-300/80">Player stats</p>
+      <p className="mb-1 font-sans text-[10px] font-black uppercase tracking-[0.22em] text-[#e8b33a]/80">Player stats</p>
       <dl className="space-y-0.5">
         {rows.map(([label, value]) => (
           <div key={label} className="flex gap-2">
@@ -167,7 +168,7 @@ export const TopBar = memo(function TopBar({ title, subtitle, visible, badges = 
         ) : null}
         <div className="min-w-0 flex-1 pt-0.5">
           <p className="flex max-w-full items-center gap-2 truncate text-[13px] font-bold text-white drop-shadow sm:text-sm">
-            <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-gradient-to-r from-fuchsia-400 to-amber-300 shadow-[0_0_10px_rgba(217,70,239,0.9)]" />
+            <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-gradient-to-r from-[#e8b33a] to-[#f4c453] shadow-[0_0_10px_rgba(232,179,58,0.8)]" />
             <span className="truncate">{title || 'Now Playing'}</span>
           </p>
           {subtitle ? <p className="mt-0.5 truncate pl-3.5 text-[11px] font-semibold text-white/55">{subtitle}</p> : null}
@@ -193,7 +194,7 @@ export const SkipButton = memo(function SkipButton({ label, onClick, side = 'rig
       type="button"
       data-jash-command="skipMarks"
       onClick={onClick}
-      className={`absolute bottom-24 z-30 flex items-center gap-2 rounded-xl border border-white/25 bg-black/75 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-[0_0_28px_rgba(0,0,0,0.5)] backdrop-blur transition hover:scale-[1.02] hover:border-fuchsia-300/70 sm:bottom-28 ${
+      className={`absolute bottom-24 z-30 flex items-center gap-2 rounded-xl border border-white/25 bg-black/75 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-[0_0_28px_rgba(0,0,0,0.5)] backdrop-blur transition hover:scale-[1.02] hover:border-[#e8b33a]/70 sm:bottom-28 ${
         side === 'right' ? 'right-3 sm:right-4' : 'left-3 sm:left-4'
       }`}
     >
@@ -205,17 +206,17 @@ export const SkipButton = memo(function SkipButton({ label, onClick, side = 'rig
 
 export const NextEpisodePill = memo(function NextEpisodePill({ label, secondsLeft, onPlay, onCancel }) {
   return (
-    <div data-dvp="controls" className="absolute bottom-24 right-3 z-30 flex items-center gap-2 rounded-2xl border border-fuchsia-400/40 bg-black/85 px-3 py-2 shadow-[0_0_28px_rgba(217,70,239,0.35)] backdrop-blur sm:bottom-28 sm:right-4">
+    <div data-dvp="controls" className="absolute bottom-24 right-3 z-30 flex items-center gap-2 rounded-2xl border border-[#e8b33a]/40 bg-black/85 px-3 py-2 shadow-[0_0_28px_rgba(217,70,239,0.35)] backdrop-blur sm:bottom-28 sm:right-4">
       <div className="text-center">
         <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/45">Up next</p>
         <p className="max-w-[10rem] truncate text-xs font-black text-white sm:text-sm">{label}</p>
       </div>
       {Number.isFinite(secondsLeft) ? (
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 border-fuchsia-400/60 text-[12px] font-black tabular-nums text-fuchsia-200">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 border-[#e8b33a]/60 text-[12px] font-black tabular-nums text-[#f4c453]">
           {Math.max(0, Math.round(secondsLeft))}
         </span>
       ) : null}
-      <button type="button" onClick={onPlay} className="min-h-[44px] rounded-full bg-gradient-to-r from-fuchsia-500 to-amber-400 px-3.5 py-1 text-[11px] font-black uppercase tracking-wider text-black transition hover:brightness-110">
+      <button type="button" onClick={onPlay} className="min-h-[44px] rounded-full bg-gradient-to-r from-[#c81e3c] to-[#e8b33a] px-3.5 py-1 text-[11px] font-black uppercase tracking-wider text-black transition hover:brightness-110">
         Play
       </button>
       {onCancel ? (
@@ -233,12 +234,12 @@ export const NoticeBar = memo(function NoticeBar({ tone = 'info', children, acti
     info: 'border-white/12 bg-black/70 text-white/85',
     warn: 'border-amber-400/35 bg-amber-950/70 text-amber-100',
     error: 'border-red-400/40 bg-red-950/70 text-red-100',
-    live: 'border-fuchsia-400/35 bg-black/75 text-fuchsia-100',
+    live: 'border-[#e8b33a]/35 bg-black/75 text-[#f4c453]',
   };
   return (
     <div data-dvp="controls" className={`absolute inset-x-3 bottom-24 z-30 flex items-center gap-2 rounded-2xl border px-3 py-2 text-[11.5px] font-semibold backdrop-blur sm:bottom-28 ${tones[tone] || tones.info}`}>
       <span className="min-w-0 flex-1">{children}</span>
-      {action ? <button type="button" onClick={action.onClick} className="shrink-0 rounded-full border border-white/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider transition hover:border-fuchsia-300/60">{action.label}</button> : null}
+      {action ? <button type="button" onClick={action.onClick} className="shrink-0 rounded-full border border-white/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider transition hover:border-[#e8b33a]/60">{action.label}</button> : null}
     </div>
   );
 });
@@ -257,7 +258,15 @@ export const ScrubPreview = memo(function ScrubPreview({ preview, poster, second
     >
       {poster ? (
         <div className="relative aspect-video w-full overflow-hidden bg-zinc-900">
-          <img src={poster} alt="" className="h-full w-full object-cover opacity-90" loading="lazy" decoding="async" />
+          <img
+            src={poster}
+            srcSet={tmdbImageSrcSet(poster, ['w342', 'w780']) || undefined}
+            sizes={tmdbImageSrcSet(poster) ? '(max-width: 640px) 92vw, 430px' : undefined}
+            alt=""
+            className="h-full w-full object-cover opacity-90"
+            loading="lazy"
+            decoding="async"
+          />
         </div>
       ) : null}
       <p className="px-2 py-1 text-center text-[11px] font-black tabular-nums text-white">{fmtTime(seconds.time ?? 0)}</p>

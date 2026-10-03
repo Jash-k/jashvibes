@@ -30,6 +30,20 @@ export default function MusicCurtains() {
   function back() { if (selected.type === 'playlist') { m.backToAlbums(); navigate('playlists'); } else m.backToAlbums(); }
   const songs = view === 'search' ? m.searchResults.songs : view === 'tracks' ? m.allShelfSongs : m.favoriteTracks;
   const lyricsRows = m.syncedLyricLines.length ? m.lyricRows : m.plainLyricLines;
+  // How far through the CURRENT line the song is, as a 0–1 fraction. Real data: the
+  // next line's timestamp is the only clock we have (the sources give line-level
+  // timing, not per-word), and the offset control shifts the whole timeline, so it
+  // is applied here too. Seeking inside a line re-renders this on the next tick.
+  const lyricTiming = new Map();
+  if (m.syncedLyricLines.length && m.playingTrack) {
+    const effective = m.currentTime + m.lyricOffset;
+    lyricsRows.forEach((row, index) => {
+      if (row.state !== 'current' || row.time == null) return;
+      const next = m.syncedLyricLines[index + 1];
+      if (!next || !Number.isFinite(next.time) || next.time <= row.time) return;
+      lyricTiming.set(index, Math.max(0, Math.min(1, (effective - row.time) / (next.time - row.time))));
+    });
+  }
   return (
     <main className={`mu jv-rail-shift ${focus ? 'mu-focus' : ''} ${m.centerTab === 'lyrics' ? 'mu-mobile-lyrics' : ''}`}>
       <RailNav onOpenSearch={() => { navigate('search'); }} />
@@ -50,12 +64,12 @@ export default function MusicCurtains() {
           : view === 'search' ? <section><h2>Search</h2>{m.searchStatus === 'loading' ? <p role="status" className="mu-inline-state">Searching…</p> : null}<TrackList tracks={songs} music={m}/><h3>Albums</h3><CollectionGrid items={m.searchResults.albums} onOpen={m.openAlbum}/><h3>Playlists</h3><CollectionGrid items={m.searchResults.playlists} kind="playlist" onOpen={m.openPlaylist}/><h3>Artists</h3><CollectionGrid items={m.searchResults.artists} kind="artist" onOpen={m.openArtist}/></section>
           : <section><h2>Tracks</h2><p className="mu-muted">Songs from your loaded shelves. Search to find more.</p><TrackList tracks={songs} music={m}/>{m.favoriteTracks.length ? <><h3>Favourites</h3><TrackList tracks={m.favoriteTracks} music={m}/></> : null}{m.recents.length ? <><h3>Recently played</h3><TrackList tracks={m.recents} music={m}/></> : null}</section>}
         </div></aside>
-        <section className="mu-lyrics-stage" aria-label="Lyrics"><header><div><p className="mu-eyebrow">Now playing</p><h2>{m.playingTrack?.title || 'Let the lyrics take the stage'}</h2><p className="mu-muted">{m.playingTrack?.artists || 'Choose a song from an album, tracks or playlist.'}</p></div><div className="mu-lyrics-tools"><button type="button" aria-label="Smaller lyrics" onClick={() => setFontSize((v) => Math.max(20, v - 2))}>A−</button><button type="button" aria-label="Larger lyrics" onClick={() => setFontSize((v) => Math.min(48, v + 2))}>A＋</button><button type="button" aria-pressed={m.lyricAutoScroll} onClick={() => m.setLyricAutoScroll(!m.lyricAutoScroll)}>{m.lyricAutoScroll ? 'Following' : 'Resume follow'}</button></div></header>
+        <section className={`mu-lyrics-stage${m.lyricBlur ? ' is-lyric-focus' : ''}`} aria-label="Lyrics" style={{ '--mu-halo': m.playingTrack?.image ? `url(${m.playingTrack.image})` : 'none' }}><header><div><p className="mu-eyebrow">Now playing</p><h2>{m.playingTrack?.title || 'Let the lyrics take the stage'}</h2><p className="mu-muted">{m.playingTrack?.artists || 'Choose a song from an album, tracks or playlist.'}</p></div><div className="mu-lyrics-tools"><button type="button" aria-label="Smaller lyrics" onClick={() => setFontSize((v) => Math.max(20, v - 2))}>A−</button><button type="button" aria-label="Larger lyrics" onClick={() => setFontSize((v) => Math.min(48, v + 2))}>A＋</button><button type="button" aria-pressed={m.lyricAutoScroll} onClick={() => m.setLyricAutoScroll(!m.lyricAutoScroll)}>{m.lyricAutoScroll ? 'Following' : 'Resume follow'}</button><button type="button" aria-pressed={m.lyricBlur} title="Dim everything but the line being sung" onClick={() => m.setLyricBlur(!m.lyricBlur)}>{m.lyricBlur ? 'Focus on' : 'Focus'}</button></div></header>
           <div className="mu-lyric-scroll" onWheel={() => m.setLyricAutoScroll(false)} onTouchMove={() => m.setLyricAutoScroll(false)} style={{ '--mu-lyric-size': `${fontSize}px` }}>
             {m.lyricsStatus === 'loading' ? <p role="status" className="mu-inline-state">Finding lyrics for this song…</p> : null}
             {m.lyricsStatus === 'error' || m.lyricsStatus === 'not-found' ? <div className="mu-inline-state"><p>{m.lyricsData.message || 'Lyrics are not available from the current source.'}</p><button type="button" onClick={() => m.openLyrics(true)}>Retry lyrics</button></div> : null}
             {!m.playingTrack ? <div className="mu-lyric-empty"><span>♫</span><h3>Your music. Every line.</h3><p>Pick an album, choose a song, and read along.</p><button type="button" onClick={() => navigate('albums')}>Browse albums →</button></div> : null}
-            <ol className="mu-lyric-lines">{lyricsRows.map((row, index) => <li key={`${m.activeKey}:${index}`} ref={row.state === 'current' ? m.activeLyricRef : undefined} data-state={row.state}>{row.time != null && m.syncedLyricLines.length ? <button type="button" onClick={() => m.seekTo(row.time)} title={`Seek to ${formatTime(row.time)}`}>{row.text}</button> : <span>{row.text}</span>}</li>)}</ol>
+            <ol className="mu-lyric-lines">{lyricsRows.map((row, index) => <li key={`${m.activeKey}:${index}`} ref={row.state === 'current' ? m.activeLyricRef : undefined} data-state={row.state} aria-current={row.state === 'current' ? 'true' : undefined}>{row.time != null && m.syncedLyricLines.length ? <button type="button" onClick={() => m.seekTo(row.time)} title={`Seek to ${formatTime(row.time)}`}>{row.text}</button> : <span>{row.text}</span>}{lyricTiming.has(index) ? <span className="mu-line-progress" aria-hidden="true" style={{ '--mu-line-pct': lyricTiming.get(index) }} /> : null}</li>)}</ol>
           </div>{m.syncedLyricLines.length ? <footer className="mu-lyrics-offset">Synced lyrics · offset <button type="button" onClick={() => m.setLyricOffset((v) => v - .25)}>−</button><span>{m.lyricOffset.toFixed(2)}s</span><button type="button" onClick={() => m.setLyricOffset((v) => v + .25)}>＋</button></footer> : m.lyricsStatus === 'ready' ? <footer className="mu-lyrics-offset">Plain lyrics · no timing data</footer> : null}
         </section>
       </div>

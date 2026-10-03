@@ -1,5 +1,10 @@
 'use client';
 
+// Shaka's own stylesheet travels with the player instead of the root layout: it is 24 KB of
+// render-blocking CSS for UI that only exists once a video mounts. Imported here, it lands in the
+// player's lazy chunk and is fetched on /watch, /live and the service panel only.
+import 'shaka-player/dist/controls.css';
+
 /**
  * JashPlayer — the one player chrome for every surface in JaSH ViBeS.
  *
@@ -1050,7 +1055,7 @@ export function JashPlayer(props) {
         event.preventDefault();
         setContextMenu({ x: event.clientX, y: event.clientY });
       }}
-      className={`group/player jv-native-cursor relative isolate overflow-hidden bg-black text-white outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/60${visible ? '' : ' jv-idle'} ${aspectClass(
+      className={`group/player jv-native-cursor relative isolate overflow-hidden bg-black text-white outline-none focus-visible:ring-2 focus-visible:ring-[#e8b33a]/60${visible ? '' : ' jv-idle'} ${aspectClass(
         display.aspect,
       )} ${landscapePhone ? 'jv-landscape-phone' : ''} ${className}`}
     >
@@ -1068,7 +1073,7 @@ export function JashPlayer(props) {
 
       {dropTarget ? (
         <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-black/60">
-          <p className="rounded-2xl border border-fuchsia-400/40 bg-black/70 px-4 py-2 text-[12px] font-black uppercase tracking-wider text-fuchsia-100">Drop to load subtitles</p>
+          <p className="rounded-2xl border border-[#e8b33a]/40 bg-black/70 px-4 py-2 text-[12px] font-black uppercase tracking-wider text-[#f4c453]">Drop to load subtitles</p>
         </div>
       ) : null}
 
@@ -1113,7 +1118,7 @@ export function JashPlayer(props) {
             type="button"
             data-jash-command="freezeFrame"
             onClick={toggleFreeze}
-            className="absolute bottom-24 left-1/2 -translate-x-1/2 rounded-full border border-white/20 bg-black/75 px-4 py-2 text-[11px] font-black uppercase tracking-wider text-white backdrop-blur transition hover:border-fuchsia-400/60"
+            className="absolute bottom-24 left-1/2 -translate-x-1/2 rounded-full border border-white/20 bg-black/75 px-4 py-2 text-[11px] font-black uppercase tracking-wider text-white backdrop-blur transition hover:border-[#e8b33a]/60"
           >
             Unfreeze
           </button>
@@ -1173,7 +1178,7 @@ export function JashPlayer(props) {
       <div
         data-dvp="controls"
         onPointerDown={wake}
-        className={`absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/95 via-black/60 to-transparent px-2 pb-[max(env(safe-area-inset-bottom),0.625rem)] pt-12 transition-opacity duration-300 sm:px-3 ${
+        className={`jvp-chrome absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/95 via-black/60 to-transparent px-2 pb-[max(env(safe-area-inset-bottom),0.625rem)] pt-12 transition-opacity duration-300 sm:px-3 ${
           visible ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0 invisible'
         }`}
       >
@@ -1192,7 +1197,7 @@ export function JashPlayer(props) {
           >
             <div className="relative h-1 w-full overflow-hidden rounded-full bg-white/20 transition-all group-hover/track:h-1.5">
               <div className="absolute inset-y-0 left-0 rounded-full bg-white/25" style={{ width: `${bufferedRatio * 100}%` }} />
-              <div className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-fuchsia-500 via-fuchsia-400 to-amber-300" style={{ width: `${playedRatio * 100}%` }} />
+              <div className="absolute inset-y-0 left-0 rounded-full jvp-track-fill" style={{ width: `${playedRatio * 100}%` }} />
               {abLoop.a != null && win && winLength > 0 ? (
                 <div
                   className="absolute inset-y-0 bg-emerald-400/45"
@@ -1204,7 +1209,7 @@ export function JashPlayer(props) {
               ) : null}
             </div>
             <div
-              className="pointer-events-none absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-[0_0_14px_rgba(217,70,239,0.9)] transition-opacity group-hover/track:opacity-100"
+              className="pointer-events-none absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 jvp-thumb-glow transition-opacity group-hover/track:opacity-100"
               style={{ left: `${playedRatio * 100}%` }}
             />
             <ScrubPreview preview={preview} poster={display.poster || poster} seconds={preview ? { time: preview.time } : null} />
@@ -1275,7 +1280,7 @@ export function JashPlayer(props) {
               aria-label="Volume"
               value={Number(videoEl?.volume ?? prefs.volume)}
               onChange={(event) => engine.setVolume(Number(event.target.value))}
-              className="h-8 w-0 cursor-pointer opacity-0 transition-all accent-fuchsia-400 group-hover/vol:w-20 group-hover/vol:opacity-100"
+              className="h-8 w-0 cursor-pointer opacity-0 transition-all accent-[#e8b33a] group-hover/vol:w-20 group-hover/vol:opacity-100"
             />
           </div>
 
@@ -1292,7 +1297,7 @@ export function JashPlayer(props) {
               aria-haspopup="dialog"
               aria-expanded={menu === 'quality'}
               aria-label={`Quality: ${qualityLabel}`}
-              className="grid h-11 min-w-[4.25rem] place-items-center rounded-full border border-white/15 px-2.5 text-[11px] font-black text-white transition hover:border-fuchsia-400/50 hover:text-fuchsia-200"
+              className="grid h-11 min-w-[4.25rem] place-items-center rounded-full border border-white/15 px-2.5 text-[11px] font-black text-white transition hover:border-[#e8b33a]/50 hover:text-[#f4c453]"
             >
               <span className="flex items-center gap-1.5">
                 <Icon d={PATHS.list} className="h-4 w-4" />
@@ -1306,7 +1311,7 @@ export function JashPlayer(props) {
               aria-haspopup="dialog"
               aria-expanded={menu === 'aspect'}
               aria-label={`Aspect ratio: ${aspectLabel(aspectMode)}`}
-              className="grid h-11 min-w-[3.4rem] place-items-center rounded-full border border-white/15 px-2.5 text-[11px] font-black text-white transition hover:border-fuchsia-400/50 hover:text-fuchsia-200"
+              className="grid h-11 min-w-[3.4rem] place-items-center rounded-full border border-white/15 px-2.5 text-[11px] font-black text-white transition hover:border-[#e8b33a]/50 hover:text-[#f4c453]"
             >
               {aspectLabel(aspectMode)}
             </button>
@@ -1319,7 +1324,7 @@ export function JashPlayer(props) {
                 aria-label={subtitleOn ? 'Subtitles on' : 'Subtitles off'}
                 aria-pressed={subtitleOn}
                 title="Subtitles (C)"
-                className={`grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 ${subtitleOn ? 'bg-white/15 text-fuchsia-200' : ''}`}
+                className={`grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 ${subtitleOn ? 'bg-white/15 text-[#f4c453]' : ''}`}
               >
                 <span className="text-[11px] font-black tracking-wide">CC</span>
               </button>
@@ -1333,7 +1338,7 @@ export function JashPlayer(props) {
                 aria-label={pipActive ? 'Exit picture in picture' : 'Picture in picture'}
                 aria-pressed={pipActive}
                 title="Picture in picture (P)"
-                className={`grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95 ${pipActive ? 'bg-white/15 text-fuchsia-200' : ''}`}
+                className={`grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95 ${pipActive ? 'bg-white/15 text-[#f4c453]' : ''}`}
               >
                 <Icon d={PATHS.pip} className="h-5 w-5" />
               </button>

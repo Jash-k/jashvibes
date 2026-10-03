@@ -74,8 +74,8 @@ function hitRateLimit(key, limit, windowMs) {
 
 // Edge-runtime-safe SHA-256. The seed formula (password + optional
 // SESSION_EPOCH) MUST match lib/serverAuth.js exactly — the middleware cannot
-// import it (edge runtime), so the two are kept in sync by hand and by
-// tests/auth-token-rotation.test.js.
+// import it (edge runtime), so the two are kept in sync by hand — change one,
+// change the other.
 function sessionSeed(password) {
   const epoch = String(process.env.SESSION_EPOCH || process.env.SESSION_SECRET || '').trim();
   const base = `jash-theatre:${password}`;

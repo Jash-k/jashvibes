@@ -112,7 +112,7 @@ export const ChannelDrawer = memo(function ChannelDrawer({
     >
       <div className="flex items-center gap-2 border-b border-white/10 p-3">
         <p className="min-w-0 flex-1 truncate text-xs font-black uppercase tracking-[0.18em] text-zinc-300">
-          Channels · {filtered.length} <span className="text-zinc-600">· K5</span>
+          Channels · {filtered.length} <span className="text-white/55">· K5</span>
         </p>
         <button
           type="button"

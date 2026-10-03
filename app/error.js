@@ -34,7 +34,7 @@ export default function RouteError({ error, reset }) {
             device and is untouched. Try again, or reload for a fresh app bundle.
           </p>
           {digest ? (
-            <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-600">
+            <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.18em] text-txt-4">
               ref {digest}
             </p>
           ) : null}

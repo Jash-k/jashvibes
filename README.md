@@ -69,17 +69,19 @@ Do not expose MongoDB directly to browsers. Use a persistent managed database; a
 
 ReTro source deletion removes that source's streams while retaining shared titles. Manual metadata and removed-title overrides survive subsequent sync. Disabled/empty source registries are authoritative.
 
-## Test
+## Verify a deployment
 
 ```bash
-npm run check             # parse source modules and validate local imports
-npm test                  # deterministic unit / mocked API-policy regression tests
-npx playwright install chromium --with-deps
-npm run dev -- --port 7860 # separate terminal; use a temporary test PASS
-npm run test:browser       # UI flows; local API fixtures, no real licences/media
+npm run check   # parse every source module and validate local imports
+npm run build   # production build (Next 16, webpack)
+npm start       # binds 0.0.0.0:$PORT (default 7860)
+curl -fsS http://localhost:7860/api/health   # unauthenticated, used as the platform health check
 ```
 
-Browser tests mock catalogues and use a generated tone plus a synthetic iframe. Production-DB persistence, real DRM, geo-restricted services and Docker runtime require your own deployment acceptance checks. See [verification scope](docs/VERIFICATION.md).
+This distribution ships **no CI and no test suite** — it is the deploy bundle. A green build and a healthy
+`/api/health` do not prove playback: production-DB persistence, real DRM, geo-restricted providers and the
+Docker runtime need your own acceptance checks against the running deployment. See
+[verification scope](docs/VERIFICATION.md).
 
 ## Sources and limitations
 

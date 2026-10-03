@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { rejectCrossOriginMutation } from '@/lib/signedSession';
 import {
   ADMIN_COOKIE,
   ADMIN_TTL_SECONDS,
@@ -84,8 +85,16 @@ export async function POST(request) {
   return withAdminCookie(NextResponse.json({ success: true }), token);
 }
 
-/** DELETE — logout (clears the cookie; the token itself dies with its 12 h TTL or kill-all). */
-export async function DELETE() {
+/** DELETE — logout (clears the cookie; the token itself dies with its 12 h TTL or kill-all).
+ *
+ *  Deliberately does NOT require a valid session: logging out of an expired session
+ *  must still succeed, and there is nothing to leak here. It does reject cross-origin
+ *  callers, because every other mutation in the app does — a third-party page should
+ *  not be able to force a logout by firing a form at this URL. */
+export async function DELETE(request) {
+  if (rejectCrossOriginMutation(request)) {
+    return NextResponse.json({ error: 'Cross-origin logout refused.' }, { status: 403 });
+  }
   const response = NextResponse.json({ success: true });
   response.cookies.set(ADMIN_COOKIE, '', { httpOnly: true, path: '/', maxAge: 0 });
   return response;

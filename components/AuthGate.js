@@ -240,7 +240,7 @@ export default function AuthGate({ children }) {
                   node.focus({ preventScroll: true });
                 }
               }}
-              className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 pr-16 text-white outline-none transition placeholder:text-zinc-600 focus:border-red-500 focus:ring-2 focus:ring-red-500/30"
+              className="jv-input !mt-0 pr-16 transition focus:ring-2 focus:ring-brand-soft"
               placeholder="Enter password"
             />
             <button

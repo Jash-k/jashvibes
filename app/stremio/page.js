@@ -7,6 +7,7 @@ import EmbedSiteLinks from '@/components/EmbedSiteLinks';
 import RailNav from '@/components/rail/RailNav';
 import { readSessionCache, writeSessionCache } from '@/lib/clientCache';
 import { POSTER_SIZES_ATTR, tmdbImageSrcSet } from '@/lib/tmdbPoster';
+import { revealStyle, useReveal } from '@/lib/useReveal';
 import {
   FILTER_FIELDS,
   SELECTED_KEY,
@@ -109,13 +110,13 @@ function Ruler({ tabs, value, pinnedCount, onChange, onOpenCatalogs }) {
   );
 }
 
-function ShelfCard({ item }) {
+function ShelfCard({ item, index = 0 }) {
   const href = watchHref(item, 'stremio');
   const year = String(item.releaseInfo || item.year || '').slice(0, 4);
   const score = Number(item.rating) ? Number(item.rating).toFixed(1) : '';
 
   return (
-    <Link href={href} className="jv-st-card" title={item.synopsis || item.title}>
+    <Link href={href} className="jv-st-card" data-reveal style={revealStyle(index)} title={item.synopsis || item.title}>
       {item.posterUrl ? (
         <img
           className="jv-st-art"
@@ -493,6 +494,9 @@ export default function StremioPage() {
   const reading = Boolean(activeEntry?.loading);
   const capped = (activeEntry?.pages || 0) >= SHELF_MAX_PAGES;
   const showGrid = Boolean(activeCatalog) && loaded > 0 && !error && status === 'ready';
+  // Re-arms on the catalog AND the count: switching catalogs swaps every node,
+  // and paging appends to the same one.
+  const revealRef = useReveal(`${activeKey}|${(activeEntry?.items || []).length}`);
 
   return (
     <>
@@ -579,8 +583,8 @@ export default function StremioPage() {
 
             {showGrid ? (
               <>
-                <div className="jv-st-grid">
-                  {(activeEntry?.items || []).map((item) => <ShelfCard key={rowKey(item)} item={item} />)}
+                <div ref={revealRef} className="jv-st-grid">
+                  {(activeEntry?.items || []).map((item, index) => <ShelfCard key={rowKey(item)} item={item} index={index} />)}
                   {activeEntry?.hasMore && !capped ? (
                     <button type="button" className="jv-st-more" disabled={reading} onClick={() => run(activeCatalog, { append: true })}>
                       {reading ? 'reading…' : 'load more'}

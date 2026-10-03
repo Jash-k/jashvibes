@@ -209,7 +209,7 @@ export default function CommandPalette({ open, onClose }) {
                           className="h-full w-full object-cover"
                         />
                       ) : (
-                        <div className="grid h-full place-items-center text-xs text-zinc-600">🎬</div>
+                        <div className="grid h-full place-items-center text-xs text-txt-4">🎬</div>
                       )}
                     </div>
                     <div className="min-w-0 flex-1">

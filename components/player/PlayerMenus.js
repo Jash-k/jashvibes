@@ -73,7 +73,7 @@ export const Menu = memo(function Menu({ title, subtitle, onClose, children, wid
       >
         <div className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-300/85">{title}</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#e8b33a]/85">{title}</p>
             {subtitle ? <p className="mt-0.5 truncate text-[11px] font-semibold text-white/50">{subtitle}</p> : null}
           </div>
           <button
@@ -110,12 +110,12 @@ export const MenuItem = memo(function MenuItem({ active, onClick, children, hint
         disabled
           ? 'cursor-not-allowed text-white/30'
           : active
-            ? 'bg-fuchsia-500/15 text-fuchsia-100'
+            ? 'bg-[#e8b33a]/15 text-[#f4c453]'
             : 'text-white/85 hover:bg-white/5 hover:text-white'
       }`}
     >
       {icon ? <Icon d={icon} className="h-4 w-4 shrink-0 opacity-80" /> : null}
-      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${active ? 'bg-gradient-to-r from-fuchsia-400 to-amber-300 shadow-[0_0_8px_rgba(217,70,239,0.9)]' : 'bg-zinc-700'}`} />
+      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${active ? 'bg-gradient-to-r from-[#e8b33a] to-[#f4c453] shadow-[0_0_10px_rgba(232,179,58,0.8)]' : 'bg-zinc-700'}`} />
       <span className="min-w-0 flex-1 truncate">{children}</span>
       {hint ? <span className="shrink-0 text-[11px] font-bold tabular-nums text-white/45">{hint}</span> : null}
     </button>
@@ -265,7 +265,7 @@ export const ContextMenu = memo(function ContextMenu({ x, y, onClose, items }) {
 export const TimeBubble = memo(function TimeBubble({ label, seconds, delta }) {
   return (
     <div className="pointer-events-none absolute left-1/2 top-1/2 z-30 -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/10 bg-black/75 px-4 py-3 text-center backdrop-blur">
-      <p className="text-[11px] font-black uppercase tracking-[0.2em] text-fuchsia-300/80">{label}</p>
+      <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#e8b33a]/80">{label}</p>
       {Number.isFinite(seconds) ? <p className="mt-0.5 text-[15px] font-black tabular-nums text-white">{fmtTime(seconds)}</p> : null}
       {delta ? <p className="text-[11px] font-bold text-white/60">{delta}</p> : null}
     </div>

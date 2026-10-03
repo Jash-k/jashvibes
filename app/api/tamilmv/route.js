@@ -5,28 +5,26 @@ import { verifyRequestToken } from '@/lib/serverAuth';
 import { applyMatchesToItems, findMatchesForItems } from '@/lib/titleMatch';
 import { applyOverridesToPayload, loadOverrideMap } from '@/lib/catalogAdmin';
 import { parseReleaseQuality, labelForTier } from '@/lib/quality';
+import {
+  DEFAULT_MAX_CACHE_LIMIT,
+  SYNC_INTERVAL_MS,
+  cacheAgeMs,
+  clampNumber,
+  getCachedScrape,
+  getMaxCacheLimit,
+  isSyncDue,
+  paginatePayload,
+  saveScrape,
+  withOverrides,
+  withTitleMatches,
+} from '@/lib/tamilmvPayload';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const COLLECTION_NAME = 'tamilmv_scrapes';
-const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-const SYNC_INTERVAL_MS = Number(process.env.TAMILMV_SYNC_INTERVAL_MS || SIX_HOURS_MS);
 let backgroundSyncPromise = null;
 const DEFAULT_PAGE_LIMIT = 15;
-// Keep the first request light. Lazy loading expands the cache page-by-page up
-// to this maximum instead of forcing a large scrape before anything appears.
-const DEFAULT_MAX_CACHE_LIMIT = 90;
 
-function clampNumber(value, fallback, min, max) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return fallback;
-  return Math.max(min, Math.min(max, Math.floor(parsed)));
-}
-
-function getMaxCacheLimit() {
-  return clampNumber(process.env.TAMILMV_CACHE_LIMIT, DEFAULT_MAX_CACHE_LIMIT, DEFAULT_PAGE_LIMIT, 300);
-}
 
 function hasTMDBConfig() {
   return Boolean(
@@ -79,51 +77,6 @@ function emptyPayload(extra = {}) {
   };
 }
 
-async function getCollection() {
-  const mongoose = await dbConnect();
-  return mongoose.connection.db.collection(COLLECTION_NAME);
-}
-
-async function getCachedScrape() {
-  const collection = await getCollection();
-  return collection.findOne({ key: 'latest' });
-}
-
-async function saveScrape(payload) {
-  const collection = await getCollection();
-  await collection.updateOne(
-    { key: 'latest' },
-    {
-      $set: {
-        key: 'latest',
-        ...payload,
-        refreshedAt: new Date(),
-      },
-    },
-    { upsert: true }
-  );
-}
-
-/** Admin overrides (hide / pin / manual corrections), applied at read time. */
-async function withOverrides(payload) {
-  try {
-    const overrideMap = await loadOverrideMap();
-    if (!overrideMap.size) return payload;
-    return applyOverridesToPayload(payload, overrideMap);
-  } catch {
-    return payload; // overrides must never take the catalog down
-  }
-}
-
-function cacheAgeMs(doc) {
-  if (!doc?.refreshedAt) return Infinity;
-  const time = new Date(doc.refreshedAt).getTime();
-  return Number.isFinite(time) ? Date.now() - time : Infinity;
-}
-
-function isSyncDue(doc) {
-  return cacheAgeMs(doc) >= SYNC_INTERVAL_MS;
-}
 
 function getRequestPaging(searchParams) {
   const limit = clampNumber(searchParams.get('limit'), DEFAULT_PAGE_LIMIT, 1, 48);
@@ -141,87 +94,6 @@ function groupNeedsMore(cached, group, end, maxCacheLimit) {
   return needs(cached.movies || []) || needs(cached.series || []);
 }
 
-function paginateList(items = [], paging) {
-  return items.slice(paging.start, paging.end);
-}
-
-function pageInfo(items = [], paging, cacheLimit = 0, maxCacheLimit = DEFAULT_MAX_CACHE_LIMIT) {
-  const canExpandCache = items.length > 0 && items.length >= cacheLimit && cacheLimit < maxCacheLimit && paging.end >= items.length;
-  return {
-    page: paging.page,
-    limit: paging.limit,
-    total: items.length,
-    returned: Math.max(0, Math.min(paging.limit, items.length - paging.start)),
-    // If the user reached the current cache edge and we have not reached the
-    // max cache limit, allow one more lazy request to expand the cache.
-    hasMore: paging.end < items.length || canExpandCache,
-  };
-}
-
-// Manual poster matches (title_matches collection) must survive rescrapes, so
-// they are merged at read time instead of being baked into the cached scrape.
-function tagItemQuality(item) {
-  if (!item) return item;
-  const text = item.rawTitle || item.parsedSource || item.synopsis || item.title || '';
-  const parsed = parseReleaseQuality(text);
-  const tier = parsed.tier || item.qualityTier || '';
-  if (!tier) return item;
-  const label = parsed.label || item.qualityLabel || tier;
-  if (item.qualityTier === tier && item.qualityLabel) return item;
-  return { ...item, qualityTier: tier, qualityLabel: label };
-}
-
-function tagListQuality(items = []) {
-  return items.map(tagItemQuality);
-}
-
-async function withTitleMatches(payload) {
-  const tagged = {
-    ...payload,
-    movies: tagListQuality(payload?.movies || []),
-    series: tagListQuality(payload?.series || []),
-  };
-  try {
-    const docs = await findMatchesForItems([...(payload?.movies || []), ...(payload?.series || [])]);
-    if (!docs.length) return tagged;
-    // Contract: manual/TMDB matches only enrich (poster, rating, ids) —
-    // quality is re-computed on top so it can NEVER be dropped by a match.
-    return {
-      ...tagged,
-      movies: tagListQuality(applyMatchesToItems(tagged.movies, docs)),
-      series: tagListQuality(applyMatchesToItems(tagged.series, docs)),
-    };
-  } catch {
-    return tagged;
-  }
-}
-
-function paginatePayload(payload, paging, maxCacheLimit = DEFAULT_MAX_CACHE_LIMIT) {
-  const allMovies = payload?.movies || [];
-  const allSeries = payload?.series || [];
-  const movies = paging.group === 'series' ? [] : paginateList(allMovies, paging);
-  const series = paging.group === 'movies' ? [] : paginateList(allSeries, paging);
-
-  const cacheLimit = payload?.cacheLimit || payload?.limitPerType || 0;
-
-  return {
-    ...payload,
-    movies,
-    series,
-    tvshows: [],
-    items: [...movies, ...series],
-    count: movies.length + series.length,
-    totalCached: allMovies.length + allSeries.length,
-    cacheLimit,
-    pagination: {
-      page: paging.page,
-      limit: paging.limit,
-      group: paging.group,
-      movies: pageInfo(allMovies, paging, cacheLimit, maxCacheLimit),
-      series: pageInfo(allSeries, paging, cacheLimit, maxCacheLimit),
-    },
-  };
-}
 
 async function scrapeAndCache({ withPosters, matchTMDB, cacheLimit }) {
   const payload = await scrapeTamilMV({
