@@ -37,9 +37,7 @@ import {
   readSeekWindow,
 } from '@/lib/player/kind';
 import { isDrmConfigError, mapPlaybackError } from '@/lib/player/errors';
-import { createProgressWriter, isResumeSuppressed, planResume, suppressResume } from '@/lib/player/resume';
 import { clamp, readPrefs, writePref } from '@/lib/player/prefs';
-import { getHistoryEntry, saveOrUpsertProgress } from '@/lib/watchStore';
 import { DEFAULT_LADDER, RUNGS, capabilitiesFor, nextRecoveryAction } from '@/lib/player/recovery';
 import { createSubtitleTrack, releaseSubtitleTrack, shiftVttCues, subtitleStyleToCss } from '@/lib/player/subtitles';
 
@@ -87,8 +85,6 @@ export function usePlaybackEngine(options = {}) {
     policy = null,
     sourceKey = '',
     watchKey = '',
-    resume: resumeEnabled = true,
-    persistProgress = true,
     fallbackUrls = [],
     activeFallbackIndex = 0,
     forceUrl = '',
@@ -96,23 +92,16 @@ export function usePlaybackEngine(options = {}) {
     allowNativeHls = true,
     enableSubtitles = true,
     mediaSession = null,
-    libraryEntry = null,
     handlers = {},
   } = options;
 
   // ------------------------------------------------------------- fresh props
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
-  const libraryEntryRef = useRef(libraryEntry);
-  libraryEntryRef.current = libraryEntry;
   const fallbacksRef = useRef({ urls: fallbackUrls, index: activeFallbackIndex, forceUrl });
   fallbacksRef.current = { urls: fallbackUrls, index: activeFallbackIndex, forceUrl };
   const allowNativeHlsRef = useRef(allowNativeHls);
   allowNativeHlsRef.current = allowNativeHls;
-  const resumeEnabledRef = useRef(resumeEnabled);
-  resumeEnabledRef.current = resumeEnabled;
-  const persistRef = useRef(persistProgress);
-  persistRef.current = persistProgress;
   const enableSubtitlesRef = useRef(enableSubtitles);
   enableSubtitlesRef.current = enableSubtitles;
 
@@ -138,7 +127,6 @@ export function usePlaybackEngine(options = {}) {
   const [externalSubtitle, setExternalSubtitle] = useState(null);
   const [stats, setStats] = useState(null);
   const [showStats, setShowStats] = useState(() => Boolean(readPrefs().showStats));
-  const [resumePrompt, setResumePrompt] = useState(null);
   const [attemptNote, setAttemptNote] = useState('');
 
   // -------------------------------------------------------------------- refs
@@ -179,7 +167,6 @@ export function usePlaybackEngine(options = {}) {
   const externalSubtitleRef = useRef(null);
   externalSubtitleRef.current = externalSubtitle;
   const statsTimerRef = useRef(0);
-  const resumeTimerRef = useRef(0);
   const failureRef = useRef(null); // set once handleFailure exists
 
   // ------------------------------------------------------------------ helpers
@@ -253,31 +240,6 @@ export function usePlaybackEngine(options = {}) {
     }
   }
 
-  const flushProgress = useCallback(() => {
-    if (!persistRef.current || !watchKey) return;
-    const el = videoRef.current;
-    if (!el || playingLive(el)) return;
-    try {
-      saveOrUpsertProgress(
-        { key: watchKey, ...(libraryEntryRef.current || {}) },
-        Number(el.currentTime) || 0,
-        Number.isFinite(Number(el.duration)) ? Number(el.duration) : 0,
-      );
-    } catch {}
-  }, [watchKey]);
-
-  const progressWriter = useMemo(
-    () =>
-      createProgressWriter({
-        onChange: ({ progress, duration: total }) => {
-          if (!persistRef.current || !watchKey || playingLive(videoRef.current)) return;
-          try {
-            saveOrUpsertProgress({ key: watchKey, ...(libraryEntryRef.current || {}) }, progress, total);
-          } catch {}
-        },
-      }),
-    [watchKey],
-  );
 
   // ------------------------------------------------------------ media actions
   const setVolume = useCallback((value) => {
@@ -380,8 +342,7 @@ export function usePlaybackEngine(options = {}) {
     try {
       el.pause?.();
     } catch {}
-    flushProgress();
-  }, [flushProgress]);
+  }, []);
 
   const togglePlay = useCallback(() => {
     const el = videoRef.current;
@@ -829,23 +790,9 @@ export function usePlaybackEngine(options = {}) {
       }
       if (resumeAppliedRef.current) return;
       resumeAppliedRef.current = true;
-      const win = readSeekWindow(el);
-      const liveNow = derivePlaybackModel(el).live;
-      if (!resumeEnabledRef.current || !watchKey || liveNow) return;
-      // The user said "never for this title" — start from 0, keep persisting.
-      if (isResumeSuppressed(watchKey)) return;
-      const saved = getHistoryEntry(watchKey);
-      const plan = planResume(saved, win);
-      if (plan.seek) {
-        seekTo(plan.target);
-        setResumePrompt({ seconds: Math.round(plan.target - (win?.start || 0)), auto: true });
-        window.clearTimeout(resumeTimerRef.current);
-        resumeTimerRef.current = window.setTimeout(() => setResumePrompt((current) => (current?.auto ? null : current)), 7000);
-      } else if (saved?.progress > 0 && plan.reason !== 'finished') {
-        setResumePrompt({ seconds: Math.round(saved.progress), auto: false, reason: plan.reason });
-        window.clearTimeout(resumeTimerRef.current);
-        resumeTimerRef.current = window.setTimeout(() => setResumePrompt((current) => (current?.auto ? null : current)), 8000);
-      }
+      // Watch history was removed, so there is no saved position to restore and no
+      // resume prompt to offer: playback starts at 0, except for the deliberate
+      // `carriedSeek` handled above (episode / source switches).
     };
     if (el.readyState >= 1) applyResume();
     else el.addEventListener?.('loadedmetadata', applyResume, { once: true });
@@ -1064,7 +1011,6 @@ export function usePlaybackEngine(options = {}) {
     const onPause = () => {
       setPlaying(false);
       setStatus((current) => (current === 'buffering' && userWantsPlayRef.current ? current : current === 'ready' ? 'ready' : current));
-      flushProgress();
     };
     const onWaiting = () => {
       stallSamplesRef.current = Math.max(stallSamplesRef.current, STALL_SAMPLES);
@@ -1081,7 +1027,6 @@ export function usePlaybackEngine(options = {}) {
     };
     const onTimeUpdate = () => {
       if (!scrubbingRef.current.active) setTime(Number(el.currentTime) || 0);
-      progressWriter.tick(el);
       refreshModel();
     };
     const onDurationChange = () => {
@@ -1097,7 +1042,6 @@ export function usePlaybackEngine(options = {}) {
     const onVolumeChange = () => setPrefs((current) => ({ ...current, volume: Number(el.volume) || 0, muted: Boolean(el.muted) }));
     const onRateChange = () => setPrefs((current) => ({ ...current, rate: Number(el.playbackRate) || 1 }));
     const onEnded = () => {
-      flushProgress();
       setPlaying(false);
       commitStatus('ended', '');
       try {
@@ -1211,7 +1155,7 @@ export function usePlaybackEngine(options = {}) {
       window.clearInterval(sampler);
       window.clearInterval(clock);
     };
-  }, [commitStatus, flushProgress, progressWriter, refreshModel, videoEl]);
+  }, [commitStatus, refreshModel, videoEl]);
 
   // ----------------------------------------------------------- lifecycle sync
   useEffect(() => {
@@ -1219,7 +1163,6 @@ export function usePlaybackEngine(options = {}) {
 
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
-        flushProgress();
         const live = derivePlaybackModel(videoRef.current).live;
         if (live && !suspendedRef.current) {
           suspendedRef.current = true;
@@ -1233,7 +1176,6 @@ export function usePlaybackEngine(options = {}) {
         attach({ reason: 'foreground' });
       }
     };
-    const onPageHide = () => flushProgress();
     const onOnline = () => {
       if (!offlineRef.current) return;
       offlineRef.current = false;
@@ -1250,16 +1192,14 @@ export function usePlaybackEngine(options = {}) {
     };
 
     document.addEventListener?.('visibilitychange', onVisibility);
-    window.addEventListener?.('pagehide', onPageHide);
     window.addEventListener?.('online', onOnline);
     window.addEventListener?.('offline', onOffline);
     return () => {
       document.removeEventListener?.('visibilitychange', onVisibility);
-      window.removeEventListener?.('pagehide', onPageHide);
       window.removeEventListener?.('online', onOnline);
       window.removeEventListener?.('offline', onOffline);
     };
-  }, [attach, destroyPlayer, flushProgress]);
+  }, [attach, destroyPlayer]);
 
   // ------------------------------------------------------- source transitions
   const signature = `${sourceKey}::${forceUrl}`;
@@ -1418,7 +1358,6 @@ export function usePlaybackEngine(options = {}) {
     externalSubtitle,
     stats,
     showStats,
-    resumePrompt,
     // controls
     play,
     pause,
@@ -1435,7 +1374,6 @@ export function usePlaybackEngine(options = {}) {
     nudgeBrightness,
     unmuteAfterGesture,
     setScrubbing,
-    flushProgress,
     setPref,
     // engine
     retry,
@@ -1455,21 +1393,9 @@ export function usePlaybackEngine(options = {}) {
     removeExternalSubtitle,
     shiftSubtitleDelay,
     toggleStats,
-    dismissResumePrompt: () => setResumePrompt(null),
-    neverResume: () => {
-      suppressResume(watchKey);
-      resumeAppliedRef.current = true;
-      setResumePrompt(null);
-    },
-    resumeFromPrompt: () => {
-      const seconds = Number(resumePrompt?.seconds) || 0;
-      resumeAppliedRef.current = true;
-      setResumePrompt(null);
-      seekTo(seconds);
-    },
+    /** Play from the beginning (menu action; holds no resume state any more). */
     startOver: () => {
       resumeAppliedRef.current = true;
-      setResumePrompt(null);
       seekTo(0);
     },
     /**

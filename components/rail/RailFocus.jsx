@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { removeHistoryEntry } from '@/lib/watchStore';
 
 /**
  * RailFocus — the banner half of Rail OS: one title, its own artwork, and the way back into it.
@@ -9,8 +8,11 @@ import { removeHistoryEntry } from '@/lib/watchStore';
  * The poster strip that used to sit under the copy is gone by request, and it was the right call: the
  * two catalogue rows below already *are* the browser, so a thumbnail rail inside the hero was a control
  * nested inside a control, and its ring competed with the row cards. What is left is deliberately still
- * — no timer, no autoplay, nothing to pause — and it shows the thing you are most likely to press:
- * the last half-watched title, or the freshest one when there isn't one.
+ * — no timer, no autoplay, nothing to pause — and it shows the freshest scraped title.
+ *
+ * It also no longer carries resume state ("Resume · 42%", "Cancel resume", "All unfinished"): watch
+ * history was removed, so a percentage here would be a permanent 0 and the two ghost buttons would
+ * point at a list that does not exist.
  *
  * Nothing about live TV belongs here either: a "Star Vijay HD · …" pill on a movie poster is two
  * products sharing one rectangle, and it read as a bug report even though it was a feature. The channel
@@ -60,35 +62,13 @@ export default function RailFocus({ slide = null, eyebrow = 'Now on your shelf',
               <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
                 <path d="M8 5v14l11-7z" />
               </svg>
-              {slide.progress > 0 ? `Resume · ${slide.progress}%` : 'Watch now'}
+              Watch now
             </Link>
           ) : (
             <span className="jv-focus-cta jv-focus-cta-muted" title="This release has no TMDB match yet">
               Not matched yet — bind it in the rows below
             </span>
           )}
-          {slide.href && slide.progress > 0 ? (
-            <button
-              type="button"
-              className="jv-focus-ghost"
-              title="Remove from Continue Watching"
-              aria-label={`Remove ${slide.title} from Continue Watching`}
-              onClick={(event) => {
-                event.preventDefault();
-                if (slide.key) removeHistoryEntry(slide.key);
-              }}
-            >
-              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" aria-hidden="true">
-                <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" fill="none" />
-              </svg>
-              Cancel resume
-            </button>
-          ) : null}
-          {slide.href && slide.progress > 0 ? (
-            <Link href={slide.libraryHref || '/my-list?tab=history'} className="jv-focus-ghost">
-              All unfinished
-            </Link>
-          ) : null}
         </div>
       </div>
     </section>

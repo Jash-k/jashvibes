@@ -7,8 +7,8 @@
  * destination you removed on the other.
  *
  * `My List` is deliberately not here. The homepage is the catalogue now, and the rail's slots are
- * for the places you go to *find* something; the library is where you go to *resume*, and the focus
- * panel already links to it (`/my-list?tab=history`) whenever there is something half-watched.
+ * for the places you go to *find* something, not for the shortlist you keep — the heart on any poster
+ * is the way in, and the watch page's ★ button is the way back out.
  */
 export const NAV_ITEMS = [
   { href: '/', label: 'Home', icon: 'home', accent: 'text-red-400', hint: 'Movies & series' },

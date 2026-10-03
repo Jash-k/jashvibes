@@ -11,7 +11,7 @@
  * verifies. It therefore lives behind the app's AuthGate and the admin gate.
  */
 
-import { startTransition, useEffect, useMemo, useState } from 'react';
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import JashPlayer from '@/components/player/JashPlayerLazy';
 import PlayerIncidents from '@/components/player/PlayerIncidents';
 import { createLiveTvPolicy } from '@/lib/player/policy/liveTv';

@@ -7,7 +7,7 @@ import { createStreamPolicy } from '@/lib/player/policy/stream';
 import { detectKind } from '@/lib/player/kind';
 import { useWatchContext, useWatchSources, requestJson } from '@/hooks/useWatch';
 import { WATCH_PROVIDERS, parseIdentity } from '@/lib/watch/policy';
-import { makeWatchKey, isFavoriteItem, toggleFavoriteItem, upsertHistoryEntry, useLibraryVersion } from '@/lib/watchStore';
+import { makeWatchKey, isFavoriteItem, toggleFavoriteItem, useLibraryVersion } from '@/lib/watchStore';
 import { claimMediaFocus } from '@/lib/player/mediaFocus';
 
 export default function UnifiedWatchPage() {
@@ -43,7 +43,6 @@ export default function UnifiedWatchPage() {
   useEffect(() => {
     if (embed && sources.status === 'ready') { claimMediaFocus('watch'); setFrameLoaded(false); }
   }, [embed, active?.url, sources.status]);
-  useEffect(() => { if (entry && sources.status === 'ready') upsertHistoryEntry(entry); }, [entry, sources.status]);
   useEffect(() => {
     if (context?.episodes?.length && !context.episodes.some((e) => e.season === season && e.episode === episode)) {
       setSeason(context.episodes[0].season); setEpisode(context.episodes[0].episode);
@@ -82,7 +81,7 @@ export default function UnifiedWatchPage() {
           <div className="relative aspect-video flex-1 min-h-0 bg-black">
             {loaded.status === 'loading' || sources.status === 'loading' ? <div className="absolute inset-0 grid place-content-center gap-3 p-6 text-center"><span className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-zinc-600 border-t-amber-300"/><p className="text-sm text-zinc-400">{loaded.status === 'loading' ? 'Matching title and episode…' : `Checking ${sources.provider}…`}</p></div> : null}
             {loaded.status === 'error' || sources.status === 'error' ? <div className="absolute inset-0 grid place-content-center p-6 text-center"><h2 className="text-xl font-bold">Source unavailable</h2><p role="alert" className="mt-3 max-w-xl text-sm text-zinc-400">{loaded.error || sources.error}</p><p className="mt-3 text-xs text-zinc-500">Use Retry / Try next source, or select a provider above.</p></div> : null}
-            {sources.status === 'ready' && active && !embed ? <JashPlayer key={`${active.url}:${sources.retryKey}`} playbackPolicy={playbackPolicy} source={{ url: active.url, kind: active.kind || detectKind(active.url) }} display={{ title: context?.title, poster: context?.backdropUrl || context?.posterUrl, aspect: 'fill' }} library={{ watchKey: key, entry }} fullscreenTargetRef={shell} lineup={{ nextEpisode: nextEpisode ? { label: `S${nextEpisode.season} E${nextEpisode.episode}`, onPlay: () => pickEpisode(`${nextEpisode.season}:${nextEpisode.episode}`) } : null }} on={{ onFatal: sources.fatal, onQualityApi }} /> : null}
+            {sources.status === 'ready' && active && !embed ? <JashPlayer key={`${active.url}:${sources.retryKey}`} playbackPolicy={playbackPolicy} source={{ url: active.url, kind: active.kind || detectKind(active.url) }} display={{ title: context?.title, poster: context?.backdropUrl || context?.posterUrl, aspect: 'fill' }} library={{ watchKey: key, entry, resume: false, persist: false }} fullscreenTargetRef={shell} lineup={{ nextEpisode: nextEpisode ? { label: `S${nextEpisode.season} E${nextEpisode.episode}`, onPlay: () => pickEpisode(`${nextEpisode.season}:${nextEpisode.episode}`) } : null }} on={{ onFatal: sources.fatal, onQualityApi }} /> : null}
             {(trailer || sources.status === 'ready' && active && embed) ? <iframe key={`${trailer?.embedUrl || active.url}:${sources.retryKey}`} title={trailer?.name || context?.title || 'Embedded player'} src={trailer?.embedUrl || active.url} className="absolute inset-0 h-full w-full border-0" onLoad={() => setFrameLoaded(true)} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" sandbox={popupBlocker ? 'allow-scripts allow-same-origin allow-forms allow-presentation' : undefined} referrerPolicy="origin-when-cross-origin" allowFullScreen /> : null}
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 bg-zinc-900/80 px-4 py-3 text-xs text-zinc-400"><span>{sources.provider ? `${WATCH_PROVIDERS.find((p) => p.id === sources.provider)?.name || sources.provider} · ` : ''}{embed ? `${frameLoaded ? 'Frame opened' : 'Frame opening'} — video playback cannot be verified by the app` : 'Native player · bounded recovery'}</span><button type="button" onClick={() => shell.current?.requestFullscreen?.()} className="text-zinc-200">Fullscreen ↗</button></div>

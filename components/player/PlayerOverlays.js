@@ -65,50 +65,6 @@ export const HoldBadge = memo(function HoldBadge({ rate }) {
   );
 });
 
-/**
- * Resume prompt. The engine computed the position; this only asks what to do.
- * `auto` prompts already seeked (so the buttons say "start over / keep going"),
- * non-auto prompts offer the seek. Both paths keep the player usable.
- */
-export const ResumeToast = memo(function ResumeToast({ prompt, onAccept, onDismiss, onStartOver, onNever }) {
-  if (!prompt) return null;
-  return (
-    <div
-      data-dvp="controls"
-      className="absolute left-1/2 top-4 z-30 flex max-w-[92%] -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-2xl border border-fuchsia-400/30 bg-black/85 px-4 py-2.5 shadow-[0_12px_44px_rgba(0,0,0,0.6)] backdrop-blur sm:gap-3"
-    >
-      <p className="text-xs font-bold text-white sm:text-sm">
-        {prompt.auto ? 'Resumed from ' : 'You stopped at '}
-        <span className="font-black text-fuchsia-300">{fmtTime(prompt.seconds)}</span>
-      </p>
-      {prompt.auto ? (
-        <button type="button" onClick={onStartOver} className="min-h-[44px] rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-white transition hover:border-fuchsia-400/50 hover:text-fuchsia-200">
-          Start over
-        </button>
-      ) : (
-        <>
-          <button type="button" onClick={onAccept} className="min-h-[44px] rounded-full border border-fuchsia-400/50 bg-fuchsia-500/20 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-fuchsia-100 transition hover:bg-fuchsia-500/30">
-            Resume
-          </button>
-          <button type="button" onClick={onDismiss} className="min-h-[44px] rounded-full border border-white/15 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-white/75 transition hover:text-white">
-            From the start
-          </button>
-        </>
-      )}
-      {onNever ? (
-        <button
-          type="button"
-          onClick={onNever}
-          title="Stop asking for this title. Progress keeps saving, playback just starts from 0."
-          className="min-h-[44px] rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider text-white/50 transition hover:text-white"
-        >
-          Never for this title
-        </button>
-      ) : null}
-    </div>
-  );
-});
-
 const ACTION_COPY = {
   retry: 'Try again',
   'rotate-source': 'Next source',

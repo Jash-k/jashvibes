@@ -39,7 +39,6 @@ import {
   LockedOverlay,
   NextEpisodePill,
   NoticeBar,
-  ResumeToast,
   ScrubPreview,
   SkipButton,
   Spinner,
@@ -183,14 +182,11 @@ export function JashPlayer(props) {
     policy: builtPolicy,
     sourceKey,
     watchKey: library.watchKey || '',
-    resume: library.resume !== false,
-    persistProgress: Boolean(library.watchKey) && library.persist !== false,
     fallbackUrls: sourceUrls,
     activeFallbackIndex: rotateIndex,
     autoPlay,
     allowNativeHls,
     mediaSession: display.mediaSession || null,
-    libraryEntry: library.entry || null,
     handlers: {
       onStatus: on.onStatus,
       onError: on.onError,
@@ -246,7 +242,7 @@ export function JashPlayer(props) {
   const [preview, setPreview] = useState(null);
   const [frozenFrame, setFrozenFrame] = useState('');
 
-  const { status, statusMessage, attemptNote, errorInfo, playing, time, model, prefs, tracks, stats, resumePrompt } = engine;
+  const { status, statusMessage, attemptNote, errorInfo, playing, time, model, prefs, tracks, stats } = engine;
   useEffect(() => {
     on.onQualityApi?.({ heights: [...new Set((tracks.video || []).map((v) => Number(v.height)).filter(Boolean))].sort((a, b) => b - a), auto: prefs.qualityAuto, height: prefs.qualityHeight, select: engine.selectQualityHeight, setAuto: engine.setAutoQuality });
   }, [tracks.video, prefs.qualityHeight, prefs.qualityAuto, on.onQualityApi, engine.selectQualityHeight, engine.setAutoQuality]);
@@ -352,7 +348,7 @@ export function JashPlayer(props) {
     locked ||
     status === 'recovering' ||
     status === 'loading';
-  const toastIsActionable = Boolean(resumePrompt) || Boolean(errorInfo) || skipCountdown !== null || Boolean(notice);
+  const toastIsActionable = Boolean(errorInfo) || skipCountdown !== null || Boolean(notice);
   busyRef.current = controlsAreBusy || toastIsActionable;
   const debugPlayer = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('jvdebug');
   useEffect(() => {
@@ -799,10 +795,6 @@ export function JashPlayer(props) {
     return () => el.removeEventListener?.('timeupdate', onTime);
   }, [abLoop.a, abLoop.b, videoEl]);
 
-  // Resume prompts deserve a stronger buzz: the user must decide.
-  useEffect(() => {
-    if (resumePrompt && !resumePrompt.auto) vibrate([15, 40, 15]);
-  }, [resumePrompt, vibrate]);
 
   // A first real gesture restores sound if autoplay forced us muted.
   const unmuteAfterGesture = engine.unmuteAfterGesture;
@@ -1066,7 +1058,7 @@ export function JashPlayer(props) {
 
       {debugPlayer ? (
         <div className="pointer-events-none absolute left-2 top-2 z-[100] max-w-[75%] whitespace-pre-wrap rounded-lg bg-black/85 p-2 font-mono text-[10px] leading-relaxed text-lime-200">
-          {JSON.stringify({ visible, playing, status, menu: Boolean(menu), ctx: Boolean(contextMenu), scrub: scrubValue, jog: jog?.seconds ?? null, hold2x, locked, notice: Boolean(notice), skip: skipCountdown, resume: Boolean(resumePrompt), err: Boolean(errorInfo), t: Math.round(Number(time) || 0) }, null, 1)}
+          {JSON.stringify({ visible, playing, status, menu: Boolean(menu), ctx: Boolean(contextMenu), scrub: scrubValue, jog: jog?.seconds ?? null, hold2x, locked, notice: Boolean(notice), skip: skipCountdown, err: Boolean(errorInfo), t: Math.round(Number(time) || 0) }, null, 1)}
         </div>
       ) : null}
 
@@ -1150,13 +1142,6 @@ export function JashPlayer(props) {
         }
       />
 
-      <ResumeToast
-        prompt={resumePrompt}
-        onAccept={engine.resumeFromPrompt}
-        onDismiss={engine.startOver}
-        onStartOver={engine.startOver}
-        onNever={library.watchKey ? engine.neverResume : null}
-      />
 
       {markSkipTarget ? <SkipButton label={markSkipTarget.label} side="right" onClick={() => engine.seekTo(markSkipTarget.end + 0.5)} /> : null}
 
