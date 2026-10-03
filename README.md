@@ -57,6 +57,21 @@ The image uses Node 22, Next standalone output and explicit `HOSTNAME=0.0.0.0` /
 
 Do not expose MongoDB directly to browsers. Use a persistent managed database; a container filesystem is not the mapping store. Multiple app replicas can each run the in-process scheduler; use a single scheduler instance or `LIVE_SYNC_MINUTES=0` on the others.
 
+## Database upkeep
+
+```bash
+npm run db:audit                                  # read-only: duplicates, dead channels, unused indexes
+npm run db:clean                                  # safe tier — duplicates, channels whose source is gone, counters, indexes
+npm run db:clean -- --all                         # + the app's own unused / broken / not-seen / hidden rules
+npm run db:clean -- --drop media                  # + drop a named legacy or unknown collection
+```
+
+Dry by default: the audit changes nothing and every write mode prints its plan first. Favourites,
+manual channel maps, guide overrides, catalogue overrides and manual title matches are never
+removed, and VOD items are only ever reported — `/api/vod` still lists them. Uses the same
+`DB` → `DB_URI` → `MONGODB_URI` chain as the app, so it runs from your machine or a host shell.
+See [database maintenance](docs/DATABASE-MAINTENANCE.md).
+
 ## Upgrade from 10.9
 
 1. **Back up MongoDB** and exported Live configuration first.

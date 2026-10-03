@@ -7,6 +7,7 @@ import { applyOverridesToPayload, loadOverrideMap } from '@/lib/catalogAdmin';
 import { parseReleaseQuality, labelForTier } from '@/lib/quality';
 import {
   DEFAULT_MAX_CACHE_LIMIT,
+  DEFAULT_PAGE_LIMIT,
   SYNC_INTERVAL_MS,
   cacheAgeMs,
   clampNumber,
@@ -23,7 +24,6 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 let backgroundSyncPromise = null;
-const DEFAULT_PAGE_LIMIT = 15;
 
 
 function hasTMDBConfig() {

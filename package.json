@@ -6,6 +6,8 @@
     "dev": "next dev --webpack -H 0.0.0.0",
     "build": "next build --webpack",
     "start": "node scripts/start.cjs",
+    "db:audit": "node scripts/db-maintenance.cjs",
+    "db:clean": "node scripts/db-maintenance.cjs --safe",
     "check": "node scripts/check-source.cjs"
   },
   "dependencies": {
