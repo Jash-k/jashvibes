@@ -1324,7 +1324,10 @@ export function JashPlayer(props) {
                 behind breakpoints and stuffed the rest into a settings sheet;
                 every one of these is reachable on every device, and each is
                 rendered only when it can actually do something. */}
-            <button
+            {/* Fullscreen is the film and the transport. The quality/source panel
+                belongs to the page, so its door is not rendered while the frame
+                owns the screen. */}
+            {!isFullscreen ? <button
               type="button"
               onClick={() => setMenu(menu === 'quality' ? null : 'quality')}
               aria-haspopup="dialog"
@@ -1338,7 +1341,7 @@ export function JashPlayer(props) {
                 <Icon d={PATHS.gear} className="h-4 w-4" />
                 <span className="hidden sm:inline">{qualityLabel}</span>
               </span>
-            </button>
+            </button> : null}
 
             <button
               type="button"

@@ -23,8 +23,8 @@ import { claimMediaFocus } from '@/lib/player/mediaFocus';
  *
  * Nothing about resolution changed: `useWatchContext` and `useWatchSources` are
  * untouched, every handler is the same call it was, and the bar hides itself in
- * fullscreen (`fullscreen:hidden`) because the player brings its own chrome and
- * the frame is the point there.
+ * fullscreen because the frame is the point there — the player brings its own
+ * chrome, and a second copy of the controls only ever fought it.
  */
 
 /** "← Back" returns to the catalogue the title came from. */
@@ -149,6 +149,23 @@ export default function UnifiedWatchPage() {
   const providerName = sources.provider ? (WATCH_PROVIDERS.find((p) => p.id === sources.provider)?.name || sources.provider) : '';
   const watched = isFavoriteItem(key);
 
+  /*
+   * Fullscreen state, observed rather than assumed.
+   *
+   * The bar below the picture carried `fullscreen:hidden`, which is the
+   * `:fullscreen` pseudo-class — and the element that actually goes fullscreen
+   * is the frame, not the bar, so the rule never matched and the Playback panel
+   * rode along inside fullscreen. One listener, one boolean, no guessing.
+   */
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const apply = () => setIsFullscreen(Boolean(document.fullscreenElement || document.webkitFullscreenElement));
+    const events = ['fullscreenchange', 'webkitfullscreenchange'];
+    apply();
+    events.forEach((name) => document.addEventListener(name, apply));
+    return () => events.forEach((name) => document.removeEventListener(name, apply));
+  }, []);
+
   const art = context?.backdropUrl || context?.posterUrl || '';
 
   return (
@@ -196,10 +213,12 @@ export default function UnifiedWatchPage() {
           ) : null}
           <div ref={shell} className="jv-cinema-frame jv-surface flex flex-col overflow-hidden rounded-tile fullscreen:h-dvh fullscreen:w-screen fullscreen:rounded-none">
           <div className="relative aspect-video min-h-0 flex-1 bg-black">
-            <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-2 px-3.5 py-3">
-              {providerName ? <span className="jv-chip jv-chip-info">{providerName}</span> : <span />}
-              {embed ? <span className="jv-chip jv-chip-warn">Embed</span> : null}
-            </div>
+            {!isFullscreen ? (
+              <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-2 px-3.5 py-3">
+                {providerName ? <span className="jv-chip jv-chip-info">{providerName}</span> : <span />}
+                {embed ? <span className="jv-chip jv-chip-warn">Embed</span> : null}
+              </div>
+            ) : null}
 
             {busy ? (
               <div role="status" className="absolute inset-0 grid place-content-center gap-3 p-6 text-center">
@@ -264,8 +283,10 @@ export default function UnifiedWatchPage() {
             ) : null}
           </div>
 
-          {/* control bar — below the picture, hidden in fullscreen ------- */}
-          <div className="flex flex-wrap items-end gap-3 border-t border-line-1 bg-ink-1 p-3.5 fullscreen:hidden">
+          {/* control bar — below the picture. Not rendered while the frame owns the
+              screen: fullscreen is the film, and a hidden button is still focusable. */}
+          {!isFullscreen ? (
+          <div className="flex flex-wrap items-end gap-3 border-t border-line-1 bg-ink-1 p-3.5">
             <div ref={playbackRef} className="relative min-w-[15rem] flex-1 sm:flex-none">
               <p className="jv-eyebrow mb-1.5">Playback</p>
               <button
@@ -371,18 +392,8 @@ export default function UnifiedWatchPage() {
               <button type="button" onClick={() => { setTrailer(null); sources.next(); }} className="jv-btn jv-btn-marquee">Next source →</button>
             </div>
           </div>
+          ) : null}
 
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line-1 bg-ink-2 px-3.5 py-2.5 text-[11px] font-semibold text-txt-4">
-            <span>
-              {providerName ? `${providerName} · ` : ''}
-              {embed
-                ? `${frameLoaded ? 'Frame opened' : 'Frame opening'} — video playback cannot be verified by the app`
-                : 'Native player · bounded recovery'}
-            </span>
-            <button type="button" onClick={() => shell.current?.requestFullscreen?.()} className="font-black text-txt-2 underline-offset-4 hover:underline">
-              Fullscreen ↗
-            </button>
-          </div>
         </div>
         </div>
 

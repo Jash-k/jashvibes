@@ -1,16 +1,16 @@
 {
   "version": "11.0.0",
-  "baselineCommit": "9554091fd88e01cd5bfc157d1b85f14650b0524f",
-  "verifiedOn": "2026-10-02",
-  "authorization": "User finalized defaults and explicitly selected Proceed",
+  "branch": "deploy-ready",
+  "baselineCommit": "66924b2ef53df3335a8aac900733f97d90010b76",
+  "verifiedOn": "2026-10-03",
+  "authorization": "User selected the Control Deck vault direction and requested the deployable zip",
   "verification": {
     "productionBuild": "passed",
     "standaloneStartupAndAssets": "passed",
-    "sourceModules": 205,
+    "sourceModules": 209,
     "localImportErrors": 0,
-    "regressionTestsPassed": 43,
-    "productionBrowserFlowsPassed": 13,
-    "productionHttpChecksPassed": 7,
+    "regressionTestsPassed": "not shipped in this bundle",
+    "productionBrowserFlowsPassed": 31,
     "npmKnownVulnerabilities": 0,
     "realProductionDatabaseTested": false,
     "realDRMPlaybackTested": false,
@@ -22,12 +22,8 @@
       "sha256": "beb85ce7296ad30984138184ff063cc76339354e5b30d42493e16e1bf3c2d605"
     },
     ".env.example": {
-      "bytes": 1328,
-      "sha256": "5c6b55e18e7d36e425283b2173b2883070d1359cad19959b68acada051629779"
-    },
-    ".github/workflows/ci.yml": {
-      "bytes": 487,
-      "sha256": "9b19ca7de196b9108924b999f5cebadd1a4197a36abb7856a9844f7ee3d3365d"
+      "bytes": 12098,
+      "sha256": "996bd6ba85d1782837b0ac8f848e3c19b1b0ce5b030bae95ace15fdc9c421e17"
     },
     ".gitignore": {
       "bytes": 395,
@@ -46,16 +42,16 @@
       "sha256": "078bb2a73e8e64f74b99ec3c320b663f5a57c67b7ffcbe715b0c3595a3bf66e2"
     },
     "README.md": {
-      "bytes": 6375,
-      "sha256": "36c038ac7324d7bb5f8fc315026562ce69f6edef39e53e012248094360aac331"
+      "bytes": 7308,
+      "sha256": "bbf9ae191438da394d37049833e76239c81d8b52edf0bcfd5641262d46c12c0b"
     },
     "app/admin/page.js": {
       "bytes": 482,
       "sha256": "c4a1efe34a3c6a5d1c9dea3767c0cba57850125a2d6866920ccd79cfaad2966a"
     },
     "app/api/admin/auth/route.js": {
-      "bytes": 3011,
-      "sha256": "01629953f7adf7a9a8279916515f5d4d71b1998afbcba32ccf1f8d7592e1af76"
+      "bytes": 3548,
+      "sha256": "edb8c26d21cde69e5f1c5fc4bd90782e6a4228dc055367835193c0c46de61cbe"
     },
     "app/api/admin/catalog/override/route.js": {
       "bytes": 1822,
@@ -70,8 +66,8 @@
       "sha256": "33f108c650ca122db2c74fd31ab1305eb9cfac11ab3af42454df9ddb18760fe4"
     },
     "app/api/admin/catalog/sync/route.js": {
-      "bytes": 1658,
-      "sha256": "1f8e3896204f197052d04ff7434342e4891ab1c00308067b506fec8695d7c1a3"
+      "bytes": 1613,
+      "sha256": "e9ea5aa6433ab9e553a28e4b52058683b16d6f3bc7ce9c7c437a99506f86258c"
     },
     "app/api/admin/stremio/addons/check/route.js": {
       "bytes": 2283,
@@ -110,8 +106,8 @@
       "sha256": "efe78ed7ef5d1c32b584de5428a227b119b961f03bdfcdbed79f825c2cef54e0"
     },
     "app/api/cron/tamilmv/route.js": {
-      "bytes": 2552,
-      "sha256": "07ec22c10284a7e41034a91de92a7d0a01191882d0e61d9e57e1cb6f12d733e1"
+      "bytes": 2468,
+      "sha256": "14f42ff57348a9218f7a8f0852a192555527b16b17aabb92dfd4d25d616a926d"
     },
     "app/api/debug-scrapers/route.js": {
       "bytes": 1425,
@@ -258,8 +254,8 @@
       "sha256": "93df31181bd726d7ab1f6b3b9cc5cbee599b6f5e3a8ce27b3bb06cfecc2e6fb0"
     },
     "app/api/search/route.js": {
-      "bytes": 7890,
-      "sha256": "177ade505a601d4800300d07e77656529ed919c8c359017baeddf3ee7534840e"
+      "bytes": 7800,
+      "sha256": "91b675833dadb3f6f8e46310da4ed1fe789ac5165c8ab406d008561179cbf12e"
     },
     "app/api/seed/route.js": {
       "bytes": 5819,
@@ -286,16 +282,16 @@
       "sha256": "5d94eacccbd4c884c9f9e49c2ef489f527cdea1829e52e0944dfd27f4f51504b"
     },
     "app/api/stremio/pins/route.js": {
-      "bytes": 2430,
-      "sha256": "c044298ee40aae6c472188562dc047ec21d552b2899f8874455d410f96d49cbb"
+      "bytes": 4698,
+      "sha256": "040c960c9a4d7e5513284ee00c40339e3fe18c44a8bf2bfd941349b9451f9aba"
     },
     "app/api/stremio/stream/route.js": {
       "bytes": 1085,
       "sha256": "e1991432ffffa67de47c8b479f8af6d925edf9509b22ea361e0b852c0729d686"
     },
     "app/api/tamilmv/route.js": {
-      "bytes": 14118,
-      "sha256": "9dcffd39e306ca23f5b73ed0b2b931b4b46bcab52b563ecbd3ae989c322a7f26"
+      "bytes": 9507,
+      "sha256": "9b3bd7effb78e342faca9848785a82df64d5ec021ec190073db2ccd1c3809ca0"
     },
     "app/api/title-match/route.js": {
       "bytes": 2163,
@@ -354,16 +350,16 @@
       "sha256": "6527ba1642461be7866a0391338466eb1c87608716178e80b87f6165134f6e5c"
     },
     "app/classics/page.js": {
-      "bytes": 18203,
-      "sha256": "7c4f2806b79474d3f2e883ba241da32c88c1d6ef6611536ef3a22e5ee5de9efe"
+      "bytes": 18573,
+      "sha256": "6eb5cb1f270981f3cd90fe4fd24ed76bbe77f896e18e7f0d98910d5cb52b3a85"
     },
     "app/embed-browser/page.js": {
-      "bytes": 10915,
-      "sha256": "31fb88991e7c01c61f812dc58125aa3b1ddd15797bb45be9c731fa1ac0b2a464"
+      "bytes": 10773,
+      "sha256": "30b67ee738cb91be92334cccf785dc7d47bf212f9eeabee64365b4b98c218b1e"
     },
     "app/error.js": {
-      "bytes": 2692,
-      "sha256": "a0e9d7cf588e3f3e189120e84037aa98cbe4e81ebc110191d0f4db73f0f45a9f"
+      "bytes": 2689,
+      "sha256": "e135c9786193b8b882afeddee79390b331a7b4e68fde7cf8d4242e7986a02c84"
     },
     "app/fonts/playfair-display-variable.woff2": {
       "bytes": 38404,
@@ -374,32 +370,32 @@
       "sha256": "fac83046ecd4144267e5804122aa218b5a09aecad5b0c77dea9eb0cd45de6190"
     },
     "app/globals.css": {
-      "bytes": 96187,
-      "sha256": "c6e987d3a1973639df25e30605985d7da181c8683dc5701efecc481114b58568"
+      "bytes": 131279,
+      "sha256": "84f1517bb9c422aca85d889a7e4bb0a4f51097816d7fc857394d0e77cd95360a"
     },
     "app/layout.js": {
-      "bytes": 2195,
-      "sha256": "f57331879b8b292f959bed21111b72ad844d409ef0cceb849617e1c84b7235e8"
+      "bytes": 2154,
+      "sha256": "c290a72d01624373faed42ada26e323f2e032aaa165ba1cae41d99976e49b0d0"
     },
     "app/live/page.js": {
-      "bytes": 34984,
-      "sha256": "2dab87c8fa425a1399ba6913729f0e31353f2e3a67c89768228375fe4fc105d2"
+      "bytes": 35453,
+      "sha256": "2212abe33e1c04221e27b359c99f464abaa6e57cf1f546d2194a989d1497fee2"
     },
     "app/music/page.js": {
       "bytes": 321,
       "sha256": "d168a28b685daecb2135cadef19212f80a33f3edf19cdf35316c99e4a67e346d"
     },
     "app/my-list/page.js": {
-      "bytes": 8359,
-      "sha256": "ab916dd8bbb57928ce3ef13442b77fc9c5fba1324fc6cd509623f5263d8189a6"
+      "bytes": 5468,
+      "sha256": "77dd6bfaba116564a0de90c2c06e9c7782e3d6e0c183498bc63ce681bf06fc69"
     },
     "app/not-found.js": {
       "bytes": 2071,
       "sha256": "f52e939f9dfacd7bb1ea8f908d53c49c123845ce036879f133877f5b51ccdede"
     },
     "app/page.js": {
-      "bytes": 31357,
-      "sha256": "0ebdb0d1f0c7b2c6ae3ab16aae797a576059cfbf1be17e41522889ecee7a0a5a"
+      "bytes": 1430,
+      "sha256": "64cf3769cd48e151cce34c9e2bff7bc802fed917b18c8bf3bcb3017d9901f960"
     },
     "app/stremio-watch/[type]/[id]/page.js": {
       "bytes": 342,
@@ -410,28 +406,28 @@
       "sha256": "adfb9c1b1b474bd170627339a036b0b79351231e08754bddb31ef4fbe3280baa"
     },
     "app/stremio/page.js": {
-      "bytes": 28370,
-      "sha256": "a9368988500b577d4eaac17ecde531771dca2510c7f27e93ee288e92c2773ae8"
+      "bytes": 28720,
+      "sha256": "d24013ed7e1e45f51733494f372530c215d63a8e89e7fe4002a06952edb5d1bc"
     },
     "app/vault/page.js": {
-      "bytes": 23827,
-      "sha256": "4ef9f4da2882b342a0700a2443cd114b1edbceda94d153cc9b656cada824e2ec"
+      "bytes": 31243,
+      "sha256": "0316dcd5e2045cc0c39cde3e0321fc7498cbdebd4c041b1c598c9b6fe6af4596"
     },
     "app/watch/[type]/[tmdbId]/page.js": {
-      "bytes": 13949,
-      "sha256": "5842387e08e1551ea6f0c47c1f0873f7b56e8d99054cbf25ec7c4e9c24355c2e"
+      "bytes": 25241,
+      "sha256": "bf8df78740fc78957e39365c7efd2c57fe65dc3f2a1ae3b3f4b5c553f270ed3f"
     },
     "components/AuthGate.js": {
-      "bytes": 10356,
-      "sha256": "9008b764ec590e6aa340e0ba2561b7324edd99bca15d17dbfaf2925f2ae55a39"
+      "bytes": 10239,
+      "sha256": "26e6d6fff79ff3aa65b521b85c48a9b61672fb2ee5a80ef0574bcf7c363099fc"
     },
     "components/BrandLogo.js": {
       "bytes": 1705,
       "sha256": "98f1138b2ad2fbb7b46f526a5072165c92c4b8ffc5bdfc1dd4465160214a1e21"
     },
     "components/CommandPalette.jsx": {
-      "bytes": 11170,
-      "sha256": "1ca862af000fabbfd168d31a1fcae04a94bcfcec4bfbeddab52cc69eacef0e39"
+      "bytes": 11167,
+      "sha256": "1ce25c15cc5a37b0e0e708eed11602eaa61a35a943554177528a9cb8585b292a"
     },
     "components/EmbedSiteLinks.jsx": {
       "bytes": 1971,
@@ -445,9 +441,9 @@
       "bytes": 4173,
       "sha256": "a05602ab5755dd1023299887e5de90c6ae3f26ee18fea2facb29e864012dae88"
     },
-    "components/LibraryRows.js": {
-      "bytes": 6302,
-      "sha256": "e3cd8c4c62e2b9247096503d95dc35f854832531883cce49ce8df30fb083f069"
+    "components/LibraryCard.js": {
+      "bytes": 2989,
+      "sha256": "e049dae38798de29ea2c443901b2aa0ffd41cb6bd9a6bdf88960342c8c04eb62"
     },
     "components/MobileDock.jsx": {
       "bytes": 2531,
@@ -482,32 +478,36 @@
       "sha256": "22e09c0be4c383e853d43bb69a656d1303c36a8b6812faca3ad49329e9ec6647"
     },
     "components/admin/admin.css": {
-      "bytes": 13242,
-      "sha256": "c7c2ea50f563d85693fe49de2153e61064b3e54843b2501a9c07d368c29ee1f9"
+      "bytes": 13328,
+      "sha256": "3c20263c7cf0ebcfc6ee4117a01429f0cbca9a5841ec7e6279949e2946bbf02f"
+    },
+    "components/home/HomeClient.jsx": {
+      "bytes": 27056,
+      "sha256": "38865da932d87d1d657614665c5036d474ca0fe1083013bfd71eb67ee06723c0"
     },
     "components/live/LiveGuide.js": {
       "bytes": 15486,
       "sha256": "121de67ec5ff92b4024a7b9f32a672d020dad458a47d0cb6c72cad2444e56570"
     },
     "components/live/LiveServicePanel.js": {
-      "bytes": 61321,
-      "sha256": "badccd47549891c0d05ada32bdcdf161d7014b584a1d4f30a8f868e616fc257e"
+      "bytes": 61329,
+      "sha256": "d060e2f38d4656fe55790dbc75267ab7545cfd7033728d2133e8cf41e17df973"
     },
     "components/music/MusicCurtains.jsx": {
-      "bytes": 13672,
-      "sha256": "2f1f788167e4838b415bdc939316fd5b46324b898ab52ab186d642cd8325fb7f"
+      "bytes": 15016,
+      "sha256": "7e647417b485849f5650ba935939270fbdd64e342ec602186b6d23821a427106"
     },
     "components/music/MusicProvider.jsx": {
-      "bytes": 41939,
-      "sha256": "8ee5dd9619d4c5f8822637ab324fd60f1ee7e643db4125cdb16a928ebcf6d999"
+      "bytes": 42510,
+      "sha256": "269a9fd0dd16b26e11a80319f3328cad5c7406fe9c6e9c93f3c6a3eb0eb42775"
     },
     "components/navItems.js": {
-      "bytes": 2345,
-      "sha256": "62f48991190b6325f7e0df1578f1a01d1195cb0407984d5cee58cfa475d0d40d"
+      "bytes": 2324,
+      "sha256": "290fbb0728562f31e865b605a372504aad73550e6ebfbd2710ace91d01ecdc9b"
     },
     "components/player/JashPlayer.js": {
-      "bytes": 60102,
-      "sha256": "d7b62e43b03cace0a6d1e8abed9056cd0c66393cfcfca8848f57d9b0c0e6984f"
+      "bytes": 61687,
+      "sha256": "f2f2bd36bd004ac47773a2ffc8ea471a2daac429c4845967a6060ae34a1df132"
     },
     "components/player/JashPlayerLazy.js": {
       "bytes": 1580,
@@ -515,7 +515,7 @@
     },
     "components/player/PlayerBrowser.js": {
       "bytes": 9055,
-      "sha256": "7e459d20b0cad16d86d17ea84527bede8b13309a5f1542e11bb84957af7da909"
+      "sha256": "633db05374a4e1ff5dee3ef6331330fe1d8087485c4e7521ed568e14760f39ca"
     },
     "components/player/PlayerIcons.js": {
       "bytes": 5193,
@@ -526,16 +526,16 @@
       "sha256": "20e7b165cac0e5328c67d72113ae539b0be7badff9c953cc65db89a2b7076946"
     },
     "components/player/PlayerMenus.js": {
-      "bytes": 11637,
-      "sha256": "8f7c7a691a9ba49a1c4afe7268ec4fe6e0e2c91320a6dbae41eaa90c7cc60892"
+      "bytes": 12172,
+      "sha256": "52f30d7f12c47700abb4acb85a0cb0851c199cfab88f13d606b35b8b084f881d"
     },
     "components/player/PlayerOverlays.js": {
-      "bytes": 17471,
-      "sha256": "4aad576ef1f076ec5ac0ac1821ebfc53a38766c99958d14bc80027aa09d6991c"
+      "bytes": 16040,
+      "sha256": "274099717e203d0df7dbc085ce811b90d9cd664036c4576cf37bc03175dbb3cc"
     },
     "components/player/usePlaybackEngine.js": {
-      "bytes": 55871,
-      "sha256": "b3f4a9d6b1537e0b6f54d645ef768a5d88b3299391a98fc1fc8c141d72cebb2d"
+      "bytes": 52883,
+      "sha256": "04127feec143df67a16fc08ced32775e3d830e85aeabce4e31213bce9a23f95b"
     },
     "components/player/usePlayerEnvironment.js": {
       "bytes": 7255,
@@ -546,8 +546,8 @@
       "sha256": "c72b453fbce4ea21108498be27ae3bdf88e245a70a6f6784c2a669cb77d68775"
     },
     "components/rail/RailFocus.jsx": {
-      "bytes": 4251,
-      "sha256": "0c457f7fe9031c48e69b75faea10c92d36732a15cda0e4dee13a5510385acab0"
+      "bytes": 4047,
+      "sha256": "daccc836e32e42e3f5f90a891197e3138b0d01a7020e8c8628cb9ce3680d1a78"
     },
     "components/rail/RailNav.jsx": {
       "bytes": 3776,
@@ -561,9 +561,17 @@
       "bytes": 3140,
       "sha256": "e74116039047a69b96df2752417bab3b6cfb4b7eb5802cab5ba4294eff886027"
     },
+    "docs/DATABASE-MAINTENANCE.md": {
+      "bytes": 5863,
+      "sha256": "a344a86ffa2e5faec4da50c8d1a07bb24905de6c73aa14190cff59e6169603d4"
+    },
+    "docs/DESIGN-SYSTEM.md": {
+      "bytes": 18929,
+      "sha256": "e132e0ba531c3adf0aac3d7065f8c730b5bbbb7c90a7bd99f26adc1696202416"
+    },
     "docs/VERIFICATION.md": {
-      "bytes": 3571,
-      "sha256": "76c1327eef6da3abff2e85675c7dad8ecb2746a03a6e2ac64d79b000352c74d5"
+      "bytes": 3898,
+      "sha256": "e1a53658161c2142cace5c2f9b30034abfd4f971b795e63402820942a1a424d8"
     },
     "hooks/useAudioPlayback.js": {
       "bytes": 2774,
@@ -590,12 +598,12 @@
       "sha256": "1743d5771ef5e05ebeeb6e596e198271744ce3e971324b86c671cbf0875610ed"
     },
     "lib/catalogAdmin.js": {
-      "bytes": 5187,
-      "sha256": "0674f3b0bd4915bf0094cd80f62c8193215a8c1b265f0b23b976115c2f8d4af1"
+      "bytes": 5653,
+      "sha256": "08d27fc134fb1656cac73ff7f9d82412b3dd2e2f2d3d96d081ec66c15b1ef618"
     },
     "lib/classicsDecade.js": {
-      "bytes": 9673,
-      "sha256": "8f080a7115e490fdbb4146bdbc0008ec77f6b9ca4089c63ea782328fdf1a4b49"
+      "bytes": 9680,
+      "sha256": "50aa600c1d7ddc1fc522f0670892b913a4cb209a4ed541834b83d9e043a18747"
     },
     "lib/clientCache.js": {
       "bytes": 1155,
@@ -605,9 +613,21 @@
       "bytes": 1381,
       "sha256": "8dddb650e37f4fc2ac9f091e0dc2fc4bad1862914592d851f0f8213ff237e3cb"
     },
+    "lib/dbMaintenance.cjs": {
+      "bytes": 32348,
+      "sha256": "307f188bc725aa4753a15c05a41a4581909fe7f199a4368b2cc31e210a008237"
+    },
     "lib/embedSites.js": {
       "bytes": 2914,
       "sha256": "41a10cf8217d45384f53e45fb41c2427cd5ceac9892ea3e60065917c1b53f1fb"
+    },
+    "lib/heroSlide.js": {
+      "bytes": 2780,
+      "sha256": "3c322aa5e69d67ebd4bb8909d9317a168f579ec54948fc23e407c3c110524a62"
+    },
+    "lib/homeHero.js": {
+      "bytes": 3404,
+      "sha256": "f4fd846d3c1183d94251a56397ba68b97be0ab21104ff0cc43495870cefe343d"
     },
     "lib/jioPlayback.js": {
       "bytes": 3406,
@@ -622,8 +642,8 @@
       "sha256": "82e8b06f8a650919a99037e563425d4035fa2c41fabe026c96eaa545265b8b60"
     },
     "lib/liveEpg.js": {
-      "bytes": 20731,
-      "sha256": "a86caf084382044877eeeee7e5c59de02da7636f61690bba0cbdad527d0ad3e7"
+      "bytes": 20693,
+      "sha256": "0637955c6ff062915dd9814d9dfc9c336bdbc92451304cc314ebda1c224c389d"
     },
     "lib/liveService.js": {
       "bytes": 15339,
@@ -658,8 +678,8 @@
       "sha256": "d68aee44b9388e08f79c4ce915b085be6557fee8f4902ef804b91bf15f54a802"
     },
     "lib/player/commands.js": {
-      "bytes": 9715,
-      "sha256": "e0f6e80d97bb4d033d62b13b8ae7361d214f2fe2f1aaf12e63b4eb24e2333502"
+      "bytes": 9758,
+      "sha256": "0c69763af137188bb702290b5e8360cb48a84bcf5f876a2ec99eafd3d30b0895"
     },
     "lib/player/errors.js": {
       "bytes": 12943,
@@ -670,8 +690,8 @@
       "sha256": "74b8be1c4fef55368ada456c492f75a441aed795aee1b38b9aeb6cf96453ddde"
     },
     "lib/player/kind.js": {
-      "bytes": 8450,
-      "sha256": "19d82892a54b28fb72cc2a63a6fc7046cb688c63d90d1489866fc40e5832dd15"
+      "bytes": 8411,
+      "sha256": "599306ffa03f3af3e4cc3558611557960ed562ca4b5e72fd3811a6b8e2700dc5"
     },
     "lib/player/labels.js": {
       "bytes": 5246,
@@ -698,16 +718,8 @@
       "sha256": "0a53812d792d446beea41fa14ab5b2b020f47a519a6a1587be26ba81eaff2461"
     },
     "lib/player/recovery.js": {
-      "bytes": 6864,
-      "sha256": "3ed12e1671f51e6ae6c90fda5ee1c8e5417819096d6c6526d84adf94ea7a7cb5"
-    },
-    "lib/player/resume.js": {
-      "bytes": 5251,
-      "sha256": "000078899f23a36ea634e4ec26d05d8c0f34aa7e762df12a2fc616f26bcb8f81"
-    },
-    "lib/player/sourcePriority.js": {
-      "bytes": 541,
-      "sha256": "231bb76e7a11e2b48cff2eb534a1f8c20020d83ab9a9160c3d0d3b0341679aea"
+      "bytes": 6856,
+      "sha256": "a49e0f16f4b7139a54d60e8459b1a00367edaefa7c57e5b84bf25c1029abeae2"
     },
     "lib/player/subtitles.js": {
       "bytes": 7036,
@@ -777,6 +789,10 @@
       "bytes": 14793,
       "sha256": "2d073dcdaeb4eeb0820e508c333fc28e3bf7dd175fa8a3178906d576b6a9eafa"
     },
+    "lib/tamilmvPayload.js": {
+      "bytes": 8874,
+      "sha256": "69514de036bcd9ddcf9ef2e8cfdfac1b75a3299f0ac17878bf3082c7f3b935cc"
+    },
     "lib/tamilmvScraper.js": {
       "bytes": 23496,
       "sha256": "a3e02b0964e023e535c3729fe6de1308e22524af9f52b95484ec88646e587976"
@@ -794,12 +810,20 @@
       "sha256": "581d272a496d5ae9daeb05caa911bf28e60b3cd2cdea3d9b110518d7e6069dad"
     },
     "lib/tmdbPoster.js": {
-      "bytes": 3160,
-      "sha256": "f351eaab151b4199d53a3399c819241b875213f970ab91f725fc35e3ed5cd4b9"
+      "bytes": 3499,
+      "sha256": "82e883dd6b9afb0bd991a9004ed04deeb39766ada88a9c0258db72d3cd448714"
+    },
+    "lib/useParallax.js": {
+      "bytes": 3906,
+      "sha256": "707269432f542af72de15d9d9926cd835274e77d4c58cc85188fb780f0cdfddc"
+    },
+    "lib/useReveal.js": {
+      "bytes": 3280,
+      "sha256": "fce9262ddc04450b373e926d05d5fea5d9b52b27f4181360f248a2943de419be"
     },
     "lib/vault.js": {
-      "bytes": 7554,
-      "sha256": "4d6087495b091cc789f173bd6845a713bd5e860c9d66cedaf169024ce9c2265f"
+      "bytes": 10913,
+      "sha256": "659a3c7295fb6ed26b50bb3fe390d533decbe91dbf8d10d0d466dcce6670bc8e"
     },
     "lib/vaultEpisodes.js": {
       "bytes": 1922,
@@ -826,8 +850,8 @@
       "sha256": "6dc582d869433263ff3d106794e030ea7c010cb1538a7d76078b2a493cdd878f"
     },
     "lib/watchStore.js": {
-      "bytes": 10634,
-      "sha256": "97f72d61b75dedd8c060bf4923b4d96bf5f88ed9174530d9434ea0c8737d9259"
+      "bytes": 7044,
+      "sha256": "ad378444a08678daa39f799615341787e2a6a56492945ede37d0fb4f2abaeeff"
     },
     "models/CatalogOverride.js": {
       "bytes": 1433,
@@ -878,24 +902,20 @@
       "sha256": "f0fccd2884427f129d15ca60c41c0c30341e5a5c0d0d26138d35f8f65a615749"
     },
     "package-lock.json": {
-      "bytes": 92628,
-      "sha256": "bdb91502549e93c93ca279528d666b5cbcca09d6fd07af9108b80ba8b9d61a0f"
+      "bytes": 91137,
+      "sha256": "1010207743ce23cef5a915fc338bcb7d521773b52f7cf5fa52028039c4e6895c"
     },
     "package.json": {
-      "bytes": 761,
-      "sha256": "9b2544488a601d06e722225ace947c31b6b895d296ff8cd0b7fd0fa6bc858606"
-    },
-    "playwright.config.cjs": {
-      "bytes": 554,
-      "sha256": "ac35860418fa934ea56bed0bb2772a5abed215c170dd71cccebfd99c71afb1ca"
+      "bytes": 752,
+      "sha256": "81c4aab6be0ae1c1be565fdb3c0e290ab658dbb94ef642194bea7694ba4e7677"
     },
     "postcss.config.js": {
       "bytes": 83,
       "sha256": "fa650b380adfabb151a0b352f7135e107e6352345f899060f1c5c231228f94bf"
     },
     "proxy.js": {
-      "bytes": 8049,
-      "sha256": "5b914f7357b2fe2735b73b1e6835651cc6fafc17e1c038ac3fe87f9203ddbd34"
+      "bytes": 8041,
+      "sha256": "c1ee6a3971f2d8fd5b85a24e60887740989ec9b65638bfbba8f9070a1e630846"
     },
     "public/brand/logo-source.webp": {
       "bytes": 105142,
@@ -949,6 +969,10 @@
       "bytes": 1168,
       "sha256": "77bee9d7716b0923bd453dc457716841f9fb5d5cc22186ba5dff8ff94c6e8778"
     },
+    "scripts/db-maintenance.cjs": {
+      "bytes": 10983,
+      "sha256": "54aba3d788b555d6c254d11ebf44aba628869021b2f13b6a0a19d785d784b4c3"
+    },
     "scripts/start.cjs": {
       "bytes": 1093,
       "sha256": "75dbe37f5fb95b515be19d6787a942a9fb16d1d06d00559c03aed37b541908e4"
@@ -958,24 +982,9 @@
       "sha256": "1effeaf67f5b0466bc54394a5a09bd1df2b0dc2211d13d2be91c6a3025cb65f4"
     },
     "tailwind.config.js": {
-      "bytes": 248,
-      "sha256": "3bdfad7205575f2812d337f224f4f9439b220c72efedd744604953b36cefb2c3"
-    },
-    "tests/browser/flows.spec.cjs": {
-      "bytes": 11715,
-      "sha256": "02ac301deba1e2ebe45e6ce17cbd905089c7e68af7365ed2c7d188e389c27db0"
-    },
-    "tests/fixtures/tone.wav": {
-      "bytes": 192044,
-      "sha256": "cc04b14200984b4eec505e09a060a26ec8a9be62212155a78014490894588416"
-    },
-    "tests/loader.cjs": {
-      "bytes": 5583,
-      "sha256": "2faeabfee69df96d2614b039c9cfd02c3d4f7f57fbfac50dff2d006ff901e6ae"
-    },
-    "tests/regression.test.cjs": {
-      "bytes": 8857,
-      "sha256": "3b35a06769099c4e0345909c7ee822d5b639d03852f34aee7aa2c7c111428eb8"
+      "bytes": 2374,
+      "sha256": "e520045280e0338cce8004b0fff111ec8c86e51e9979b3b8f45b7d34c3ecfd55"
     }
-  }
+  },
+  "manifestNote": "baselineCommit is the code state these hashes describe; the manifest itself is committed after it and lists no hash for itself."
 }

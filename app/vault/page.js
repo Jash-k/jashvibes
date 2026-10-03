@@ -7,53 +7,85 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import RailNav from '@/components/rail/RailNav';
 import Icon from '@/components/Icons';
 import { readSessionCache, writeSessionCache } from '@/lib/clientCache';
-import { episodeLabel, groupEpisodes } from '@/lib/vaultEpisodes';
 import { POSTER_SIZES_ATTR, tmdbImageSrcSet } from '@/lib/tmdbPoster';
 import { revealStyle, useReveal } from '@/lib/useReveal';
 
 /**
- * The Vault — "Neon Control Deck" (v10.9.0).
+ * The Vault — "Control Deck" (v10.11.0).
  *
- * The full browse surface for the mv_vault catalogue, in the chosen concept:
- * glowing cyan deck head, glass control rail, decade waveform scrubber, and
- * sharp neon-edged poster tiles. Desktop gets a sticky left control rail;
- * mobile gets the same controls as horizontally-scrolling pill rows — both
- * were built together and every control exists in both shells.
+ * The chosen direction of the three filter/sort architectures that were built
+ * side by side. It keeps the cyan deck the vault always had and changes the way
+ * you drive it: every filter is a group in one rail, and **every option carries
+ * a live count** — the number of titles that click would leave you with. An
+ * option that would return nothing is greyed and struck through instead of
+ * leading you into an empty grid, which is the difference between an instrument
+ * and a row of switches.
  *
- * Architecture: the whole catalogue (currently ~600 titles) ships to the
- * browser once and every filter/search/sort runs client-side, so scrubbing the
- * decade wave or typing is instant with zero round-trips. The server's 30-minute
- * upstream cache (lib/vault.js) is the freshness contract; `?force=1` is the
- * escape hatch when you want the just-finished scrape letter *now*.
+ * The counts are honest because each one is computed with that option's own
+ * dimension lifted: the number next to "1080p" is "how many of the titles that
+ * pass every OTHER filter hold a 1080p source", not a static catalogue total.
  *
- * Series (v10.9.1): a record with `kind: 'series'` carries one embed per quality
- * per episode. The tile gets an episode badge and the player gains an episode
- * strip, so a 20-episode show is a playable season rather than a wall of
- * "1080p · #7"-style chips. Movies are untouched — `groupEpisodes` returns
- * nothing for them and every code path falls back to the original behaviour.
+ * Architecture is unchanged: the whole catalogue ships to the browser once,
+ * filter/search/sort run client-side with zero round-trips, the server keeps its
+ * ~30-minute upstream cache (lib/vault.js) and `?force=1` still bypasses it.
  *
- * Playback: tiles open the instant embed player — a modal iframe pointed at the
- * onestream embed, no route change, no resolve round-trip. Embeds are sorted
- * best-first (1080p before 720p) and chips switch quality/source inside the
- * modal, which is how a dead embed costs one click instead of a dead end.
+ * What changed under the hood: `lib/vault.js` now lifts `originalLanguage` and
+ * `category` from the upstream record (they were always in the payload and were
+ * being thrown away), which is what makes the language / original-vs-dubbed
+ * filters possible at all — no new scraping.
+ *
+ * Deliberately absent: genre (the `category` field is a site bucket, not
+ * Action/Drama), runtime, cast, popularity, and watch progress (history was
+ * removed from this app on purpose). The rail says so in words rather than
+ * offering filters that would lie.
  */
 
-const CACHE_KEY = 'jash:vault:v1';
+// v2: the payload gained language/origin; a v1 entry from a previous visit
+// would paint a rail whose every count is zero until the network answered.
+const CACHE_KEY = 'jash:vault:v2';
 const CACHE_TTL_MS = 30 * 60 * 1000;
 const GRID_STEP = 60;
 
 const SORTS = [
   { id: 'newest', label: 'Newest', hint: 'latest vaulted' },
   { id: 'rating', label: 'Top rated', hint: 'highest first' },
-  { id: 'az', label: 'A–Z', hint: 'alphabetical' },
   { id: 'year', label: 'Year', hint: 'newest year first' },
+  { id: 'az', label: 'A–Z', hint: 'alphabetical' },
+  { id: 'sources', label: 'Sources', hint: 'most mirrors first' },
 ];
 
-const QUALITIES = [
-  { id: 'any', label: 'Any quality' },
-  { id: '1080p', label: '1080p' },
-  { id: '720p', label: '720p' },
+const ORIGINS = [
+  { id: 'any', label: 'All' },
+  { id: 'tamil', label: 'Tamil' },
+  { id: 'dubbed', label: 'Dubbed' },
 ];
+
+const QUALITY_KEYS = ['1080p', '720p', 'HD', '360p'];
+const SOURCE_KEYS = [
+  { id: '1', label: '1 mirror' },
+  { id: '2', label: '2 mirrors' },
+  { id: '3-4', label: '3–4 mirrors' },
+  { id: '5+', label: '5+ mirrors' },
+];
+const RATING_KEYS = [
+  { id: '5', label: '5+' },
+  { id: '6', label: '6+' },
+  { id: '7', label: '7+' },
+  { id: '8', label: '8+' },
+  { id: 'unrated', label: 'Unrated' },
+];
+const ERA_KEYS = ['2020s', '2010s', '2000s', '1990s', '1980s', 'pre-1980'];
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ#'.split('');
+
+const EMPTY_FILTERS = {
+  origin: 'any',
+  languages: [],
+  qualities: [],
+  sources: [],
+  rating: 'any',
+  eras: [],
+  letter: '',
+};
 
 function relativeTime(iso) {
   const then = Date.parse(iso || '');
@@ -72,33 +104,85 @@ function qualityChipClass(quality) {
   return 'jv-vault-chip';
 }
 
-/* ── waveform scrubber ──────────────────────────────────────────────── */
+function sourceBucket(count) {
+  if (count <= 1) return '1';
+  if (count === 2) return '2';
+  if (count <= 4) return '3-4';
+  return '5+';
+}
 
-function WaveScrubber({ decades, value, onChange, total }) {
-  const max = Math.max(1, ...decades.map((entry) => entry.count));
-  const bars = [{ decade: 'all', label: 'All', count: total }, ...decades];
+/** Era of a record, or '' when the year is missing (one record today). */
+function eraOf(year) {
+  const value = Number(year) || 0;
+  if (value <= 0) return '';
+  if (value >= 2020) return '2020s';
+  if (value >= 2010) return '2010s';
+  if (value >= 2000) return '2000s';
+  if (value >= 1990) return '1990s';
+  if (value >= 1980) return '1980s';
+  return 'pre-1980';
+}
+
+/**
+ * Does this record survive the current filters?
+ *
+ * `skip` lifts ONE dimension. That is the whole trick behind a live count: a
+ * count for dimension X is computed by asking every record to pass everything
+ * except X, so the number answers "how many would be left if I clicked this".
+ */
+function passes(movie, filters, needle, skip) {
+  if (needle && !`${movie.title} ${movie.year}`.toLowerCase().includes(needle)) return false;
+  if (skip !== 'language') {
+    if (filters.languages.length && !filters.languages.includes(movie.language)) return false;
+    if (filters.origin === 'tamil' && movie.origin !== 'tamil') return false;
+    if (filters.origin === 'dubbed' && movie.origin !== 'dubbed') return false;
+  }
+  if (skip !== 'quality' && filters.qualities.length) {
+    const marks = movie.embeds.map((embed) => String(embed.quality).toLowerCase());
+    if (!filters.qualities.some((quality) => marks.includes(quality.toLowerCase()))) return false;
+  }
+  if (skip !== 'sources' && filters.sources.length) {
+    if (!filters.sources.includes(sourceBucket(movie.embedCount))) return false;
+  }
+  if (skip !== 'rating' && filters.rating !== 'any') {
+    if (filters.rating === 'unrated') { if (Number(movie.rating) > 0) return false; }
+    else if (Number(movie.rating) < Number(filters.rating)) return false;
+  }
+  if (skip !== 'era' && filters.eras.length && !filters.eras.includes(eraOf(movie.year))) return false;
+  if (skip !== 'letter' && filters.letter && movie.letter !== filters.letter) return false;
+  return true;
+}
+
+/* ── the controls ───────────────────────────────────────────────────── */
+
+/** One faceted option: a tick, a word, and what the click would leave you with. */
+function DeckOption({ pressed, count, label, onClick, children }) {
+  const dead = count === 0 && !pressed;
   return (
-    <div className="jv-vault-wave" role="group" aria-label="Decade scrubber">
-      {bars.map((bar) => {
-        const active = String(value) === String(bar.decade);
-        const height = bar.decade === 'all' ? 100 : Math.max(14, Math.round((bar.count / max) * 100));
-        return (
-          <button
-            key={bar.decade}
-            type="button"
-            aria-pressed={active}
-            title={`${bar.label} — ${bar.count} films`}
-            className={`jv-vault-wave-col${active ? ' jv-vault-wave-on' : ''}`}
-            onClick={() => onChange(active ? 'all' : bar.decade)}
-          >
-            <span className="jv-vault-wave-track">
-              <span className="jv-vault-wave-bar" style={{ height: `${height}%` }} />
-            </span>
-            <span className="jv-vault-wave-count">{bar.count}</span>
-            <span className="jv-vault-wave-label">{bar.label || bar.decade}</span>
-          </button>
-        );
-      })}
+    <button
+      type="button"
+      aria-pressed={pressed}
+      onClick={onClick}
+      disabled={dead}
+      className={`jv-deck-opt${pressed ? ' is-on' : ''}${dead ? ' is-dead' : ''}`}
+      title={dead ? `${label} — nothing matches the rest of your filters` : `${label} — ${count} title${count === 1 ? '' : 's'}`}
+    >
+      <span className="jv-deck-box" aria-hidden="true">{pressed ? '✕' : ''}</span>
+      <span className="jv-deck-opt-label">{label}</span>
+      <span className="jv-deck-count">{count}</span>
+      {children}
+    </button>
+  );
+}
+
+function DeckGroup({ title, note, children }) {
+  return (
+    <div className="jv-deck-group">
+      <div className="jv-deck-group-head">
+        <h3>{title}</h3>
+        {note ? <span className="jv-deck-note">{note}</span> : null}
+      </div>
+      {children}
     </div>
   );
 }
@@ -152,17 +236,12 @@ function VaultTile({ movie, onPlay, index = 0 }) {
           {movie.year || '—'}
           {movie.isSeries ? <span className="jv-vault-ep-count">{movie.episodeCount} ep</span> : null}
           {movie.rating ? <span className="jv-vault-star">★ {movie.rating.toFixed(1)}</span> : null}
+          <span className="jv-vault-src-chip">{movie.embedCount} src</span>
         </span>
       </span>
     </button>
   );
 }
-
-/* ── instant embed player ───────────────────────────────────────────── */
-
-
-
-/* ── skeletons & notes ──────────────────────────────────────────────── */
 
 function SkeletonGrid() {
   return (
@@ -183,10 +262,10 @@ export default function VaultPage() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [query, setQuery] = useState('');
-  const [decade, setDecade] = useState('all');
-  const [quality, setQuality] = useState('any');
   const [sort, setSort] = useState('newest');
-  const [letter, setLetter] = useState('');
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [dense, setDense] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [visible, setVisible] = useState(GRID_STEP);
   const router = useRouter();
   const openWatch = useCallback((movie) => router.push(watchHref(movie, 'vault')), [router]);
@@ -231,37 +310,57 @@ export default function VaultPage() {
     if (!id) return;
     const movie = data.movies.find((entry) => entry.id === id);
     if (movie) router.replace(watchHref(movie, 'vault'));
-  }, [data]);
+  }, [data, router]);
 
-  /* Facets + letter index, derived from the full list. */
+  const movies = data?.movies || [];
+  const needle = query.trim().toLowerCase();
   const facets = data?.facets;
-  const letters = useMemo(() => {
-    const counts = new Map();
-    for (const movie of data?.movies || []) counts.set(movie.letter, (counts.get(movie.letter) || 0) + 1);
-    return [...counts.entries()].sort(([a], [b]) => (a === '#' ? 1 : b === '#' ? -1 : a.localeCompare(b)));
-  }, [data]);
+
+  /* Every live count, in one pass per dimension. */
+  const counts = useMemo(() => {
+    const out = { language: {}, quality: {}, sources: {}, rating: {}, era: {}, letter: {}, origin: {} };
+    for (const movie of movies) {
+      const language = movie.language || '';
+      const marks = movie.embeds.map((embed) => String(embed.quality).toLowerCase());
+      const bucket = sourceBucket(movie.embedCount);
+      const rating = Number(movie.rating) || 0;
+      const era = eraOf(movie.year);
+      const languagePasses = passes(movie, filters, needle, 'language');
+      const qualityPasses = passes(movie, filters, needle, 'quality');
+      const sourcePasses = passes(movie, filters, needle, 'sources');
+      const ratingPasses = passes(movie, filters, needle, 'rating');
+      const eraPasses = passes(movie, filters, needle, 'era');
+      const letterPasses = passes(movie, filters, needle, 'letter');
+      if (languagePasses) {
+        if (language) out.language[language] = (out.language[language] || 0) + 1;
+        out.origin[movie.origin] = (out.origin[movie.origin] || 0) + 1;
+      }
+      if (qualityPasses) for (const key of QUALITY_KEYS) { if (marks.includes(key.toLowerCase())) out.quality[key] = (out.quality[key] || 0) + 1; }
+      if (sourcePasses) out.sources[bucket] = (out.sources[bucket] || 0) + 1;
+      if (ratingPasses) {
+        if (rating > 0) for (const key of ['5', '6', '7', '8']) { if (rating >= Number(key)) out.rating[key] = (out.rating[key] || 0) + 1; }
+        else out.rating.unrated = (out.rating.unrated || 0) + 1;
+      }
+      if (eraPasses && era) out.era[era] = (out.era[era] || 0) + 1;
+      if (letterPasses) out.letter[movie.letter] = (out.letter[movie.letter] || 0) + 1;
+    }
+    return out;
+  }, [movies, filters, needle]);
 
   /* One filter+sort pipeline — every control writes state, this reads it. */
   const filtered = useMemo(() => {
-    const movies = data?.movies || [];
-    const needle = query.trim().toLowerCase();
-    const list = movies.filter((movie) => {
-      if (needle && !`${movie.title} ${movie.year}`.toLowerCase().includes(needle)) return false;
-      if (decade !== 'all' && movie.decade !== decade) return false;
-      if (quality !== 'any' && !movie.embeds.some((embed) => String(embed.quality).toLowerCase() === quality)) return false;
-      if (letter && movie.letter !== letter) return false;
-      return true;
-    });
+    const list = movies.filter((movie) => passes(movie, filters, needle, null));
     const byAdded = (a, b) => String(b.addedAt || '').localeCompare(String(a.addedAt || '')) || b.year - a.year;
     if (sort === 'newest') list.sort(byAdded);
     else if (sort === 'year') list.sort((a, b) => b.year - a.year || a.title.localeCompare(b.title));
     else if (sort === 'rating') list.sort((a, b) => b.rating - a.rating || byAdded(a, b));
     else if (sort === 'az') list.sort((a, b) => a.title.localeCompare(b.title));
+    else if (sort === 'sources') list.sort((a, b) => b.embedCount - a.embedCount || byAdded(a, b));
     return list;
-  }, [data, query, decade, quality, letter, sort]);
+  }, [movies, filters, needle, sort]);
 
   /* Reset paging whenever the result set changes shape. */
-  useEffect(() => { setVisible(GRID_STEP); }, [query, decade, quality, letter, sort]);
+  useEffect(() => { setVisible(GRID_STEP); }, [query, filters, sort]);
 
   /* Infinite scroll: one sentinel, one observer, no scroll math. */
   useEffect(() => {
@@ -275,6 +374,7 @@ export default function VaultPage() {
   }, [filtered.length]);
 
   const shown = filtered.slice(0, visible);
+
   const forceRefresh = async () => {
     setRefreshing(true);
     try {
@@ -291,11 +391,164 @@ export default function VaultPage() {
     }
   };
 
-  const clearAll = () => { setQuery(''); setDecade('all'); setQuality('any'); setLetter(''); };
+  /* ── filter bookkeeping ── */
+  const setFilter = (patch) => setFilters((prev) => ({ ...prev, ...patch }));
+  const toggleIn = (key, value) => setFilters((prev) => ({
+    ...prev,
+    [key]: prev[key].includes(value) ? prev[key].filter((entry) => entry !== value) : [...prev[key], value],
+  }));
+  const clearAll = () => { setQuery(''); setFilters(EMPTY_FILTERS); };
+
+  const chips = useMemo(() => {
+    const out = [];
+    if (query.trim()) out.push({ id: 'q', label: `“${query.trim()}”` });
+    if (filters.origin !== 'any') out.push({ id: 'origin', label: filters.origin === 'tamil' ? 'Original Tamil' : 'Dubbed' });
+    for (const code of filters.languages) out.push({ id: `lang:${code}`, label: (facets?.languages || []).find((entry) => entry.code === code)?.label || code.toUpperCase() });
+    for (const quality of filters.qualities) out.push({ id: `qual:${quality}`, label: quality });
+    for (const bucket of filters.sources) out.push({ id: `src:${bucket}`, label: `${bucket} mirror${bucket === '1' ? '' : 's'}` });
+    if (filters.rating !== 'any') out.push({ id: 'rating', label: `${filters.rating === 'unrated' ? 'Unrated' : `${filters.rating}+`} rated` });
+    for (const era of filters.eras) out.push({ id: `era:${era}`, label: era });
+    if (filters.letter) out.push({ id: 'letter', label: `letter ${filters.letter}` });
+    return out;
+  }, [query, filters, facets]);
+
+  const removeChip = (id) => {
+    if (id === 'q') return setQuery('');
+    if (id === 'origin') return setFilter({ origin: 'any' });
+    if (id === 'rating') return setFilter({ rating: 'any' });
+    if (id === 'letter') return setFilter({ letter: '' });
+    const [kind, value] = id.split(':');
+    if (kind === 'lang') return toggleIn('languages', value);
+    if (kind === 'qual') return toggleIn('qualities', value);
+    if (kind === 'src') return toggleIn('sources', value);
+    if (kind === 'era') return toggleIn('eras', value);
+    return undefined;
+  };
 
   // Keyed on the filters AND the page window: the vault appends as it scrolls, and
   // two filter combinations can render the same number of tiles.
-  const revealRef = useReveal(`${sort}|${decade}|${query}|${quality}|${letter}|${visible}`);
+  const revealRef = useReveal(`${sort}|${JSON.stringify(filters)}|${query}|${visible}`);
+
+  const activeCount = chips.length;
+
+  /* The rail is ONE node: a sticky column on desktop, a bottom sheet on a phone.
+     Moving it in the DOM would lose focus and scroll; CSS alone cannot. */
+  const rail = (
+    <div className={`jv-deck-rail${sheetOpen ? ' is-open' : ''}`} id="vault-filters" aria-label="Vault filters">
+      <div className="jv-deck-rail-bar">
+        <strong>Filters</strong>
+        <span className="jv-deck-note">{filtered.length} of {movies.length}</span>
+        <button type="button" className="jv-deck-close" onClick={() => setSheetOpen(false)} aria-label="Close filters">Done</button>
+      </div>
+
+      <DeckGroup title="Origin" note="original vs dub">
+        <div className="jv-deck-seg" role="group" aria-label="Origin">
+          {ORIGINS.map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              aria-pressed={filters.origin === entry.id}
+              onClick={() => setFilter({ origin: entry.id })}
+              title={entry.id === 'any' ? 'Every title' : `${counts.origin[entry.id] || 0} titles`}
+            >
+              {entry.label}
+            </button>
+          ))}
+        </div>
+      </DeckGroup>
+
+      <DeckGroup title="Language" note={`${(facets?.languages || []).length} in the catalogue`}>
+        {(facets?.languages || []).slice(0, 10).map((entry) => (
+          <DeckOption
+            key={entry.code}
+            label={entry.label}
+            count={counts.language[entry.code] || 0}
+            pressed={filters.languages.includes(entry.code)}
+            onClick={() => toggleIn('languages', entry.code)}
+          />
+        ))}
+        {(facets?.languages || []).length > 10 ? (
+          <DeckOption
+            label="Other + unknown"
+            count={movies.filter((movie) => !(facets?.languages || []).slice(0, 10).some((entry) => entry.code === movie.language)).length}
+            pressed={false}
+            onClick={() => setFilter({ languages: [], origin: 'any' })}
+          />
+        ) : null}
+      </DeckGroup>
+
+      <DeckGroup title="Quality" note="any source of the title">
+        {QUALITY_KEYS.map((quality) => (
+          <DeckOption
+            key={quality}
+            label={quality}
+            count={counts.quality[quality] || 0}
+            pressed={filters.qualities.includes(quality)}
+            onClick={() => toggleIn('qualities', quality)}
+          />
+        ))}
+      </DeckGroup>
+
+      <DeckGroup title="Sources" note="mirrors per title">
+        {SOURCE_KEYS.map((entry) => (
+          <DeckOption
+            key={entry.id}
+            label={entry.label}
+            count={counts.sources[entry.id] || 0}
+            pressed={filters.sources.includes(entry.id)}
+            onClick={() => toggleIn('sources', entry.id)}
+          />
+        ))}
+      </DeckGroup>
+
+      <DeckGroup title="Rating" note="TMDB, from upstream">
+        <div className="jv-deck-radios" role="group" aria-label="Minimum rating">
+          <button type="button" aria-pressed={filters.rating === 'any'} onClick={() => setFilter({ rating: 'any' })}>Any</button>
+          {RATING_KEYS.map((entry) => {
+            const count = counts.rating[entry.id] || 0;
+            const dead = count === 0 && filters.rating !== entry.id;
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                aria-pressed={filters.rating === entry.id}
+                onClick={() => setFilter({ rating: entry.id })}
+                disabled={dead}
+                className={dead ? 'is-dead' : undefined}
+              >
+                {entry.label} <span className="jv-deck-count">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      </DeckGroup>
+
+      <DeckGroup title="Era">
+        {ERA_KEYS.map((era) => (
+          <DeckOption
+            key={era}
+            label={era}
+            count={counts.era[era] || 0}
+            pressed={filters.eras.includes(era)}
+            onClick={() => toggleIn('eras', era)}
+          />
+        ))}
+      </DeckGroup>
+
+      <div className="jv-deck-group">
+        <p className="jv-deck-fine">
+          Genre, runtime, cast and “where you left off” are not in the catalogue, so no filter here
+          pretends they are. Everything above is a field the vault actually carries.
+        </p>
+      </div>
+
+      {activeCount ? (
+        <div className="jv-deck-group">
+          <button type="button" className="jv-deck-clear" onClick={clearAll}>Clear all filters</button>
+        </div>
+      ) : null}
+    </div>
+  );
 
   return (
     <main className="jv-vault-page jv-rail-shift min-h-dvh overflow-x-hidden text-zinc-100">
@@ -310,7 +563,7 @@ export default function VaultPage() {
               <p className="mt-1 text-[11px] font-black uppercase tracking-[0.22em] text-cyan-200/75">
                 {facets ? (
                   <>
-                    {facets.total} movies · {facets.posters} posters · {facets.qualities['1080p']} in 1080p
+                    {facets.total} titles · {facets.posters} posters · {facets.series || 0} series
                     {data?.fetchedAt ? <span className="text-txt-4"> · updated {relativeTime(data.fetchedAt)}</span> : null}
                   </>
                 ) : 'loading the deck…'}
@@ -333,15 +586,15 @@ export default function VaultPage() {
             </div>
           </div>
 
-          {/* search — the circular dial, expanded */}
+          {/* search */}
           <div className="jv-vault-search mt-4">
             <Icon name="search" className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300/70" />
             <input
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search the vault…"
-              aria-label="Search movies"
+              placeholder={`Search ${facets?.total || 'the'} titles…`}
+              aria-label="Search titles"
               className="w-full bg-transparent pl-11 pr-10 py-2.5 text-sm font-semibold text-txt-1 placeholder:text-txt-4 focus:outline-none"
             />
             {query ? (
@@ -352,150 +605,88 @@ export default function VaultPage() {
           </div>
         </header>
 
-        {/* ── decade waveform ── */}
-        {facets?.decades?.length ? (
-          <div className="jv-vault-glass mt-4 rounded-xl px-3 pb-2 pt-3 sm:px-4">
-            <WaveScrubber decades={facets.decades} total={facets.total} value={decade} onChange={setDecade} />
-          </div>
-        ) : null}
-
-        {/* ── mobile pills (desktop rail mirrors every control) ── */}
-        <div className="mt-3 space-y-2 lg:hidden">
-          <div className="jv-vault-pills" aria-label="Sort">
+        {/* ── control bar: sort, density, filters ── */}
+        <div className="jv-deck-bar">
+          <div className="jv-deck-seg jv-deck-seg-wide" role="group" aria-label="Sort">
             {SORTS.map((entry) => (
               <button
                 key={entry.id}
                 type="button"
                 aria-pressed={sort === entry.id}
+                title={entry.hint}
                 onClick={() => setSort(entry.id)}
-                className={sort === entry.id ? 'jv-vault-pill jv-vault-pill-on' : 'jv-vault-pill'}
               >
                 {entry.label}
               </button>
             ))}
-            <button
-              type="button"
-              aria-pressed={quality !== 'any'}
-              onClick={() => setQuality(quality === '1080p' ? '720p' : quality === '720p' ? 'any' : '1080p')}
-              className={quality !== 'any' ? 'jv-vault-pill jv-vault-pill-on' : 'jv-vault-pill'}
-            >
-              {quality === 'any' ? '1080p only' : quality === '1080p' ? '720p only' : 'any quality'}
-            </button>
           </div>
-          <div className="jv-vault-pills" aria-label="Decade">
-            <button type="button" aria-pressed={decade === 'all'} onClick={() => setDecade('all')} className={decade === 'all' ? 'jv-vault-pill jv-vault-pill-on' : 'jv-vault-pill'}>All</button>
-            {(facets?.decades || []).map((entry) => (
+          <div className="jv-deck-seg" role="group" aria-label="Tile density">
+            <button type="button" aria-pressed={!dense} onClick={() => setDense(false)}>Cozy</button>
+            <button type="button" aria-pressed={dense} onClick={() => setDense(true)}>Dense</button>
+          </div>
+          <button
+            type="button"
+            className="jv-deck-filters-btn"
+            aria-expanded={sheetOpen}
+            aria-controls="vault-filters"
+            onClick={() => setSheetOpen((open) => !open)}
+          >
+            Filters{activeCount ? ` · ${activeCount}` : ''}
+          </button>
+        </div>
+
+        {/* ── A–Z strip, with what each letter holds ── */}
+        <div className="jv-deck-letters" role="group" aria-label="Jump to letter">
+          <button
+            type="button"
+            aria-pressed={!filters.letter}
+            onClick={() => setFilter({ letter: '' })}
+            className="jv-deck-letter"
+          >
+            <span>All</span>
+          </button>
+          {ALPHABET.map((letter) => {
+            const count = counts.letter[letter] || 0;
+            const dead = count === 0 && filters.letter !== letter;
+            return (
               <button
-                key={entry.decade}
+                key={letter}
                 type="button"
-                aria-pressed={decade === entry.decade}
-                onClick={() => setDecade(decade === entry.decade ? 'all' : entry.decade)}
-                className={decade === entry.decade ? 'jv-vault-pill jv-vault-pill-on' : 'jv-vault-pill'}
+                aria-pressed={filters.letter === letter}
+                disabled={dead}
+                onClick={() => setFilter({ letter: filters.letter === letter ? '' : letter })}
+                className={`jv-deck-letter${dead ? ' is-dead' : ''}`}
+                title={`${letter} — ${count} title${count === 1 ? '' : 's'}`}
               >
-                {entry.decade} <span className="opacity-60">{entry.count}</span>
+                <span>{letter}</span>
+                <em>{count}</em>
               </button>
+            );
+          })}
+        </div>
+
+        {/* ── count line + active filters ── */}
+        <div className="jv-deck-countline">
+          <b>{filtered.length}</b>
+          <span>{filtered.length === 1 ? 'title' : 'titles'}</span>
+          <div className="jv-deck-chips">
+            {chips.map((chip) => (
+              <span key={chip.id} className="jv-deck-chip">
+                {chip.label}
+                <button type="button" onClick={() => removeChip(chip.id)} aria-label={`Remove ${chip.label}`}>✕</button>
+              </span>
             ))}
+            {chips.length > 1 ? (
+              <button type="button" className="jv-deck-chip jv-deck-chip-clear" onClick={clearAll}>Clear all</button>
+            ) : null}
           </div>
         </div>
 
-        {/* ── A–Z strip ── */}
-        <div className="jv-vault-pills mt-3" aria-label="Jump to letter">
-          <button type="button" aria-pressed={!letter} onClick={() => setLetter('')} className={!letter ? 'jv-vault-pill jv-vault-pill-on' : 'jv-vault-pill'}>#All</button>
-          {letters.map(([value, count]) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={letter === value}
-              onClick={() => setLetter(letter === value ? '' : value)}
-              className={letter === value ? 'jv-vault-pill jv-vault-pill-on' : 'jv-vault-pill'}
-            >
-              {value}<span className="ml-1 opacity-50">{count}</span>
-            </button>
-          ))}
-        </div>
+        {/* ── body: rail + grid ── */}
+        <div className="jv-deck-body">
+          {rail}
 
-        {/* ── body: control rail (desktop) + grid ── */}
-        <div className="mt-5 flex gap-6">
-          {/* desktop control rail */}
-          <aside className="jv-vault-glass sticky top-5 hidden h-fit w-56 shrink-0 flex-col gap-5 rounded-2xl p-4 lg:flex" aria-label="Vault controls">
-            <div>
-              <p className="jv-vault-rail-label">Sort</p>
-              <div className="mt-2 flex flex-col gap-1">
-                {SORTS.map((entry) => (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    aria-pressed={sort === entry.id}
-                    onClick={() => setSort(entry.id)}
-                    className={sort === entry.id ? 'jv-vault-rail-opt jv-vault-rail-opt-on' : 'jv-vault-rail-opt'}
-                  >
-                    {entry.label}
-                    <span className="text-[10px] font-semibold uppercase tracking-wide opacity-50">{entry.hint}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="jv-vault-rail-label">Quality</p>
-              <div className="mt-2 flex flex-col gap-1">
-                {QUALITIES.map((entry) => (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    aria-pressed={quality === entry.id}
-                    onClick={() => setQuality(entry.id)}
-                    className={quality === entry.id ? 'jv-vault-rail-opt jv-vault-rail-opt-on' : 'jv-vault-rail-opt'}
-                  >
-                    {entry.label}
-                    {entry.id !== 'any' && facets ? (
-                      <span className="text-[10px] font-semibold opacity-50">{facets.qualities[entry.id] || 0}</span>
-                    ) : null}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="jv-vault-rail-label">Decade</p>
-              <div className="mt-2 flex flex-col gap-1">
-                <button type="button" aria-pressed={decade === 'all'} onClick={() => setDecade('all')} className={decade === 'all' ? 'jv-vault-rail-opt jv-vault-rail-opt-on' : 'jv-vault-rail-opt'}>
-                  All <span className="text-[10px] font-semibold opacity-50">{facets?.total || 0}</span>
-                </button>
-                {(facets?.decades || []).map((entry) => (
-                  <button
-                    key={entry.decade}
-                    type="button"
-                    aria-pressed={decade === entry.decade}
-                    onClick={() => setDecade(decade === entry.decade ? 'all' : entry.decade)}
-                    className={decade === entry.decade ? 'jv-vault-rail-opt jv-vault-rail-opt-on' : 'jv-vault-rail-opt'}
-                  >
-                    {entry.decade} <span className="text-[10px] font-semibold opacity-50">{entry.count}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {(query || decade !== 'all' || quality !== 'any' || letter) ? (
-              <button type="button" onClick={clearAll} className="jv-vault-rail-opt justify-center border border-cyan-400/30 text-cyan-200 hover:border-cyan-400/70">
-                Clear filters
-              </button>
-            ) : null}
-          </aside>
-
-          {/* results */}
           <div className="min-w-0 flex-1">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-txt-4">
-                {status === 'ready' ? <>showing <span className="text-cyan-300">{filtered.length}</span> of {data?.movies?.length || 0}</> : '\u00A0'}
-              </p>
-              {sort !== 'newest' || decade !== 'all' ? (
-                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-txt-4">
-                  {SORTS.find((entry) => entry.id === sort)?.label}{decade !== 'all' ? ` · ${decade}` : ''}
-                </p>
-              ) : null}
-            </div>
-
             {status === 'loading' ? <SkeletonGrid /> : null}
 
             {status === 'error' ? (
@@ -507,14 +698,22 @@ export default function VaultPage() {
 
             {status === 'ready' && !filtered.length ? (
               <div className="jv-vault-glass rounded-2xl p-10 text-center">
-                <p className="text-sm font-bold text-txt-2">Nothing matches that combination.</p>
-                <button type="button" onClick={clearAll} className="jv-vault-src-chip mt-4">Clear filters</button>
+                <p className="text-sm font-bold text-txt-2">Nothing in the vault matches this cut.</p>
+                <p className="mt-2 text-xs text-txt-4">
+                  The rail greys out options that would return nothing — loosen one of the others.
+                </p>
+                <button type="button" onClick={clearAll} className="jv-vault-src-chip mt-4">Clear all filters</button>
               </div>
             ) : null}
 
             {status === 'ready' && filtered.length ? (
               <>
-                <div ref={revealRef} className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                <div
+                  ref={revealRef}
+                  className={`grid gap-3 ${dense
+                    ? 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8'
+                    : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'}`}
+                >
                   {shown.map((movie, index) => (
                     <VaultTile key={movie.id} movie={movie} onPlay={openWatch} index={index} />
                   ))}
@@ -525,7 +724,7 @@ export default function VaultPage() {
                   </div>
                 ) : (
                   <div className="py-6 text-center text-[11px] font-black uppercase tracking-[0.18em] text-txt-4">
-                    end of the deck — {filtered.length} films
+                    end of the deck — {filtered.length} titles
                   </div>
                 )}
               </>
@@ -534,7 +733,7 @@ export default function VaultPage() {
         </div>
       </section>
 
-
+      {sheetOpen ? <div className="jv-deck-scrim" onClick={() => setSheetOpen(false)} aria-hidden="true" /> : null}
     </main>
   );
 }
