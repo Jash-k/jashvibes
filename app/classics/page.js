@@ -398,7 +398,11 @@ export default function TamilClassicsPage() {
           />
 
           <div className="jv-dec-body">
-            <div className="jv-dec-ghost" aria-hidden="true">{decade === 'all' || decade === null ? span : decadeLabel(decade)}</div>
+            {/* The decade repeated behind the rows, at 5%. Only when there are rows:
+                an empty shelf rendered it as an 86px headline instead of a watermark. */}
+            {status === 'ready' && items.length ? (
+              <div className="jv-dec-ghost" aria-hidden="true">{decade === 'all' || decade === null ? span : decadeLabel(decade)}</div>
+            ) : null}
 
             {syncSummary && status === 'ready' ? (
               <p className="jv-dec-sync">
@@ -418,7 +422,13 @@ export default function TamilClassicsPage() {
                 title="The archive did not answer"
                 action={<button type="button" className="jv-dec-chip jv-dec-chip-go" onClick={() => requestShelf(shelf, { budget })}>Try again</button>}
               >
-                {error}
+                <p>The classics shelf could not be read just now. Nothing is lost — try again in a moment.</p>
+                {error ? (
+                  <details className="jv-dec-detail">
+                    <summary>Technical detail</summary>
+                    <p>{error}</p>
+                  </details>
+                ) : null}
               </Note>
             ) : null}
 

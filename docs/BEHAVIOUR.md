@@ -12,6 +12,7 @@ Implementation was explicitly authorized by the user selecting **Proceed with th
 - An unidentified Home card still opens Watch; confident type-aware Vault matching and ID entry happen inside Watch.
 - Auto native/Shaka failures use bounded alternatives then next provider. Explicitly chosen providers remain selected and show Retry/Next on exhaustion.
 - Opaque iframes are switched by user action. Document load is not video success; do not infer timestamps or blindly fail over after a timer.
+- Direct MP4 candidates are proven before they are offered: each link is probed with a bounded ranged request, and a host that refuses (403/404/410, or a body that is not media) is marked unavailable and sorted below the living ones rather than silently becoming "Auto". A host whose probe is inconclusive counts as unknown, never as dead. The watch page warms the resolver in the background when a movie page opens, using the cheap index lookup only; the walk itself never runs speculatively for a title the index does not know.
 - Legacy playback links remain usable through redirects.
 
 ## Live TV

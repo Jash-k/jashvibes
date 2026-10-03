@@ -194,6 +194,25 @@ export default function LiveTVPage() {
   const [liveSourceMode, setLiveSourceMode] = useState('auto');
   const liveTried = useRef(new Set());
   const [liveSourceError, setLiveSourceError] = useState('');
+  /*
+   * One control for the source, like the watch page. This used to be a <select>
+   * of raw mirror names next to a channel picker — the same "which source?"
+   * question asked in a different dialect from everywhere else in the app. The
+   * trigger shows the current answer on its face; the panel lists the others.
+   */
+  const [sourcePanelOpen, setSourcePanelOpen] = useState(false);
+  const sourcePanelRef = useRef(null);
+  useEffect(() => {
+    if (!sourcePanelOpen) return undefined;
+    const onDown = (event) => { if (!sourcePanelRef.current?.contains?.(event.target)) setSourcePanelOpen(false); };
+    const onKey = (event) => { if (event.key === 'Escape') setSourcePanelOpen(false); };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [sourcePanelOpen]);
   const alternatives = useMemo(() => active?.logicalChannelId ? channels.filter((c) => c.logicalChannelId === active.logicalChannelId && c.playable) : active ? [active] : [], [channels, active]);
   function failLiveSource() {
     if (!active) return;
@@ -444,9 +463,60 @@ export default function LiveTVPage() {
 
               </div>
             </div>
-            <div className="my-3 flex flex-wrap items-center gap-3 text-xs text-zinc-400">
-              <label>Source <select aria-label="Live source" className="ml-2 rounded-lg border border-white/15 bg-zinc-950 px-3 py-2 text-white" value={liveSourceMode === 'auto' ? 'auto' : active?.id || 'auto'} onChange={(event) => { const id = event.target.value; setLiveSourceMode(id === 'auto' ? 'auto' : 'manual'); liveTried.current = new Set(); setLiveSourceError(''); if (id !== 'auto') { const candidate = alternatives.find((c) => c.id === id); if (candidate) setActive(candidate); } }}><option value="auto">Auto · same channel only</option>{alternatives.map((c) => <option key={c.id} value={c.id}>{c.source || c.name}</option>)}</select></label>
+            <div ref={sourcePanelRef} className="relative my-3 flex flex-wrap items-center gap-3 text-xs text-zinc-400">
+              <button
+                type="button"
+                aria-haspopup="dialog"
+                aria-expanded={sourcePanelOpen}
+                aria-label={`Live source: ${liveSourceMode === 'auto' ? 'Auto, same channel only' : active?.source || active?.name || 'manual'}`}
+                onClick={() => setSourcePanelOpen((open) => !open)}
+                className="jv-playback-trigger w-full sm:w-auto sm:min-w-[15rem]"
+              >
+                <span className="min-w-0 text-left">
+                  <span className="block truncate font-black text-white">
+                    {liveSourceMode === 'auto' ? 'Auto' : active?.source || active?.name || 'Manual'}
+                  </span>
+                  <span className="block truncate text-[11px] font-semibold text-txt-4">
+                    {liveSourceMode === 'auto'
+                      ? 'same channel only'
+                      : `${alternatives.length} alternate${alternatives.length === 1 ? '' : 's'} available`}
+                  </span>
+                </span>
+                <span aria-hidden="true" className={`jv-playback-caret ${sourcePanelOpen ? 'is-open' : ''}`}>▾</span>
+              </button>
               {liveSourceError ? <span role="alert" className="text-red-300">{liveSourceError}</span> : null}
+              {sourcePanelOpen ? (
+                <div role="dialog" aria-label="Live source" className="jvp-sheet jv-playback-panel">
+                  <p className="jvp-panel-title">Source</p>
+                  <button
+                    type="button"
+                    aria-pressed={liveSourceMode === 'auto'}
+                    className="jvp-panel-row"
+                    onClick={() => { setLiveSourceMode('auto'); liveTried.current = new Set(); setLiveSourceError(''); setSourcePanelOpen(false); }}
+                  >
+                    <span>Auto — this channel only, never a different one</span>
+                  </button>
+                  {alternatives.length ? alternatives.map((candidate) => (
+                    <button
+                      key={candidate.id}
+                      type="button"
+                      aria-pressed={liveSourceMode === 'manual' && active?.id === candidate.id}
+                      className="jvp-panel-row"
+                      onClick={() => {
+                        setLiveSourceMode('manual');
+                        liveTried.current = new Set();
+                        setLiveSourceError('');
+                        setActive(candidate);
+                        setSourcePanelOpen(false);
+                      }}
+                    >
+                      <span>{candidate.source || candidate.name}</span>
+                    </button>
+                  )) : (
+                    <p className="jvp-panel-note">No other source is mapped for this channel.</p>
+                  )}
+                </div>
+              ) : null}
             </div>
             {guideCompact ? (
               <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5 self-center py-0.5">

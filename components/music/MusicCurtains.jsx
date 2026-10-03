@@ -4,16 +4,22 @@ import { useEffect, useRef, useState } from 'react';
 import RailNav from '@/components/rail/RailNav';
 import { useMusic } from './MusicProvider';
 import { formatTime, trackKey } from '@/lib/musicCore';
+import { revealStyle, useReveal } from '@/lib/useReveal';
 
 function TrackList({ tracks = [], music }) {
-  return <ol className="mu-tracks">{tracks.map((track, i) => <li key={trackKey(track) || i} className={trackKey(track) === music.activeKey ? 'is-active' : ''}>
+  // Motion: one observer for the whole album, one stagger step per row. The
+  // dependency is the track count, so appending rows observes the new ones
+  // instead of leaving them hidden.
+  const revealRef = useReveal(tracks.length);
+  return <ol ref={revealRef} className="mu-tracks">{tracks.map((track, i) => <li key={trackKey(track) || i} data-reveal style={revealStyle(i, 10)} className={trackKey(track) === music.activeKey ? 'is-active' : ''}>
     <button className="mu-track-main" type="button" onClick={() => music.playTrack(track, tracks, true)}><span className="mu-track-index">{trackKey(track) === music.activeKey && music.isPlaying ? '♫' : i + 1}</span><span><strong>{track.title || 'Untitled'}</strong><small>{track.artists || track.subtitle || ''}</small></span><span className="mu-duration">{track.durationLabel || ''}</span></button>
     <button type="button" aria-label={`Favourite ${track.title}`} title="Favourite" aria-pressed={music.favoriteSet.has(trackKey(track))} onClick={() => music.toggleFavorite(track)}>{music.favoriteSet.has(trackKey(track)) ? '★' : '☆'}</button>
     <button type="button" aria-label={`Add ${track.title} to queue`} title="Add to queue" onClick={() => music.addToQueue(track)}>＋</button>
   </li>)}</ol>;
 }
 function CollectionGrid({ items = [], kind = 'album', onOpen }) {
-  return <div className="mu-collection-grid">{items.map((item) => <button key={item.id || item.title || item.name} type="button" className="mu-collection" onClick={() => onOpen(item)}>{item.image ? <img src={item.image} alt="" loading="lazy"/> : <span className="mu-art-fallback">♫</span>}<strong>{item.title || item.name}</strong><small>{item.artists || item.subtitle || `${item.songCount || item.count || ''} ${kind === 'artist' ? '' : 'tracks'}`}</small></button>)}</div>;
+  const revealRef = useReveal(`${kind}:${items.length}`);
+  return <div ref={revealRef} className="mu-collection-grid">{items.map((item, i) => <button key={item.id || item.title || item.name} data-reveal style={revealStyle(i, 8)} type="button" className="mu-collection" onClick={() => onOpen(item)}>{item.image ? <img src={item.image} alt="" loading="lazy"/> : <span className="mu-art-fallback">♫</span>}<strong>{item.title || item.name}</strong><small>{item.artists || item.subtitle || `${item.songCount || item.count || ''} ${kind === 'artist' ? '' : 'tracks'}`}</small></button>)}</div>;
 }
 
 export default function MusicCurtains() {

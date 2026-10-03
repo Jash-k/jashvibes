@@ -18,6 +18,7 @@ export async function GET(request) {
   const season = Math.max(1, Number(p.get('season')) || 1), episode = Math.max(1, Number(p.get('episode')) || 1);
   try {
     let candidates = [];
+    let note = '';
     if (provider === 'stremio') {
       await warmStremioRegistry();
       const reference = p.get('reference') || imdbId || (tmdbId ? `tmdb:${tmdbId}` : '');
@@ -28,8 +29,24 @@ export async function GET(request) {
       if (type !== 'movie') return NextResponse.json({ candidates: [], reason: 'Direct MP4 catalogue currently contains movies.' });
       const match = await matchMoviesda({ tmdbId, type, title: p.get('title') || '', year: Number(p.get('year')) || 0, allowSearch: true });
       if (match?.pageUrl) {
-        const result = await resolveMoviesdaMovie(match.pageUrl, { budgetMs: 12000 });
+        /*
+         * Budget: 28s, not the old 12s.
+         *
+         * Measured on the live chain: a complete walk of one moviesda item page is
+         * ~25s, and at 12s it returned 1 candidate where 25s returns 7 — a truncated
+         * prefix that, on the title tested, was entirely dead hosts. The client
+         * (hooks/useWatch.js) allows a provider 35s, so the honest budget is the one
+         * that lets the walk finish. Normal clicks never pay this: the watch page
+         * warms the resolver on load, so this is usually a cache hit.
+         */
+        const result = await resolveMoviesdaMovie(match.pageUrl, { budgetMs: 28000 });
         candidates = normalizeCandidates(sortByQuality(result.mp4s || []), provider);
+        if (candidates.length && !candidates.some((c) => c.health !== 'dead')) {
+          // Every host refused this time. Reported as a note, not as an error: the
+          // UI still lists them (retry can revive a per-request token) but must not
+          // present a dead list as a working source.
+          note = 'The hosts for this title all refused right now — retry in a moment, or try another source.';
+        }
       }
     } else if (provider === 'mirchi') {
       if (!tmdbId) return NextResponse.json({ candidates: [], needsIdentity: true }, { status: 422 });
@@ -37,7 +54,7 @@ export async function GET(request) {
       const item = result?.providers?.find((v) => v.id === 'mirchi') || result?.selected;
       if (item?.streamUrl) candidates = normalizeCandidates([{ url: item.streamUrl, kind: 'embed', label: 'Mirchi · source-controlled quality' }], provider);
     } else return NextResponse.json({ error: 'Unknown provider' }, { status: 400 });
-    return NextResponse.json({ provider, candidates }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ provider, candidates, ...(note ? { note } : {}) }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     return NextResponse.json({ provider, candidates: [], error: error.message || 'Source unavailable' }, { status: 502, headers: { 'Cache-Control': 'no-store' } });
   }

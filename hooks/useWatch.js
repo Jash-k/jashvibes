@@ -72,7 +72,7 @@ export function useWatchContext(routeType, routeId, queryString) {
 export function useWatchSources(context, season, episode) {
   const [selection, setSelection] = useState('auto');
   const [retry, setRetry] = useState(0);
-  const [state, setState] = useState({ status: 'idle', provider: '', candidates: [], index: 0, error: '', attempts: [], needsIdentity: false });
+  const [state, setState] = useState({ status: 'idle', provider: '', candidates: [], index: 0, error: '', attempts: [], needsIdentity: false, note: '' });
   const generation = useRef(0), resolver = useRef(null), quality = useRef(''), startAt = useRef(0), tried = useRef(new Set());
   const order = providerOrder(context?.origin);
   useEffect(() => {
@@ -83,7 +83,8 @@ export function useWatchSources(context, season, episode) {
     const attempts = [];
     async function resolve(from = 0, forced = '') {
       const providers = forced ? [forced] : order.slice(from);
-      safe({ status: 'loading', provider: providers[0] || '', candidates: [], index: 0, error: '', attempts: [...attempts], needsIdentity: false });
+      let nextNote = '';
+      safe({ status: 'loading', provider: providers[0] || '', candidates: [], index: 0, error: '', attempts: [...attempts], needsIdentity: false, note: '' });
       let needsIdentity = false;
       for (const provider of providers) {
         if (controller.signal.aborted || generation.current !== token) return;
@@ -98,12 +99,16 @@ export function useWatchSources(context, season, episode) {
             if (context.reference) p.set('reference', context.reference);
             const data = await requestJson(`/api/watch/source?${p}`, controller.signal, 35000);
             candidates = data.candidates || [];
+            // A provider may answer with usable candidates *and* a caveat (direct
+            // MP4 says so when every host refused). Keep it: silently listing dead
+            // links as if they were live is the bug being fixed.
+            if (data.note) nextNote = data.note;
           }
           if (candidates.length) {
             const index = chooseCandidate(candidates, quality.current);
             tried.current.add(candidates[index].url);
             attempts.push({ provider, status: candidates[index].kind === 'embed' ? 'iframe opened · playback not verified' : 'stream discovered' });
-            safe({ status: 'ready', provider, candidates, index, error: '', attempts: [...attempts], needsIdentity });
+            safe({ status: 'ready', provider, candidates, index, error: '', attempts: [...attempts], needsIdentity, note: nextNote });
             return;
           }
           attempts.push({ provider, status: 'no matching source' });

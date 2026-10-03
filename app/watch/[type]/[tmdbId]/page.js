@@ -7,7 +7,7 @@ import JashPlayer from '@/components/player/JashPlayerLazy';
 import { createStreamPolicy } from '@/lib/player/policy/stream';
 import { detectKind } from '@/lib/player/kind';
 import { useWatchContext, useWatchSources, requestJson } from '@/hooks/useWatch';
-import { WATCH_PROVIDERS, parseIdentity } from '@/lib/watch/policy';
+import { WATCH_PROVIDERS, parseIdentity, providerOrder } from '@/lib/watch/policy';
 import { makeWatchKey, isFavoriteItem, toggleFavoriteItem, useLibraryVersion } from '@/lib/watchStore';
 import { claimMediaFocus } from '@/lib/player/mediaFocus';
 
@@ -80,6 +80,55 @@ export default function UnifiedWatchPage() {
   const onQualityApi = useCallback((api) => setManifestQuality(api), []);
   const active = sources.active;
   useEffect(() => setManifestQuality(null), [active?.url]);
+
+  /*
+   * Warm the Direct MP4 resolver while the viewer is still watching something else.
+   *
+   * `app/api/moviesda/resolve` has always been described as "the watch page fires
+   * this in the background the moment the source match lands" — but nothing ever
+   * called it, so the first click on Direct MP4 paid the whole hop-chain walk:
+   * measured at 12.2s for a 12s budget, returning 1 candidate where a complete
+   * walk returns 7. The fix is to call the two endpoints the way their own docs
+   * say, once per title, after the page is up.
+   *
+   * Only for movies (the Direct MP4 catalogue is movies-only), only once per
+   * title, and never awaited — if it fails, the click simply does the walk itself.
+   *
+   * The lookup is the cheap index read, deliberately without the live-search
+   * fallback: warming is speculation, and speculation must not cost moviesda a
+   * crawl for every title it has never heard of. A title the index does not know
+   * is resolved on click, exactly as before.
+   */
+  const warmedRef = useRef('');
+  useEffect(() => {
+    if (!context || context.type !== 'movie') return;
+    if (!providerOrder(context.origin).includes('mp4')) return;
+    const warmKey = `${context.tmdbId || ''}|${context.title || ''}|${context.year || ''}`;
+    if (!warmKey.replace(/\|/g, '') || warmedRef.current === warmKey) return;
+    warmedRef.current = warmKey;
+    /*
+     * Deliberately not abortable.
+     *
+     * A fire-and-forget warm-up must outlive the render that started it: aborting
+     * on cleanup would discard a walk the server is running anyway (it fills the
+     * cache whether or not a client is still listening), so the only thing an
+     * AbortController buys here is a warm-up that sometimes never lands.
+     */
+    (async () => {
+      try {
+        const matchParams = new URLSearchParams({
+          type: 'movie',
+          tmdbId: String(context.tmdbId || ''),
+          title: context.title || '',
+          year: String(context.year || ''),
+        });
+        const matchResponse = await fetch(`/api/moviesda/match?${matchParams}`);
+        const match = (await matchResponse.json())?.match;
+        if (!match?.pageUrl) return;
+        await fetch(`/api/moviesda/resolve?pageUrl=${encodeURIComponent(match.pageUrl)}`);
+      } catch { /* the click path resolves on its own */ }
+    })();
+  }, [context?.tmdbId, context?.title, context?.year, context?.type, context?.origin]);
   const embed = Boolean(trailer || active?.kind === 'embed');
   const series = context?.type === 'series';
   const episodes = context?.episodes?.length ? context.episodes : [{ season, episode, name: '' }];
@@ -233,6 +282,7 @@ export default function UnifiedWatchPage() {
               <div className="absolute inset-0 grid place-content-center gap-3 p-6 text-center">
                 <h2 className="text-lg font-black text-txt-1 sm:text-xl">No playable source right now</h2>
                 <p role="alert" className="mx-auto max-w-xl text-[13px] leading-6 text-txt-3">{loaded.error || sources.error}</p>
+                {sources.note ? <p className="mt-2 text-center text-[12px] leading-5 text-txt-3/80">{sources.note}</p> : null}
                 <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
                   <button type="button" onClick={() => { setTrailer(null); sources.retry(); }} className="jv-btn jv-btn-ghost">Retry</button>
                   <button type="button" onClick={() => { setTrailer(null); sources.next(); }} className="jv-btn jv-btn-marquee">Try next source →</button>
@@ -362,6 +412,10 @@ export default function UnifiedWatchPage() {
                           onClick={() => sources.chooseMirror(i)}
                         >
                           <span className="truncate">{c.label}</span>
+                          {/* The resolver probes every link before it is offered, so
+                              the list can say which hosts refused instead of letting
+                              the viewer find out by pressing play. */}
+                          {c.health === 'dead' ? <span className="jvp-panel-note ml-2 shrink-0">unavailable</span> : null}
                         </button>
                       ))}
                     </>

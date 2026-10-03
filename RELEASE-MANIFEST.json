@@ -1,20 +1,23 @@
 {
   "version": "11.0.0",
   "branch": "deploy-ready",
-  "baselineCommit": "66924b2ef53df3335a8aac900733f97d90010b76",
-  "verifiedOn": "2026-10-03",
-  "authorization": "User selected the Control Deck vault direction and requested the deployable zip",
+  "baselineCommit": "2afaece619ed5f1415b4ed98cf74161d4d968095",
+  "verifiedOn": "2026-10-04",
+  "authorization": "Direct MP4 offers only hosts that answer (user: fix directMP4 source in watchpage)",
   "verification": {
     "productionBuild": "passed",
     "standaloneStartupAndAssets": "passed",
     "sourceModules": 209,
     "localImportErrors": 0,
     "regressionTestsPassed": "not shipped in this bundle",
-    "productionBrowserFlowsPassed": 31,
+    "productionBrowserFlowsPassed": 8,
     "npmKnownVulnerabilities": 0,
     "realProductionDatabaseTested": false,
     "realDRMPlaybackTested": false,
-    "dockerRuntimeTested": false
+    "dockerRuntimeTested": false,
+    "productionBrowserFlowsScope": "Direct MP4 watch-page flow on this branch’s own production build: warm-up completes unprompted (25.0s), provider then answers from cache in 14ms, dead hosts flagged and sorted last, series pages do not warm the movies-only resolver",
+    "liveUpstreamProbes": "moviesda chain walked from the sandbox: links minted live, alive hosts verified by MP4 signature (206 + ftypisom), refusing hosts 403 text/html; no false positives on real media",
+    "regressionSuiteNote": "The deterministic suite (73 tests on audit-fixes) is not shipped on this branch by design; the Direct MP4 behaviour was verified here through the built app and the live chain instead."
   },
   "files": {
     ".dockerignore": {
@@ -22,8 +25,8 @@
       "sha256": "beb85ce7296ad30984138184ff063cc76339354e5b30d42493e16e1bf3c2d605"
     },
     ".env.example": {
-      "bytes": 12098,
-      "sha256": "996bd6ba85d1782837b0ac8f848e3c19b1b0ce5b030bae95ace15fdc9c421e17"
+      "bytes": 12191,
+      "sha256": "e9df2643fe638c277de9f6fc16ca4f4b198ec99696259072918513bd49f36a15"
     },
     ".gitignore": {
       "bytes": 395,
@@ -342,16 +345,16 @@
       "sha256": "5d5aeb87bec9f01accf871b0e2c519837271f6d0b0deb0e65affd9d6b579326a"
     },
     "app/api/watch/source/route.js": {
-      "bytes": 2982,
-      "sha256": "1dc6dedcde1ffa396612f7826cca28d1d212829dbbbb00d8847a57c593c46361"
+      "bytes": 4023,
+      "sha256": "6d37e93dfa8654b232b5236509348948973b225b9be61cb44945ca656bb6fd7d"
     },
     "app/classics/[id]/page.js": {
       "bytes": 205,
       "sha256": "6527ba1642461be7866a0391338466eb1c87608716178e80b87f6165134f6e5c"
     },
     "app/classics/page.js": {
-      "bytes": 18573,
-      "sha256": "6eb5cb1f270981f3cd90fe4fd24ed76bbe77f896e18e7f0d98910d5cb52b3a85"
+      "bytes": 19142,
+      "sha256": "e6d4a4efed77185a29e78609f66451c1cf3a1bf6d2d526152a11eb89926d33cb"
     },
     "app/embed-browser/page.js": {
       "bytes": 10773,
@@ -370,16 +373,16 @@
       "sha256": "fac83046ecd4144267e5804122aa218b5a09aecad5b0c77dea9eb0cd45de6190"
     },
     "app/globals.css": {
-      "bytes": 131279,
-      "sha256": "84f1517bb9c422aca85d889a7e4bb0a4f51097816d7fc857394d0e77cd95360a"
+      "bytes": 132017,
+      "sha256": "71f651d940cd00a6b2531b8bf82e0bc8a6455df112db83d12281d2b5623c1b52"
     },
     "app/layout.js": {
       "bytes": 2154,
       "sha256": "c290a72d01624373faed42ada26e323f2e032aaa165ba1cae41d99976e49b0d0"
     },
     "app/live/page.js": {
-      "bytes": 35453,
-      "sha256": "2212abe33e1c04221e27b359c99f464abaa6e57cf1f546d2194a989d1497fee2"
+      "bytes": 38587,
+      "sha256": "24d95265f2a95d5b6296a651ef6ada33c888b044f14bc26add73a4453579161a"
     },
     "app/music/page.js": {
       "bytes": 321,
@@ -414,8 +417,8 @@
       "sha256": "0316dcd5e2045cc0c39cde3e0321fc7498cbdebd4c041b1c598c9b6fe6af4596"
     },
     "app/watch/[type]/[tmdbId]/page.js": {
-      "bytes": 25241,
-      "sha256": "bf8df78740fc78957e39365c7efd2c57fe65dc3f2a1ae3b3f4b5c553f270ed3f"
+      "bytes": 28189,
+      "sha256": "ff081de0accbfd6937904b95553d3baef37e99f0eb12820b3d283cf0dca3d501"
     },
     "components/AuthGate.js": {
       "bytes": 10239,
@@ -494,8 +497,8 @@
       "sha256": "d060e2f38d4656fe55790dbc75267ab7545cfd7033728d2133e8cf41e17df973"
     },
     "components/music/MusicCurtains.jsx": {
-      "bytes": 15016,
-      "sha256": "7e647417b485849f5650ba935939270fbdd64e342ec602186b6d23821a427106"
+      "bytes": 15480,
+      "sha256": "fc89dee4e1d1cb98892648f970bf63850a7c6773f0ecb9675aaa7916eb0eb024"
     },
     "components/music/MusicProvider.jsx": {
       "bytes": 42510,
@@ -558,8 +561,8 @@
       "sha256": "bdf95b1a7ea517f95ab2444f1e3af91d325b4b212608745911e1541852b68aaf"
     },
     "docs/BEHAVIOUR.md": {
-      "bytes": 3140,
-      "sha256": "e74116039047a69b96df2752417bab3b6cfb4b7eb5802cab5ba4294eff886027"
+      "bytes": 3670,
+      "sha256": "a06d06df4f6715f5255c04971e85e7e4d277ab986a4b8d94f6b80054b8d69ea1"
     },
     "docs/DATABASE-MAINTENANCE.md": {
       "bytes": 5863,
@@ -578,8 +581,8 @@
       "sha256": "70c90a20208c5eb96b5ab563efa6c45567a02adb9ba193a207de12f9cc869360"
     },
     "hooks/useWatch.js": {
-      "bytes": 10950,
-      "sha256": "008d430f05a4ad8c626fcb195282c4fec057627a2fec9ddb243a628d8465e5a7"
+      "bytes": 11293,
+      "sha256": "9df1b68c320af4a6365378d293d825c5ef734300c98fb246575cbf8a0e99f796"
     },
     "instrumentation.js": {
       "bytes": 2459,
@@ -654,8 +657,8 @@
       "sha256": "e90358c547f344cdd0da993c11f4f294e7d1c3eed6596372ddf866028fe67a78"
     },
     "lib/moviesda/resolve.js": {
-      "bytes": 15670,
-      "sha256": "72e06f3613d496b60793bfea351ef6c7e22ee4a7cfeb304cef0c0070ec26f0a8"
+      "bytes": 26986,
+      "sha256": "e9a04e69d209ee60822126517f1d2735aef5ab0dcfc05bbc4eac2583c10e24f6"
     },
     "lib/moviesdaSource.js": {
       "bytes": 3380,
@@ -846,8 +849,8 @@
       "sha256": "88535a9e901bfac65474023372d6287c0f271865909850aab8e8bc69a80c00c1"
     },
     "lib/watch/policy.js": {
-      "bytes": 3289,
-      "sha256": "6dc582d869433263ff3d106794e030ea7c010cb1538a7d76078b2a493cdd878f"
+      "bytes": 4808,
+      "sha256": "f7b09dd428b568b408d0dd4fe94907efe63607592595ddd7a6560ad7e32e47a1"
     },
     "lib/watchStore.js": {
       "bytes": 7044,
