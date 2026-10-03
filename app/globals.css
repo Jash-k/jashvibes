@@ -2518,24 +2518,224 @@ html.day-mode .jv-vault-page {
       decision to keep it.
    ========================================================================== */
 [data-dvp="root"] {
-  --jvp-accent: #e8b33a;
-  --jvp-accent-soft: #f4c453;
-  --jvp-accent-deep: #c81e3c;
-  --jvp-on-accent: #1a1206;
-  --jvp-surface: rgba(9, 9, 14, 0.82);
-  --jvp-line: rgba(255, 255, 255, 0.16);
+  /* Chosen on 2026-10-03: direction C, "Midnight Violet". The player keeps an
+     accent of its own rather than the app's marquee gold, so the film's deck and
+     the rest of the app do not compete for the same warm colour. Gold is still
+     the app's identity — wordmark, hero, buttons — everywhere outside the frame.
+
+     As before these are LITERALS: the player is dark in both themes, so any
+     --txt-* / --ink-* token here would flip to dark ink on a dark surface. */
+  --jvp-accent: #a893ff;
+  --jvp-accent-soft: #cfc4ff;
+  --jvp-accent-deep: #7fe3e0;   /* the far end of the progress gradient */
+  --jvp-on-accent: #0f0b1c;
+  --jvp-glow: rgba(168, 147, 255, 0.34);
+  --jvp-surface: rgba(10, 7, 20, 0.94);
+  --jvp-line: rgba(168, 147, 255, 0.28);
   --jvp-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --jvp-serif: var(--font-display, 'Playfair Display'), Georgia, 'Times New Roman', serif;
 }
 
 /* ── the scrub track ── */
 .jvp-track-fill {
-  /* Lost and found: the old fill ran fuchsia → amber. Gold → deep marquee red
-     reads as the same object as the home-page play button. */
-  background: linear-gradient(90deg, var(--jvp-accent-deep), var(--jvp-accent));
+  /* Violet into cyan — the same gradient the deck's glow is cut from, so the
+     progress line and the surface around it read as one object. */
+  background: linear-gradient(90deg, #7b5cff, var(--jvp-accent) 62%, var(--jvp-accent-deep));
 }
 .jvp-thumb-glow {
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 16px rgba(232, 179, 58, 0.75);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 16px var(--jvp-glow);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   THE DECK — the chosen direction's one new surface
+   ----------------------------------------------------------------------------
+   The controls are no longer a gradient smeared across the bottom of the frame;
+   they are the film's deck: a lit panel that carries the title in the display
+   serif, the scrub line, and a tidy row of controls. It only exists while the
+   chrome is up. Nothing here is interactive by itself.
+   ──────────────────────────────────────────────────────────────────────────── */
+.jvp-deck {
+  position: relative;
+  border-radius: 20px 20px 0 0;
+  border-top: 1px solid rgba(168, 147, 255, 0.3);
+  background: linear-gradient(180deg, var(--jvp-surface), rgba(8, 5, 16, 0.98));
+  box-shadow: 0 -22px 70px rgba(0, 0, 0, 0.72), 0 -1px 34px rgba(168, 147, 255, 0.12);
+  padding: 0.7rem 0.75rem 0.5rem;
+}
+@media (min-width: 640px) {
+  .jvp-deck { padding: 0.85rem 1.125rem 0.55rem; }
+}
+@media (max-width: 639px) {
+  /* A 16:9 frame on a 390 px phone is ~192 px tall. The deck has to stay a
+     minority of it, so on small screens the identity line is one row — the
+     title — and the meta line, which repeats it in smaller type, is dropped. */
+  .jvp-meta { display: none; }
+  .jvp-film { font-size: 0.94rem; }
+  .jvp-orb { width: 2.5rem; height: 2.5rem; }
+  .jvp-orb svg { width: 1.05rem; height: 1.05rem; }
+  .jvp-deck { padding: 0.5rem 0.55rem 0.35rem; }
+}
+/* Fullscreen keeps the deck but squares it off and pins it to the frame edges. */
+[data-dvp="root"].jvp-fullscreen .jvp-deck {
+  border-radius: 0;
+  box-shadow: 0 -14px 44px rgba(0, 0, 0, 0.65), 0 -1px 30px rgba(168, 147, 255, 0.1);
+}
+
+.jvp-film {
+  margin: 0;
+  font-family: var(--jvp-serif);
+  font-size: 1.02rem;
+  line-height: 1.2;
+  color: #f4f1ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.jvp-film em {
+  font-style: normal;
+  margin-left: 0.45rem;
+  font-size: 0.72em;
+  color: rgba(207, 196, 255, 0.85);
+}
+.jvp-meta {
+  margin: 0.22rem 0 0;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(207, 196, 255, 0.62);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The play orb: the deck's one loud element. */
+.jvp-orb {
+  display: grid;
+  place-items: center;
+  width: 2.9rem;
+  height: 2.9rem;
+  border-radius: 999px;
+  color: var(--jvp-on-accent);
+  background: linear-gradient(180deg, var(--jvp-accent-soft), var(--jvp-accent));
+  box-shadow: 0 0 0 5px rgba(168, 147, 255, 0.18), 0 10px 30px var(--jvp-glow);
+  transition: transform 170ms var(--jvp-ease), box-shadow 170ms var(--jvp-ease);
+}
+.jvp-orb:hover { transform: scale(1.06); box-shadow: 0 0 0 6px rgba(168, 147, 255, 0.24), 0 12px 36px var(--jvp-glow); }
+
+/* Fullscreen idle: the deck leaves, one hairline stays. It tracks what is played,
+   so a glance tells you where you are without a single glyph on the picture. */
+.jvp-line {
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 25;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.14);
+  pointer-events: none;
+}
+.jvp-line i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #7b5cff, var(--jvp-accent) 62%, var(--jvp-accent-deep));
+  box-shadow: 0 0 14px var(--jvp-glow);
+}
+
+/* ── the one playback panel, in the player and page alike ── */
+.jvp-sheet {
+  border: 1px solid rgba(168, 147, 255, 0.3);
+  background: linear-gradient(180deg, rgba(21, 14, 40, 0.98), rgba(10, 7, 20, 0.98));
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.85), 0 0 40px rgba(168, 147, 255, 0.1);
+}
+.jvp-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(168, 147, 255, 0.3);
+  background: rgba(168, 147, 255, 0.1);
+  border-radius: 999px;
+  padding: 0.42rem 0.8rem;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: rgba(244, 241, 255, 0.86);
+  transition: background 150ms var(--jvp-ease), color 150ms var(--jvp-ease), border-color 150ms var(--jvp-ease);
+}
+.jvp-pill:hover { background: rgba(168, 147, 255, 0.2); color: #fff; }
+.jvp-pill[aria-pressed="true"] {
+  background: linear-gradient(180deg, var(--jvp-accent-soft), var(--jvp-accent));
+  border-color: transparent;
+  color: var(--jvp-on-accent);
+  font-weight: 800;
+}
+.jvp-pill small { display: block; font-size: 9.5px; font-weight: 700; opacity: 0.7; }
+
+/* ── the page's Playback panel ──
+   Same family as the player's sheet: the two are the same decision asked in two
+   places, so they must not look like two different products. Dark-locked like
+   the deck — the panel sits under a video frame in both themes. */
+.jv-playback-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--line-2, rgba(255, 255, 255, 0.14));
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  text-align: left;
+  transition: border-color 150ms var(--jvp-ease), background 150ms var(--jvp-ease);
+}
+.jv-playback-trigger:hover { border-color: rgba(168, 147, 255, 0.45); background: rgba(168, 147, 255, 0.08); }
+.jv-playback-caret { color: #a893ff; font-size: 12px; transition: transform 160ms var(--jvp-ease); }
+.jv-playback-caret.is-open { transform: rotate(180deg); }
+
+.jv-playback-panel {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.5rem);
+  z-index: 50;
+  width: min(23rem, calc(100vw - 2rem));
+  max-height: min(60vh, 32rem);
+  overflow-y: auto;
+  border-radius: 16px;
+  padding: 0.75rem;
+  color: #f4f1ff;
+}
+@media (max-width: 640px) {
+  /* On a phone the panel docks to the bottom of the frame instead of floating
+     above a control that may be scrolled off-screen. */
+  .jv-playback-panel { position: fixed; left: 0.75rem; right: 0.75rem; bottom: 0.75rem; width: auto; max-height: 70vh; }
+}
+.jvp-panel-title {
+  margin: 0.1rem 0 0.45rem;
+  padding: 0 0.25rem;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(207, 196, 255, 0.62);
+}
+.jvp-panel-row {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  text-align: left;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: rgba(244, 241, 255, 0.82);
+  transition: background 140ms var(--jvp-ease), border-color 140ms var(--jvp-ease), color 140ms var(--jvp-ease);
+}
+.jvp-panel-row:hover { background: rgba(255, 255, 255, 0.07); color: #fff; }
+.jvp-panel-row[aria-pressed="true"] {
+  background: rgba(168, 147, 255, 0.16);
+  border-color: rgba(168, 147, 255, 0.45);
+  color: #fff;
+}
+.jvp-panel-row[aria-pressed="true"]::after { content: " ✓"; color: #cfc4ff; font-weight: 800; }
 
 /* ── chrome motion: a lift, not a pop ──
    The bar already faded with Tailwind's transition-opacity. Adding transform on

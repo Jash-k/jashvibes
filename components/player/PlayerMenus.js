@@ -42,12 +42,12 @@ export const Menu = memo(function Menu({ title, subtitle, onClose, children, wid
   }, []);
 
   const sheet = coarse
-    ? 'absolute inset-x-0 bottom-0 z-50 max-h-[min(70%,calc(100%-3rem))] overflow-hidden rounded-t-3xl border-t border-white/10 bg-zinc-950/97 pb-[max(env(safe-area-inset-bottom),16px)] shadow-[0_-18px_60px_rgba(0,0,0,.8)]'
+    ? 'jvp-sheet absolute inset-x-0 bottom-0 z-50 max-h-[min(70%,calc(100%-3rem))] overflow-hidden rounded-t-3xl pb-[max(env(safe-area-inset-bottom),16px)]'
     // Anchored inside the player box rather than floating above it: the sheets are
     // siblings of the control bar, so an outside-above anchor put the whole menu
     // outside the frame, where `overflow-hidden` clipped it. That is why clicking a
     // control on desktop looked like "nothing happened".
-    : `absolute bottom-28 right-2 z-50 max-h-[min(70%,calc(100%-8rem))] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/95 shadow-[0_18px_60px_rgba(0,0,0,0.7)] backdrop-blur ${wide ? 'w-[19rem]' : 'w-48'}`;
+    : `jvp-sheet absolute bottom-28 right-2 z-50 max-h-[min(70%,calc(100%-8rem))] overflow-hidden rounded-[18px] backdrop-blur-xl ${wide ? 'w-[19rem]' : 'w-48'}`;
 
   return (
     <>
@@ -73,7 +73,7 @@ export const Menu = memo(function Menu({ title, subtitle, onClose, children, wid
       >
         <div className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#e8b33a]/85">{title}</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#a893ff]/85">{title}</p>
             {subtitle ? <p className="mt-0.5 truncate text-[11px] font-semibold text-white/50">{subtitle}</p> : null}
           </div>
           <button
@@ -110,12 +110,12 @@ export const MenuItem = memo(function MenuItem({ active, onClick, children, hint
         disabled
           ? 'cursor-not-allowed text-white/30'
           : active
-            ? 'bg-[#e8b33a]/15 text-[#f4c453]'
+            ? 'bg-[#a893ff]/15 text-[#cfc4ff]'
             : 'text-white/85 hover:bg-white/5 hover:text-white'
       }`}
     >
       {icon ? <Icon d={icon} className="h-4 w-4 shrink-0 opacity-80" /> : null}
-      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${active ? 'bg-gradient-to-r from-[#e8b33a] to-[#f4c453] shadow-[0_0_10px_rgba(232,179,58,0.8)]' : 'bg-zinc-700'}`} />
+      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${active ? 'bg-gradient-to-r from-[#a893ff] to-[#cfc4ff] shadow-[0_0_10px_rgba(232,179,58,0.8)]' : 'bg-zinc-700'}`} />
       <span className="min-w-0 flex-1 truncate">{children}</span>
       {hint ? <span className="shrink-0 text-[11px] font-bold tabular-nums text-white/45">{hint}</span> : null}
     </button>
@@ -143,16 +143,46 @@ export const QualityMenu = memo(function QualityMenu({
   onClose,
 }) {
   const hasStreams = streams.length > 0;
-  const subtitle = hasStreams
-    ? `${streams.length} stream${streams.length === 1 ? '' : 's'}`
-    : auto
-      ? 'Auto (adaptive)'
-      : `${Number(activeHeight) || '?'}p locked`;
+  // One panel, two questions. Before this, quality and source were separate
+  // dropdowns in the deck and a third pair of <select>s on the page — the same
+  // decision spread over four controls. The heading counts what is actually in
+  // here, so it is never a promise the panel cannot keep.
+  const parts = [];
+  if (heights.length) parts.push(`${heights.length + 1} qualities`);
+  if (hasStreams) parts.push(`${streams.length} source${streams.length === 1 ? '' : 's'}`);
+  const subtitle = parts.length ? parts.join(' · ') : 'Auto (adaptive)';
 
   return (
-    <Menu title="Quality" subtitle={subtitle} note={note} coarse={coarse} onClose={onClose}>
+    <Menu title="Playback" subtitle={subtitle} note={note} coarse={coarse} onClose={onClose}>
+      {/* Quality first: it is the question viewers actually ask. */}
+      <div className="flex flex-wrap gap-1.5 px-4 pb-3 pt-3">
+        <button
+          type="button"
+          className="jvp-pill"
+          aria-pressed={auto}
+          onClick={() => onAuto?.()}
+        >
+          Auto
+        </button>
+        {heights.map((height) => (
+          <button
+            key={height}
+            type="button"
+            className="jvp-pill"
+            aria-pressed={!auto && Number(activeHeight) === height}
+            onClick={() => onPickHeight?.(height)}
+          >
+            {height >= 2160 ? '4K' : `${height}p`}
+          </button>
+        ))}
+      </div>
+
       {hasStreams ? (
-        streams.map((source, index) => {
+        <>
+          <p className="px-4 pb-1 pt-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/40">
+            Source
+          </p>
+          {streams.map((source, index) => {
           const sizeHint = Number(source.sizeBytes) > 0 ? fmtSize(Number(source.sizeBytes)) : String(source.size || '');
           return (
             <MenuItem
@@ -165,30 +195,14 @@ export const QualityMenu = memo(function QualityMenu({
               {source.label || `Stream ${index + 1}`}
             </MenuItem>
           );
-        })
-      ) : (
-        <>
-          <MenuItem command="qualityAuto" role="menuitemradio" active={auto} onClick={() => onAuto?.()}>
-            Auto
-          </MenuItem>
-          {heights.map((height) => (
-            <MenuItem
-              key={height}
-              command="cycleQuality"
-              role="menuitemradio"
-              active={!auto && Number(activeHeight) === height}
-              onClick={() => onPickHeight?.(height)}
-              hint={height >= 2160 ? '4K' : height >= 1080 ? 'Full HD' : height >= 720 ? 'HD' : ''}
-            >
-              {height}p
-            </MenuItem>
-          ))}
-          {heights.length ? null : (
-            <p className="px-4 py-2 text-[11px] font-semibold text-white/45">
-              This source exposes one rendition, so there is nothing to switch — the server decides the quality.
-            </p>
-          )}
+        })}
         </>
+      ) : (
+        <p className="px-4 pb-2 text-[11px] font-semibold text-white/45">
+          {heights.length
+            ? 'One source for this title — the quality pills above switch the rendition it serves.'
+            : 'This source exposes one rendition, so there is nothing to switch — the server decides the quality.'}
+        </p>
       )}
     </Menu>
   );
@@ -265,7 +279,7 @@ export const ContextMenu = memo(function ContextMenu({ x, y, onClose, items }) {
 export const TimeBubble = memo(function TimeBubble({ label, seconds, delta }) {
   return (
     <div className="pointer-events-none absolute left-1/2 top-1/2 z-30 -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/10 bg-black/75 px-4 py-3 text-center backdrop-blur">
-      <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#e8b33a]/80">{label}</p>
+      <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#a893ff]/80">{label}</p>
       {Number.isFinite(seconds) ? <p className="mt-0.5 text-[15px] font-black tabular-nums text-white">{fmtTime(seconds)}</p> : null}
       {delta ? <p className="text-[11px] font-bold text-white/60">{delta}</p> : null}
     </div>

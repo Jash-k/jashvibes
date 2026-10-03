@@ -52,6 +52,30 @@ export default function UnifiedWatchPage() {
   const [frameLoaded, setFrameLoaded] = useState(false), [popupBlocker, setPopupBlocker] = useState(true);
   const [trailer, setTrailer] = useState(null), [trailerError, setTrailerError] = useState('');
   const shell = useRef(null); useLibraryVersion();
+  /*
+   * One playback surface.
+   *
+   * This page used to answer "which source?" and "which quality?" with three
+   * <select>s — Source, Resolution, and a Mirror picker further down — while the
+   * player's own bar carried a fourth. Four controls, one decision. They are now
+   * a single panel that shows the current answer on its face, and the player's
+   * gear opens the same two questions for the stream that is already playing.
+   */
+  const [playbackOpen, setPlaybackOpen] = useState(false);
+  const playbackRef = useRef(null);
+  useEffect(() => {
+    if (!playbackOpen) return undefined;
+    const onDown = (event) => {
+      if (!playbackRef.current?.contains?.(event.target)) setPlaybackOpen(false);
+    };
+    const onKey = (event) => { if (event.key === 'Escape') setPlaybackOpen(false); };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [playbackOpen]);
   const [manifestQuality, setManifestQuality] = useState(null);
   const onQualityApi = useCallback((api) => setManifestQuality(api), []);
   const active = sources.active;
@@ -63,6 +87,30 @@ export default function UnifiedWatchPage() {
   const nextEpisode = series ? episodes[episodeIndex + 1] : null;
   const key = context?.tmdbId ? makeWatchKey({ type: context.type, tmdbId: context.tmdbId }) : `${context?.origin || routeType}:${routeId}`;
   const qualities = [...new Set(sources.candidates.map((c) => c.quality).filter(Boolean))];
+
+  /*
+   * The quality question, resolved once for the panel.
+   *
+   * Two shapes exist in this app and the old <select> handled both branches
+   * inline: a source that labels its own candidates (mirrors of a release, each
+   * with a quality string), or a manifest that exposes rendition heights. The
+   * panel shows whichever exists, and never offers a choice that would be a
+   * no-op — if there is nothing to switch, the section is simply not there.
+   */
+  const playbackQualities = qualities.length
+    ? qualities
+    : (manifestQuality?.heights || []).map((height) => String(height));
+  const selectedQuality = qualities.length
+    ? (active?.quality || '')
+    : (manifestQuality?.auto ? 'auto' : String(manifestQuality?.height || 'auto'));
+  const qualityLabelFor = (value) => {
+    if (value === 'auto') return manifestQuality?.heights?.length ? 'Auto' : 'Source controlled · Auto';
+    if (value === selectedQuality && !qualities.length && manifestQuality?.height) return `${manifestQuality.height}p`;
+    return /^\d+$/.test(value) ? `${value}p` : value;
+  };
+  const playbackQualityLabel = playbackQualities.length
+    ? qualityLabelFor(selectedQuality)
+    : 'One rendition';
   const playbackPolicy = useMemo(() => active && !embed ? createStreamPolicy(active, { expandDashKids: false }) : null, [active, embed]);
   const entry = useMemo(() => context ? {
     key, type: context.type, tmdbId: context.tmdbId || null, title: context.title,
@@ -217,20 +265,94 @@ export default function UnifiedWatchPage() {
           </div>
 
           {/* control bar — below the picture, hidden in fullscreen ------- */}
-          <div className="grid gap-3 border-t border-line-1 bg-ink-1 p-3.5 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] fullscreen:hidden">
-            <Field label="Source">
-              <select
-                aria-label="Source"
-                className="jv-select"
-                value={sources.selection}
-                onChange={(e) => { setTrailer(null); sources.chooseProvider(e.target.value); }}
+          <div className="flex flex-wrap items-end gap-3 border-t border-line-1 bg-ink-1 p-3.5 fullscreen:hidden">
+            <div ref={playbackRef} className="relative min-w-[15rem] flex-1 sm:flex-none">
+              <p className="jv-eyebrow mb-1.5">Playback</p>
+              <button
+                type="button"
+                aria-haspopup="dialog"
+                aria-expanded={playbackOpen}
+                aria-label={`Playback: ${sources.selection === 'auto' ? 'Auto source' : WATCH_PROVIDERS.find((p) => p.id === sources.selection)?.name || sources.selection}, ${playbackQualityLabel}`}
+                onClick={() => setPlaybackOpen((open) => !open)}
+                className="jv-playback-trigger"
               >
-                <option value="auto">Auto</option>
-                {WATCH_PROVIDERS.filter((p) => p.id !== 'retro' || context?.retroStreams?.length).map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </Field>
+                <span className="min-w-0">
+                  <span className="block truncate font-black text-txt-1">
+                    {sources.selection === 'auto'
+                      ? 'Auto'
+                      : WATCH_PROVIDERS.find((p) => p.id === sources.selection)?.name || sources.selection}
+                  </span>
+                  <span className="block truncate text-[11px] font-semibold text-txt-4">{playbackQualityLabel}</span>
+                </span>
+                <span aria-hidden="true" className={`jv-playback-caret ${playbackOpen ? 'is-open' : ''}`}>▾</span>
+              </button>
+
+              {playbackOpen ? (
+                <div role="dialog" aria-label="Playback" className="jvp-sheet jv-playback-panel">
+                  <p className="jvp-panel-title">Source</p>
+                  <button
+                    type="button"
+                    aria-pressed={sources.selection === 'auto'}
+                    className="jvp-panel-row"
+                    onClick={() => { setTrailer(null); sources.chooseProvider('auto'); }}
+                  >
+                    <span>Auto — best available, follows the order below</span>
+                  </button>
+                  {WATCH_PROVIDERS.filter((p) => p.id !== 'retro' || context?.retroStreams?.length).map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      aria-pressed={sources.selection === p.id}
+                      className="jvp-panel-row"
+                      onClick={() => { setTrailer(null); sources.chooseProvider(p.id); }}
+                    >
+                      <span>{p.name}</span>
+                    </button>
+                  ))}
+
+                  {playbackQualities.length ? (
+                    <>
+                      <p className="jvp-panel-title mt-3">Quality</p>
+                      <div className="flex flex-wrap gap-1.5 px-1 pb-1">
+                        {playbackQualities.map((q) => (
+                          <button
+                            key={q}
+                            type="button"
+                            className="jvp-pill"
+                            aria-pressed={String(q) === String(selectedQuality)}
+                            onClick={() => { setTrailer(null); if (qualities.length) sources.chooseQuality(q); else if (q === 'auto') manifestQuality?.setAuto(); else manifestQuality?.select(Number(q)); }}
+                          >
+                            {q === 'auto' ? 'Auto' : q}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : null}
+
+                  {sources.candidates.length > 1 ? (
+                    <>
+                      <p className="jvp-panel-title mt-3">Mirror</p>
+                      {sources.candidates.map((c, i) => (
+                        <button
+                          key={c.url}
+                          type="button"
+                          aria-pressed={Number(sources.index) === i}
+                          className="jvp-panel-row"
+                          onClick={() => sources.chooseMirror(i)}
+                        >
+                          <span className="truncate">{c.label}</span>
+                        </button>
+                      ))}
+                    </>
+                  ) : null}
+
+                  <div className="mt-3 flex gap-2 border-t border-white/10 px-1 pt-3">
+                    <button type="button" onClick={() => { setTrailer(null); sources.retry(); }} className="jv-btn jv-btn-ghost jv-btn-sm">Retry</button>
+                    <button type="button" onClick={() => { setTrailer(null); sources.next(); }} className="jv-btn jv-btn-marquee jv-btn-sm flex-1">Next source →</button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
 
             {series ? (
               <Field label="Episode">
@@ -244,30 +366,9 @@ export default function UnifiedWatchPage() {
               </Field>
             ) : null}
 
-            <Field label="Resolution">
-              <select
-                aria-label="Resolution"
-                className="jv-select"
-                value={qualities.length ? active?.quality || '' : manifestQuality?.auto ? 'auto' : String(manifestQuality?.height || 'auto')}
-                disabled={!qualities.length && !manifestQuality?.heights?.length}
-                onChange={(e) => {
-                  if (qualities.length) sources.chooseQuality(e.target.value);
-                  else if (e.target.value === 'auto') manifestQuality?.setAuto();
-                  else manifestQuality?.select(Number(e.target.value));
-                }}
-              >
-                {!qualities.length ? (
-                  <>
-                    <option value="auto">{manifestQuality?.heights?.length ? 'Auto' : 'Source controlled / Auto'}</option>
-                    {(manifestQuality?.heights || []).map((h) => <option key={h} value={String(h)}>{h}p</option>)}
-                  </>
-                ) : qualities.map((q) => <option key={q} value={q}>{q}</option>)}
-              </select>
-            </Field>
-
             <div className="flex items-end gap-2">
               <button type="button" onClick={() => { setTrailer(null); sources.retry(); }} className="jv-btn jv-btn-ghost">Retry</button>
-              <button type="button" onClick={() => { setTrailer(null); sources.next(); }} className="jv-btn jv-btn-marquee flex-1">Next source →</button>
+              <button type="button" onClick={() => { setTrailer(null); sources.next(); }} className="jv-btn jv-btn-marquee">Next source →</button>
             </div>
           </div>
 
@@ -291,20 +392,6 @@ export default function UnifiedWatchPage() {
             <input type="checkbox" checked={popupBlocker} onChange={(e) => setPopupBlocker(e.target.checked)} />
             Sandbox iframe popups
           </label>
-
-          {sources.candidates.length > 1 ? (
-            <label className="jv-field inline-flex items-center gap-2">
-              Mirror
-              <select
-                aria-label="Stream mirror"
-                className="jv-select !mt-0 !w-auto min-h-11"
-                value={sources.index}
-                onChange={(e) => sources.chooseMirror(Number(e.target.value))}
-              >
-                {sources.candidates.map((c, i) => <option key={c.url} value={i}>{c.label}</option>)}
-              </select>
-            </label>
-          ) : null}
 
           {nextEpisode ? (
             <button type="button" className="jv-btn jv-btn-ghost jv-btn-sm" onClick={() => pickEpisode(`${nextEpisode.season}:${nextEpisode.episode}`)}>

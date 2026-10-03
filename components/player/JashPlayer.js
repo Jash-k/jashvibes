@@ -948,6 +948,22 @@ export function JashPlayer(props) {
   const renditionLabel = prefs.qualityAuto || !prefs.qualityHeight ? 'Auto' : Number(prefs.qualityHeight) >= 2160 ? '4K' : `${prefs.qualityHeight}p`;
   const qualityLabel = activeStreamQuality || renditionLabel;
 
+  /*
+   * The line under the deck's title. Every part of it is something the player
+   * already knows — the chosen rendition, how many sources it can fall back
+   * through, and whether this is a live edge or a file. It replaces the old
+   * habit of printing the same facts as three separate pills in the bar.
+   */
+  const deckMeta = useMemo(() => {
+    const parts = [qualityLabel];
+    const count = sources.length;
+    if (count > 1) parts.push(`${count} sources`);
+    parts.push(wantsLive ? 'Live' : 'On demand');
+    // The codec warning is a chip in the top bar, with the detail in its tooltip.
+    // Printing it twice made the frame look like it did not trust either one.
+    return parts.filter(Boolean).join('  ·  ');
+  }, [qualityLabel, sources.length, wantsLive]);
+
   const subtitleOn = (tracks.text || []).some((track) => track.active) || Boolean(engine.externalSubtitle);
   // No control that controls nothing: the CC toggle exists only when there is
   // a track to toggle — embedded, or a file the viewer dropped on the player.
@@ -1055,7 +1071,7 @@ export function JashPlayer(props) {
         event.preventDefault();
         setContextMenu({ x: event.clientX, y: event.clientY });
       }}
-      className={`group/player jv-native-cursor relative isolate overflow-hidden bg-black text-white outline-none focus-visible:ring-2 focus-visible:ring-[#e8b33a]/60${visible ? '' : ' jv-idle'} ${aspectClass(
+      className={`group/player jv-native-cursor relative isolate overflow-hidden bg-black text-white outline-none focus-visible:ring-2 focus-visible:ring-[#a893ff]/60${visible ? '' : ' jv-idle'} ${isFullscreen ? ' jvp-fullscreen' : ''} ${aspectClass(
         display.aspect,
       )} ${landscapePhone ? 'jv-landscape-phone' : ''} ${className}`}
     >
@@ -1073,7 +1089,7 @@ export function JashPlayer(props) {
 
       {dropTarget ? (
         <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-black/60">
-          <p className="rounded-2xl border border-[#e8b33a]/40 bg-black/70 px-4 py-2 text-[12px] font-black uppercase tracking-wider text-[#f4c453]">Drop to load subtitles</p>
+          <p className="rounded-full border border-[#a893ff]/45 bg-[#0a0714]/90 px-4 py-2 text-[12.5px] font-bold tracking-wide text-[#f4f1ff] shadow-[0_14px_44px_rgba(0,0,0,0.55)]">Release to load subtitles</p>
         </div>
       ) : null}
 
@@ -1118,7 +1134,7 @@ export function JashPlayer(props) {
             type="button"
             data-jash-command="freezeFrame"
             onClick={toggleFreeze}
-            className="absolute bottom-24 left-1/2 -translate-x-1/2 rounded-full border border-white/20 bg-black/75 px-4 py-2 text-[11px] font-black uppercase tracking-wider text-white backdrop-blur transition hover:border-[#e8b33a]/60"
+            className="absolute bottom-24 left-1/2 -translate-x-1/2 rounded-full border border-white/20 bg-black/75 px-4 py-2 text-[11px] font-black uppercase tracking-wider text-white backdrop-blur transition hover:border-[#a893ff]/60"
           >
             Unfreeze
           </button>
@@ -1127,24 +1143,23 @@ export function JashPlayer(props) {
 
       {locked ? <LockedOverlay onUnlock={() => setLocked(false)} /> : null}
 
+      {/* The deck carries the title now. This bar keeps navigation and real state —
+          the two of them used to print the same words at opposite ends of the frame. */}
       <TopBar
-        title={display.title || title}
-        subtitle={display.subtitle}
+        title={null}
+        subtitle={null}
         visible={visible || status !== 'ready'}
         onPrev={onPrev}
         onNext={onNext}
-        badges={
-          <>
-            {display.badges}
-            {codecWarning.risky ? (
-              <span className="rounded-full border border-amber-300/40 bg-amber-950/60 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-200" title={codecWarning.notes.join(' · ')}>
-                {codecWarning.tags.join(' / ')}
-              </span>
-            ) : null}
-            {!online ? <span className="rounded-full border border-red-400/40 bg-red-950/60 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-red-200">Offline</span> : null}
-            {canFullscreen ? null : <span className="text-[9px] font-black uppercase tracking-wider text-white/35">no FS</span>}
-          </>
-        }
+        badges={[
+          display.badges,
+          codecWarning.risky ? (
+            <span key="codec" className="rounded-full border border-amber-300/40 bg-amber-950/60 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-200" title={codecWarning.notes.join(' · ')}>
+              {codecWarning.tags.join(' / ')}
+            </span>
+          ) : null,
+          !online ? <span key="offline" className="rounded-full border border-red-400/40 bg-red-950/60 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-red-200">Offline</span> : null,
+        ]}
       />
 
 
@@ -1164,6 +1179,14 @@ export function JashPlayer(props) {
         />
       ) : null}
 
+      {/* Fullscreen, chrome down: nothing but the picture and this line. It is the
+          one thing that is still worth saying while the deck is away. */}
+      {isFullscreen && canSeek ? (
+        <div className="jvp-line" aria-hidden="true">
+          <i style={{ width: `${playedRatio * 100}%` }} />
+        </div>
+      ) : null}
+
       {notice ? (
         <NoticeBar
           tone={notice.tone}
@@ -1178,10 +1201,20 @@ export function JashPlayer(props) {
       <div
         data-dvp="controls"
         onPointerDown={wake}
-        className={`jvp-chrome absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/95 via-black/60 to-transparent px-2 pb-[max(env(safe-area-inset-bottom),0.625rem)] pt-12 transition-opacity duration-300 sm:px-3 ${
+        className={`jvp-chrome absolute inset-x-0 bottom-0 z-30 pb-[max(env(safe-area-inset-bottom),0.25rem)] ${
           visible ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0 invisible'
         }`}
       >
+        {/* The film's deck. It carries the title in the display serif, so the frame
+            itself says what is playing — the page's own heading is off-screen in
+            fullscreen, and a bare row of icons never did. */}
+        <div className="jvp-deck">
+          <div className="mb-1 flex items-end justify-between gap-4">
+            <div className="min-w-0">
+              <p className="jvp-film">{display.title || title || 'Untitled'}</p>
+              <p className="jvp-meta">{deckMeta}</p>
+            </div>
+          </div>
         {canSeek ? (
           <div
             ref={trackRef}
@@ -1227,9 +1260,9 @@ export function JashPlayer(props) {
             data-jash-command="togglePlay"
             onClick={() => runCommand('togglePlay')}
             aria-label={playing ? 'Pause' : 'Play'}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95"
+            className="jvp-orb mr-1 shrink-0 active:scale-95"
           >
-            <Icon d={playing ? PATHS.pause : PATHS.play} className="h-6 w-6" />
+            <Icon d={playing ? PATHS.pause : PATHS.play} className="h-5 w-5" />
           </button>
 
           {canSeek ? (
@@ -1280,7 +1313,7 @@ export function JashPlayer(props) {
               aria-label="Volume"
               value={Number(videoEl?.volume ?? prefs.volume)}
               onChange={(event) => engine.setVolume(Number(event.target.value))}
-              className="h-8 w-0 cursor-pointer opacity-0 transition-all accent-[#e8b33a] group-hover/vol:w-20 group-hover/vol:opacity-100"
+              className="h-8 w-0 cursor-pointer opacity-0 transition-all accent-[#a893ff] group-hover/vol:w-20 group-hover/vol:opacity-100"
             />
           </div>
 
@@ -1296,12 +1329,14 @@ export function JashPlayer(props) {
               onClick={() => setMenu(menu === 'quality' ? null : 'quality')}
               aria-haspopup="dialog"
               aria-expanded={menu === 'quality'}
-              aria-label={`Quality: ${qualityLabel}`}
-              className="grid h-11 min-w-[4.25rem] place-items-center rounded-full border border-white/15 px-2.5 text-[11px] font-black text-white transition hover:border-[#e8b33a]/50 hover:text-[#f4c453]"
+              aria-label={`Playback settings: quality ${qualityLabel}`}
+              className="grid h-11 min-w-[3rem] place-items-center rounded-full border border-white/15 px-2.5 text-[11px] font-black text-white transition hover:border-[#a893ff]/50 hover:text-[#cfc4ff]"
             >
+              {/* One control, one panel. Quality and source used to be two
+                  dropdowns wearing two labels; the panel below holds both. */}
               <span className="flex items-center gap-1.5">
-                <Icon d={PATHS.list} className="h-4 w-4" />
-                {qualityLabel}
+                <Icon d={PATHS.gear} className="h-4 w-4" />
+                <span className="hidden sm:inline">{qualityLabel}</span>
               </span>
             </button>
 
@@ -1311,7 +1346,7 @@ export function JashPlayer(props) {
               aria-haspopup="dialog"
               aria-expanded={menu === 'aspect'}
               aria-label={`Aspect ratio: ${aspectLabel(aspectMode)}`}
-              className="grid h-11 min-w-[3.4rem] place-items-center rounded-full border border-white/15 px-2.5 text-[11px] font-black text-white transition hover:border-[#e8b33a]/50 hover:text-[#f4c453]"
+              className="grid h-11 min-w-[3.4rem] place-items-center rounded-full border border-white/15 px-2.5 text-[11px] font-black text-white transition hover:border-[#a893ff]/50 hover:text-[#cfc4ff]"
             >
               {aspectLabel(aspectMode)}
             </button>
@@ -1324,7 +1359,7 @@ export function JashPlayer(props) {
                 aria-label={subtitleOn ? 'Subtitles on' : 'Subtitles off'}
                 aria-pressed={subtitleOn}
                 title="Subtitles (C)"
-                className={`grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 ${subtitleOn ? 'bg-white/15 text-[#f4c453]' : ''}`}
+                className={`grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 ${subtitleOn ? 'bg-white/15 text-[#cfc4ff]' : ''}`}
               >
                 <span className="text-[11px] font-black tracking-wide">CC</span>
               </button>
@@ -1338,7 +1373,7 @@ export function JashPlayer(props) {
                 aria-label={pipActive ? 'Exit picture in picture' : 'Picture in picture'}
                 aria-pressed={pipActive}
                 title="Picture in picture (P)"
-                className={`grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95 ${pipActive ? 'bg-white/15 text-[#f4c453]' : ''}`}
+                className={`grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95 ${pipActive ? 'bg-white/15 text-[#cfc4ff]' : ''}`}
               >
                 <Icon d={PATHS.pip} className="h-5 w-5" />
               </button>
@@ -1369,6 +1404,7 @@ export function JashPlayer(props) {
               </button>
             ) : null}
           </div>
+        </div>
         </div>
       </div>
 
