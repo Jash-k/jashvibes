@@ -2558,13 +2558,17 @@ html.day-mode .jv-vault-page {
    serif, the scrub line, and a tidy row of controls. It only exists while the
    chrome is up. Nothing here is interactive by itself.
    ──────────────────────────────────────────────────────────────────────────── */
+/* The deck, compacted. It was carrying a title at 1.02rem, a tight tracking label,
+   a 44px control row and 8rem of reserved timestamp — a slab across the bottom of the
+   film. It is now a single bar: same controls, same order, roughly two thirds the
+   height, and the padding is what shrank, not the touch targets. */
 .jvp-deck {
   position: relative;
-  border-radius: 20px 20px 0 0;
+  border-radius: 16px 16px 0 0;
   border-top: 1px solid rgba(168, 147, 255, 0.3);
   background: linear-gradient(180deg, var(--jvp-surface), rgba(8, 5, 16, 0.98));
-  box-shadow: 0 -22px 70px rgba(0, 0, 0, 0.72), 0 -1px 34px rgba(168, 147, 255, 0.12);
-  padding: 0.7rem 0.75rem 0.5rem;
+  box-shadow: 0 -18px 52px rgba(0, 0, 0, 0.68), 0 -1px 24px rgba(168, 147, 255, 0.12);
+  padding: 0.42rem 0.55rem 0.35rem;
 }
 @media (min-width: 640px) {
   .jvp-deck { padding: 0.85rem 1.125rem 0.55rem; }
@@ -2588,8 +2592,8 @@ html.day-mode .jv-vault-page {
 .jvp-film {
   margin: 0;
   font-family: var(--jvp-serif);
-  font-size: 1.02rem;
-  line-height: 1.2;
+  font-size: 0.86rem;
+  line-height: 1.15;
   color: #f4f1ff;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2602,10 +2606,10 @@ html.day-mode .jv-vault-page {
   color: rgba(207, 196, 255, 0.85);
 }
 .jvp-meta {
-  margin: 0.22rem 0 0;
-  font-size: 9.5px;
+  margin: 0.1rem 0 0;
+  font-size: 9px;
   font-weight: 800;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: rgba(207, 196, 255, 0.62);
   overflow: hidden;
@@ -2617,32 +2621,62 @@ html.day-mode .jv-vault-page {
 .jvp-orb {
   display: grid;
   place-items: center;
-  width: 2.9rem;
-  height: 2.9rem;
+  width: 2.35rem;
+  height: 2.35rem;
   border-radius: 999px;
   color: var(--jvp-on-accent);
   background: linear-gradient(180deg, var(--jvp-accent-soft), var(--jvp-accent));
-  box-shadow: 0 0 0 5px rgba(168, 147, 255, 0.18), 0 10px 30px var(--jvp-glow);
+  box-shadow: 0 0 0 4px rgba(168, 147, 255, 0.16), 0 8px 22px var(--jvp-glow);
   transition: transform 170ms var(--jvp-ease), box-shadow 170ms var(--jvp-ease);
 }
-.jvp-orb:hover { transform: scale(1.06); box-shadow: 0 0 0 6px rgba(168, 147, 255, 0.24), 0 12px 36px var(--jvp-glow); }
+.jvp-orb:hover { transform: scale(1.06); box-shadow: 0 0 0 5px rgba(168, 147, 255, 0.22), 0 10px 28px var(--jvp-glow); }
+.jvp-orb-sm { width: 2.05rem; height: 2.05rem; }
 
-/* Fullscreen idle: the deck leaves, one hairline stays. It tracks what is played,
-   so a glance tells you where you are without a single glyph on the picture. */
-.jvp-line {
-  position: absolute;
-  inset: auto 0 0;
-  z-index: 25;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.14);
-  pointer-events: none;
+/* Fullscreen idle: nothing at all. A 3px progress hairline used to live here, pinned
+   to the bottom edge of the picture. Removed on request — while a film plays, the
+   frame carries no furniture. Seeking stays on the arrow keys and the deck's track. */
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   STATE, AS COLOUR
+   ----------------------------------------------------------------------------
+   Every probed link and every probed provider row carries a dot, and its hue is
+   the entire message: green = a host answered with media, gold = the walk is
+   still running, red = hosts were found and every one refused, grey = nothing is
+   known yet. No words, no counts, no badges.
+
+   Colour alone is the house style for this deck, so the dot always sits beside
+   the thing it describes (the provider's name, or the quality on a link row) —
+   never floating on its own, and never wider than a full stop. Screen-reader
+   users get the same state through the row's aria-label, which is a sentence.
+   ──────────────────────────────────────────────────────────────────────────── */
+.jvp-state {
+  /* inline-block, not inline: the Source row's button is display:block, so a bare
+     inline span would have its width and height ignored and render as a sliver.
+     Flex children are blockified anyway, so this costs nothing in the Quality rows. */
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex: none;
+  background: var(--txt-4);
+  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 16%, transparent);
+  transition: background 180ms var(--jvp-ease), box-shadow 180ms var(--jvp-ease);
 }
-.jvp-line i {
-  display: block;
-  height: 100%;
-  background: linear-gradient(90deg, #7b5cff, var(--jvp-accent) 62%, var(--jvp-accent-deep));
-  box-shadow: 0 0 14px var(--jvp-glow);
+.jvp-state-ready     { background: var(--ok);     box-shadow: 0 0 0 2px color-mix(in srgb, var(--ok) 22%, transparent), 0 0 10px color-mix(in srgb, var(--ok) 45%, transparent); }
+.jvp-state-checking  { background: var(--gold);   box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 24%, transparent); animation: jvp-pulse 1.6s ease-in-out infinite; }
+.jvp-state-exhausted { background: var(--danger); box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 22%, transparent); }
+.jvp-state-unknown   { background: var(--txt-4);  box-shadow: 0 0 0 2px color-mix(in srgb, var(--txt-4) 20%, transparent); }
+@keyframes jvp-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
 }
+@media (prefers-reduced-motion: reduce) {
+  .jvp-state-checking { animation: none; }
+}
+
+/* A link row: quality, then the host it actually lives on. */
+.jvp-row-q    { font-weight: 900; color: #fff; flex: none; min-width: 2.6rem; letter-spacing: 0.01em; }
+.jvp-row-host { font-weight: 600; font-size: 11.5px; color: rgba(244, 241, 255, 0.5); }
 
 /* ── the one playback panel, in the player and page alike ── */
 .jvp-sheet {
@@ -2722,7 +2756,14 @@ html.day-mode .jv-vault-page {
 }
 .jvp-panel-note { margin: 0.5rem 0.25rem 0.1rem; font-size: 0.68rem; line-height: 1.5; color: #9a94b8; }
 .jvp-panel-row {
-  display: block;
+  /* A flex line, not a block: the active row's ✓ is an inline ::after, and once a
+     row's content became a flex box the check was pushed onto its own line. The
+     label takes what it needs, the check sits at the far end, and long host names
+     truncate instead of wrapping. */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   width: 100%;
   min-height: 40px;
   padding: 0.5rem 0.6rem;
@@ -2740,7 +2781,10 @@ html.day-mode .jv-vault-page {
   border-color: rgba(168, 147, 255, 0.45);
   color: #fff;
 }
-.jvp-panel-row[aria-pressed="true"]::after { content: " ✓"; color: #cfc4ff; font-weight: 800; }
+.jvp-panel-row[aria-pressed="true"]::after { content: " ✓"; color: #cfc4ff; font-weight: 800; flex: none; }
+/* Whatever a row carries should be allowed to shrink, so a long host name never
+   pushes the row wider than the panel. */
+.jvp-panel-row > * { min-width: 0; }
 
 /* ── chrome motion: a lift, not a pop ──
    The bar already faded with Tailwind's transition-opacity. Adding transform on

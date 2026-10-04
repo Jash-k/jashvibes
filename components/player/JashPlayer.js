@@ -1179,13 +1179,13 @@ export function JashPlayer(props) {
         />
       ) : null}
 
-      {/* Fullscreen, chrome down: nothing but the picture and this line. It is the
-          one thing that is still worth saying while the deck is away. */}
-      {isFullscreen && canSeek ? (
-        <div className="jvp-line" aria-hidden="true">
-          <i style={{ width: `${playedRatio * 100}%` }} />
-        </div>
-      ) : null}
+      {/*
+        Fullscreen keeps the picture, and nothing else. A 3px progress hairline used to
+        be pinned to the bottom of the frame here — the one thing that stayed on screen
+        after the deck left. It came out on request: nothing is allowed to sit at the
+        bottom edge while a film is playing. The deck still knows where you are, and the
+        arrow keys still seek without waking it.
+      */}
 
       {notice ? (
         <NoticeBar
@@ -1218,7 +1218,7 @@ export function JashPlayer(props) {
         {canSeek ? (
           <div
             ref={trackRef}
-            className="group/track relative -my-2 cursor-pointer touch-none select-none py-3"
+            className="group/track relative -my-1 cursor-pointer touch-none select-none py-2.5"
             title={engine.seekRefused ? 'The browser cannot jump ahead in this file: you can scrub within what has downloaded' : undefined}
             onPointerDown={onTrackDown}
             onPointerMove={onTrackMove}
@@ -1254,15 +1254,15 @@ export function JashPlayer(props) {
           </div>
         ) : null}
 
-        <div className="mt-1 flex items-center gap-0.5 sm:gap-1.5">
+        <div className="mt-0.5 flex items-center gap-0.5 sm:gap-1">
           <button
             type="button"
             data-jash-command="togglePlay"
             onClick={() => runCommand('togglePlay')}
             aria-label={playing ? 'Pause' : 'Play'}
-            className="jvp-orb mr-1 shrink-0 active:scale-95"
+            className="jvp-orb jvp-orb-sm mr-0.5 shrink-0 active:scale-95"
           >
-            <Icon d={playing ? PATHS.pause : PATHS.play} className="h-5 w-5" />
+            <Icon d={playing ? PATHS.pause : PATHS.play} className="h-[17px] w-[17px]" />
           </button>
 
           {canSeek ? (
@@ -1273,9 +1273,9 @@ export function JashPlayer(props) {
                 onClick={() => runCommand('seekBack')}
                 aria-label="Back 10 seconds"
                 title="Back 10s (arrowleft)"
-                className="hidden h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95 sm:grid"
+                className="hidden h-8 w-8 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95 sm:grid"
               >
-                <Icon d={PATHS.back10} className="h-5 w-5" />
+                <Icon d={PATHS.back10} className="h-[17px] w-[17px]" />
               </button>
               <button
                 type="button"
@@ -1283,14 +1283,13 @@ export function JashPlayer(props) {
                 onClick={() => runCommand('seekForward')}
                 aria-label="Forward 10 seconds"
                 title="Forward 10s (arrowright)"
-                className="hidden h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95 sm:grid"
+                className="hidden h-8 w-8 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95 sm:grid"
               >
-                <Icon d={PATHS.fwd10} className="h-5 w-5" />
+                <Icon d={PATHS.fwd10} className="h-[17px] w-[17px]" />
               </button>
-              <span className="ml-1 hidden min-w-[8rem] text-[11px] font-bold tabular-nums text-white sm:inline">
-                {fmtTime(Math.max(0, shownTime - (win?.start || 0)))}
-                {winLength > 0 ? <span className="text-white/55"> / {fmtTime(winLength)}</span> : null}
-              </span>
+              {/* The elapsed/total block that used to sit here was the widest thing
+                  in the row — 8rem reserved for a number the scrub line already shows.
+                  Removed; the deck came down to a single compact bar because of it. */}
             </>
           ) : null}
 
@@ -1300,9 +1299,9 @@ export function JashPlayer(props) {
               data-jash-command="mute"
               onClick={() => runCommand('mute')}
               aria-label={videoEl?.muted ? 'Unmute' : 'Mute'}
-              className="grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10"
+              className="grid h-8 w-8 place-items-center rounded-full text-white transition hover:bg-white/10"
             >
-              <Icon d={videoEl?.muted || (Number(videoEl?.volume) || 0) === 0 ? PATHS.mute : PATHS.vol} className="h-5 w-5" />
+              <Icon d={videoEl?.muted || (Number(videoEl?.volume) || 0) === 0 ? PATHS.mute : PATHS.vol} className="h-[17px] w-[17px]" />
             </button>
             <input
               data-jash-command="nudgeVolumeUp"
@@ -1319,7 +1318,7 @@ export function JashPlayer(props) {
 
           <div className="flex-1" />
 
-          <div className="flex items-center gap-0.5 sm:gap-1">
+          <div className="flex items-center gap-0.5 sm:gap-0.5">
             {/* Four controls, one tap each. The old bar hid most of its pills
                 behind breakpoints and stuffed the rest into a settings sheet;
                 every one of these is reachable on every device, and each is
@@ -1333,12 +1332,12 @@ export function JashPlayer(props) {
               aria-haspopup="dialog"
               aria-expanded={menu === 'quality'}
               aria-label={`Playback settings: quality ${qualityLabel}`}
-              className="grid h-11 min-w-[3rem] place-items-center rounded-full border border-white/15 px-2.5 text-[11px] font-black text-white transition hover:border-[#a893ff]/50 hover:text-[#cfc4ff]"
+              className="grid h-8 min-w-[2.5rem] place-items-center rounded-full border border-white/15 px-2 text-[10.5px] font-black text-white transition hover:border-[#a893ff]/50 hover:text-[#cfc4ff]"
             >
               {/* One control, one panel. Quality and source used to be two
                   dropdowns wearing two labels; the panel below holds both. */}
               <span className="flex items-center gap-1.5">
-                <Icon d={PATHS.gear} className="h-4 w-4" />
+                <Icon d={PATHS.gear} className="h-[15px] w-[15px]" />
                 <span className="hidden sm:inline">{qualityLabel}</span>
               </span>
             </button> : null}
@@ -1349,7 +1348,7 @@ export function JashPlayer(props) {
               aria-haspopup="dialog"
               aria-expanded={menu === 'aspect'}
               aria-label={`Aspect ratio: ${aspectLabel(aspectMode)}`}
-              className="grid h-11 min-w-[3.4rem] place-items-center rounded-full border border-white/15 px-2.5 text-[11px] font-black text-white transition hover:border-[#a893ff]/50 hover:text-[#cfc4ff]"
+              className="grid h-8 min-w-[2.8rem] place-items-center rounded-full border border-white/15 px-2 text-[10.5px] font-black text-white transition hover:border-[#a893ff]/50 hover:text-[#cfc4ff]"
             >
               {aspectLabel(aspectMode)}
             </button>
@@ -1362,9 +1361,9 @@ export function JashPlayer(props) {
                 aria-label={subtitleOn ? 'Subtitles on' : 'Subtitles off'}
                 aria-pressed={subtitleOn}
                 title="Subtitles (C)"
-                className={`grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 ${subtitleOn ? 'bg-white/15 text-[#cfc4ff]' : ''}`}
+                className={`grid h-8 w-8 place-items-center rounded-full text-white transition hover:bg-white/10 ${subtitleOn ? 'bg-white/15 text-[#cfc4ff]' : ''}`}
               >
-                <span className="text-[11px] font-black tracking-wide">CC</span>
+                <span className="text-[10px] font-black tracking-wide">CC</span>
               </button>
             ) : null}
 
@@ -1376,9 +1375,9 @@ export function JashPlayer(props) {
                 aria-label={pipActive ? 'Exit picture in picture' : 'Picture in picture'}
                 aria-pressed={pipActive}
                 title="Picture in picture (P)"
-                className={`grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95 ${pipActive ? 'bg-white/15 text-[#cfc4ff]' : ''}`}
+                className={`grid h-8 w-8 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95 ${pipActive ? 'bg-white/15 text-[#cfc4ff]' : ''}`}
               >
-                <Icon d={PATHS.pip} className="h-5 w-5" />
+                <Icon d={PATHS.pip} className="h-[17px] w-[17px]" />
               </button>
             ) : null}
 
@@ -1388,9 +1387,9 @@ export function JashPlayer(props) {
                 data-jash-command="toggleFullscreen"
                 onClick={() => toggleFullscreen(props.fullscreenTargetRef?.current || wrapRef.current)}
                 aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-                className="grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95"
+                className="grid h-8 w-8 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95"
               >
-                <Icon d={isFullscreen ? PATHS.fsExit : PATHS.fs} className="h-5 w-5" />
+                <Icon d={isFullscreen ? PATHS.fsExit : PATHS.fs} className="h-[17px] w-[17px]" />
               </button>
             ) : null}
             {liveBrowser ? (
@@ -1401,7 +1400,7 @@ export function JashPlayer(props) {
                 aria-label="Channels"
                 aria-pressed={browserOpen}
                 title="Channels (G)"
-                className={`grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95 ${browserOpen ? 'bg-white/10' : ''}`}
+                className={`grid h-8 w-8 place-items-center rounded-full text-white transition hover:bg-white/10 active:scale-95 ${browserOpen ? 'bg-white/10' : ''}`}
               >
                 <Icon d={PATHS.grid} className="h-5 w-5" />
               </button>

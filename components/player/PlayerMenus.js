@@ -17,6 +17,7 @@ import { memo, useEffect, useRef } from 'react';
 import { Icon, PATHS } from './PlayerIcons';
 import { fmtSize, fmtTime } from '@/lib/player/labels';
 import { ASPECT_MODES, aspectLabel } from '@/lib/player/aspect';
+import { tieredCandidates, hostOf } from '@/lib/watch/policy';
 
 export const Menu = memo(function Menu({ title, subtitle, onClose, children, wide = false, coarse = false, footer }) {
   const panelRef = useRef(null);
@@ -149,6 +150,16 @@ export const QualityMenu = memo(function QualityMenu({
   // here, so it is never a promise the panel cannot keep.
   const parts = [];
   if (heights.length) parts.push(`${heights.length + 1} qualities`);
+
+  /*
+   * The same rule the watch page uses (lib/watch/policy.js), applied to the same
+   * candidates, so the two menus cannot disagree: direct links are tiered
+   * (1080p/720p first, otherwise 480p/HD/360p), dead ones are dropped, and a row is
+   * quality + the host it lives on. Embeds have no health and no resolution, so the
+   * filter is a no-op and every row survives — they only gain the host line.
+   */
+  const isDirect = streams.some((item) => item?.health);
+  const rows = tieredCandidates(streams);
   if (hasStreams) parts.push(`${streams.length} source${streams.length === 1 ? '' : 's'}`);
   const subtitle = parts.length ? parts.join(' · ') : 'Auto (adaptive)';
 
@@ -160,7 +171,7 @@ export const QualityMenu = memo(function QualityMenu({
           type="button"
           className="jvp-pill"
           aria-pressed={auto}
-          onClick={() => onAuto?.()}
+          onClick={() => { onAuto?.(); onClose?.(); }}
         >
           Auto
         </button>
@@ -170,7 +181,7 @@ export const QualityMenu = memo(function QualityMenu({
             type="button"
             className="jvp-pill"
             aria-pressed={!auto && Number(activeHeight) === height}
-            onClick={() => onPickHeight?.(height)}
+            onClick={() => { onPickHeight?.(height); onClose?.(); }}
           >
             {height >= 2160 ? '4K' : `${height}p`}
           </button>
@@ -180,22 +191,30 @@ export const QualityMenu = memo(function QualityMenu({
       {hasStreams ? (
         <>
           <p className="px-4 pb-1 pt-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/40">
-            Source
+            {isDirect && rows.length ? 'Quality' : 'Source'}
           </p>
-          {streams.map((source, index) => {
-          const sizeHint = Number(source.sizeBytes) > 0 ? fmtSize(Number(source.sizeBytes)) : String(source.size || '');
-          return (
-            <MenuItem
-              key={`${source.url || index}`}
-              role="menuitemradio"
-              active={index === Number(activeIndex)}
-              onClick={() => onPickStream?.(index)}
-              hint={sizeHint}
-            >
-              {source.label || `Stream ${index + 1}`}
-            </MenuItem>
-          );
-        })}
+          {rows.map((source) => {
+            const index = streams.indexOf(source);
+            const sizeHint = Number(source.sizeBytes) > 0 ? fmtSize(Number(source.sizeBytes)) : String(source.size || '');
+            // Colour is the whole signal, as on the page: no "Ready"/"Unavailable"
+            // words, just the hue beside the quality and the host it lives on.
+            const state = source.health === 'ok' ? 'ready' : source.health === 'dead' ? 'exhausted' : source.health === 'unknown' ? 'unknown' : '';
+            return (
+              <MenuItem
+                key={`${source.url || index}`}
+                role="menuitemradio"
+                active={index === Number(activeIndex)}
+                onClick={() => { onPickStream?.(index); onClose?.(); }}
+                hint={sizeHint}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  {state ? <span className={`jvp-state jvp-state-${state}`} aria-hidden="true" /> : null}
+                  <span className="jvp-row-q">{source.quality || source.label || `Stream ${index + 1}`}</span>
+                  {hostOf(source.url) ? <span className="jvp-row-host truncate">{hostOf(source.url)}</span> : null}
+                </span>
+              </MenuItem>
+            );
+          })}
         </>
       ) : (
         <p className="px-4 pb-2 text-[11px] font-semibold text-white/45">

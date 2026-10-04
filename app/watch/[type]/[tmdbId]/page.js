@@ -7,7 +7,7 @@ import JashPlayer from '@/components/player/JashPlayerLazy';
 import { createStreamPolicy } from '@/lib/player/policy/stream';
 import { detectKind } from '@/lib/player/kind';
 import { useWatchContext, useWatchSources, requestJson } from '@/hooks/useWatch';
-import { WATCH_PROVIDERS, parseIdentity, providerOrder } from '@/lib/watch/policy';
+import { WATCH_PROVIDERS, parseIdentity, providerOrder, tieredCandidates, hostOf } from '@/lib/watch/policy';
 import { makeWatchKey, isFavoriteItem, toggleFavoriteItem, useLibraryVersion } from '@/lib/watchStore';
 import { claimMediaFocus } from '@/lib/player/mediaFocus';
 
@@ -60,6 +60,15 @@ export default function UnifiedWatchPage() {
    * player's own bar carried a fourth. Four controls, one decision. They are now
    * a single panel that shows the current answer on its face, and the player's
    * gear opens the same two questions for the stream that is already playing.
+   */
+  /*
+   * The deck closes on every choice.
+   *
+   * A panel that stays open after you have answered it is asking the question
+   * twice: the viewer picks a source, and then has to dismiss the sheet before
+   * they can see whether it worked. Every selection closes it — the source, the
+   * quality, the mirror. Escape and outside-click still work for backing out
+   * without choosing anything.
    */
   const [playbackOpen, setPlaybackOpen] = useState(false);
   const playbackRef = useRef(null);
@@ -136,6 +145,31 @@ export default function UnifiedWatchPage() {
   const nextEpisode = series ? episodes[episodeIndex + 1] : null;
   const key = context?.tmdbId ? makeWatchKey({ type: context.type, tmdbId: context.tmdbId }) : `${context?.origin || routeType}:${routeId}`;
   const qualities = [...new Set(sources.candidates.map((c) => c.quality).filter(Boolean))];
+  /*
+   * The direct-link list, tiered: 1080p/720p when they answer, otherwise 480p/HD/360p,
+   * one row per link, dead ones dropped. Embeds (vault/stremio/mirchi) have no probe
+   * and no resolution, so they keep the old shape — quality pills for their renditions,
+   * and their own list below. See lib/watch/policy.js for the rule.
+   */
+  const isDirectLinks = sources.provider === 'mp4';
+  const directRows = isDirectLinks ? tieredCandidates(sources.candidates) : [];
+  /*
+   * Direct MP4's own state, for the colour on its Source row. Health is read from the
+   * probe verdicts the resolver already returned — no second request, no guessing:
+   *   ready      at least one link answered        → --ok
+   *   exhausted  links were found, all refused     → --danger
+   *   checking   the walk is still running         → --gold
+   *   unknown    nothing discovered yet            → no colour at all
+   */
+  const directState = (() => {
+    if (!isDirectLinks) return '';
+    if (sources.status === 'loading') return 'checking';
+    const alive = sources.candidates.filter((c) => c.health !== 'dead').length;
+    if (alive > 0) return 'ready';
+    if (sources.candidates.length > 0) return 'exhausted';
+    if (sources.status === 'error' || sources.error) return 'exhausted';
+    return '';
+  })();
 
   /*
    * The quality question, resolved once for the panel.
@@ -348,10 +382,15 @@ export default function UnifiedWatchPage() {
                 className="jv-playback-trigger"
               >
                 <span className="min-w-0">
-                  <span className="block truncate font-black text-txt-1">
-                    {sources.selection === 'auto'
-                      ? 'Auto'
-                      : WATCH_PROVIDERS.find((p) => p.id === sources.selection)?.name || sources.selection}
+                  <span className="flex min-w-0 items-center gap-2 font-black text-txt-1">
+                    {/* The same dot as the deck's Source row: Direct MP4's health is
+                        worth seeing without opening the panel to look for it. */}
+                    {directState ? <span className={`jvp-state jvp-state-${directState}`} aria-hidden="true" /> : null}
+                    <span className="truncate">
+                      {sources.selection === 'auto'
+                        ? 'Auto'
+                        : WATCH_PROVIDERS.find((p) => p.id === sources.selection)?.name || sources.selection}
+                    </span>
                   </span>
                   <span className="block truncate text-[11px] font-semibold text-txt-4">{playbackQualityLabel}</span>
                 </span>
@@ -365,7 +404,7 @@ export default function UnifiedWatchPage() {
                     type="button"
                     aria-pressed={sources.selection === 'auto'}
                     className="jvp-panel-row"
-                    onClick={() => { setTrailer(null); sources.chooseProvider('auto'); }}
+                    onClick={() => { setTrailer(null); sources.chooseProvider('auto'); setPlaybackOpen(false); }}
                   >
                     <span>Auto — best available, follows the order below</span>
                   </button>
@@ -375,13 +414,49 @@ export default function UnifiedWatchPage() {
                       type="button"
                       aria-pressed={sources.selection === p.id}
                       className="jvp-panel-row"
-                      onClick={() => { setTrailer(null); sources.chooseProvider(p.id); }}
+                      onClick={() => { setTrailer(null); sources.chooseProvider(p.id); setPlaybackOpen(false); }}
                     >
-                      <span>{p.name}</span>
+                      {/* Colour is the whole signal: a dot beside the name, no word. The
+                          two live in one flex line so the dot stays next to the provider
+                          it describes — as a separate child of the row it would be pushed
+                          to the far edge by the row's space-between, away from its own
+                          subject. Direct MP4 is the only provider whose links are
+                          probed, so it is the only row that can carry a state. */}
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="truncate">{p.name}</span>
+                        {p.id === 'mp4' && directState ? <span className={`jvp-state jvp-state-${directState}`} aria-hidden="true" /> : null}
+                      </span>
                     </button>
                   ))}
 
-                  {playbackQualities.length ? (
+                  {isDirectLinks ? (
+                    <>
+                      <p className="jvp-panel-title mt-3">Quality</p>
+                      {directRows.length ? directRows.map((candidate) => {
+                        const index = sources.candidates.indexOf(candidate);
+                        const state = candidate.health === 'ok' ? 'ready' : candidate.health === 'dead' ? 'exhausted' : 'unknown';
+                        return (
+                          <button
+                            key={candidate.url}
+                            type="button"
+                            aria-pressed={Number(sources.index) === index}
+                            className="jvp-panel-row"
+                            onClick={() => { setTrailer(null); sources.chooseMirror(index); setPlaybackOpen(false); }}
+                          >
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span className={`jvp-state jvp-state-${state}`} aria-hidden="true" />
+                              <span className="jvp-row-q">{candidate.quality || candidate.label || 'HD'}</span>
+                              <span className="jvp-row-host truncate">{hostOf(candidate.url)}</span>
+                            </span>
+                          </button>
+                        );
+                      }) : (
+                        <p className="jvp-panel-note px-1 pb-1">
+                          No playable link right now — Retry, or try another source.
+                        </p>
+                      )}
+                    </>
+                  ) : playbackQualities.length ? (
                     <>
                       <p className="jvp-panel-title mt-3">Quality</p>
                       <div className="flex flex-wrap gap-1.5 px-1 pb-1">
@@ -391,7 +466,7 @@ export default function UnifiedWatchPage() {
                             type="button"
                             className="jvp-pill"
                             aria-pressed={String(q) === String(selectedQuality)}
-                            onClick={() => { setTrailer(null); if (qualities.length) sources.chooseQuality(q); else if (q === 'auto') manifestQuality?.setAuto(); else manifestQuality?.select(Number(q)); }}
+                            onClick={() => { setTrailer(null); if (qualities.length) sources.chooseQuality(q); else if (q === 'auto') manifestQuality?.setAuto(); else manifestQuality?.select(Number(q)); setPlaybackOpen(false); }}
                           >
                             {q === 'auto' ? 'Auto' : q}
                           </button>
@@ -400,22 +475,18 @@ export default function UnifiedWatchPage() {
                     </>
                   ) : null}
 
-                  {sources.candidates.length > 1 ? (
+                  {!isDirectLinks && sources.candidates.length > 1 ? (
                     <>
-                      <p className="jvp-panel-title mt-3">Mirror</p>
+                      <p className="jvp-panel-title mt-3">Sources</p>
                       {sources.candidates.map((c, i) => (
                         <button
                           key={c.url}
                           type="button"
                           aria-pressed={Number(sources.index) === i}
                           className="jvp-panel-row"
-                          onClick={() => sources.chooseMirror(i)}
+                          onClick={() => { sources.chooseMirror(i); setPlaybackOpen(false); }}
                         >
                           <span className="truncate">{c.label}</span>
-                          {/* The resolver probes every link before it is offered, so
-                              the list can say which hosts refused instead of letting
-                              the viewer find out by pressing play. */}
-                          {c.health === 'dead' ? <span className="jvp-panel-note ml-2 shrink-0">unavailable</span> : null}
                         </button>
                       ))}
                     </>

@@ -136,6 +136,17 @@ export function usePlaybackEngine(options = {}) {
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
   const generationRef = useRef(0);
+  /*
+   * Whether the component is still on screen.
+   *
+   * The recovery ladder below checks this before acting on a delayed retry — but
+   * the ref was never declared, so the check threw a ReferenceError and the whole
+   * recovery was abandoned: a failed stream stayed failed instead of walking the
+   * ladder. Every rung of the ladder (retry, re-anchor, reload) was dead code for
+   * every provider, which is why a mid-film failure looked final.
+   */
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
   const loadStartedAtRef = useRef(0);
   const loadTokenRef = useRef(0);
   const timeoutRef = useRef(0);
