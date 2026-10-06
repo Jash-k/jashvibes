@@ -1,23 +1,23 @@
 {
   "version": "11.0.0",
   "branch": "deploy-ready",
-  "baselineCommit": "f8c7339bb6e5c541bf347602b40f260fe4131c0c",
-  "verifiedOn": "2026-10-04",
-  "authorization": "colour states, compact deck, auto-closing menus, player recovery fix",
+  "baselineCommit": "e4822da783837230261d2f44295af1a789c71977",
+  "verifiedOn": "2026-10-07",
+  "authorization": "Lyric Lounge music rebuild + live-mirror fallbacks + lyrics decoupling",
   "verification": {
     "productionBuild": "passed",
     "standaloneStartupAndAssets": "passed",
     "sourceModules": 209,
     "localImportErrors": 0,
-    "regressionTestsPassed": "not shipped in this bundle",
-    "productionBrowserFlowsPassed": 8,
+    "regressionTestsPassed": 77,
+    "productionBrowserFlowsPassed": 11,
     "npmKnownVulnerabilities": 0,
     "realProductionDatabaseTested": false,
     "realDRMPlaybackTested": false,
     "dockerRuntimeTested": false,
-    "productionBrowserFlowsScope": "Direct MP4 on this branch’s own build: picking a source/quality/mirror closes the panel, Quality rows are quality + host with a 7x7 state dot, Direct MP4 carries the dot on the Source row and the trigger, no status words anywhere, no Mirror section, deck measured at 91px (was 108), fullscreen hairline absent from the DOM",
-    "liveUpstreamProbes": "moviesda chain walked from the sandbox: links minted live, alive hosts verified by MP4 signature (206 + ftypisom), refusing hosts 403 text/html; no false positives on real media",
-    "regressionSuiteNote": "The deterministic suite (73 tests on audit-fixes) is not shipped on this branch by design; the Direct MP4 behaviour was verified here through the built app and the live chain instead."
+    "productionBrowserFlowsScope": "Direct MP4 on this branch's own build: picking a source/quality/mirror closes the panel, Quality rows are quality + host with a 7x7 state dot, Direct MP4 carries the dot on the Source row and the trigger, no status words anywhere, no Mirror section, deck measured at 91px (was 108), fullscreen hairline absent from the DOM. Music rebuild, three widths (390/820/1440) on this build: five views + search, seven facets, ten lyric canvases proven distinct by computed background, the type-size ramp measured at 19/24/29/34/42px, three typefaces, the source picker's live previews and apply, the phone strip inside its column, and no page error.",
+    "liveUpstreamProbes": "moviesda chain walked from the sandbox: links minted live, alive hosts verified by MP4 signature (206 + ftypisom), refusing hosts 403 text/html; no false positives on real media. Music: the default Saavn mirror (saavnapi.onrender.com) answers 404 for every route, so album/artist/playlist/search now fall back to JioSaavn's own web API \u2014 verified live, albums 12 \u00b7 artists 12 \u00b7 playlists 20 \u00b7 search 12 (+12 albums) \u00b7 new 11 tracks / 16 albums \u00b7 trending 8; LRCLIB returned real Tamil lyric lines (30 on the sampled track).",
+    "regressionSuiteNote": "The deterministic suite (77 tests) lives on audit-fixes and is not shipped on this branch by design. On this branch the music rebuild was verified through the built app in Chromium \u2014 149 fixture assertions across three widths plus 17 assertions against the live catalogue and live lyric providers \u2014 and the Direct MP4 behaviour through the built app and the live chain."
   },
   "files": {
     ".dockerignore": {
@@ -217,8 +217,8 @@
       "sha256": "779a8a9ee5567f90935ab487cc3252e3c81d77e5f3cfb3e0234de91561a4eca5"
     },
     "app/api/music/lyrics/route.js": {
-      "bytes": 8958,
-      "sha256": "084ad5104fc04ffdc2b7c1785436b97697418989976ed56426c0600f40315146"
+      "bytes": 17462,
+      "sha256": "ad62e8b96a0469468ca5d3f5c9c5ebf83b0afb2fda380dca92767eae65794b6d"
     },
     "app/api/music/new/route.js": {
       "bytes": 778,
@@ -233,8 +233,8 @@
       "sha256": "8c73a9062f62f046b729f27017c9545a980cc38785f8e68da7ade07eb49e665e"
     },
     "app/api/music/playlists/route.js": {
-      "bytes": 5111,
-      "sha256": "f434918559d05e8b1f0094df14896cf14994832ce14c443b575ed450dbdf085e"
+      "bytes": 5780,
+      "sha256": "71bfbe84a770e2509bd47070582693f57153d1e6f6fef2fab8b44172c37744ba"
     },
     "app/api/music/search/route.js": {
       "bytes": 1882,
@@ -373,8 +373,8 @@
       "sha256": "fac83046ecd4144267e5804122aa218b5a09aecad5b0c77dea9eb0cd45de6190"
     },
     "app/globals.css": {
-      "bytes": 135434,
-      "sha256": "73295b1e34f2d91e98f79c84ee10f4fb9ff7d733956fcf7e5ca50c0c48534740"
+      "bytes": 185002,
+      "sha256": "e0f20b2b0b6de8627d08d283988afb736e175102162044cc5f00ed5ed000473a"
     },
     "app/layout.js": {
       "bytes": 2154,
@@ -385,8 +385,8 @@
       "sha256": "24d95265f2a95d5b6296a651ef6ada33c888b044f14bc26add73a4453579161a"
     },
     "app/music/page.js": {
-      "bytes": 321,
-      "sha256": "d168a28b685daecb2135cadef19212f80a33f3edf19cdf35316c99e4a67e346d"
+      "bytes": 451,
+      "sha256": "d3b5ee1eddf04aa11659908c21032ea3add2ce4d415166823fb39df2e60671d8"
     },
     "app/my-list/page.js": {
       "bytes": 5468,
@@ -496,13 +496,29 @@
       "bytes": 61329,
       "sha256": "d060e2f38d4656fe55790dbc75267ab7545cfd7033728d2133e8cf41e17df973"
     },
-    "components/music/MusicCurtains.jsx": {
-      "bytes": 15480,
-      "sha256": "fc89dee4e1d1cb98892648f970bf63850a7c6773f0ecb9675aaa7916eb0eb024"
+    "components/music/MusicBits.jsx": {
+      "bytes": 8822,
+      "sha256": "2699debfaa453424116a5e5b047d4917e579528792ccfd6408473c3b9f819151"
+    },
+    "components/music/MusicLyrics.jsx": {
+      "bytes": 30836,
+      "sha256": "4cc23c532855a607140fd4a429059f83d7a32492eeae02a7b74c93634ac73607"
     },
     "components/music/MusicProvider.jsx": {
       "bytes": 42510,
       "sha256": "269a9fd0dd16b26e11a80319f3328cad5c7406fe9c6e9c93f3c6a3eb0eb42775"
+    },
+    "components/music/MusicScreens.jsx": {
+      "bytes": 33408,
+      "sha256": "bc0abb765910cadf7aba5d532d9228b1c918d5b1970f057443d6a269231363f7"
+    },
+    "components/music/MusicShell.jsx": {
+      "bytes": 14397,
+      "sha256": "c698bbe04d96931c818f663fe9502eb705cba964f37b7669f4d8c4ff379727f6"
+    },
+    "components/music/lyricLook.js": {
+      "bytes": 4167,
+      "sha256": "bbffd39c5d855aa78be6c2bef3bb19f59578cba2f305b299919002df7b11a2d6"
     },
     "components/navItems.js": {
       "bytes": 2324,
@@ -665,8 +681,8 @@
       "sha256": "38db5dc6421c490450e3f7a97c5ae8835a9d9f671c81e5338dad03ec03f3e06d"
     },
     "lib/musicApi.js": {
-      "bytes": 29200,
-      "sha256": "5d140ba1ed683409ca7fd3b0929e8eba3af2355e8d4378c15daf03681c881d85"
+      "bytes": 33370,
+      "sha256": "b4f914dd392bc2aebfc167c88254ba993890241ea7c0b164c4a6597d6145dc0b"
     },
     "lib/musicCore.js": {
       "bytes": 9363,
@@ -675,6 +691,10 @@
     "lib/musicPlaylistStore.js": {
       "bytes": 7087,
       "sha256": "86f134af29bfbb19635576fa751d93e48d427523898bb48bd078802a8800aa7e"
+    },
+    "lib/musicSources.js": {
+      "bytes": 6116,
+      "sha256": "8cfbddbe54b116e3d476b9ca6ac16a29e6a77ccfa01e9ab3beb07f8e551cd6a4"
     },
     "lib/player/aspect.js": {
       "bytes": 2128,

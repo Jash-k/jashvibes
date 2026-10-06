@@ -43,8 +43,23 @@ export async function GET(request) {
       return NextResponse.json({ items, count: items.length, source: 'saavn' }, { headers: { 'Cache-Control': 'no-store' } });
     }
 
-    const items = await listImportedPlaylists({ includeHidden: searchParams.get('all') === '1' });
-    return NextResponse.json({ items, count: items.length, source: 'imported' }, { headers: { 'Cache-Control': 'no-store' } });
+    /* Imported playlists live in Mongo. A missing or unreachable DB used to fail the
+       whole endpoint (500) and take the Playlists surface down with it; it now
+       degrades to the provider's own playlists and says so in `warning`. */
+    let imported = [];
+    let warning = '';
+    try {
+      imported = await listImportedPlaylists({ includeHidden: searchParams.get('all') === '1' });
+    } catch (error) {
+      warning = `Imported playlists unavailable: ${error.message}`;
+    }
+
+    if (imported.length) {
+      return NextResponse.json({ items: imported, count: imported.length, source: 'imported', warning }, { headers: { 'Cache-Control': 'no-store' } });
+    }
+
+    const charts = await searchPlaylists('Tamil', limit).catch(() => []);
+    return NextResponse.json({ items: charts, count: charts.length, source: 'saavn', warning }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     console.error('[api/music/playlists] Error:', error);
     return NextResponse.json({ error: error.message || 'Playlist search failed', items: [] }, { status: 500 });
