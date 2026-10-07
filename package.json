@@ -8,12 +8,14 @@
     "start": "node scripts/start.cjs",
     "db:audit": "node scripts/db-maintenance.cjs",
     "db:clean": "node scripts/db-maintenance.cjs --safe",
-    "check": "node scripts/check-source.cjs"
+    "check": "node scripts/check-source.cjs",
+    "live:playlist": "node scripts/build-live-playlist.mjs"
   },
   "dependencies": {
     "cheerio": "^1.2.0",
     "ipaddr.js": "^2.5.0",
     "mongoose": "^8.8.4",
+    "mpegts.js": "^1.8.2",
     "mux.js": "^7.1.0",
     "next": "16.3.8",
     "react": "^19.0.0",

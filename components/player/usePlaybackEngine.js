@@ -37,6 +37,8 @@ import {
   readSeekWindow,
 } from '@/lib/player/kind';
 import { isDrmConfigError, mapPlaybackError } from '@/lib/player/errors';
+import { probeCapabilities } from '@/lib/player/capabilities';
+import { ENGINE, engineLabel, planLivePlayback } from '@/lib/player/liveEngine';
 import { clamp, readPrefs, writePref } from '@/lib/player/prefs';
 import { DEFAULT_LADDER, RUNGS, capabilitiesFor, nextRecoveryAction } from '@/lib/player/recovery';
 import { createSubtitleTrack, releaseSubtitleTrack, shiftVttCues, subtitleStyleToCss } from '@/lib/player/subtitles';
@@ -65,6 +67,24 @@ async function loadShaka() {
     window.shaka = shaka;
   }
   return window.shaka;
+}
+
+let mpegtsPromise = null;
+
+/**
+ * mpegts.js — the engine for raw MPEG-TS / FLV (Xtream/DTH-style feeds).
+ * Those URLs end in `.ts` or carry `extension=ts`, which no browser demuxes on
+ * its own; mpegts.js transmuxes them to fMP4 and feeds MSE. Loaded on demand,
+ * so the ~35 KB only costs anything on channels that need it.
+ */
+async function loadMpegts() {
+  if (typeof window === 'undefined') throw new Error('mpegts.js is only available in the browser.');
+  if (!window.mpegts) {
+    mpegtsPromise = mpegtsPromise || import('mpegts.js');
+    const module = await mpegtsPromise;
+    window.mpegts = module.default?.getFeatureList ? module.default : (module.default || module);
+  }
+  return window.mpegts;
 }
 
 let muxPromise = null;
@@ -179,6 +199,9 @@ export function usePlaybackEngine(options = {}) {
   externalSubtitleRef.current = externalSubtitle;
   const statsTimerRef = useRef(0);
   const failureRef = useRef(null); // set once handleFailure exists
+  const mpegtsRef = useRef(null);  // mpegts.js player instance (raw TS/FLV engine)
+  const capsRef = useRef(null);    // probed browser capabilities (once per session)
+  const livePlanRef = useRef(null); // { plan, index } — the live router's current position
 
   // ------------------------------------------------------------------ helpers
   const isAlive = useCallback((generation) => generationRef.current === generation, []);
@@ -591,6 +614,14 @@ export function usePlaybackEngine(options = {}) {
 
   // ------------------------------------------------------------------- destroy
   const destroyPlayer = useCallback(async () => {
+    const mpegtsPlayer = mpegtsRef.current;
+    mpegtsRef.current = null;
+    if (mpegtsPlayer) {
+      try { mpegtsPlayer.pause?.(); } catch {}
+      try { mpegtsPlayer.unload?.(); } catch {}
+      try { mpegtsPlayer.detachMediaElement?.(); } catch {}
+      try { mpegtsPlayer.destroy?.(); } catch {}
+    }
     const player = playerRef.current;
     playerRef.current = null;
     if (!player) return;
@@ -665,7 +696,7 @@ export function usePlaybackEngine(options = {}) {
     }
     if (!isAlive(generation)) return;
 
-    const url = String(urlOverride || fallbacksRef.current.forceUrl || source.url || '');
+    let url = String(urlOverride || fallbacksRef.current.forceUrl || source.url || '');
     if (!url) {
       const mapped = { kind: 'unknown', message: 'No playable URL was resolved for this source.', retriable: false, action: 'none' };
       setErrorInfo(mapped);
@@ -675,7 +706,62 @@ export function usePlaybackEngine(options = {}) {
     }
 
     const kind = source.kind && source.kind !== 'auto' ? source.kind : detectKind(url);
-    const useShaka = needsEngine(url, kind, { allowNativeHls: allowNativeHlsRef.current && source.allowNativeHls !== false && !source.hasDrm });
+
+    /* ------------------------------------------------------------------
+     * Capability router (live rows only).
+     *
+     * A live row now carries its own facts (raw TS? ClearKey? headers? token
+     * expiry?) and the router turns them plus THIS browser's probe into an
+     * ordered plan:
+     *     native HLS (Apple) → Shaka (MSE) → mpegts.js (raw TS/FLV) → proxied retry
+     * or an honest "this browser can never play it" verdict, instead of a
+     * spinner that never resolves. VOD keeps the original heuristic.
+     * ------------------------------------------------------------------ */
+    let plannedEngine = '';
+    if (source.liveChannel) {
+      const caps = capsRef.current || (capsRef.current = await probeCapabilities());
+      const planChannel = /^\/api\//.test(String(source.url || ''))
+        // Already proxied: same-origin https, headers handled server-side.
+        ? { ...source.liveChannel, url: source.url, userAgent: '', referer: '', cookie: '', headers: {} }
+        : source.liveChannel;
+      const plan = planLivePlayback(planChannel, caps, {
+        allowNativeHls: allowNativeHlsRef.current && source.allowNativeHls !== false,
+        allowMpegts: true,
+        allowWebCodecs: false,
+        streamProxyUrl: source.liveChannel.streamProxy || '',
+        pageIsHttps: typeof window !== 'undefined' && window.location.protocol === 'https:',
+      });
+
+      // Keep the position when re-attaching the SAME stream (the ladder reloads a
+      // lot); start from the top for a new row.
+      const sameStream = livePlanRef.current?.plan?.stream?.url === plan.stream.url;
+      const index = sameStream ? livePlanRef.current.index : 0;
+      livePlanRef.current = { plan, index };
+
+      if (plan.unsupported) {
+        const message = [plan.unsupported.reason, plan.unsupported.hint].filter(Boolean).join(' ');
+        const mapped = { kind: 'unsupported', message, retriable: false, action: plan.unsupported.action || 'none' };
+        setErrorInfo(mapped);
+        commitStatus('error', message);
+        try {
+          handlersRef.current.onError?.(mapped);
+          handlersRef.current.onFatal?.(mapped);
+        } catch {}
+        return;
+      }
+
+      const chosen = plan.steps[index] || plan.steps[0];
+      if (chosen) {
+        plannedEngine = chosen.engine;
+        if (chosen.proxy !== 'none' && chosen.why) setAttemptNote(chosen.why);
+        if (chosen.url && !urlOverride && !fallbacksRef.current.forceUrl) url = chosen.url;
+      }
+    }
+
+    const useShaka = plannedEngine
+      ? plannedEngine === ENGINE.SHAKA
+      : needsEngine(url, kind, { allowNativeHls: allowNativeHlsRef.current && source.allowNativeHls !== false && !source.hasDrm });
+    const useMpegts = plannedEngine === ENGINE.MPEGTS;
     const suppliedDrm = dropDrm ? {} : source.drm || {};
     const hasDrm = Boolean(suppliedDrm?.clearKeys && Object.keys(suppliedDrm.clearKeys).length) || Boolean(suppliedDrm?.servers);
     activePolicy.lastDrm = hasDrm;
@@ -752,6 +838,47 @@ export function usePlaybackEngine(options = {}) {
         });
 
         await player.load(url, undefined, source.mimeType || mimeTypeFor(kind));
+      } else if (useMpegts) {
+        /* Raw MPEG-TS / FLV: the browser cannot demux this container itself, so
+           mpegts.js transmuxes it to fMP4 and drives MSE. Same <video> element,
+           so every existing control (gestures, overlays, fullscreen) still owns
+           the UI — only subtitles/TrackList are unavailable on this path. */
+        const mpegts = await loadMpegts();
+        if (!isAlive(generation)) return;
+        if (!mpegts.getFeatureList?.().mseLivePlayback) {
+          const mapped = { kind: 'codec', message: 'This browser cannot play raw transport streams (no MediaSource).', retriable: false, action: 'switch-device' };
+          setErrorInfo(mapped);
+          commitStatus('error', mapped.message);
+          handlersRef.current.onFatal?.(mapped);
+          return;
+        }
+        const mpegtsPlayer = mpegts.createPlayer(
+          {
+            type: source.mpegtsType || ((plannedEngine === ENGINE.MPEGTS && /\.flv(\?|$)|extension=flv/i.test(url)) ? 'flv' : 'mse'),
+            isLive: true,
+            url,
+            cors: false,
+          },
+          {
+            enableWorker: true,
+            enableStashBuffer: false,
+            lazyLoad: false,
+            liveBufferLatencyChasing: true,
+            autoCleanupSourceBuffer: true,
+          },
+        );
+        mpegtsRef.current = mpegtsPlayer;
+        mpegtsPlayer.attachMediaElement(el);
+        mpegtsPlayer.on(mpegts.Events.ERROR, (errorType, detail) => {
+          if (!isAlive(generation)) return;
+          failureRef.current?.(
+            { kind: 'engine', code: `MPEGTS_${errorType || 'ERROR'}`, message: String(detail || 'The transport stream could not be played.'), retriable: true, action: 'live-next-step' },
+            'engine',
+          );
+        });
+        await mpegtsPlayer.load();
+        if (!isAlive(generation)) return;
+        await mpegtsPlayer.play().catch(() => {});  // autoplay policy: the chrome shows tap-to-play
       } else {
         el.src = url;
         el.load?.();
@@ -851,6 +978,24 @@ export function usePlaybackEngine(options = {}) {
       commitStatus('buffering', mapped.message);
       setAttemptNote('Waiting for that part of the file to download…');
       stallSamplesRef.current = FATAL_STALL_SAMPLES - 1;
+      return;
+    }
+
+    /* The live router's chain goes first: if the plan still has an untried step
+       (proxied retry, a different engine), advance it before the generic ladder
+       starts guessing. The plan is finite, so this cannot loop. */
+    const livePlan = livePlanRef.current;
+    if (livePlan?.plan?.steps?.length && livePlan.index + 1 < livePlan.plan.steps.length) {
+      livePlan.index += 1;
+      const next = livePlan.plan.steps[livePlan.index];
+      const message = `${next.why || 'Trying the next route'}…`;
+      commitStatus('recovering', message);
+      setAttemptNote(message);
+      const stepGeneration = generationRef.current;
+      window.setTimeout(() => {
+        if (!mountedRef.current || generationRef.current !== stepGeneration) return;
+        void attach({ reason: 'live-next-step' });
+      }, 250);
       return;
     }
 
@@ -1238,12 +1383,13 @@ export function usePlaybackEngine(options = {}) {
     const sample = () => {
       const el = videoRef.current;
       const player = playerRef.current;
+      const plannedEngineLabel = (engine) => (engine ? engineLabel(engine) : '');
       let bufferedLead = 0;
       try {
         if (el?.buffered?.length) bufferedLead = Number(el.buffered.end(el.buffered.length - 1)) - (Number(el.currentTime) || 0);
       } catch {}
       const base = {
-        engine: player ? 'shaka' : 'native',
+        engine: mpegtsRef.current ? 'mpegts' : player ? 'shaka' : plannedEngineLabel(plannedEngine) || 'native',
         size: el?.videoWidth ? `${el.videoWidth}×${el.videoHeight}` : '—',
         readyState: el?.readyState ?? 0,
         networkState: el?.networkState ?? 0,

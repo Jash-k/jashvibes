@@ -1,0 +1,275 @@
+{
+  "generatedAt": "2026-10-07T13:04:55.795Z",
+  "sources": [
+    {
+      "file": "Sport.m3u",
+      "ok": true,
+      "parsed": 287,
+      "kept": 3
+    },
+    {
+      "file": "Sports.m3u",
+      "ok": true,
+      "parsed": 92,
+      "kept": 18
+    },
+    {
+      "file": "LiveEvent.m3u",
+      "ok": true,
+      "parsed": 177,
+      "kept": 14
+    },
+    {
+      "file": "Star.m3u",
+      "ok": true,
+      "parsed": 23,
+      "kept": 7
+    },
+    {
+      "file": "sony.m3u",
+      "ok": true,
+      "parsed": 22,
+      "kept": 0
+    },
+    {
+      "file": "sony2.m3u",
+      "ok": true,
+      "parsed": 22,
+      "kept": 0
+    },
+    {
+      "file": "sony3.m3u",
+      "ok": true,
+      "parsed": 22,
+      "kept": 0
+    },
+    {
+      "file": "sony4.m3u",
+      "ok": true,
+      "parsed": 18,
+      "kept": 2
+    },
+    {
+      "file": "fancode.m3u",
+      "ok": true,
+      "parsed": 5,
+      "kept": 2
+    },
+    {
+      "file": "fancode2.m3u",
+      "ok": true,
+      "parsed": 5,
+      "kept": 0
+    },
+    {
+      "file": "fancode3.m3u",
+      "ok": true,
+      "parsed": 5,
+      "kept": 0
+    },
+    {
+      "file": "digital.m3u",
+      "ok": true,
+      "parsed": 48,
+      "kept": 9
+    },
+    {
+      "file": "Tnt.m3u",
+      "ok": true,
+      "parsed": 4,
+      "kept": 0
+    },
+    {
+      "file": "primesport.m3u",
+      "ok": true,
+      "parsed": 1,
+      "kept": 0
+    },
+    {
+      "file": "Live.m3u",
+      "ok": true,
+      "parsed": 18,
+      "kept": 0
+    },
+    {
+      "file": "Combined.m3u",
+      "ok": true,
+      "parsed": 6,
+      "kept": 5
+    },
+    {
+      "file": "hotstar.m3u",
+      "ok": true,
+      "parsed": 126,
+      "kept": 7
+    },
+    {
+      "file": "hotstarbackup.m3u",
+      "ok": true,
+      "parsed": 146,
+      "kept": 2
+    },
+    {
+      "file": "jtvplus8.m3u",
+      "ok": true,
+      "parsed": 5190,
+      "kept": 452
+    },
+    {
+      "file": "jtvplus4.m3u",
+      "ok": true,
+      "parsed": 1293,
+      "kept": 0
+    },
+    {
+      "file": "pocket.m3u",
+      "ok": true,
+      "parsed": 1272,
+      "kept": 50
+    },
+    {
+      "file": "bb.m3u",
+      "ok": true,
+      "parsed": 6,
+      "kept": 1
+    },
+    {
+      "file": "sun.m3u",
+      "ok": true,
+      "parsed": 34,
+      "kept": 0
+    },
+    {
+      "file": "voot.m3u",
+      "ok": true,
+      "parsed": 69,
+      "kept": 0
+    },
+    {
+      "file": "playlist.m3u",
+      "ok": true,
+      "parsed": 2292,
+      "kept": 29
+    },
+    {
+      "file": "mixiptv.m3u",
+      "ok": true,
+      "parsed": 1558,
+      "kept": 45
+    },
+    {
+      "file": "mixiptv2.m3u",
+      "ok": true,
+      "parsed": 1436,
+      "kept": 0
+    },
+    {
+      "file": "zee.m3u",
+      "ok": true,
+      "parsed": 33,
+      "kept": 0
+    },
+    {
+      "file": "zee2.m3u",
+      "ok": true,
+      "parsed": 112,
+      "kept": 0
+    },
+    {
+      "file": "zee3.m3u",
+      "ok": true,
+      "parsed": 118,
+      "kept": 0
+    },
+    {
+      "file": "zee4.m3u",
+      "ok": true,
+      "parsed": 67,
+      "kept": 0
+    },
+    {
+      "file": "waves.m3u",
+      "ok": true,
+      "parsed": 78,
+      "kept": 0
+    },
+    {
+      "file": "jtv.m3u",
+      "ok": true,
+      "parsed": 1176,
+      "kept": 0
+    },
+    {
+      "file": "jtv3.m3u",
+      "ok": true,
+      "parsed": 1173,
+      "kept": 0
+    },
+    {
+      "file": "jtv5.m3u",
+      "ok": true,
+      "parsed": 1087,
+      "kept": 3
+    },
+    {
+      "file": "jtvplus2.m3u",
+      "ok": true,
+      "parsed": 1088,
+      "kept": 0
+    },
+    {
+      "file": "jtvplus3.m3u",
+      "ok": true,
+      "parsed": 1176,
+      "kept": 0
+    },
+    {
+      "file": "jtvplus5.m3u",
+      "ok": true,
+      "parsed": 1176,
+      "kept": 0
+    },
+    {
+      "file": "jtvplus6.m3u",
+      "ok": true,
+      "parsed": 1173,
+      "kept": 0
+    },
+    {
+      "file": "jtvplus7.m3u",
+      "ok": true,
+      "parsed": 1176,
+      "kept": 0
+    },
+    {
+      "file": "jtvplus9.m3u",
+      "ok": true,
+      "parsed": 1176,
+      "kept": 0
+    },
+    {
+      "file": "Replay/IPL2026.m3u",
+      "ok": true,
+      "parsed": 146,
+      "kept": 0
+    }
+  ],
+  "sections": {
+    "bigboss": 1,
+    "tamil": 299,
+    "sports": 88
+  },
+  "dropped": {
+    "expired": 810,
+    "radio": 253,
+    "blocked": 2,
+    "badUrl": 1,
+    "vod": 1613,
+    "insecure": 62,
+    "rawTs": 0,
+    "duplicateUrl": 6,
+    "duplicateChannel": 1076,
+    "capped": 167
+  },
+  "tamilAvailable": 467
+}

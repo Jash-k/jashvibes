@@ -1,0 +1,104 @@
+name: Build Jash Live playlist (Tamil + Sports + Bigg Boss 24/7)
+
+# Rebuilds jash-live.m3u from the Sportlink-wtf playlist family.
+# The upstream files are rewritten every ~30 min (their own Actions), and the
+# Akamai/Jio tokens inside them live 30 min – 20 h, so this mirrors that cadence.
+#
+# To quieten commits further, loosen the cron (e.g. '15,45 * * * *' or '0 * * * *').
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Rebuild even if the playlist content is unchanged'
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    # Rebuild when the builder itself changes. Adjust if you keep this in a folder.
+    paths:
+      - 'scripts/build-live-playlist.mjs'
+      - 'scripts/live-playlist.config.json'
+      - '.github/workflows/jash-live.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: jash-live-playlist
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build playlist
+        run: |
+          if [ "${{ inputs.force }}" = "true" ]; then
+            node scripts/build-live-playlist.mjs --force
+          else
+            node scripts/build-live-playlist.mjs
+          fi
+
+      - name: Job summary
+        if: always()
+        run: |
+          node -e '
+            const fs = require("fs");
+            const p = "jash-live.stats.json";
+            let md = "## Jash Live playlist\n\n";
+            try {
+              const s = JSON.parse(fs.readFileSync(p, "utf8"));
+              md += `| section | channels |\n|---|---|\n`;
+              md += `| Bigg Boss 24/7 | ${s.sections.bigboss} |\n`;
+              md += `| Tamil | ${s.sections.tamil} |\n`;
+              md += `| Sports | ${s.sections.sports} |\n\n`;
+              md += `Sources fetched: **${s.sources.filter(x => x.ok).length}/${s.sources.length}**\n\n`;
+              md += `Dropped — VOD rips: ${s.dropped.vod}, expired tokens: ${s.dropped.expired}, `
+                 + `radio: ${s.dropped.radio}, duplicates: ${s.dropped.duplicateChannel}\n\n`;
+              const failed = s.sources.filter(x => !x.ok);
+              if (failed.length) md += `Failed sources: ${failed.map(f => f.file).join(", ")}\n`;
+            } catch (e) {
+              md += `stats file unreadable: ${e.message}\n`;
+            }
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
+          '
+
+      - name: Commit when changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add jash-live.m3u jash-live.stats.json
+
+          if git diff --cached --quiet; then
+            echo "No playlist change — nothing to commit."
+            exit 0
+          fi
+
+          git commit -m "live: rebuild jash-live.m3u ($(TZ=Asia/Kolkata date +'%Y-%m-%d %H:%M IST'))"
+
+          # The repo is committed to by other workflows too — retry on a race.
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "Pushed on attempt ${attempt}."
+              exit 0
+            fi
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+          done
+
+          echo "Could not push after 3 attempts." >&2
+          exit 1
