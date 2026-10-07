@@ -8,8 +8,7 @@
     "start": "node scripts/start.cjs",
     "db:audit": "node scripts/db-maintenance.cjs",
     "db:clean": "node scripts/db-maintenance.cjs --safe",
-    "check": "node scripts/check-source.cjs",
-    "live:playlist": "node scripts/build-live-playlist.mjs"
+    "check": "node scripts/check-source.cjs"
   },
   "dependencies": {
     "cheerio": "^1.2.0",

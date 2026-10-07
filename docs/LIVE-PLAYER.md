@@ -5,7 +5,7 @@
 kind detection (`lib/player/kind.js`).
 **Method:** read the real code paths, researched the 2026 browser-support facts (sources at the end),
 then built and tested a router + capability probe against your real catalogue
-(389 channels from `jash-live.m3u`, 42 donor playlists) with 4 simulated browsers.
+(388 channels from a curated Tamil + sports playlist built from 42 donor playlists) with 4 simulated browsers.
 
 ---
 
@@ -37,8 +37,8 @@ Two facts from your own catalogue, measured, that this fixes:
 | Safari (macOS) | **297 / 389 (76%)** | 92 rows are ClearKey-encrypted DASH → no ClearKey CDM |
 | iPhone (iOS 18) | **297 / 389 (76%)** | same 92 |
 
-The 92 ClearKey channels are **24% of your curated list** (`jash-live.m3u`: `digital.m3u`, `Star.m3u`,
-`jtvplus*` feed them). They can never play on an iPhone through EME — that's not a bug to fix, it's a
+The ClearKey channels are **~24% of a curated Tamil + sports list** (donor files `digital.m3u`,
+`Star.m3u`, `jtvplus*`). They can never play on an iPhone through EME — that's not a bug to fix, it's a
 platform fact to design around (§6 has the three honest options).
 
 ---
@@ -74,7 +74,7 @@ files, HLS and DASH. Live TV adds raw TS, ClearKey and short-lived tokens, which
 
 ## 3. What I built (drop-in, pure, testable)
 
-These modules are installed in this repo (see [CHANGES-live-robustness.md](../CHANGES-live-robustness.md)
+These modules are installed in this repo (see [CHANGES-live-player.md](../CHANGES-live-player.md)
 for the wiring):
 
 ```
@@ -102,7 +102,7 @@ Design rules it follows, matching your codebase's philosophy:
 ### Evidence from the harness
 
 ```
-Channels: 389   (jash-live.m3u)
+Channels: 388   (curated Tamil + sports playlist)
 Chrome/Edge (Win, HW decode)   389/389 playable (100%)   shaka:389
 Firefox (Linux)                389/389 playable (100%)   shaka:389
 Safari (macOS, native HLS)     297/389 playable ( 76%)   native:255  shaka:42
@@ -267,7 +267,7 @@ gets you the first 95% with the engines you already ship.
 
 ```bash
 # 1. Coverage table, any playlist, 4 browser profiles
-node harness/matrix.mjs ../jash-live-playlist/jash-live.m3u
+node harness/matrix.mjs /path/to/your-playlist.m3u
 
 # 2. Codec detection against live manifests (needs network; CDNs may 403 a datacenter IP)
 node harness/peek.mjs
