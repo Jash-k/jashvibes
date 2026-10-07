@@ -98,25 +98,6 @@ This distribution ships **no CI and no test suite** — it is the deploy bundle.
 Docker runtime need your own acceptance checks against the running deployment. See
 [verification scope](docs/VERIFICATION.md).
 
-## Live playback (v11.1)
-
-Live channels are routed **by capability** instead of by file extension
-(see [CHANGES-live-player.md](CHANGES-live-player.md)): native HLS on Apple devices, Shaka for
-HLS/DASH (including ClearKey via EME), and `mpegts.js` for raw MPEG-TS/FLV — the feeds that no
-browser demuxes on its own. The server proxy is a step in the plan rather than an afterthought, so a
-401/403/451 or a stall escalates direct → proxied instead of failing.
-
-HEVC is recorded (`LiveChannel.videoCodec`) and judged **by the client**, because the devices that can
-decode it are known (Apple, and Chrome 107+ with a hardware decoder) — the server no longer hides
-those channels. ClearKey-encrypted DASH is reported as unsupported on Safari/iOS (Apple never shipped
-a ClearKey CDM) rather than retrying without keys.
-
-The Live section is fed by whatever sources you configure in **Admin → TV Service → Sources**. For a
-curated Tamil + sports list, point it at the M3U published by your own playlist repo
-(`https://raw.githubusercontent.com/<you>/<repo>/main/<file>.m3u`), priority 6, `trustTamil` on,
-`autoPurge` off — then Sync. Set `LIVE_SYNC_MINUTES=15` on hosts: short-lived CDN tokens go stale
-before the 60-minute default.
-
 ## Sources and limitations
 
 The app retains Vault, configured Stremio addons, Moviesda direct-file discovery, Mirchi, ReTro M3U/JSON sources, Live source feeds and Saavn/LRCLIB music integration. Third-party availability, URL expiry, supported codecs and entitlement are outside the app's control. Configure a working `SAAVN_API` / `SAAVN_MIRRORS`: the old public Render default was observed returning 404. Album detail failures are no longer hidden by presenting unrelated search songs as the requested album.

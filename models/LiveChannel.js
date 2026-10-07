@@ -45,9 +45,6 @@ const LiveChannelSchema = new mongoose.Schema({
   referer: { type: String, default: '' },
   headers: { type: Object, default: {} },
   workingStatus: { type: String, enum: ['unknown', 'working', 'broken'], default: 'unknown', index: true },
-  // Video codec the deep check saw on the wire ('h264' | 'hevc' | 'mpeg2' | '').
-  // Client-side playability depends on it, so it is a stored FACT, not a verdict.
-  videoCodec: { type: String, default: '' },
   // Health is independent of the desired catalogue. Never erase memberships.
   failStreak: { type: Number, default: 0 },
   autoHidden: { type: Boolean, default: false },

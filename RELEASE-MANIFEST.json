@@ -1,13 +1,13 @@
 {
   "version": "11.0.0",
   "branch": "deploy-ready",
-  "baselineCommit": "e4822da783837230261d2f44295af1a789c71977",
-  "verifiedOn": "2026-10-07",
-  "authorization": "Lyric Lounge music rebuild + live-mirror fallbacks + lyrics decoupling",
+  "baselineCommit": "a5fcb4a382b8f2c025add5f9ea227975a9027bd3",
+  "verifiedOn": "2026-10-08",
+  "authorization": "music streaming fixed natively (DES media URLs) \u2014 player rebuild follows",
   "verification": {
     "productionBuild": "passed",
     "standaloneStartupAndAssets": "passed",
-    "sourceModules": 209,
+    "sourceModules": 218,
     "localImportErrors": 0,
     "regressionTestsPassed": 77,
     "productionBrowserFlowsPassed": 11,
@@ -17,7 +17,8 @@
     "dockerRuntimeTested": false,
     "productionBrowserFlowsScope": "Direct MP4 on this branch's own build: picking a source/quality/mirror closes the panel, Quality rows are quality + host with a 7x7 state dot, Direct MP4 carries the dot on the Source row and the trigger, no status words anywhere, no Mirror section, deck measured at 91px (was 108), fullscreen hairline absent from the DOM. Music rebuild, three widths (390/820/1440) on this build: five views + search, seven facets, ten lyric canvases proven distinct by computed background, the type-size ramp measured at 19/24/29/34/42px, three typefaces, the source picker's live previews and apply, the phone strip inside its column, and no page error.",
     "liveUpstreamProbes": "moviesda chain walked from the sandbox: links minted live, alive hosts verified by MP4 signature (206 + ftypisom), refusing hosts 403 text/html; no false positives on real media. Music: the default Saavn mirror (saavnapi.onrender.com) answers 404 for every route, so album/artist/playlist/search now fall back to JioSaavn's own web API \u2014 verified live, albums 12 \u00b7 artists 12 \u00b7 playlists 20 \u00b7 search 12 (+12 albums) \u00b7 new 11 tracks / 16 albums \u00b7 trending 8; LRCLIB returned real Tamil lyric lines (30 on the sampled track).",
-    "regressionSuiteNote": "The deterministic suite (77 tests) lives on audit-fixes and is not shipped on this branch by design. On this branch the music rebuild was verified through the built app in Chromium \u2014 149 fixture assertions across three widths plus 17 assertions against the live catalogue and live lyric providers \u2014 and the Direct MP4 behaviour through the built app and the live chain."
+    "regressionSuiteNote": "The deterministic suite (77 tests) lives on audit-fixes and is not shipped on this branch by design. On this branch the music rebuild was verified through the built app in Chromium \u2014 149 fixture assertions across three widths plus 17 assertions against the live catalogue and live lyric providers \u2014 and the Direct MP4 behaviour through the built app and the live chain.",
+    "musicStreams": "native fallback verified on the built app: /api/music/song?seokey=saavn:yZSd2-yD \u2192 200 with 96/160/320 kbps renditions, each answering 206 audio/mp4 with Access-Control-Allow-Origin: *, 322 kbps measured (8,344,644 B / 207 s). Before this commit the same call was 500 \u2014 the SAAVN mirror answers 404 on every route \u2014 and no track could play."
   },
   "files": {
     ".dockerignore": {
@@ -681,8 +682,8 @@
       "sha256": "38db5dc6421c490450e3f7a97c5ae8835a9d9f671c81e5338dad03ec03f3e06d"
     },
     "lib/musicApi.js": {
-      "bytes": 33370,
-      "sha256": "b4f914dd392bc2aebfc167c88254ba993890241ea7c0b164c4a6597d6145dc0b"
+      "bytes": 37106,
+      "sha256": "468ca033b5ab52c18e2bdcdb4737f426ec119c8faedf9a075b50d94569c65bc1"
     },
     "lib/musicCore.js": {
       "bytes": 9363,
@@ -767,6 +768,10 @@
     "lib/releaseTitle.js": {
       "bytes": 2754,
       "sha256": "4884daa2126b163d692dc6b609267f8b21310380ad28d63a2c644eee3769b581"
+    },
+    "lib/saavnDes.mjs": {
+      "bytes": 4642,
+      "sha256": "bfdf92ffdb6d3c11c1565d659177e6d5cb58922f5914d31299d41d5d6b3631a3"
     },
     "lib/selfApi.js": {
       "bytes": 2351,
