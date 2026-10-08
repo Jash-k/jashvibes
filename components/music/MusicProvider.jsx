@@ -183,8 +183,8 @@ function useMusicController(enabled) {
       setShowLyrics(Boolean(cached.showLyrics));
       setTrending(cached.trending || { status: 'idle', items: [], error: '' });
       setFresh(cached.fresh || { status: 'idle', tracks: [], albums: [], error: '' });
-      setLyrics(cached.lyrics || '');
-      setLyricsData(cached.lyricsData?.source === 'error' ? {} : cached.lyricsData || {});
+      setLyrics(cached.lyricsData?.matchVersion === 2 ? cached.lyrics || '' : '');
+      setLyricsData(cached.lyricsData?.matchVersion === 2 && cached.lyricsData?.source !== 'error' ? cached.lyricsData : {});
       setHomeWarning(cached.homeWarning || cached.home?.warning || cached.home?.warnings?.[0] || '');
       setStatus(cached.status || 'ready');
       restoreScroll(MUSIC_CACHE_KEY);
@@ -609,12 +609,18 @@ function useMusicController(enabled) {
     const detail = activeDetail && trackKey(activeDetail) === currentTrackRef.current ? activeDetail : active;
     const currentKey = trackKey(detail); if (!currentKey || !detail?.title) return;
     setShowLyrics(true);
-    if (!force && lyricsStatus === 'ready' && lyricsData.loadedFor === currentKey) return;
+    if (!force && lyricsStatus === 'ready' && lyricsData.matchVersion === 2 && lyricsData.loadedFor === currentKey) return;
     lyricsRequest.current?.abort(); const controller = new AbortController(); lyricsRequest.current = controller;
     const token = ++lyricsGeneration.current; const timeout = setTimeout(() => controller.abort(), 12000);
     setLyricsStatus('loading'); setLyrics('');
     try {
       const params = new URLSearchParams({ title: detail.title, artist: detail.artists || '', album: detail.album || '', duration: String(detail.duration || ''), id: detail.trackId || '', seokey: detail.seokey || '' });
+      if (force) params.set('force', '1');
+      try {
+        const rejected = JSON.parse(window.localStorage.getItem('jash_rejected_lyrics_v1') || '{}')[currentKey] || [];
+        params.set('exclude', rejected.filter((value) => /^\d+$/.test(value)).join(','));
+        if (rejected.includes('saavn')) params.set('skipSaavn', '1');
+      } catch { /* private mode */ }
       const response = await fetch('/api/music/lyrics?' + params, { signal: controller.signal, cache: 'no-store' });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Lyrics unavailable');
       if (token !== lyricsGeneration.current || currentKey !== currentTrackRef.current) return;
@@ -625,6 +631,20 @@ function useMusicController(enabled) {
       if (token !== lyricsGeneration.current || currentKey !== currentTrackRef.current) return;
       setLyrics(''); setLyricsData({ loadedFor: currentKey, source: 'error', message: e.name === 'AbortError' ? 'Lyrics lookup timed out. Retry when ready.' : e.message }); setLyricsStatus('error');
     } finally { clearTimeout(timeout); }
+  }
+
+  function rejectLyrics() {
+    const key = currentTrackRef.current;
+    const rejectedId = lyricsData?.source === 'lrclib' ? String(lyricsData?.matched?.id || '') : lyricsData?.source;
+    if (key && rejectedId) {
+      try {
+        const saved = JSON.parse(window.localStorage.getItem('jash_rejected_lyrics_v1') || '{}');
+        saved[key] = [...new Set([...(saved[key] || []), rejectedId])].slice(-20);
+        const entries = Object.entries(saved).slice(-200);
+        window.localStorage.setItem('jash_rejected_lyrics_v1', JSON.stringify(Object.fromEntries(entries)));
+      } catch { /* still refresh without persistence */ }
+    }
+    return openLyrics(true);
   }
 
   async function openCollection(type, value) {
@@ -877,7 +897,7 @@ function useMusicController(enabled) {
   }
   function addToQueue(track) { setQueue((q) => dedupeQueue([...q, track])); }
   function backToAlbums() { ++collectionGeneration.current; collectionRequest.current?.abort(); setSelectedCollection(null); setCollectionStatus('idle'); setCenterTab('albums'); }
-  return { videoRef, home, status, error, setError, homeWarning, loadHome, query, setQuery, searchResults, searchStatus, selectedCollection, collectionStatus, openAlbum, openArtist, openPlaylist, backToAlbums, queueTracks, playTrack, playNext, playPrevious, addToQueue, retryTrack, closeMiniPlayer, playingTrack, activeKey, currentTime, duration, quality, setQuality, qualityChips, playerStatus, isPlaying, togglePlay, seekTo, volume, changeVolume, toggleMute, muted, shuffleEnabled, setShuffleEnabled, repeatMode, cycleRepeat, favorites, favoriteSet, favoriteTracks, recents, toggleFavorite, centerTab, setCenterTab, lyrics, lyricsData, lyricsStatus, openLyrics, syncedLyricLines, activeLyricLineIndex, lyricRows, plainLyricLines, lyricAutoScroll, setLyricAutoScroll, lyricOffset, setLyricOffset, activeLyricRef, lyricBlur, setLyricBlur, facetLists, facet, facets, loadFacet, allShelfSongs, shelfCollections, trending, loadTrending, fresh, loadFresh, refreshImportedPlaylists, listeningMode, toggleListeningMode, pocketMode, enterPocketMode, setPocketMode, showSongCrud, setShowSongCrud, crudQuery, setCrudQuery, addImportedTrack, replaceImportedTrack, removeImportedTrack };
+  return { videoRef, home, status, error, setError, homeWarning, loadHome, query, setQuery, searchResults, searchStatus, selectedCollection, collectionStatus, openAlbum, openArtist, openPlaylist, backToAlbums, queueTracks, playTrack, playNext, playPrevious, addToQueue, retryTrack, closeMiniPlayer, playingTrack, activeKey, currentTime, duration, quality, setQuality, qualityChips, playerStatus, isPlaying, togglePlay, seekTo, volume, changeVolume, toggleMute, muted, shuffleEnabled, setShuffleEnabled, repeatMode, cycleRepeat, favorites, favoriteSet, favoriteTracks, recents, toggleFavorite, centerTab, setCenterTab, lyrics, lyricsData, lyricsStatus, openLyrics, rejectLyrics, syncedLyricLines, activeLyricLineIndex, lyricRows, plainLyricLines, lyricAutoScroll, setLyricAutoScroll, lyricOffset, setLyricOffset, activeLyricRef, lyricBlur, setLyricBlur, facetLists, facet, facets, loadFacet, allShelfSongs, shelfCollections, trending, loadTrending, fresh, loadFresh, refreshImportedPlaylists, listeningMode, toggleListeningMode, pocketMode, enterPocketMode, setPocketMode, showSongCrud, setShowSongCrud, crudQuery, setCrudQuery, addImportedTrack, replaceImportedTrack, removeImportedTrack };
 
 }
 const MusicContext = createContext(null);

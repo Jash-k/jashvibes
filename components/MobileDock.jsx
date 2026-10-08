@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import MusicRouteLink from '@/components/MusicRouteLink';
 import { usePathname } from 'next/navigation';
 import Icon from '@/components/Icons';
 import { NAV_ITEMS, isNavItemActive } from '@/components/navItems';
@@ -22,8 +23,9 @@ export default function MobileDock() {
       <div className="mx-auto grid max-w-2xl" style={{ gridTemplateColumns: `repeat(${NAV_ITEMS.length}, minmax(0, 1fr))` }}>
         {DOCK_ITEMS.map((item) => {
           const active = isNavItemActive(item, pathname);
+          const NavLink = item.href === '/music' ? MusicRouteLink : Link;
           return (
-            <Link
+            <NavLink
               key={item.href}
               href={item.href}
               onClick={item.hard ? (event) => { event.preventDefault(); window.location.assign(item.href); } : undefined}
@@ -43,7 +45,7 @@ export default function MobileDock() {
                 <Icon name={item.icon} className={`h-5 w-5 transition-transform duration-200 ${active ? 'scale-110' : ''}`} />
               )}
               <span className="tracking-tight">{item.short || item.label}</span>
-            </Link>
+            </NavLink>
           );
         })}
       </div>
