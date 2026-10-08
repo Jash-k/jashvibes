@@ -733,7 +733,7 @@ export function usePlaybackEngine(options = {}) {
 
         player.addEventListener?.('error', (event) => {
           if (!isAlive(generation)) return;
-          failureRef.current?.(mapPlaybackError(event?.detail, { offline: offlineRef.current }), 'engine');
+          failureRef.current?.(activePolicy.mapError?.(event?.detail) || mapPlaybackError(event?.detail, { offline: offlineRef.current }), 'engine');
         });
         player.addEventListener?.('trackschanged', () => {
           if (isAlive(generation)) refreshTracks();
@@ -758,7 +758,7 @@ export function usePlaybackEngine(options = {}) {
       }
     } catch (loadError) {
       if (!isAlive(generation)) return;
-      failureRef.current?.(mapPlaybackError(loadError, { offline: offlineRef.current }), 'load');
+      failureRef.current?.(activePolicy.mapError?.(loadError) || mapPlaybackError(loadError, { offline: offlineRef.current }), 'load');
       return;
     }
     if (!isAlive(generation)) return;

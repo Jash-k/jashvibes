@@ -1,7 +1,6 @@
+import { normalizeLiveHeaders } from '@/lib/player/liveHeaders';
 import { safeFetch, publicDestination, readLimitedText } from '@/lib/server/safeFetch';
 
-import net from 'node:net';
-import dns from 'node:dns/promises';
 import { NextResponse } from 'next/server';
 import { isPlaylistResponse, rewritePlaylist } from '@/lib/player/playlistRewrite';
 
@@ -51,9 +50,17 @@ async function proxy(request) {
     const range = pickHeader(request, ['range', 'Range']);
     const accept = pickHeader(request, ['accept', 'Accept']);
 
-    const rawHeaders = searchParams.get('hd') || '{}';
-    try { for (const [name, value] of Object.entries(JSON.parse(rawHeaders))) { if (/^(host|connection|content-length|transfer-encoding|upgrade)$/i.test(name) || value == null) continue; upstreamHeaders.set(name, String(value)); } } catch { return NextResponse.json({ error: 'Invalid source headers' }, { status: 400 }); }
-    if (ua) upstreamHeaders.set('User-Agent', ua);
+    const suppliedHeaders = searchParams.get('hd') || '{}';
+    if (suppliedHeaders.length > 16384) return NextResponse.json({ error: 'Source headers too large' }, { status: 400 });
+    let sourceHeaders;
+    try {
+      const parsed = JSON.parse(suppliedHeaders);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
+      sourceHeaders = normalizeLiveHeaders(parsed);
+    } catch { return NextResponse.json({ error: 'Invalid source headers' }, { status: 400 }); }
+    const rawHeaders = JSON.stringify(sourceHeaders);
+    for (const [name, value] of Object.entries(sourceHeaders)) upstreamHeaders.set(name, value);
+    if (searchParams.get('ua') || !upstreamHeaders.has('User-Agent')) upstreamHeaders.set('User-Agent', ua);
     if (referer) upstreamHeaders.set('Referer', referer);
     if (cookie) upstreamHeaders.set('Cookie', cookie);
     if (range) upstreamHeaders.set('Range', range);
@@ -136,8 +143,9 @@ async function proxy(request) {
       headers,
     });
   } catch (error) {
-    console.error('[api/live-proxy] Error:', error);
-    return NextResponse.json({ error: error.message || 'Live proxy failed' }, { status: 502 });
+    // Never log source URLs, headers, cookies or licence bodies.
+    console.error('[api/live-proxy] Upstream relay failed:', error?.name || 'Error');
+    return NextResponse.json({ error: 'Live upstream relay failed. Check source availability and server region.' }, { status: 502 });
   }
 }
 

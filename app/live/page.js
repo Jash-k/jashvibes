@@ -118,7 +118,7 @@ export default function LiveTVPage() {
         if (current?.id) {
           const match = loadedChannels.find((channel) => channel.id === current.id);
           if (match) {
-            if (match.url === current.url && match.keyId === current.keyId && match.key === current.key && match.cookie === current.cookie) {
+            if (['url', 'format', 'keyId', 'key', 'licenseKey', 'licenseType', 'cookie', 'userAgent', 'referer'].every((field) => match[field] === current[field]) && JSON.stringify(match.headers || {}) === JSON.stringify(current.headers || {})) {
               return current;
             }
             return match;
