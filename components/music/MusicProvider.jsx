@@ -574,6 +574,23 @@ function useMusicController(enabled) {
   }
 
   function closeMiniPlayer() {
+    // Stop attachment and invalidate pending current-track requests; retain personal data and queue.
+    currentTrackRef.current = '';
+    setShouldAutoplay(false);
+    videoRef.current?.pause();
+    setIsPlaying(false);
+    setActive(null);
+    setActiveDetail(null);
+    setQuality('');
+    setCurrentTime(0);
+    setDuration(0);
+    setPlayerStatus('idle');
+    setError('');
+    lyricsGeneration.current += 1;
+    lyricsRequest.current?.abort();
+    setLyrics('');
+    setLyricsData({});
+    setLyricsStatus('idle');
     setShowMiniPlayer(false);
     setShowLyrics(false);
   }
@@ -860,7 +877,7 @@ function useMusicController(enabled) {
   }
   function addToQueue(track) { setQueue((q) => dedupeQueue([...q, track])); }
   function backToAlbums() { ++collectionGeneration.current; collectionRequest.current?.abort(); setSelectedCollection(null); setCollectionStatus('idle'); setCenterTab('albums'); }
-  return { videoRef, home, status, error, setError, homeWarning, loadHome, query, setQuery, searchResults, searchStatus, selectedCollection, collectionStatus, openAlbum, openArtist, openPlaylist, backToAlbums, queueTracks, playTrack, playNext, playPrevious, addToQueue, retryTrack, playingTrack, activeKey, currentTime, duration, quality, setQuality, qualityChips, playerStatus, isPlaying, togglePlay, seekTo, volume, changeVolume, toggleMute, muted, shuffleEnabled, setShuffleEnabled, repeatMode, cycleRepeat, favorites, favoriteSet, favoriteTracks, recents, toggleFavorite, centerTab, setCenterTab, lyrics, lyricsData, lyricsStatus, openLyrics, syncedLyricLines, activeLyricLineIndex, lyricRows, plainLyricLines, lyricAutoScroll, setLyricAutoScroll, lyricOffset, setLyricOffset, activeLyricRef, lyricBlur, setLyricBlur, facetLists, facet, facets, loadFacet, allShelfSongs, shelfCollections, trending, loadTrending, fresh, loadFresh, refreshImportedPlaylists, listeningMode, toggleListeningMode, pocketMode, enterPocketMode, setPocketMode, showSongCrud, setShowSongCrud, crudQuery, setCrudQuery, addImportedTrack, replaceImportedTrack, removeImportedTrack };
+  return { videoRef, home, status, error, setError, homeWarning, loadHome, query, setQuery, searchResults, searchStatus, selectedCollection, collectionStatus, openAlbum, openArtist, openPlaylist, backToAlbums, queueTracks, playTrack, playNext, playPrevious, addToQueue, retryTrack, closeMiniPlayer, playingTrack, activeKey, currentTime, duration, quality, setQuality, qualityChips, playerStatus, isPlaying, togglePlay, seekTo, volume, changeVolume, toggleMute, muted, shuffleEnabled, setShuffleEnabled, repeatMode, cycleRepeat, favorites, favoriteSet, favoriteTracks, recents, toggleFavorite, centerTab, setCenterTab, lyrics, lyricsData, lyricsStatus, openLyrics, syncedLyricLines, activeLyricLineIndex, lyricRows, plainLyricLines, lyricAutoScroll, setLyricAutoScroll, lyricOffset, setLyricOffset, activeLyricRef, lyricBlur, setLyricBlur, facetLists, facet, facets, loadFacet, allShelfSongs, shelfCollections, trending, loadTrending, fresh, loadFresh, refreshImportedPlaylists, listeningMode, toggleListeningMode, pocketMode, enterPocketMode, setPocketMode, showSongCrud, setShowSongCrud, crudQuery, setCrudQuery, addImportedTrack, replaceImportedTrack, removeImportedTrack };
 
 }
 const MusicContext = createContext(null);
@@ -868,5 +885,5 @@ export function useMusic() { const music = useContext(MusicContext); if (!music)
 export default function MusicProvider({ children }) {
   const pathname = usePathname(); const music = useMusicController(pathname === '/music');
   const mini = pathname !== '/music' && !pathname.startsWith('/watch') && pathname !== '/live' && music.playingTrack;
-  return <MusicContext.Provider value={music}>{children}<audio ref={music.videoRef} preload="auto" playsInline />{mini ? <div className="mu-global-mini"><Link href="/music">♪ {music.playingTrack.title}</Link><button onClick={music.togglePlay} type="button">{music.isPlaying ? 'Pause' : 'Play'}</button><button onClick={() => music.playNext()} type="button">Next</button></div> : null}</MusicContext.Provider>;
+  return <MusicContext.Provider value={music}>{children}<audio ref={music.videoRef} preload="auto" playsInline />{mini ? <div className="mu-global-mini"><Link href="/music">♪ {music.playingTrack.title}</Link><button onClick={music.togglePlay} type="button">{music.isPlaying ? 'Pause' : 'Play'}</button><button onClick={() => music.playNext()} type="button">Next</button><button className="mu-mini-close" onClick={music.closeMiniPlayer} type="button" aria-label="Stop music and close player" title="Stop music and close player">×</button></div> : null}</MusicContext.Provider>;
 }

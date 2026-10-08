@@ -3160,3 +3160,8 @@ html.day-mode .jv-vault-page {
 .jv-deck-clear:hover { border-color: #4dd8ff; color: #fff; }
 
 
+
+/* Explicit stop/dismiss action for the app-wide floating music player. */
+.mu-global-mini .mu-mini-close { flex:none; min-width:44px; min-height:44px; font-size:24px; line-height:1; color:#e7e7ec; border-radius:50%; }
+.mu-global-mini .mu-mini-close:hover { background:#ffffff12; }
+.mu-global-mini .mu-mini-close:focus-visible { outline:2px solid #8be5ef; outline-offset:2px; }

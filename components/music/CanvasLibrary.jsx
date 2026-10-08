@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { TAMIL_MUSIC_DIRECTORS } from '@/lib/tamilMusicDirectors';
 import { CollectionCards, Cover, IconButton, Status, TrackRows } from './CanvasBits';
 
 export const LIBRARY_TABS = [
@@ -22,10 +23,10 @@ export default function CanvasLibrary({ music, tab, setTab, query, setQuery, onP
     requested.current.add(tab);
     if (tab === 'new') loaders.current.loadFresh();
     else if (tab === 'tracks') loaders.current.loadTrending();
-    else loaders.current.loadFacet(tab);
+    else if (tab !== 'artists') loaders.current.loadFacet(tab);
   }, [tab]);
   useEffect(() => { scroll.current?.scrollTo({ top: 0 }); }, [detail?.id, query]);
-  const refresh = () => tab === 'new' ? music.loadFresh() : tab === 'tracks' ? music.loadTrending() : music.loadFacet(tab);
+  const refresh = () => tab === 'artists' ? undefined : tab === 'new' ? music.loadFresh() : tab === 'tracks' ? music.loadTrending() : music.loadFacet(tab);
   const changeTab = (id) => { music.backToAlbums(); setQuery(''); setFavorites(false); setTab(id); };
   const open = (kind, item) => {
     if (kind === 'artist') music.openArtist(item);
@@ -33,17 +34,22 @@ export default function CanvasLibrary({ music, tab, setTab, query, setQuery, onP
     else music.openAlbum(item);
   };
   const searching = Boolean(query.trim());
-  const state = searching ? { status: music.searchStatus } : tab === 'new' ? music.fresh : tab === 'tracks' ? music.trending : music.facets?.[tab];
+  const state = tab === 'artists' ? { status: 'ready' } : searching ? { status: music.searchStatus } : tab === 'new' ? music.fresh : tab === 'tracks' ? music.trending : tab === 'artists' ? { status: 'ready' } : music.facets?.[tab];
   const results = music.searchResults || {};
   let cards = [], tracks = [];
   if (searching) {
-    if (tab === 'artists') cards = results.artists || [];
+    if (tab === 'artists') {
+      const normalize = (value) => String(value).toLowerCase().replace(/[^a-z0-9]/g, '');
+      const aliases = { arr: 'A. R. Rahman', arrahman: 'A. R. Rahman', harris: 'Harris Jayaraj', illayraja: 'Ilaiyaraaja', ilayaraja: 'Ilaiyaraaja', anirudh: 'Anirudh Ravichander' };
+      const search = normalize(aliases[normalize(query)] || query);
+      cards = TAMIL_MUSIC_DIRECTORS.filter((item) => normalize(item.name).includes(search));
+    }
     else if (tab === 'playlists') cards = results.playlists || [];
     else if (tab === 'tracks') tracks = results.songs || [];
     else { cards = results.albums || []; if (tab === 'new') tracks = results.songs || []; }
   } else if (tab === 'new') { cards = music.fresh?.albums || []; tracks = music.fresh?.tracks || []; }
   else if (tab === 'tracks') tracks = music.trending?.status === 'ready' ? music.trending.items : music.allShelfSongs || [];
-  else cards = music.facetLists?.[tab] || [];
+  else cards = tab === 'artists' ? TAMIL_MUSIC_DIRECTORS : music.facetLists?.[tab] || [];
   if (tab === 'playlists' && !searching) cards = [...new Map([...(music.home?.importedPlaylists || music.home?.playlists || []), ...cards].map((item) => [item.id || item.title, item])).values()];
   if (tab === 'tracks' && favorites) tracks = music.favoriteTracks || [];
   if (sort === 'az') {
@@ -59,7 +65,7 @@ export default function CanvasLibrary({ music, tab, setTab, query, setQuery, onP
       event.preventDefault(); const next = event.key === 'Home' ? 0 : event.key === 'End' ? 4 : (index + (event.key === 'ArrowRight' ? 1 : 4)) % 5;
       changeTab(LIBRARY_TABS[next].id); refs.current[next]?.focus();
     }}>{item.label}</button>)}</div>
-    <div className="mc-library-tools"><span>{searching ? 'Search results' : 'Tamil · Available catalogue'}</span>{tab === 'tracks' ? <button className="mc-text-button" type="button" aria-pressed={favorites} onClick={() => setFavorites(!favorites)}>Favourites</button> : null}<label><span className="sr-only">Sort library</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="added">Provider order</option><option value="az">A–Z</option></select></label><IconButton icon="refresh" label="Refresh library" onClick={refresh} /></div>
+    <div className="mc-library-tools"><span>{tab === 'artists' ? 'Tamil music directors' : searching ? 'Search results' : 'Tamil · Available catalogue'}</span>{tab === 'tracks' ? <button className="mc-text-button" type="button" aria-pressed={favorites} onClick={() => setFavorites(!favorites)}>Favourites</button> : null}<label><span className="sr-only">Sort library</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="added">Provider order</option><option value="az">A–Z</option></select></label><IconButton icon="refresh" label="Refresh library" disabled={tab === 'artists'} onClick={refresh} /></div>
     <div className="mc-library-results" ref={scroll} id="mc-library-results" role="tabpanel" aria-labelledby={`mc-tab-${tab}`} tabIndex={0} aria-busy={detail ? music.collectionStatus === 'loading' : state?.status === 'loading'}>
       {detail ? <>
         <button type="button" className="mc-text-button" onClick={() => music.backToAlbums()}>← Back to {LIBRARY_TABS.find((item) => item.id === tab)?.label}</button>

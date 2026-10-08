@@ -9,7 +9,7 @@ import CanvasLyrics from './CanvasLyrics';
 import { Cover, IconButton, MusicIcon, Sheet, TrackRows } from './CanvasBits';
 import './music-canvas.css';
 
-const DEFAULT_LOOK = { canvas: 'bloom', size: 34, offset: 0, follow: true, motion: false };
+const DEFAULT_LOOK = { canvas: 'cinema', size: 34, offset: 0, follow: true, motion: false };
 
 export default function MusicShell() {
   const music = useMusic();
@@ -44,7 +44,11 @@ export default function MusicShell() {
     window.addEventListener('popstate', applyLocation);
     try {
       const saved = JSON.parse(localStorage.getItem('jash_music_canvas') || '{}');
-      setLook({ canvas: ['bloom', 'cinema', 'noir'].includes(saved.canvas) ? saved.canvas : 'bloom', size: Math.min(48, Math.max(22, Number(saved.size) || 34)), offset: Math.min(30, Math.max(-30, Number(saved.offset) || 0)), follow: saved.follow !== false, motion: saved.motion === true });
+      const migrated = localStorage.getItem('jash_music_cinema_default_v1') === '1';
+      const canvas = migrated && ['bloom', 'cinema', 'noir'].includes(saved.canvas) ? saved.canvas : 'cinema';
+      localStorage.setItem('jash_music_canvas', JSON.stringify({ ...saved, canvas }));
+      localStorage.setItem('jash_music_cinema_default_v1', '1');
+      setLook({ canvas, size: Math.min(48, Math.max(22, Number(saved.size) || 34)), offset: Math.min(30, Math.max(-30, Number(saved.offset) || 0)), follow: saved.follow !== false, motion: saved.motion === true });
     } catch { /* storage unavailable */ }
     return () => { document.documentElement.classList.remove('music-canvas-open'); media.current.removeEventListener('change', resize); window.removeEventListener('popstate', applyLocation); };
   }, []);
