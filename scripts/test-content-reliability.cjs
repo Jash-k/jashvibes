@@ -5,11 +5,13 @@ const root = path.resolve(__dirname, '..');
 const moduleFrom = (file) => import('data:text/javascript;base64,' + Buffer.from(fs.readFileSync(path.join(root, file), 'utf8')).toString('base64'));
 (async () => {
  const { vaultCategory, latestVaultFirst } = await moduleFrom('lib/vaultBrowse.js');
- assert.equal(vaultCategory({ category:'tamil-movie', language:'en' }), 'tamil-dubbed-movie');
- assert.equal(vaultCategory({ category:'tamil-series', language:'en', isSeries:true }), 'tamil-dubbed-series');
+ assert.equal(vaultCategory({ category:'tamil-movie', language:'en' }), 'unverified');
+ assert.equal(vaultCategory({ category:'tamil-series', language:'en', isSeries:true }), 'unverified');
  assert.equal(vaultCategory({ category:'tamil-movie', language:'ta' }), 'tamil-movie');
- assert.equal(vaultCategory({ category:'tamil-movie', language:'' }), 'tamil-movie');
- assert.equal(vaultCategory({}), 'unclassified');
+ assert.equal(vaultCategory({ category:'tamil-movie', language:'' }), 'unverified');
+ assert.equal(vaultCategory({}), 'unverified');
+ assert.equal(vaultCategory({ category:'tamil-dubbed-movie', language:'en' }), 'tamil-dubbed-movie');
+ assert.equal(vaultCategory({ category:'tamil-dubbed-movie', language:'ta' }), 'unverified');
  assert.equal([{id:1,updatedAt:'2025-01-01'},{id:2,updatedAt:'2026-01-01'}].sort(latestVaultFirst)[0].id,2);
  const { lyricIdentity, chooseLyricMatch } = await moduleFrom('lib/lyricsMatch.js');
  const wanted = {title:'Namaste (From "DC")',artist:'Anirudh Ravichander',album:'DC',duration:150};

@@ -65,3 +65,11 @@
  .vl-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px 12px; }.vl-grid.is-dense { grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
  .vl-backdrop { align-items:flex-end; padding:0; }.vl-popover { width:100%; max-height:80dvh; border-radius:20px 20px 0 0; padding:20px 20px max(20px,env(safe-area-inset-bottom)); }
 }
+
+/* Secondary review collection stays outside the four primary category tabs. */
+.vl-verification-note { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:0 0 18px; }
+.vl-verification-note > span { color:#a6babc; font-size:11px; line-height:1.5; }
+.vl-verification-note > button { flex:none; min-height:44px; padding:9px 14px; border:1px solid #bba47960; border-radius:20px; color:#e3cca3; background:#352c202e; font-size:12px; }
+.vl-verification-note > button[aria-pressed='true'] { background:#493921; border-color:#d9b879; }
+.vl-verification-note small { margin-left:8px; opacity:.8; }
+@media(max-width:600px) { .vl-verification-note { gap:10px; align-items:flex-start; }.vl-verification-note > span { font-size:10px; } }

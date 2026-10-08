@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import Icon from '@/components/Icons';
 import { POSTER_SIZES_ATTR, tmdbImageSrcSet } from '@/lib/tmdbPoster';
 import { revealStyle } from '@/lib/useReveal';
@@ -9,6 +10,8 @@ function qualityChipClass(quality) {
 }
 
 export function VaultTile({ movie, onPlay, index = 0 }) {
+  const [failedUrl, setFailedUrl] = useState('');
+  const showPoster = Boolean(movie.poster) && failedUrl !== movie.poster;
   return (
     <button
       type="button"
@@ -20,7 +23,7 @@ export function VaultTile({ movie, onPlay, index = 0 }) {
         ? `Play ${movie.title}${movie.year ? ` (${movie.year})` : ''} — ${movie.episodeCount} episode${movie.episodeCount === 1 ? '' : 's'}`
         : `Play ${movie.title}${movie.year ? ` (${movie.year})` : ''}`}
     >
-      {movie.poster ? (
+      {showPoster ? (
         <img
           src={movie.poster}
           srcSet={tmdbImageSrcSet(movie.poster) || undefined}
@@ -29,6 +32,7 @@ export function VaultTile({ movie, onPlay, index = 0 }) {
           aria-hidden="true"
           loading="lazy"
           decoding="async"
+          onError={() => setFailedUrl(movie.poster)}
           className="jv-vault-poster"
         />
       ) : (
