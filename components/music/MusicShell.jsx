@@ -15,7 +15,8 @@ export default function MusicShell() {
   const music = useMusic();
   const [tab, setTabState] = useState('albums');
   const [query, setQuery] = useState('');
-  const [libraryOpen, setLibraryOpen] = useState(false);
+  // Library-first on mobile even before the mount effect; desktop CSS is unchanged.
+  const [libraryOpen, setLibraryOpen] = useState(true);
   const [overlay, setOverlay] = useState('');
   const [mode, setMode] = useState('lyrics');
   const [full, setFull] = useState(false);
@@ -31,12 +32,14 @@ export default function MusicShell() {
       const params = new URLSearchParams(window.location.search);
       const next = params.get('tab');
       if (LIBRARY_TABS.some((item) => item.id === next)) setTabState(next);
-      setLibraryOpen(params.get('library') === '1');
+      // An explicit library=0 represents the player in browser history.
+      // A fresh /music entry defaults to Library on mobile, even with a saved track.
+      setLibraryOpen(media.current.matches && params.get('library') !== '0');
     };
+    media.current = window.matchMedia('(max-width: 900px)');
     applyLocation();
     provider.current.setQuery('');
-    media.current = window.matchMedia('(max-width: 900px)');
-    const resize = () => { if (!media.current.matches) setLibraryOpen(false); };
+    const resize = () => { applyLocation(); };
     media.current.addEventListener('change', resize);
     window.addEventListener('popstate', applyLocation);
     try {
@@ -48,7 +51,8 @@ export default function MusicShell() {
   const update = (patch) => setLook((old) => { const value = { ...old, ...patch }; try { localStorage.setItem('jash_music_canvas', JSON.stringify(value)); } catch { /* storage unavailable */ } return value; });
   const locationState = (nextTab, open, push = true) => {
     const url = new URL(window.location.href); url.searchParams.set('tab', nextTab);
-    if (open) url.searchParams.set('library', '1'); else url.searchParams.delete('library');
+    if (media.current?.matches) url.searchParams.set('library', open ? '1' : '0');
+    else url.searchParams.delete('library');
     window.history[push ? 'pushState' : 'replaceState']({}, '', url.pathname + url.search);
   };
   const setTab = (id) => { setTabState(id); locationState(id, libraryOpen); };
@@ -83,7 +87,17 @@ export default function MusicShell() {
     document.addEventListener('keydown', trap);
     return () => { document.removeEventListener('keydown', trap); if (background) background.inert = false; savedFocus.current?.focus?.(); };
   }, [libraryOpen, overlay]);
-  const play = (track, tracks) => { music.playTrack(track, tracks, true); setNotice(`Playing ${track.title || 'track'}`); };
+  const play = (track, tracks) => {
+    if (!track) return;
+    music.playTrack(track, tracks, true);
+    if (media.current?.matches) {
+      setMode('lyrics');
+      setFull(false);
+      setOverlay('');
+      showLibrary(false);
+    }
+    setNotice(`Playing ${track.title || 'track'}`);
+  };
   const playing = music.playingTrack;
   const favorite = music.favoriteSet?.has(music.activeKey);
   const image = playing?.image || '';
