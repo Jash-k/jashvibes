@@ -6,6 +6,7 @@ import { formatTime, QUALITY_LABELS } from '@/lib/musicCore';
 import { useMusic } from './MusicProvider';
 import CanvasLibrary, { LIBRARY_TABS } from './CanvasLibrary';
 import CanvasLyrics from './CanvasLyrics';
+import PocketLock from './PocketLock';
 import { Cover, IconButton, MusicIcon, Sheet, TrackRows } from './CanvasBits';
 import './music-canvas.css';
 
@@ -18,6 +19,7 @@ export default function MusicShell() {
   // Library-first on mobile even before the mount effect; desktop CSS is unchanged.
   const [libraryOpen, setLibraryOpen] = useState(true);
   const [overlay, setOverlay] = useState('');
+  const [pocketLocked, setPocketLocked] = useState(false);
   const [mode, setMode] = useState('lyrics');
   const [full, setFull] = useState(false);
   const [look, setLook] = useState(DEFAULT_LOOK);
@@ -69,11 +71,12 @@ export default function MusicShell() {
   useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(''), 2400); return () => clearTimeout(timer); }, [notice]);
   useEffect(() => {
     const keyboard = (event) => {
+      if (pocketLocked) return;
       if (event.key === 'Escape' && !overlay) { if (libraryOpen) showLibrary(false); else setFull(false); }
       if (event.code === 'Space' && !overlay && !['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(event.target.tagName)) { event.preventDefault(); provider.current.togglePlay(); }
     };
     window.addEventListener('keydown', keyboard); return () => window.removeEventListener('keydown', keyboard);
-  }, [overlay, libraryOpen, tab]);
+  }, [overlay, libraryOpen, tab, pocketLocked]);
   const libraryRef = useRef(null), savedFocus = useRef(null);
   useEffect(() => {
     if (!libraryOpen || !media.current?.matches) return;
@@ -83,7 +86,7 @@ export default function MusicShell() {
     libraryRef.current?.querySelector('button')?.focus();
     const trap = (event) => {
       if (event.key !== 'Tab' || overlay) return;
-      const elements = [...document.querySelectorAll('.mc-library-dock button, .mc-library-dock input, .mc-library-dock select, .mc-library-dock [tabindex="0"], .mc-transport button, .mc-transport input')].filter((node) => !node.disabled && node.getClientRects().length);
+      const elements = [...document.querySelectorAll('.mc-library-dock button, .mc-library-dock input, .mc-library-dock select, .mc-library-dock [tabindex="0"], .mc-transport button, .mc-transport input, .mc-mobile-nav button, .mc-mobile-nav a')].filter((node) => !node.disabled && node.getClientRects().length);
       const first = elements[0], last = elements[elements.length - 1];
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
@@ -115,7 +118,7 @@ export default function MusicShell() {
         <div className="mc-workspace">
           <div ref={libraryRef} className="mc-library-dock" {...(libraryOpen ? { role: 'region', 'aria-label': 'Library browsing sheet' } : {})}><CanvasLibrary music={music} tab={tab} setTab={setTab} query={query} setQuery={setQuery} onPlay={play} onClose={() => showLibrary(false)}/></div>
           <div className={`mc-player ${mode === 'artwork' ? 'is-artwork-mode' : ''}`}>
-            <section className="mc-now" aria-label="Now playing"><Cover item={playing} className="mc-now-art"/><div className="mc-now-text"><h1>{playing?.title || 'Find your next favourite'}</h1><p>{playing?.artists || 'Open the Library to choose a song'}</p>{playing ? <small>{quality}{music.playerStatus === 'loading' ? ' · Connecting…' : ''}</small> : <small>Tamil music · One uninterrupted queue</small>}</div></section>
+            <section className="mc-now" aria-label="Now playing"><Cover item={playing} className={`mc-now-art mc-vinyl ${music.isPlaying ? 'is-spinning' : ''}`}/><div className="mc-now-text"><h1>{playing?.title || 'Find your next favourite'}</h1><p>{playing?.artists || 'Open the Library to choose a song'}</p>{playing ? <small>{quality}{music.playerStatus === 'loading' ? ' · Connecting…' : ''}</small> : <small>Tamil music · One uninterrupted queue</small>}</div></section>
             <CanvasLyrics music={music} look={look} update={update} full={full} onExpand={() => { setFull(!full); setMode('lyrics'); }} onSettings={() => setOverlay('settings')}/>
             <div className="mc-player-modes" role="group" aria-label="Player view"><button type="button" aria-pressed={mode === 'artwork'} onClick={() => { setMode('artwork'); setFull(false); }}>Artwork</button><button type="button" aria-pressed={mode === 'lyrics'} onClick={() => setMode('lyrics')}>Lyrics</button></div>
           </div>
@@ -123,9 +126,15 @@ export default function MusicShell() {
         <footer className="mc-transport" aria-label="Playback controls">
           {music.playerStatus === 'error' ? <div className="mc-play-error" role="alert"><span>{music.error || 'Playback unavailable'}</span><button type="button" onClick={music.retryTrack}>Retry</button><button type="button" onClick={() => music.playNext()}>Skip</button></div> : null}
           <div className="mc-seek"><span>{formatTime(music.currentTime)}</span><input type="range" aria-label="Playback position" aria-valuetext={`${formatTime(music.currentTime)} of ${formatTime(music.duration)}`} min="0" max={music.duration || 1} step="0.1" value={Math.min(music.currentTime || 0, music.duration || 1)} disabled={!music.duration} onChange={(event) => music.seekTo(Number(event.target.value))}/><span>{formatTime(music.duration)}</span></div>
-          <div className="mc-transport-row"><button type="button" className="mc-mini-info" onClick={() => { if (libraryOpen) showLibrary(false); setMode('lyrics'); }} aria-label="Return to player"><Cover item={playing}/><span><strong>{playing?.title || 'Nothing playing'}</strong><small>{playing?.artists || 'Choose a song'}</small></span></button><div className="mc-transport-main"><IconButton icon="shuffle" label="Shuffle" active={music.shuffleEnabled} onClick={() => music.setShuffleEnabled(!music.shuffleEnabled)} disabled={!playing}/><IconButton icon="previous" label="Previous track" onClick={music.playPrevious} disabled={!playing}/><IconButton icon={music.isPlaying ? 'pause' : 'play'} label={music.isPlaying ? 'Pause' : 'Play'} className="mc-primary-play" onClick={music.togglePlay} disabled={!playing}/><IconButton icon="next" label="Next track" onClick={() => music.playNext()} disabled={!playing}/><IconButton icon="repeat" label={`Repeat: ${music.repeatMode}`} active={music.repeatMode !== 'off'} onClick={music.cycleRepeat} disabled={!playing}>{music.repeatMode === 'one' ? <sup>1</sup> : null}</IconButton><IconButton icon="heart" label={favorite ? 'Remove current track from favourites' : 'Save current track'} active={Boolean(favorite)} onClick={() => music.toggleFavorite(playing)} disabled={!playing}/></div><label className="mc-volume"><MusicIcon name="volume"/><span className="sr-only">Volume</span><input type="range" min="0" max="1" step="0.01" value={music.muted ? 0 : music.volume} onChange={(event) => music.changeVolume(Number(event.target.value))}/></label></div>
+          <div className="mc-transport-row"><button type="button" className="mc-mini-info" onClick={() => { if (libraryOpen) showLibrary(false); setMode('lyrics'); }} aria-label="Return to player"><Cover item={playing}/><span><strong>{playing?.title || 'Nothing playing'}</strong><small>{playing?.artists || 'Choose a song'}</small></span></button><div className="mc-transport-main"><IconButton icon="shuffle" label="Shuffle" active={music.shuffleEnabled} onClick={() => music.setShuffleEnabled(!music.shuffleEnabled)} disabled={!playing}/><IconButton icon="previous" label="Previous track" onClick={music.playPrevious} disabled={!playing}/><IconButton icon={music.isPlaying ? 'pause' : 'play'} label={music.isPlaying ? 'Pause' : 'Play'} className="mc-primary-play" onClick={music.togglePlay} disabled={!playing}/><IconButton icon="next" label="Next track" onClick={() => music.playNext()} disabled={!playing}/><IconButton icon="repeat" label={`Repeat: ${music.repeatMode}`} active={music.repeatMode !== 'off'} onClick={music.cycleRepeat} disabled={!playing}>{music.repeatMode === 'one' ? <sup>1</sup> : null}</IconButton><IconButton icon="heart" label={favorite ? 'Remove current track from favourites' : 'Save current track'} active={Boolean(favorite)} onClick={() => music.toggleFavorite(playing)} disabled={!playing}/><IconButton icon="lock" label="Enable pocket mode" className="mc-pocket-button" onClick={() => setPocketLocked(true)} disabled={!playing}/></div><label className="mc-volume"><MusicIcon name="volume"/><span className="sr-only">Volume</span><input type="range" min="0" max="1" step="0.01" value={music.muted ? 0 : music.volume} onChange={(event) => music.changeVolume(Number(event.target.value))}/></label></div>
           {look.motion ? <div className={`mc-signal ${music.isPlaying ? 'is-playing' : ''}`} aria-hidden="true">{Array.from({ length: 72 }, (_, i) => <i key={i} style={{ '--bar-height': `${10 + ((i * 17) % 31)}px`, '--bar-delay': `${(i % 9) * -0.12}s`, '--bar-color': `hsl(${200 - i * 2.5} 78% 65%)` }}/>)}</div> : null}
         </footer>
+        <nav className="mc-mobile-nav" aria-label="Mobile music navigation">
+          <Link href="/"><MusicIcon name="home"/><span>Home</span></Link>
+          <Link href="/live"><MusicIcon name="live"/><span>Live</span></Link>
+          <button type="button" aria-current={!libraryOpen ? 'page' : undefined} onClick={() => { showLibrary(false); setMode('lyrics'); }}><MusicIcon name="play"/><span>Music</span></button>
+          <button type="button" aria-current={libraryOpen ? 'page' : undefined} onClick={() => showLibrary(true)}><MusicIcon name="library"/><span>Library</span></button>
+        </nav>
       </div>
     </div>
     {overlay ? <Sheet title={overlay === 'queue' ? 'Up next' : 'Music settings'} onClose={() => setOverlay('')}>
@@ -139,6 +148,7 @@ export default function MusicShell() {
         <button type="button" className="mc-button is-quiet" onClick={() => update(DEFAULT_LOOK)}>Reset appearance</button>
       </div>}
     </Sheet> : null}
+    {pocketLocked ? <PocketLock onUnlock={() => setPocketLocked(false)}/> : null}
     <div className={`mc-notice ${notice ? 'is-visible' : ''}`} role="status" aria-live="polite">{notice}</div>
   </main>;
 }

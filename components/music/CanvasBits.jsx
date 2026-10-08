@@ -5,6 +5,7 @@ import { formatTime, trackKey } from '@/lib/musicCore';
 
 export function MusicIcon({ name, size = 22 }) {
   const paths = {
+    lock: 'M6 10h12v11H6zM8 10V7a4 4 0 018 0v3',
     play: 'M8 5l11 7-11 7z', pause: 'M8 5v14M16 5v14', next: 'M5 5l11 7-11 7zM19 5v14', previous: 'M19 5L8 12l11 7zM5 5v14',
     queue: 'M4 6h16M4 12h12M4 18h8', close: 'M6 6l12 12M18 6L6 18', back: 'M15 5l-7 7 7 7',
     shuffle: 'M4 6h3l10 12h3M17 15l3 3-3 3M4 18h3l4-5M13 9l4-3h3M17 3l3 3-3 3',

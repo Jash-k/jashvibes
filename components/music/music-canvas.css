@@ -279,3 +279,59 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
   .mc-signal.is-playing i { animation:none; }
   .mc-app *, .mc-app *::before, .mc-app *::after { transition:none !important; scroll-behavior:auto !important; }
 }
+
+/* Compact app navigation occupies its own row BELOW transport, never an overlay. */
+.mc-mobile-nav, .mc-pocket-button { display:none; }
+.mc-pocket-lock { position:absolute; inset:0; z-index:150; background:#04070afa; color:#edf4f8; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:16px; padding:24px; touch-action:none; overscroll-behavior:none; }
+.mc-pocket-lock h2 { font-size:26px; }
+.mc-pocket-lock p { color:#a7b2bd; font-size:13px; text-align:center; }
+.mc-pocket-lock > small { color:#a7b2bd; font-size:11px; }
+.mc-pocket-slider { width:min(300px,100%); height:56px; border:1px solid #ffffff30; background:#15212a; border-radius:30px; position:relative; margin-top:20px; user-select:none; }
+.mc-pocket-slider > span { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding-left:36px; font-size:13px; color:#d4e2ea; pointer-events:none; }
+.mc-pocket-slider > button { position:absolute; inset:0 auto 0 0; width:56px; height:54px; display:grid; place-items:center; border:0; border-radius:50%; background:#8be5ef; color:#10171c; touch-action:none; }
+.mc-pocket-slider > button svg { transform:rotate(180deg); }
+@media (max-width:900px) {
+  .mc-canvas { grid-template-rows:56px minmax(0,1fr) auto 60px; padding-bottom:env(safe-area-inset-bottom); }
+  .mc-mobile-nav { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-top:1px solid var(--mc-line); background:#0b141bea; align-items:stretch; }
+  .mc-mobile-nav > a, .mc-mobile-nav > button { display:flex; align-items:center; justify-content:center; flex-direction:column; gap:3px; color:var(--mc-muted); min-height:56px; min-width:0; background:none; border:0; font-size:10px; border-radius:10px; }
+  .mc-mobile-nav [aria-current='page'] { color:var(--mc-accent); background:#8be5ef0c; }
+  .mc-pocket-button { display:inline-flex; }
+  .mc-transport-main { gap:0; }
+  .mc-transport-main > .mc-icon { width:42px; }
+  .mc-transport-main > .mc-primary-play { width:52px; }
+  .mc-app.is-library-open .mc-transport-main > .mc-pocket-button { display:inline-flex; width:36px; }
+  .mc-notice { bottom:185px; }
+  .mc-now-art { height:min(21dvh,180px); }
+}
+@media (max-width:360px) {
+  .mc-transport-main > .mc-icon { width:38px; }
+  .mc-transport-main > .mc-primary-play { width:46px; }
+  .mc-app.is-library-open .mc-transport-main > .mc-icon { width:30px; }
+  .mc-app.is-library-open .mc-transport-main > .mc-primary-play { width:40px; }
+}
+@media (max-height:520px) and (max-width:900px) {
+  .mc-canvas { grid-template-rows:44px minmax(0,1fr) auto 50px; gap:2px; }
+  .mc-mobile-nav > a, .mc-mobile-nav > button { min-height:48px; }
+  .mc-now-art { width:44px; height:44px; }
+  .mc-now p { display:none; }
+}
+
+/* Now-playing vinyl: paused animation retains its angle; catalogue covers stay rectangular. */
+.mc-now .mc-vinyl {
+  border-radius:50%;
+  aspect-ratio:1;
+  box-shadow:0 0 0 1px #ffffff20, 0 12px 30px #0006;
+  background:repeating-radial-gradient(circle at center,#111316 0 2px,#24282d 3px,#111316 4px 6px);
+  animation:mc-vinyl-turn 18s linear infinite;
+  animation-play-state:paused;
+  will-change:auto;
+}
+.mc-now .mc-vinyl.is-spinning { animation-play-state:running; }
+/* The artwork is the circular record label, surrounded by a grooved vinyl rim. */
+.mc-now .mc-vinyl img { inset:16%; width:68%; height:68%; border-radius:50%; }
+.mc-now .mc-vinyl .mc-cover-fallback { inset:16%; border-radius:50%; background:linear-gradient(140deg,#31565d,#322b48); }
+.mc-now .mc-vinyl::after { content:''; position:absolute; z-index:2; left:50%; top:50%; width:8%; aspect-ratio:1; transform:translate(-50%,-50%); border-radius:50%; background:#080b0e; border:2px solid #d4e2ea88; box-shadow:0 0 0 3px #0003; pointer-events:none; }
+@keyframes mc-vinyl-turn { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion:reduce) {
+  .mc-now .mc-vinyl, .mc-now .mc-vinyl.is-spinning { animation:none; }
+}
