@@ -335,3 +335,8 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
 @media (prefers-reduced-motion:reduce) {
   .mc-now .mc-vinyl, .mc-now .mc-vinyl.is-spinning { animation:none; }
 }
+
+/* Full-cover vinyl: album artwork fills the disc rather than a small centre label. */
+.mc-now .mc-vinyl img { inset:0; width:100%; height:100%; border-radius:50%; }
+.mc-now .mc-vinyl .mc-cover-fallback { inset:0; }
+.mc-now .mc-vinyl::before { content:''; position:absolute; inset:0; z-index:1; border-radius:50%; pointer-events:none; background:repeating-radial-gradient(circle at center,transparent 0 7px,#00000012 8px,transparent 9px 13px); box-shadow:inset 0 0 0 3px #0b15195c; }
