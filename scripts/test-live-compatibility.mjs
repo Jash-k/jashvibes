@@ -48,7 +48,7 @@ const policy = createLiveTvPolicy(rows[0],{origin});
 const source = await policy.resolve();
 eq(source.kind,'dash'); eq(source.mimeType,'application/dash+xml'); eq(source.allowNativeHls,false);
 ok(source.url.startsWith('/api/live-proxy?')); ok(!policy.ladder.includes(RUNGS.DROP_DRM));
-eq(policy.playerConfig.streaming.bufferingGoal,20);
+eq(policy.playerConfig.streaming.bufferingGoal,10);
 const types = { MANIFEST:0,SEGMENT:1,LICENSE:2,TIMING:7 };
 const ctx = {shaka:{net:{NetworkingEngine:{RequestType:types}}}};
 const wrapped = (type,uris,headers={}) => { const req={uris:[...uris],headers:{...headers}}; source.http.requestFilter(type,req,ctx); return req; };

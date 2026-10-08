@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import JashPlayer from '@/components/player/JashPlayerLazy';
 import { DayStrip, GuideNowLine, GuideStatus, ProgrammeCard, SourceBadges, showProgress, useLiveGuide } from '@/components/live/LiveGuide';
 import { createLiveTvPolicy, isPocketChannel } from '@/lib/player/policy/liveTv';
-import { revealStyle, useReveal } from '@/lib/useReveal';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 import {
   LIVE_CATALOGS,
@@ -393,7 +392,6 @@ export default function LiveTVPage() {
   // Keyed on the filter state AND the count: switching between two catalogs of
   // equal size keeps the count identical while replacing every node, and the
   // observer would never see the replacements.
-  const revealRef = useReveal(`${category}|${showFavoritesOnly}|${query}|${filteredChannels.length}`);
 
   return (
     <main className="palette-cybergrape live-page jv-lv min-h-dvh overflow-x-clip bg-[#09041a] text-zinc-100">
@@ -706,7 +704,7 @@ export default function LiveTVPage() {
             </div>
           ) : null}
 
-          <div ref={revealRef} className="jv-lv-wall">
+          <div className="jv-lv-wall">
             {status === 'loading' ? <div className="jv-lv-wallnote rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">Loading Tamil channels...</div> : null}
             {status === 'error' ? <div className="jv-lv-wallnote rounded-3xl border border-red-500/30 bg-red-950/20 p-6 text-center text-red-200">{error}</div> : null}
             {status === 'ready' && filteredChannels.length === 0 ? <div className="jv-lv-wallnote rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">No manually mapped channels in this catalog.</div> : null}
@@ -718,8 +716,6 @@ export default function LiveTVPage() {
               return (
                 <div
                   key={channel.id}
-                  data-reveal
-                  style={revealStyle(index, 6)}
                   className={`jv-lv-tile${isActive ? ' is-active' : ''}`}
                   title={channel.name || 'Channel'}
                 >

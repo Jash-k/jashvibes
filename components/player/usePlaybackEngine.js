@@ -146,10 +146,14 @@ export function usePlaybackEngine(options = {}) {
    * every provider, which is why a mid-film failure looked final.
    */
   const mountedRef = useRef(true);
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
   const loadStartedAtRef = useRef(0);
   const loadTokenRef = useRef(0);
   const timeoutRef = useRef(0);
+  const recoveryTimerRef = useRef(0);
+  const firstPlaybackRef = useRef(false);
+  const startupPendingRef = useRef(false);
+  const loadFailedRef = useRef(false);
   const userWantsPlayRef = useRef(Boolean(autoPlay));
   const autoplayMutedRef = useRef(false);
   const pendingSeekRef = useRef(null);
@@ -594,15 +598,10 @@ export function usePlaybackEngine(options = {}) {
     const player = playerRef.current;
     playerRef.current = null;
     if (!player) return;
-    try {
-      await player.unload?.();
-    } catch {}
-    try {
-      player.detach?.();
-    } catch {}
-    try {
-      await player.destroy?.();
-    } catch {}
+    // destroy() owns unload + detach. Overlapping detach/destroy operations
+    // can leave Shaka's operation queue waiting on itself after a failed load.
+    try { await player.destroy?.(); } catch {}
+
   }, []);
 
   // ------------------------------------------------------------------- load
@@ -622,6 +621,11 @@ export function usePlaybackEngine(options = {}) {
     generationRef.current = generation;
     loadTokenRef.current += 1;
     loadStartedAtRef.current = Date.now();
+    firstPlaybackRef.current = false;
+    startupPendingRef.current = Boolean(activePolicy.startupAware);
+    loadFailedRef.current = false;
+    window.clearTimeout(recoveryTimerRef.current);
+    recoveryTimerRef.current = 0;
     window.clearTimeout(timeoutRef.current);
 
     const carriedSeek = pendingSeekRef.current;
@@ -640,7 +644,19 @@ export function usePlaybackEngine(options = {}) {
     setAttemptNote('');
     commitStatus(reason === 'initial' ? 'loading' : 'recovering', reason === 'initial' ? 'Loading stream…' : 'Recovering…');
 
-    await destroyPlayer();
+    if (activePolicy.startupAware) {
+      let teardownTimer;
+      const destroyed = await Promise.race([
+        destroyPlayer().then(() => true),
+        new Promise((resolve) => { teardownTimer = window.setTimeout(() => resolve(false), 4000); }),
+      ]);
+      window.clearTimeout(teardownTimer);
+      if (!isAlive(generation)) return;
+      if (!destroyed) {
+        const mapped = { kind: 'player', retriable: false, action: 'retry', message: 'The previous stream could not close cleanly. Reload this page before retrying.' };
+        setErrorInfo(mapped); commitStatus('error', mapped.message); return;
+      }
+    } else await destroyPlayer();
     if (!isAlive(generation)) return;
 
     try {
@@ -686,7 +702,8 @@ export function usePlaybackEngine(options = {}) {
     const timeoutMs = Number(activePolicy.loadTimeoutMs || DEFAULT_LOAD_TIMEOUT_MS);
     timeoutRef.current = window.setTimeout(() => {
       if (!isAlive(generation)) return;
-      if ((videoRef.current?.readyState ?? 0) >= 2) return;
+      if (activePolicy.startupAware ? firstPlaybackRef.current : (videoRef.current?.readyState ?? 0) >= 2) return;
+      loadFailedRef.current = true;
       failureRef.current?.(
         { kind: 'timeout', code: 'LOAD_TIMEOUT', message: `This source did not start within ${Math.round(timeoutMs / 1000)}s.`, retriable: true, action: 'rotate-source' },
         'timeout',
@@ -747,6 +764,7 @@ export function usePlaybackEngine(options = {}) {
           else stallSamplesRef.current = 0;
           setStatus((current) => {
             if (event?.buffering) return current === 'ready' ? 'buffering' : current;
+            if (activePolicy.startupAware && !firstPlaybackRef.current) return current;
             return current === 'buffering' || current === 'recovering' ? 'ready' : current;
           });
         });
@@ -769,11 +787,13 @@ export function usePlaybackEngine(options = {}) {
     if (Number(prefsRef.current.rate) !== 1) el.playbackRate = clamp(prefsRef.current.rate, 1, 0.25, 16);
     if (Number(prefsRef.current.brightness) < 1) el.style.filter = `brightness(${Number(prefsRef.current.brightness).toFixed(2)})`;
 
-    commitStatus('ready', '');
+    if (activePolicy.startupAware && !firstPlaybackRef.current) commitStatus('loading', 'Starting stream…');
+    else commitStatus('ready', '');
     setAttemptNote('');
     refreshModel();
     refreshTracks();
 
+    if (activePolicy.startupAware && loadFailedRef.current) return;
     if (userWantsPlayRef.current) {
       try {
         el.play?.()?.then?.(() => {
@@ -811,7 +831,7 @@ export function usePlaybackEngine(options = {}) {
     if (enableSubtitlesRef.current && externalSubtitleRef.current) reapplySubtitle();
     if (!prefsRef.current.qualityAuto) applyQualityLock(prefsRef.current.qualityHeight);
 
-    ladderRef.current = { rungIndex: -1, counts: {}, startedAt: 0, reloadAttempts: 0 };
+    if (!activePolicy.startupAware) ladderRef.current = { rungIndex: -1, counts: {}, startedAt: 0, reloadAttempts: 0 };
   }, [
     applyQualityLock,
     commitStatus,
@@ -829,8 +849,12 @@ export function usePlaybackEngine(options = {}) {
     const el = videoRef.current;
     const activePolicy = policyRef.current;
     void origin;
+    if (recoveryTimerRef.current) return;
+    if (startupPendingRef.current) loadFailedRef.current = true;
 
     if (!mapped?.retriable) {
+      loadFailedRef.current = true;
+      window.clearTimeout(timeoutRef.current);
       setErrorInfo(mapped);
       commitStatus('error', mapped.message);
       try {
@@ -869,6 +893,14 @@ export function usePlaybackEngine(options = {}) {
       error: mapped,
       seeking: Boolean(el?.seeking) || Date.now() < seekGraceUntilRef.current || Date.now() < coarseSeekHoldRef.current,
     });
+    if (activePolicy?.startupAware && !firstPlaybackRef.current) {
+      // retryStreaming only resumes an already-created streaming engine.
+      // A rejected manifest has none: a no-op retry must not mark it ready.
+      caps.canRetryStreaming = false;
+      caps.canReanchor = false;
+      caps.canReload = true;
+      caps.seeking = false;
+    }
     caps.hasPolicyRecovery = typeof activePolicy?.recover === 'function' && Boolean(activePolicy.hasRecovery?.());
     if (isDrmConfigError(mapped) && !dropDrmRef.current) caps.hasDrm = true;
 
@@ -886,6 +918,8 @@ export function usePlaybackEngine(options = {}) {
     );
 
     if (!action) {
+      loadFailedRef.current = true;
+      window.clearTimeout(timeoutRef.current);
       setErrorInfo(mapped);
       commitStatus('error', mapped.message);
       try {
@@ -905,7 +939,8 @@ export function usePlaybackEngine(options = {}) {
     if (action.hold) return;
 
     const recoveryGeneration = generationRef.current;
-    window.setTimeout(async () => {
+    recoveryTimerRef.current = window.setTimeout(async () => {
+      recoveryTimerRef.current = 0;
       if (!mountedRef.current || generationRef.current !== recoveryGeneration) return;
       try {
         if (action.positionPreserved && el) {
@@ -920,14 +955,14 @@ export function usePlaybackEngine(options = {}) {
           case RUNGS.RETRY_STREAMING:
             await playerRef.current?.retryStreaming?.();
             stallSamplesRef.current = 0;
-            commitStatus('ready', '');
+            if (!activePolicy?.startupAware) commitStatus('ready', '');
             break;
           case RUNGS.REANCHOR: {
             const win = readSeekWindow(el);
             if (win && (win.end - win.start) > 10 && derivePlaybackModel(el).live) seekTo(win.end - 3);
             else seekBy(-2);
             stallSamplesRef.current = 0;
-            commitStatus('ready', '');
+            if (!activePolicy?.startupAware) commitStatus('ready', '');
             break;
           }
           case RUNGS.DROP_DRM:
@@ -1007,6 +1042,12 @@ export function usePlaybackEngine(options = {}) {
     lastSampleTimeRef.current = Number(el.currentTime) || 0;
 
     const markHealthy = () => {
+      firstPlaybackRef.current = true;
+      startupPendingRef.current = false;
+      loadFailedRef.current = false;
+      window.clearTimeout(recoveryTimerRef.current);
+      recoveryTimerRef.current = 0;
+      setErrorInfo(null);
       stallSamplesRef.current = 0;
       ladderRef.current = { rungIndex: -1, counts: {}, startedAt: 0, reloadAttempts: 0 };
       setAttemptNote('');
@@ -1017,7 +1058,7 @@ export function usePlaybackEngine(options = {}) {
       claimMediaFocus('video');
       userWantsPlayRef.current = true;
       setPlaying(true);
-      setStatus((current) => (current === 'buffering' || current === 'recovering' || current === 'loading' || current === 'error' ? 'ready' : current));
+      if (!policyRef.current?.startupAware) setStatus((current) => (current === 'buffering' || current === 'recovering' || current === 'loading' || current === 'error' ? 'ready' : current));
     };
     const onPause = () => {
       setPlaying(false);
@@ -1030,9 +1071,10 @@ export function usePlaybackEngine(options = {}) {
     const onPlaying = () => {
       markHealthy();
       setPlaying(true);
-      setStatus((current) => (current === 'buffering' || current === 'recovering' || current === 'loading' ? 'ready' : current));
+      setStatus((current) => (current === 'buffering' || current === 'recovering' || current === 'loading' || current === 'error' ? 'ready' : current));
     };
     const onCanPlay = () => {
+      if (policyRef.current?.startupAware && !firstPlaybackRef.current) { refreshModel(); return; }
       setStatus((current) => (current === 'loading' || current === 'buffering' ? 'ready' : current));
       refreshModel();
     };
@@ -1121,7 +1163,7 @@ export function usePlaybackEngine(options = {}) {
       const current = Number(el.currentTime) || 0;
       if (!scrubbingRef.current.active) setTime(current);
 
-      if (userWantsPlayRef.current && !el.paused && !el.ended) {
+      if (userWantsPlayRef.current && !el.paused && !el.ended && !(policyRef.current?.startupAware && (startupPendingRef.current || loadFailedRef.current))) {
         const advanced = current - lastSampleTimeRef.current;
         if (advanced > 0.05) {
           lastPositionRef.current = current;
@@ -1130,7 +1172,7 @@ export function usePlaybackEngine(options = {}) {
           seekVerifyRef.current = null;
           if (stallSamplesRef.current >= STALL_SAMPLES) {
             markHealthy();
-            setStatus((state) => (state === 'buffering' ? 'ready' : state));
+            setStatus((state) => (state === 'buffering' || state === 'recovering' || state === 'error' ? 'ready' : state));
           }
           stallSamplesRef.current = 0;
         } else {
@@ -1218,11 +1260,15 @@ export function usePlaybackEngine(options = {}) {
   useEffect(() => {
     if (lastSignatureRef.current === signature) return;
     lastSignatureRef.current = signature;
+    ladderRef.current = { rungIndex: -1, counts: {}, startedAt: 0, reloadAttempts: 0 };
     dropDrmRef.current = false;
     resumeAppliedRef.current = false;
     attach({ reason: 'initial' });
     return () => {
+      lastSignatureRef.current = null;
       generationRef.current += 1;
+      window.clearTimeout(recoveryTimerRef.current);
+      recoveryTimerRef.current = 0;
       window.clearTimeout(timeoutRef.current);
       void destroyPlayer();
     };
