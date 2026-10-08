@@ -1,25 +1,24 @@
 {
   "version": "11.0.0",
-  "branch": "deploy-ready",
-  "baselineCommit": "a5fcb4a382b8f2c025add5f9ea227975a9027bd3",
+  "release": "fixed-canvas-music",
+  "baselineCommit": "c6653cc1732448cd2ea295762b4bdf9ef38a8e5b",
   "verifiedOn": "2026-10-08",
-  "authorization": "music streaming fixed natively (DES media URLs) \u2014 player rebuild follows",
   "verification": {
+    "sourceModules": 220,
     "productionBuild": "passed",
-    "standaloneStartupAndAssets": "passed",
-    "sourceModules": 218,
-    "localImportErrors": 0,
-    "regressionTestsPassed": 77,
-    "productionBrowserFlowsPassed": 11,
-    "npmKnownVulnerabilities": 0,
+    "standaloneStartupAndHealth": "passed",
+    "fixtureBrowserViewports": [
+      "1440x900",
+      "390x844",
+      "320x568",
+      "844x390"
+    ],
+    "productionAuditKnownVulnerabilities": 0,
     "realProductionDatabaseTested": false,
     "realDRMPlaybackTested": false,
-    "dockerRuntimeTested": false,
-    "productionBrowserFlowsScope": "Direct MP4 on this branch's own build: picking a source/quality/mirror closes the panel, Quality rows are quality + host with a 7x7 state dot, Direct MP4 carries the dot on the Source row and the trigger, no status words anywhere, no Mirror section, deck measured at 91px (was 108), fullscreen hairline absent from the DOM. Music rebuild, three widths (390/820/1440) on this build: five views + search, seven facets, ten lyric canvases proven distinct by computed background, the type-size ramp measured at 19/24/29/34/42px, three typefaces, the source picker's live previews and apply, the phone strip inside its column, and no page error.",
-    "liveUpstreamProbes": "moviesda chain walked from the sandbox: links minted live, alive hosts verified by MP4 signature (206 + ftypisom), refusing hosts 403 text/html; no false positives on real media. Music: the default Saavn mirror (saavnapi.onrender.com) answers 404 for every route, so album/artist/playlist/search now fall back to JioSaavn's own web API \u2014 verified live, albums 12 \u00b7 artists 12 \u00b7 playlists 20 \u00b7 search 12 (+12 albums) \u00b7 new 11 tracks / 16 albums \u00b7 trending 8; LRCLIB returned real Tamil lyric lines (30 on the sampled track).",
-    "regressionSuiteNote": "The deterministic suite (77 tests) lives on audit-fixes and is not shipped on this branch by design. On this branch the music rebuild was verified through the built app in Chromium \u2014 149 fixture assertions across three widths plus 17 assertions against the live catalogue and live lyric providers \u2014 and the Direct MP4 behaviour through the built app and the live chain.",
-    "musicStreams": "native fallback verified on the built app: /api/music/song?seokey=saavn:yZSd2-yD \u2192 200 with 96/160/320 kbps renditions, each answering 206 audio/mp4 with Access-Control-Allow-Origin: *, 322 kbps measured (8,344,644 B / 207 s). Before this commit the same call was 500 \u2014 the SAAVN mirror answers 404 on every route \u2014 and no track could play."
+    "dockerRuntimeTested": false
   },
+  "notes": "See docs/MUSIC-CANVAS.md. Source deployment; environment configuration required.",
   "files": {
     ".dockerignore": {
       "bytes": 109,
@@ -34,20 +33,16 @@
       "sha256": "a6940d6cb1d35e9012e6891df78078b537b885b5c2be99b6c84682596f16c966"
     },
     "CHANGELOG.md": {
-      "bytes": 3319,
-      "sha256": "526b465aed42d29f6877d8714d01c9baf7eb81576def7ca9f7bf69c4f2371f9c"
-    },
-    "CHANGES-vault-watch.md": {
-      "bytes": 1810,
-      "sha256": "bc7a3e646d92bc725c1032362d23aa52a28b294ac1a59be43ca7642679ce38cf"
+      "bytes": 3926,
+      "sha256": "8037ee8e7499205a54b8738b62577e43f79604cc8c9bbc762a05f92111abb9f5"
     },
     "Dockerfile": {
       "bytes": 650,
       "sha256": "078bb2a73e8e64f74b99ec3c320b663f5a57c67b7ffcbe715b0c3595a3bf66e2"
     },
     "README.md": {
-      "bytes": 7308,
-      "sha256": "bbf9ae191438da394d37049833e76239c81d8b52edf0bcfd5641262d46c12c0b"
+      "bytes": 7782,
+      "sha256": "f05dfb4ec037e88af86156ceead7b0a824abbb503318b332ab953fb0febfe46d"
     },
     "app/admin/page.js": {
       "bytes": 482,
@@ -374,8 +369,8 @@
       "sha256": "fac83046ecd4144267e5804122aa218b5a09aecad5b0c77dea9eb0cd45de6190"
     },
     "app/globals.css": {
-      "bytes": 185002,
-      "sha256": "e0f20b2b0b6de8627d08d283988afb736e175102162044cc5f00ed5ed000473a"
+      "bytes": 119481,
+      "sha256": "83f48702ba3d1ed13b715704512609c90a54711a8c57b39d35fffc0ece61f48b"
     },
     "app/layout.js": {
       "bytes": 2154,
@@ -386,8 +381,8 @@
       "sha256": "24d95265f2a95d5b6296a651ef6ada33c888b044f14bc26add73a4453579161a"
     },
     "app/music/page.js": {
-      "bytes": 451,
-      "sha256": "d3b5ee1eddf04aa11659908c21032ea3add2ce4d415166823fb39df2e60671d8"
+      "bytes": 209,
+      "sha256": "30bb4f9e85c1f8fee34998295f25eaacb547383dca8877a0312e9d9412037854"
     },
     "app/my-list/page.js": {
       "bytes": 5468,
@@ -401,10 +396,6 @@
       "bytes": 1430,
       "sha256": "64cf3769cd48e151cce34c9e2bff7bc802fed917b18c8bf3bcb3017d9901f960"
     },
-    "app/stremio-watch/[type]/[id]/page.js": {
-      "bytes": 342,
-      "sha256": "cb2031aeae47f72b3e985f20bde29f1feb1c1b19fd359a317c54061fc8cfd397"
-    },
     "app/stremio/[type]/[id]/page.js": {
       "bytes": 1063,
       "sha256": "adfb9c1b1b474bd170627339a036b0b79351231e08754bddb31ef4fbe3280baa"
@@ -412,6 +403,10 @@
     "app/stremio/page.js": {
       "bytes": 28720,
       "sha256": "d24013ed7e1e45f51733494f372530c215d63a8e89e7fe4002a06952edb5d1bc"
+    },
+    "app/stremio-watch/[type]/[id]/page.js": {
+      "bytes": 342,
+      "sha256": "cb2031aeae47f72b3e985f20bde29f1feb1c1b19fd359a317c54061fc8cfd397"
     },
     "app/vault/page.js": {
       "bytes": 31243,
@@ -422,8 +417,8 @@
       "sha256": "d3b544d0ea19e618e6e19a9e027d13e2dfb4317d42cb5842e6e11c49505bc765"
     },
     "components/AuthGate.js": {
-      "bytes": 10239,
-      "sha256": "26e6d6fff79ff3aa65b521b85c48a9b61672fb2ee5a80ef0574bcf7c363099fc"
+      "bytes": 10268,
+      "sha256": "1e3a61f2cdeb6793e51cde7ca9daf4e4b990e8b6900f20439247f3af9e10fcd0"
     },
     "components/BrandLogo.js": {
       "bytes": 1705,
@@ -497,29 +492,29 @@
       "bytes": 61329,
       "sha256": "d060e2f38d4656fe55790dbc75267ab7545cfd7033728d2133e8cf41e17df973"
     },
-    "components/music/MusicBits.jsx": {
-      "bytes": 8822,
-      "sha256": "2699debfaa453424116a5e5b047d4917e579528792ccfd6408473c3b9f819151"
+    "components/music/CanvasBits.jsx": {
+      "bytes": 6548,
+      "sha256": "acc11b972a4790fc5043b5a6c31dbffffc452a54fb2535549f1d538ea4f1ed5d"
     },
-    "components/music/MusicLyrics.jsx": {
-      "bytes": 30836,
-      "sha256": "4cc23c532855a607140fd4a429059f83d7a32492eeae02a7b74c93634ac73607"
+    "components/music/CanvasLibrary.jsx": {
+      "bytes": 7719,
+      "sha256": "e29d258b53df33c81df608144f400c4520fc3a0af9d2cba8f1be926a331536c8"
+    },
+    "components/music/CanvasLyrics.jsx": {
+      "bytes": 4211,
+      "sha256": "37935629913db10ba2f17c57318fcdd4ace9da13ab4d0963502432a7278d57df"
     },
     "components/music/MusicProvider.jsx": {
-      "bytes": 42510,
-      "sha256": "269a9fd0dd16b26e11a80319f3328cad5c7406fe9c6e9c93f3c6a3eb0eb42775"
-    },
-    "components/music/MusicScreens.jsx": {
-      "bytes": 33408,
-      "sha256": "bc0abb765910cadf7aba5d532d9228b1c918d5b1970f057443d6a269231363f7"
+      "bytes": 43462,
+      "sha256": "76ceb6ed19445ce9a9937d697d8df5b5dac2d6ca706dc60a74c62428af40d788"
     },
     "components/music/MusicShell.jsx": {
-      "bytes": 14397,
-      "sha256": "c698bbe04d96931c818f663fe9502eb705cba964f37b7669f4d8c4ff379727f6"
+      "bytes": 13358,
+      "sha256": "47e5a5ffd3ae859dcc4503f8cc45f6a6a30abea6c3f8841c8d453c5086006d8e"
     },
-    "components/music/lyricLook.js": {
-      "bytes": 4167,
-      "sha256": "bbffd39c5d855aa78be6c2bef3bb19f59578cba2f305b299919002df7b11a2d6"
+    "components/music/music-canvas.css": {
+      "bytes": 22403,
+      "sha256": "0e064fbe602986d637cd8b0319871bea9efc79fbf9cc9208ba8ee20fbd832816"
     },
     "components/navItems.js": {
       "bytes": 2324,
@@ -574,24 +569,36 @@
       "sha256": "4c2c677a010b8b37047445652a4f73397337d07bf26ea1f8bf520348c5d863e8"
     },
     "docs/ARCHITECTURE.md": {
-      "bytes": 3500,
-      "sha256": "bdf95b1a7ea517f95ab2444f1e3af91d325b4b212608745911e1541852b68aaf"
+      "bytes": 3799,
+      "sha256": "a8c1c002553e6af94b718ec01eecf9857ea1c0ea8a1f178c34c3a47fee833693"
     },
     "docs/BEHAVIOUR.md": {
-      "bytes": 3670,
-      "sha256": "a06d06df4f6715f5255c04971e85e7e4d277ab986a4b8d94f6b80054b8d69ea1"
+      "bytes": 3723,
+      "sha256": "c8843c0139fb9d2c4abe25d225bc0eeb38c0dca19fbc81e37d85a44059fb70c8"
     },
     "docs/DATABASE-MAINTENANCE.md": {
       "bytes": 5863,
       "sha256": "a344a86ffa2e5faec4da50c8d1a07bb24905de6c73aa14190cff59e6169603d4"
     },
     "docs/DESIGN-SYSTEM.md": {
-      "bytes": 18929,
-      "sha256": "e132e0ba531c3adf0aac3d7065f8c730b5bbbb7c90a7bd99f26adc1696202416"
+      "bytes": 18945,
+      "sha256": "7c60acc9273a055a5ed888a938fa960dfff3c43e78a213064a9c0e5db3d980b8"
+    },
+    "docs/LIVE-PLAYER.md": {
+      "bytes": 18470,
+      "sha256": "bb96a586beee0ea6ddc914f5d2f5a01c304aa3efe5d31a01df4761990e943352"
+    },
+    "docs/MUSIC-CANVAS.md": {
+      "bytes": 3753,
+      "sha256": "79a5deb04a513abb187f23daa59c72f61f2ead45dc7fc567d6fd1df80c25f545"
     },
     "docs/VERIFICATION.md": {
       "bytes": 3898,
       "sha256": "e1a53658161c2142cace5c2f9b30034abfd4f971b795e63402820942a1a424d8"
+    },
+    "docs/live-doctor.md": {
+      "bytes": 1383,
+      "sha256": "8bd1bea2a72c278f1daf644b49094e5c6aec4c77327de1f9d5559ba9a41b603f"
     },
     "hooks/useAudioPlayback.js": {
       "bytes": 2774,
@@ -701,6 +708,10 @@
       "bytes": 2128,
       "sha256": "d68aee44b9388e08f79c4ce915b085be6557fee8f4902ef804b91bf15f54a802"
     },
+    "lib/player/capabilities.js": {
+      "bytes": 9448,
+      "sha256": "afae2d572fb08aaf2611089503016c9f22c5772197a0fd3bb932b1b3677cf43c"
+    },
     "lib/player/commands.js": {
       "bytes": 9758,
       "sha256": "0c69763af137188bb702290b5e8360cb48a84bcf5f876a2ec99eafd3d30b0895"
@@ -720,6 +731,10 @@
     "lib/player/labels.js": {
       "bytes": 5246,
       "sha256": "53340d4fe61a1616193f4ac1636ff082506137607e95c3e1aa5db4e94a861787"
+    },
+    "lib/player/liveEngine.js": {
+      "bytes": 9923,
+      "sha256": "25e2cebe68c8f6b5e1c4f8c4ffc14e702b0ec5da77c7db4c87b13033c4481a8a"
     },
     "lib/player/mediaFocus.js": {
       "bytes": 539,
@@ -745,13 +760,13 @@
       "bytes": 6856,
       "sha256": "a49e0f16f4b7139a54d60e8459b1a00367edaefa7c57e5b84bf25c1029abeae2"
     },
+    "lib/player/streamClassifier.js": {
+      "bytes": 7972,
+      "sha256": "0479cb073852d7869ab1694b63c54c9a5c6511ee5aafce470eb2eb30f6966754"
+    },
     "lib/player/subtitles.js": {
       "bytes": 7036,
       "sha256": "9118e22affba0dd94d01663548e4a72b6ab3894ae3dcf8e66c1b0f2f59f4a905"
-    },
-    "lib/providers.js": {
-      "bytes": 2029,
-      "sha256": "75a68593d103715504f5eb4f7616fc3badc066b7208e93077e0c72db10de0480"
     },
     "lib/providers/embedProviders.js": {
       "bytes": 15019,
@@ -760,6 +775,10 @@
     "lib/providers/stremioProvider.js": {
       "bytes": 6143,
       "sha256": "74b9726179ddfa12b92bf51e342115304a3e2a46080339c30e3c9196f06cf781"
+    },
+    "lib/providers.js": {
+      "bytes": 2029,
+      "sha256": "75a68593d103715504f5eb4f7616fc3badc066b7208e93077e0c72db10de0480"
     },
     "lib/quality.js": {
       "bytes": 2622,
@@ -931,11 +950,11 @@
     },
     "package-lock.json": {
       "bytes": 91137,
-      "sha256": "1010207743ce23cef5a915fc338bcb7d521773b52f7cf5fa52028039c4e6895c"
+      "sha256": "4e667f68db0833496b9259d189616fd2083b967f14503a3565811c9421ce575e"
     },
     "package.json": {
-      "bytes": 752,
-      "sha256": "81c4aab6be0ae1c1be565fdb3c0e290ab658dbb94ef642194bea7694ba4e7677"
+      "bytes": 809,
+      "sha256": "5ca32d97be387150c556659b4c61179a6aed7a0bf479e6821366c248d1cda2d3"
     },
     "postcss.config.js": {
       "bytes": 83,
@@ -993,6 +1012,14 @@
       "bytes": 1951,
       "sha256": "f8874a417ab56e9954986ef67a6d649b3559b99fce9f735ad22aa8ca95a684e8"
     },
+    "scripts/alias-loader.mjs": {
+      "bytes": 1155,
+      "sha256": "a7cc5f641cd007e8819f5c86af250d529dd32b54122bf098f6fefa1e2a310aac"
+    },
+    "scripts/alias-register.mjs": {
+      "bytes": 353,
+      "sha256": "3ebddb5864b27b82a93925f22e66a17b52a18d66e4363c17d012e387ab8ebc3c"
+    },
     "scripts/check-source.cjs": {
       "bytes": 1168,
       "sha256": "77bee9d7716b0923bd453dc457716841f9fb5d5cc22186ba5dff8ff94c6e8778"
@@ -1001,9 +1028,17 @@
       "bytes": 10983,
       "sha256": "54aba3d788b555d6c254d11ebf44aba628869021b2f13b6a0a19d785d784b4c3"
     },
+    "scripts/live-doctor.mjs": {
+      "bytes": 12875,
+      "sha256": "9b957396ba7b7072d68b086378c3c8ce2eed9935d0b120c7ee2936c09a7b3970"
+    },
     "scripts/start.cjs": {
       "bytes": 1093,
       "sha256": "75dbe37f5fb95b515be19d6787a942a9fb16d1d06d00559c03aed37b541908e4"
+    },
+    "scripts/test-music-browser.cjs": {
+      "bytes": 5247,
+      "sha256": "5ffbe5fec1d6c70bfe19e946627226c0fb518ca6a5f02fdac8dc23ebe2fe81d6"
     },
     "scripts/verify-vault.mjs": {
       "bytes": 4382,
@@ -1013,6 +1048,5 @@
       "bytes": 2374,
       "sha256": "e520045280e0338cce8004b0fff111ec8c86e51e9979b3b8f45b7d34c3ecfd55"
     }
-  },
-  "manifestNote": "baselineCommit is the code state these hashes describe; the manifest itself is committed after it and lists no hash for itself."
+  }
 }

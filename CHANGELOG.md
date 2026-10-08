@@ -1,3 +1,13 @@
+# Fixed Canvas Music — 2026-10-08
+
+- Approved desktop library/player split and mobile library sheet.
+- Five correctly mapped categories: New, Tracks, Albums, Artists, Playlists.
+- Persistent transport, bounded lyric follow, Bloom/Cinema/Noir, queue/settings overlays.
+- Removed competing global dock/theme toggle only on Music.
+- Removed five retired presentation files and approximately 63 KB of unused music CSS; preserved other sections and global mini-player.
+- Added independent facet state, timeout/retry and stale-response guards.
+- No new playback service or fake lossless/audio-analyser claims.
+
 # 11.0.0 — unified playback and durable curation
 
 ## Requested behaviour

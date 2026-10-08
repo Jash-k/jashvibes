@@ -41,6 +41,10 @@ function useMusicController(enabled) {
 
   const videoRef = useRef(null);
   const [facet, setFacet] = useState({ id: '', status: 'idle', items: [], error: '' });
+  const [facets, setFacets] = useState({});
+  const facetGeneration = useRef({});
+  const facetRequests = useRef({});
+  useEffect(() => () => Object.values(facetRequests.current).forEach((request) => request.abort()), []);
   const [trending, setTrending] = useState({ status: 'idle', items: [], error: '' });
   const [fresh, setFresh] = useState({ status: 'idle', tracks: [], albums: [], error: '' });
   const [lyricAutoScroll, setLyricAutoScroll] = useState(true);
@@ -746,20 +750,35 @@ function useMusicController(enabled) {
   // A tab asks the facet endpoint for itself. `home` is a summary, and passing its summary off as the whole
   // facet is how a library advertises "Albums 0" while the albums endpoint has results.
   const loadFacet = useCallback(async (id, searchTerm = '') => {
-    if (!id) return;
-    setFacet({ id, status: 'loading', items: [], error: '' });
+    if (!['albums', 'artists', 'playlists'].includes(id)) return;
+    facetRequests.current[id]?.abort();
+    const controller = new AbortController();
+    facetRequests.current[id] = controller;
+    const generation = (facetGeneration.current[id] || 0) + 1;
+    facetGeneration.current[id] = generation;
+    const publish = (value) => {
+      if (controller.signal.aborted || generation !== facetGeneration.current[id]) return;
+      setFacet(value);
+      setFacets((previous) => ({ ...previous, [id]: value }));
+    };
+    publish({ id, status: 'loading', items: [], error: '' });
     const url = id === 'playlists'
       ? '/api/music/playlists'
-      : `/api/music/${id}?q=${encodeURIComponent(String(searchTerm || '').trim() || (id === 'albums' ? 'tamil' : ''))}&limit=48`;
+      : `/api/music/${id}?q=${encodeURIComponent(String(searchTerm || '').trim() || 'Tamil')}&limit=48`;
+    const timeout = setTimeout(() => controller.abort(), 20000);
     try {
-      const response = await fetch(url, { cache: 'no-store' });
-      const data = await response.json().catch(() => ({}));
+      const response = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+      const data = await response.json();
       if (!response.ok) throw new Error(data?.error || `${id} lookup failed`);
       const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
-      setFacet({ id, status: 'ready', items, error: '' });
+      publish({ id, status: 'ready', items, error: '' });
     } catch (err) {
-      setFacet({ id, status: 'error', items: [], error: err.message || `${id} lookup failed` });
-    }
+      if (generation !== facetGeneration.current[id]) return;
+      // A newer request owns aborts; a current timeout must remain retryable.
+      const value = { id, status: 'error', items: [], error: err.name === 'AbortError' ? 'Library request timed out. Try again.' : err.message };
+      setFacets((previous) => ({ ...previous, [id]: value }));
+      setFacet(value);
+    } finally { clearTimeout(timeout); }
   }, []);
 
   const loadTrending = useCallback(async () => {
@@ -822,11 +841,10 @@ function useMusicController(enabled) {
     playlists: fromFacet('playlists', importedPlaylists.length || searchResults?.playlists?.length || 0),
   };
   const facetHome = { albums: home?.releases?.albums || [], artists: home?.artists || [], playlists: importedPlaylists };
-  const facetLists = {
-    albums: facet.id === 'albums' && facet.items.length ? facet.items : facetHome.albums,
-    artists: facet.id === 'artists' && facet.items.length ? facet.items : facetHome.artists,
-    playlists: facet.id === 'playlists' && facet.items.length ? facet.items : facetHome.playlists,
-  };
+  const facetLists = Object.fromEntries(['albums', 'artists', 'playlists'].map((id) => [
+    id, facets[id]?.status === 'ready' ? facets[id].items : facetHome[id],
+  ]));
+
   const rowsFor = (list) => (list || []).filter(Boolean);
   const allShelfSongs = useMemo(() => dedupeQueue([
     ...mainSections.flatMap((section) => rowsFor(section.items).filter((item) => !(item?.type === 'album' || item?.type === 'playlist'))),
@@ -842,7 +860,7 @@ function useMusicController(enabled) {
   }
   function addToQueue(track) { setQueue((q) => dedupeQueue([...q, track])); }
   function backToAlbums() { ++collectionGeneration.current; collectionRequest.current?.abort(); setSelectedCollection(null); setCollectionStatus('idle'); setCenterTab('albums'); }
-  return { videoRef, home, status, error, setError, homeWarning, loadHome, query, setQuery, searchResults, searchStatus, selectedCollection, collectionStatus, openAlbum, openArtist, openPlaylist, backToAlbums, queueTracks, playTrack, playNext, playPrevious, addToQueue, retryTrack, playingTrack, activeKey, currentTime, duration, quality, setQuality, qualityChips, playerStatus, isPlaying, togglePlay, seekTo, volume, changeVolume, toggleMute, muted, shuffleEnabled, setShuffleEnabled, repeatMode, cycleRepeat, favorites, favoriteSet, favoriteTracks, recents, toggleFavorite, centerTab, setCenterTab, lyrics, lyricsData, lyricsStatus, openLyrics, syncedLyricLines, activeLyricLineIndex, lyricRows, plainLyricLines, lyricAutoScroll, setLyricAutoScroll, lyricOffset, setLyricOffset, activeLyricRef, lyricBlur, setLyricBlur, facetLists, facet, loadFacet, allShelfSongs, shelfCollections, trending, loadTrending, fresh, loadFresh, refreshImportedPlaylists, listeningMode, toggleListeningMode, pocketMode, enterPocketMode, setPocketMode, showSongCrud, setShowSongCrud, crudQuery, setCrudQuery, addImportedTrack, replaceImportedTrack, removeImportedTrack };
+  return { videoRef, home, status, error, setError, homeWarning, loadHome, query, setQuery, searchResults, searchStatus, selectedCollection, collectionStatus, openAlbum, openArtist, openPlaylist, backToAlbums, queueTracks, playTrack, playNext, playPrevious, addToQueue, retryTrack, playingTrack, activeKey, currentTime, duration, quality, setQuality, qualityChips, playerStatus, isPlaying, togglePlay, seekTo, volume, changeVolume, toggleMute, muted, shuffleEnabled, setShuffleEnabled, repeatMode, cycleRepeat, favorites, favoriteSet, favoriteTracks, recents, toggleFavorite, centerTab, setCenterTab, lyrics, lyricsData, lyricsStatus, openLyrics, syncedLyricLines, activeLyricLineIndex, lyricRows, plainLyricLines, lyricAutoScroll, setLyricAutoScroll, lyricOffset, setLyricOffset, activeLyricRef, lyricBlur, setLyricBlur, facetLists, facet, facets, loadFacet, allShelfSongs, shelfCollections, trending, loadTrending, fresh, loadFresh, refreshImportedPlaylists, listeningMode, toggleListeningMode, pocketMode, enterPocketMode, setPocketMode, showSongCrud, setShowSongCrud, crudQuery, setCrudQuery, addImportedTrack, replaceImportedTrack, removeImportedTrack };
 
 }
 const MusicContext = createContext(null);

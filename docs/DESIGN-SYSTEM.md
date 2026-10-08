@@ -301,7 +301,7 @@ forever. Every call site keys on what *identifies* the list (filter state + coun
 | `/live` | ✅ | channel wall; keyed on category + favourites + query + count |
 | Hero | ✅ parallax | `useParallax`; clamped ±22px, 1.14 slack scale |
 | Watch shell | ✅ | halo entrance + 19s drift on `translate` (composes with the entrance's `transform`) |
-| `/music` | ❌ **deliberately none** | the page never scrolls — its panels scroll internally, so viewport reveals would be wasted work that can only hide content |
+| `/music` | None | Fixed viewport; only library and lyrics panels scroll internally. Scoped `mc-*` CSS replaces retired `mu-*` / `mu2-*` UI styling; `.mu-global-mini` is preserved. |
 
 Six list surfaces, one hook, one rule each for reduced motion and key identity. If you add a seventh, copy an
 existing call site and **key on what identifies the list**, not just its length.

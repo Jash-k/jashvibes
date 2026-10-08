@@ -1,4 +1,4 @@
-# JaSH ViBeS 11
+# JaSH ViBeS — Fixed Canvas Music
 
 Tamil-first browsing, a unified on-demand Watch page, curated Live TV and a lyrics-first Music workspace. Refactored from version 10.9.0, commit `9554091fd88e01cd5bfc157d1b85f14650b0524f`.
 
@@ -32,7 +32,7 @@ All on-demand cards open **Watch**. Season/episode identity, resolution and sour
 - Auto native/Shaka errors try bounded alternatives, then advance. An explicitly selected provider stays selected until you choose another.
 - Live TV remains on `/live`. Explicit same-channel alternative groups can recover in Auto; there is no movie-provider fallback or fuzzy channel-name switching.
 - **Manual Live map/unmap choices are authoritative.** Sync registers new candidates as unmapped. Health does not delete catalogue memberships. Empty catalogues stay empty; database failure is reported instead of masquerading as raw Jio fallback.
-- Music has a library/lyrics split on desktop, four navigation tabs on mobile, a persistent audio controller, queue drawer and bitrate changes that retain position. Browsing does not replace the queue. Music yields audio focus to Watch/Live; exhausted same-track recovery offers Retry/Skip.
+- Music uses a fixed viewport on desktop and mobile: New / Tracks / Albums / Artists / Playlists, a desktop library/player split, a mobile library sheet, persistent transport, Bloom/Cinema/Noir lyrics, queue and settings overlays. Only library/lyrics panels scroll; no page scrolling. Browsing does not replace the queue. Music yields audio focus to Watch/Live; exhausted same-track recovery offers Retry/Skip.
 
 See [approved behaviour](docs/BEHAVIOUR.md), [architecture](docs/ARCHITECTURE.md) and [changes](CHANGELOG.md).
 
@@ -105,3 +105,7 @@ The app retains Vault, configured Stremio addons, Moviesda direct-file discovery
 The remote Worker adapter is **not an active shipped stream relay**. Direct playback and the authenticated server relay are the supported transport paths. Proxies validate/pin public DNS destinations, validate redirect hops, bound header/idle waits and retain the correct playlist base. They do not provide access rights, defeat DRM or solve every codec/region restriction.
 
 Use only providers, streams and credentials you are authorized to access. This project does not distribute media, DRM credentials or production secrets.
+
+## Fixed Canvas Music release
+
+See [Music layout and verification](docs/MUSIC-CANVAS.md). Configure your real DB, viewer/owner passwords and upstream services using `.env.example` before deployment. Run `npm ci`, `npm run check`, `npm run build`, then `npm start`. This source ZIP does not include node_modules or a generated build.

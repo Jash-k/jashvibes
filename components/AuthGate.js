@@ -200,8 +200,7 @@ export default function AuthGate({ children }) {
     return (
       <>
         {children}
-        <DayNightToggle />
-        <MobileDock />
+        {pathname !== '/music' ? <><DayNightToggle /><MobileDock /></> : null}
       </>
     );
   }

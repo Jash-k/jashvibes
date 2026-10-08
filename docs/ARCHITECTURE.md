@@ -15,7 +15,8 @@
 
 - `MusicProvider.jsx`: persistent track/queue orchestration and independently keyed library/lyrics data. It is mounted inside the unlocked root so leaving `/music` does not destroy audio, and locking the app does.
 - `useAudioPlayback.js`: attachment, cancellation, bounded initial readiness and same-track position retention.
-- `MusicCurtains.jsx`: new lyrics-first presentation; no media attachment or collection-fetch ownership in the UI.
+- `MusicShell.jsx`, `CanvasLibrary.jsx`, `CanvasLyrics.jsx`, `CanvasBits.jsx`: fixed viewport presentation, bounded panel scrolling, five library categories, lyrics follow, and accessible queue/settings overlays. Route CSS lives in `music-canvas.css`.
+- Library facets have independently stored responses and generation guards; empty successful responses remain empty rather than being replaced by home summaries.
 - `mediaFocus.js`: one owner across music/video/opaque frames. Browser background-playback restrictions still apply.
 
 ## Live persistence

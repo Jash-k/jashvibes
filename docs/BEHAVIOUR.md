@@ -27,7 +27,7 @@ Implementation was explicitly authorized by the user selecting **Proceed with th
 
 ## Music
 
-- Dedicated audio experience: library alongside dominant lyrics on desktop; Lyrics / Albums / Tracks / Playlists on mobile.
+- Dedicated audio experience: library alongside dominant lyrics on desktop; mobile browsing sheet with New / Tracks / Albums / Artists / Playlists and a persistent mini-player.
 - Album selection displays its genuine available tracklist, with stable ID, request guards, Back and inline loading/error/Retry states.
 - Browse/search/lyrics/player states are independent. Browsing does not change the queue.
 - Mobile song selection stays in browsing while lyrics update. A persistent player stays available across tabs and app navigation.
