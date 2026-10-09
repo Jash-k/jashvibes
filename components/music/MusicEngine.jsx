@@ -1,5 +1,6 @@
 'use client';
 import { lyricRequestMetadata, LYRICS_MATCH_VERSION } from '@/lib/lyricsMatch';
+import { createLyricsController } from '@/lib/lyricsController';
 import { MusicContext } from './MusicContext';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -119,11 +120,27 @@ function useMusicController(enabled) {
     if (pocketHoldRef.current) { clearInterval(pocketHoldRef.current); pocketHoldRef.current = null; }
     setPocketHold(0);
   }
-  const [lyrics, setLyrics] = useState('');
-  const [lyricsData, setLyricsData] = useState({});
-  const [lyricsStatus, setLyricsStatus] = useState('idle');
+  const [lyricState, setLyricState] = useState({ status: 'idle', lyrics: '', data: {} });
+  const [lyricRejection, setLyricRejection] = useState(0);
+  const [detailSettledFor, setDetailSettledFor] = useState('');
+  const lyricController = useRef(null);
+  if (!lyricController.current) lyricController.current = createLyricsController({ onChange: setLyricState });
+  const lyricsKey = trackKey(active);
+  const lyricDetail = activeDetail && trackKey(activeDetail) === lyricsKey ? activeDetail : null;
+  const lyricMetadata = lyricRequestMetadata(lyricDetail || active || {}, active || {});
+  let rejectedLyrics = [];
+  try { rejectedLyrics = JSON.parse(window.localStorage.getItem('jash_rejected_lyrics_v1') || '{}')[lyricsKey] || []; } catch {}
+  const lyricParams = { ...lyricMetadata, duration: String(lyricMetadata.duration || ''),
+    id: String(lyricDetail?.trackId || active?.trackId || ''), seokey: active?.seokey || '',
+    exclude: rejectedLyrics.filter(value => /^\d+$/.test(value)).join(','), skipSaavn: rejectedLyrics.includes('saavn') ? '1' : '0' };
+  const lyricSignature = JSON.stringify([LYRICS_MATCH_VERSION, lyricsKey, lyricParams, lyricRejection]);
+  const lyricReady = Boolean(lyricsKey && detailSettledFor === lyricsKey);
+  // Scope output during render, before effects run: never flash the previous song's state.
+  const lyricsData = lyricState.signature === lyricSignature ? lyricState.data : { loadedFor: lyricsKey };
+  const lyrics = lyricState.signature === lyricSignature ? lyricState.lyrics : '';
+  const lyricsStatus = !lyricsKey ? 'idle' : lyricState.signature === lyricSignature ? lyricState.status : 'loading';
   const [error, setError] = useState('');
-  const collectionGeneration = useRef(0), lyricsGeneration = useRef(0), lyricsRequest = useRef(null), collectionRequest = useRef(null), currentTrackRef = useRef(''), attemptedAudio = useRef(new Set()), initialized = useRef(false);
+  const collectionGeneration = useRef(0), collectionRequest = useRef(null), currentTrackRef = useRef(''), attemptedAudio = useRef(new Set()), initialized = useRef(false);
   const [homeWarning, setHomeWarning] = useState('');
   const [favorites, setFavorites] = useState([]);
   const [recents, setRecents] = useState([]);
@@ -195,8 +212,6 @@ function useMusicController(enabled) {
       setShowLyrics(Boolean(cached.showLyrics));
       setTrending(cached.trending || { status: 'idle', items: [], error: '' });
       setFresh(cached.fresh || { status: 'idle', tracks: [], albums: [], error: '' });
-      setLyrics(cached.lyricsData?.matchVersion === LYRICS_MATCH_VERSION ? cached.lyrics || '' : '');
-      setLyricsData(cached.lyricsData?.matchVersion === LYRICS_MATCH_VERSION && cached.lyricsData?.source !== 'error' ? cached.lyricsData : {});
       setHomeWarning(cached.homeWarning || cached.home?.warning || cached.home?.warnings?.[0] || '');
       setStatus('ready');
       restoreScroll(MUSIC_CACHE_KEY);
@@ -305,7 +320,7 @@ function useMusicController(enabled) {
     }
     if (songCacheRef.current.has(key)) return { ...songCacheRef.current.get(key), spotify: track.spotify || null };
     if (!track?.seokey) throw new Error('Song stream id missing');
-    const response = await fetch(`/api/music/song?seokey=${encodeURIComponent(track.seokey)}`, { cache: 'no-store' });
+    const response = await fetch(`/api/music/song?seokey=${encodeURIComponent(track.seokey)}`, { cache: 'no-store', signal: AbortSignal.timeout(12000) });
     const data = await response.json();
     if (!response.ok) throw new Error(data?.error || 'Unable to load song stream');
     songCacheRef.current.set(key, data.item);
@@ -336,11 +351,7 @@ function useMusicController(enabled) {
       try {
         setPlayerStatus('loading');
         setError('');
-        setLyrics('');
-        setLyricsData({});
-        setLyricsStatus('idle');
-        lyricsGeneration.current += 1;
-        lyricsRequest.current?.abort();
+        setDetailSettledFor('');
         attemptedAudio.current = new Set();
         const detail = await getTrackDetail(active);
         if (cancelled) return;
@@ -351,6 +362,8 @@ function useMusicController(enabled) {
         window.localStorage.setItem(RECENTS_KEY, JSON.stringify(nextRecents));
       } catch (err) {
         if (!cancelled) { setPlayerStatus('error'); setError(err.message || 'Unable to load song stream'); }
+      } finally {
+        if (!cancelled) setDetailSettledFor(trackKey(active));
       }
     }
     loadSong();
@@ -600,11 +613,7 @@ function useMusicController(enabled) {
     setDuration(0);
     setPlayerStatus('idle');
     setError('');
-    lyricsGeneration.current += 1;
-    lyricsRequest.current?.abort();
-    setLyrics('');
-    setLyricsData({});
-    setLyricsStatus('idle');
+    lyricController.current.select(null);
     setShowMiniPlayer(false);
     setShowLyrics(false);
   }
@@ -619,33 +628,9 @@ function useMusicController(enabled) {
     return 'Touch lock active';
   }
 
-  async function openLyrics(force = false) {
-    const detail = activeDetail && trackKey(activeDetail) === currentTrackRef.current ? activeDetail : active;
-    const currentKey = trackKey(detail); if (!currentKey || !detail?.title) return;
+  function openLyrics(force = false) {
     setShowLyrics(true);
-    if (!force && lyricsStatus === 'ready' && lyricsData.matchVersion === LYRICS_MATCH_VERSION && lyricsData.loadedFor === currentKey) return;
-    lyricsRequest.current?.abort(); const controller = new AbortController(); lyricsRequest.current = controller;
-    const token = ++lyricsGeneration.current; const timeout = setTimeout(() => controller.abort(), 12000);
-    setLyricsStatus('loading'); setLyrics('');
-    try {
-      const metadata = lyricRequestMetadata(detail, active || {});
-      const params = new URLSearchParams({ title: metadata.title, artist: metadata.artist, album: metadata.album, duration: String(metadata.duration || ''), id: detail.trackId || '', seokey: detail.seokey || '' });
-      if (force) params.set('force', '1');
-      try {
-        const rejected = JSON.parse(window.localStorage.getItem('jash_rejected_lyrics_v1') || '{}')[currentKey] || [];
-        params.set('exclude', rejected.filter((value) => /^\d+$/.test(value)).join(','));
-        if (rejected.includes('saavn')) params.set('skipSaavn', '1');
-      } catch { /* private mode */ }
-      const response = await fetch('/api/music/lyrics?' + params, { signal: controller.signal, cache: 'no-store' });
-      const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Lyrics unavailable');
-      if (token !== lyricsGeneration.current || currentKey !== currentTrackRef.current) return;
-      const plain = data.plainLyrics || data.lyrics || plainFromSyncedLyrics(data.syncedLyrics || '');
-      setLyricsData({ ...data, loadedFor: currentKey }); setLyrics(plain || '');
-      setLyricsStatus(plain || data.syncedLyrics ? 'ready' : 'not-found');
-    } catch (e) {
-      if (token !== lyricsGeneration.current || currentKey !== currentTrackRef.current) return;
-      setLyrics(''); setLyricsData({ loadedFor: currentKey, source: 'error', message: e.name === 'AbortError' ? 'Lyrics lookup timed out. Retry when ready.' : e.message }); setLyricsStatus('error');
-    } finally { clearTimeout(timeout); }
+    return lyricController.current.refresh({ force });
   }
 
   function rejectLyrics() {
@@ -659,7 +644,8 @@ function useMusicController(enabled) {
         window.localStorage.setItem('jash_rejected_lyrics_v1', JSON.stringify(Object.fromEntries(entries)));
       } catch { /* still refresh without persistence */ }
     }
-    return openLyrics(true);
+    // Changing exclusions invalidates only this selection, including its positive cache.
+    setLyricRejection(value => value + 1);
   }
 
   async function openCollection(type, value) {
@@ -907,7 +893,11 @@ function useMusicController(enabled) {
   const shelfCollections = useMemo(() => mainSections.flatMap((section) => rowsFor(section.items).filter((item) => item?.type === 'album' || item?.type === 'playlist')), [home]);
   const trendingShelf = useMemo(() => mainSections.find((section) => section.title === 'Trending Now'), [home]);
 
-    useEffect(() => { if (activeDetail?.seokey && activeDetail.seokey === active?.seokey) openLyrics(); /* current-song identity, not tab clicks */ }, [activeDetail?.seokey]);
+  useEffect(() => {
+    lyricController.current.select(activeKey ? { key: activeKey, signature: lyricSignature, params: lyricParams, ready: lyricReady } : null);
+    // Signature includes all lookup metadata/exclusions, not just the song id.
+  }, [lyricSignature, lyricReady]);
+  useEffect(() => () => lyricController.current.dispose(), []);
   function retryTrack() {
     attemptedAudio.current = new Set(); songCacheRef.current.delete(trackKey(active)); setError('');
     if (active) { setActiveDetail(null); getTrackDetail({ ...active, streamUrls: {} }).then((d) => { if (trackKey(d) === currentTrackRef.current) { setActiveDetail(d); setQuality(chooseBestQuality(d.streamUrls || {})); setPlayerStatus('loading'); setShouldAutoplay(true); } }).catch((e) => { setError(e.message); setPlayerStatus('error'); }); }

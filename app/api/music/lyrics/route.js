@@ -38,41 +38,62 @@ function stripSyncedLyrics(value = '') {
     .join('\n');
 }
 
-let lyricQueue = Promise.resolve();
+class ProviderFailure extends Error {
+  constructor(message, retryAfter = 1, retryable = true) {
+    super(message); this.retryAfter = retryAfter; this.retryable = retryable;
+  }
+}
 const cooldowns = new Map();
+let lyricQueue = Promise.resolve(), queued = 0;
+function cooldownError(origin) {
+  const remaining = (cooldowns.get(origin) || 0) - Date.now();
+  return remaining > 0 ? new ProviderFailure('Lyrics provider is busy.', Math.ceil(remaining / 1000)) : null;
+}
 async function fetchJson(url, options = {}) {
-  const isLrc = new URL(url).origin === new URL(getLyricsApiBase()).origin;
-  if (!isLrc) return fetchJsonNow(url, options);
+  const origin = new URL(url).origin;
+  const blocked = cooldownError(origin);
+  if (blocked) throw blocked;
+  if (origin !== new URL(getLyricsApiBase()).origin) return fetchJsonNow(url, options);
+  if (queued >= 8) throw new ProviderFailure('Lyrics queue is busy.', 3);
+  const deadline = options.deadline || Date.now() + 7000;
+  let expired = false, timer;
+  queued++;
   const work = lyricQueue.catch(() => {}).then(async () => {
-    const origin = new URL(url).origin;
-    if ((cooldowns.get(origin) || 0) > Date.now()) return null;
-    if (options.deadline && Date.now() >= options.deadline) return null;
-    await new Promise((resolve) => setTimeout(resolve, 220));
-    return fetchJsonNow(url, options);
-  });
-  lyricQueue = work.catch(() => null);
-  return work;
+    // Expired entries do not consume a throttle slot or make a late provider request.
+    if (expired || Date.now() >= deadline) throw new ProviderFailure('Lyrics queue timed out.', 2);
+    const blocked = cooldownError(origin); if (blocked) throw blocked;
+    await new Promise(resolve => setTimeout(resolve, 220));
+    if (expired || Date.now() >= deadline) throw new ProviderFailure('Lyrics queue timed out.', 2);
+    return fetchJsonNow(url, { ...options, deadline });
+  }).finally(() => { queued--; });
+  lyricQueue = work.catch(() => {});
+  try {
+    return await Promise.race([work, new Promise((_, reject) => {
+      timer = setTimeout(() => { expired = true; reject(new ProviderFailure('Lyrics lookup timed out.', 2)); }, Math.max(1, deadline - Date.now()));
+    })]);
+  } finally { clearTimeout(timer); }
 }
 async function fetchJsonNow(url, options = {}) {
   const { timeout = 10000, deadline, ...rest } = options;
-  const response = await fetch(url, {
-    cache: 'no-store',
-    signal: AbortSignal.timeout(Math.max(1, Math.min(timeout, deadline ? deadline - Date.now() : timeout))),
-    ...rest,
-    headers: {
-      Accept: 'application/json',
-      'User-Agent': 'JaSH-ViBeS/11.0 (https://github.com/Jash-k/jashvibes)',
-      ...(rest.headers || {}),
-    },
-  });
+  let response;
+  try {
+    response = await fetch(url, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(Math.max(1, Math.min(timeout, deadline ? deadline - Date.now() : timeout))),
+      ...rest,
+      headers: { Accept: 'application/json',
+        'User-Agent': 'JaSH-ViBeS/11.0 (https://github.com/Jash-k/jashvibes)', ...(rest.headers || {}) },
+    });
+  } catch { throw new ProviderFailure('Could not reach the lyrics provider.', 2); }
+  if (response.status === 404) return null;
   if (response.status === 429 || response.status === 503) {
     const retry = response.headers.get('retry-after');
     const until = /^\d+$/.test(retry || '') ? Date.now() + Number(retry) * 1000 : Date.parse(retry || '');
-    cooldowns.set(new URL(url).origin, Number.isFinite(until) ? until : Date.now() + 30000);
-    return null;
+    cooldowns.set(new URL(url).origin, Number.isFinite(until) ? until : Date.now() + (response.status === 429 ? 30000 : 2000));
+    throw new ProviderFailure('Lyrics provider is busy.', Math.max(1, Math.ceil(((cooldowns.get(new URL(url).origin)) - Date.now()) / 1000)));
   }
-  if (!response.ok) return null;
-  return response.json().catch(() => null);
+  if (!response.ok) throw new ProviderFailure(`Lyrics provider returned HTTP ${response.status}.`, 2, response.status >= 500);
+  try { return await response.json(); } catch { throw new ProviderFailure('Lyrics provider returned an invalid response.', 2); }
 }
 
 function extractSaavnLyrics(payload) {
@@ -90,8 +111,11 @@ async function lookupSaavnLyrics(id = '', { timeout = 10000 } = {}) {
     `${base}/api/lyrics?id=${encodeURIComponent(id)}`,
   ];
 
+  let failure;
   for (const url of candidates) {
-    const payload = await fetchJson(url, { timeout: Math.max(1, Math.floor(timeout / candidates.length)) }).catch(() => null);
+    let payload;
+    try { payload = await fetchJson(url, { timeout: Math.max(1, Math.floor(timeout / candidates.length)) }); }
+    catch (error) { failure = error; continue; }
     const plainLyrics = extractSaavnLyrics(payload);
     if (plainLyrics) {
       return {
@@ -104,6 +128,7 @@ async function lookupSaavnLyrics(id = '', { timeout = 10000 } = {}) {
       };
     }
   }
+  if (failure) throw failure;
   return null;
 }
 
@@ -177,7 +202,8 @@ function mapLrclibItem(item = {}, sourceUrl = '', wanted = {}) {
 
 const lyricCache = new Map(), lyricPending = new Map();
 async function lookupLrclibLyrics(ctx = {}) {
-  const key = JSON.stringify([ctx.title, ctx.artist, ctx.album, ctx.duration, ctx.exclude]);
+  const metadata = lyricRequestMetadata({ title: ctx.title, artists: ctx.artist, album: ctx.album, duration: ctx.duration });
+  const key = JSON.stringify([LYRICS_MATCH_VERSION, lyricTitle(metadata.title), metadata.artist, metadata.album, metadata.duration, ctx.exclude]);
   if (!ctx.force && lyricCache.get(key)?.expires > Date.now()) return lyricCache.get(key).value;
   if (lyricPending.has(key)) return lyricPending.get(key);
   const job = lookupLrclibUncached(ctx).then((value) => {
@@ -194,11 +220,17 @@ async function lookupLrclibUncached({ title = '', artist = '', album = '', durat
   const blocked = new Set(String(exclude).split(',').filter(Boolean));
   const deadline = Date.now() + Math.min(timeout, 7000);
   const base = getLyricsApiBase();
+  let failure;
   const lookup = async (path, params) => {
-    if (Date.now() >= deadline) return null;
+    if (Date.now() >= deadline) { failure = new ProviderFailure('Lyrics lookup timed out.', 2); return null; }
     const url = new URL(path, base + '/');
     for (const [key, value] of Object.entries(params)) if (value) url.searchParams.set(key, String(value));
-    const payload = await fetchJson(url.toString(), { timeout: 3000, deadline }).catch(() => null);
+    let payload;
+    try {
+      payload = await fetchJson(url.toString(), { timeout: 3000, deadline });
+      if (payload !== null && (path === '/api/search' ? !Array.isArray(payload) : typeof payload !== 'object' || !payload.id))
+        throw new ProviderFailure('Lyrics provider returned an invalid result.', 2);
+    } catch (error) { failure = error; return null; }
     const items = (Array.isArray(payload) ? payload : payload ? [payload] : []).filter((item) => !blocked.has(String(item.id)));
     const match = chooseLyricMatch(items, wanted);
     return match ? { ...mapLrclibItem(match, url.toString(), wanted), matchVersion: LYRICS_MATCH_VERSION } : null;
@@ -211,7 +243,12 @@ async function lookupLrclibUncached({ title = '', artist = '', album = '', durat
   if (specific) return specific;
   // Album punctuation/catalogue variants can prevent retrieval even when identity matches.
   // Broaden retrieval only; chooseLyricMatch still enforces title, album, artist and duration guards.
-  if (wanted.album && Date.now() < deadline) return lookup('/api/search', { track_name: wanted.title });
+  if (wanted.album) {
+    const broad = await lookup('/api/search', { track_name: wanted.title });
+    if (broad) return broad;
+  }
+  // Never negative-cache an incomplete lookup, even if another stage returned 404.
+  if (failure) throw failure;
   return null;
 }
 
@@ -275,7 +312,7 @@ async function runSource(sourceId, ctx) {
     return {
       id: sourceId, ok: false, kind: 'none', plainLyrics: '', syncedLyrics: '',
       matched: null, ms: Date.now() - started, lines: 0, preview: [],
-      reason: error.message || 'Lookup failed',
+      reason: error.message || 'Lookup failed', retryable: error.retryable !== false, retryAfter: error.retryAfter || 2,
     };
   }
   return {
@@ -337,7 +374,9 @@ export async function GET(request) {
       preview: autoWinner ? byId[autoWinner].preview : [],
       match: autoWinner && byId[autoWinner].match != null ? byId[autoWinner].match : null,
       winner: autoWinner,
-      reason: autoWinner ? null : 'Neither wired source returned lyrics for this track.',
+      reason: autoWinner ? null : [saavn, lrclib].find(result => result.retryable)?.reason || 'Neither wired source returned lyrics for this track.',
+      retryable: !autoWinner && [saavn, lrclib].some(result => result.retryable),
+      retryAfter: Math.max(saavn.retryAfter || 0, lrclib.retryAfter || 0),
     };
 
     const catalogue = Object.fromEntries(
@@ -361,6 +400,7 @@ export async function GET(request) {
         ms: result.ms,
         winner: result.winner || null,
         reason: result.reason,
+        retryable: Boolean(result.retryable), retryAfter: result.retryAfter || 0,
         evidence: meta.evidence,
         note: meta.note,
         wired: true,
@@ -398,6 +438,7 @@ export async function GET(request) {
         {
           lyrics: '', plainLyrics: '', syncedLyrics: '', source: forced, applied: 'none',
           message: result.reason || 'That source had nothing for this track.',
+          retryable: Boolean(result.retryable), retryAfter: result.retryAfter || 0,
         },
         { headers: { 'Cache-Control': 'no-store' } },
       );
@@ -418,12 +459,14 @@ export async function GET(request) {
   }
 
   try {
-    const lrclibResult = await lookupLrclibLyrics({ title, artist, album, duration, exclude, force, timeout: 7000 });
+    let failure;
+    const lrclibResult = await lookupLrclibLyrics({ title, artist, album, duration, exclude, force, timeout: 7000 }).catch(error => { failure = error; return null; });
     if (lrclibResult?.lyrics) return NextResponse.json(lrclibResult, { headers: { 'Cache-Control': 'no-store' } });
     // Track-ID-bound plain lyrics from an explicitly configured provider only.
-    const saavnResult = searchParams.get('skipSaavn') === '1' ? null : await lookupSaavnLyrics(id, { timeout: 2500 });
+    const saavnResult = searchParams.get('skipSaavn') === '1' ? null : await lookupSaavnLyrics(id, { timeout: 2500 }).catch(error => { failure = failure || error; return null; });
     if (saavnResult?.lyrics) return NextResponse.json({ ...saavnResult, matchVersion: LYRICS_MATCH_VERSION }, { headers: { 'Cache-Control': 'no-store' } });
 
+    if (failure) throw failure;
     return NextResponse.json(
       {
         lyrics: '',
@@ -435,7 +478,7 @@ export async function GET(request) {
       { headers: { 'Cache-Control': 'no-store' } },
     );
   } catch (error) {
-    console.error('[api/music/lyrics] Error:', error);
+    // Provider outages are expected, retryable outcomes — not a missing song.
     return NextResponse.json(
       {
         lyrics: '',
@@ -443,8 +486,9 @@ export async function GET(request) {
         syncedLyrics: '',
         source: 'error',
         message: error.message || 'Lyrics lookup failed',
+        retryable: error.retryable !== false, retryAfter: error.retryAfter || 2,
       },
-      { headers: { 'Cache-Control': 'no-store' } },
+      { status: error.retryable === false ? 502 : 503, headers: { 'Cache-Control': 'no-store', 'Retry-After': String(error.retryAfter || 2) } },
     );
   }
 }

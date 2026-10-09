@@ -45,7 +45,7 @@ const url = text => 'data:text/javascript;base64,' + Buffer.from(text).toString(
     assert.equal(fallback.matched.id, 10385047); assert.equal(calls.length, 3);
   } finally { global.fetch = realFetch; }
   const engine = fs.readFileSync(path.join(root, 'components/music/MusicEngine.jsx'), 'utf8');
-  assert(engine.includes('lyricRequestMetadata(detail, active || {})'));
+  assert(engine.includes('lyricRequestMetadata(lyricDetail || active || {}, active || {})'));
   assert(engine.includes('spotify: track.spotify || null'));
   console.log('PASS Spotify film suffix/entity cleanup, preserved metadata, artist initials, strict identity guards, LRCLIB retrieval, rejection exclusions and cache-version invalidation.');
 })().catch(error => { console.error(error); process.exitCode = 1; });
