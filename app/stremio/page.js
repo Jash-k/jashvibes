@@ -507,7 +507,7 @@ export default function StremioPage() {
             <button type="button" className="jv-st-burger" onClick={() => setSheet('catalogs')} title="Pin or unpin catalogs" aria-label="Catalogs">
               <span className="jv-st-burger-bars" aria-hidden="true" />
             </button>
-            <h1 className="jv-st-heading">Stremio<span className="jv-st-heading-addon">· {addonName}</span></h1>
+            <h1 className="jv-st-heading">Stremio</h1>
             <div className="jv-st-top-side">
               <span className="jv-st-pinchip">{pinned.length} catalog{pinned.length === 1 ? '' : 's'} pinned</span>
               <button type="button" className="jv-st-mobfilters" onClick={() => { setSheetField(''); setSheet('filters'); }}>

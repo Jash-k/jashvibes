@@ -4,7 +4,7 @@
 .vl-page button, .vl-page select, .vl-page input { font:inherit; }
 .vl-page button { cursor:pointer; }
 .vl-page button:disabled { opacity:.35; cursor:not-allowed; }
-.vl-page button:focus-visible, .vl-page select:focus-visible, .vl-page input:focus-visible { outline:2px solid #9bddce; outline-offset:3px; }
+.vl-page button:focus-visible, .vl-page select:focus-visible { outline:2px solid #9bddce; outline-offset:3px; }
 .vl-page h1, .vl-page h2, .vl-page h3, .vl-page p { margin:0; }
 .vl-header { display:flex; align-items:center; justify-content:space-between; gap:20px; margin-bottom:24px; }
 .vl-eyebrow { font-size:10px; letter-spacing:3px; text-transform:uppercase; font-weight:700; color:#9bddce; }
@@ -80,3 +80,16 @@
 .vl-retro:hover { border-color:#f6cf87; background:#443322; }
 .vl-retro:focus-visible { outline:2px solid #f6cf87; outline-offset:3px; }
 @media(max-width:600px) { .vl-header-actions { gap:8px; } .vl-header-actions .vl-refresh { padding:10px 13px; } }
+
+/* MoViE VaULT: a compact two-voice wordmark, using the existing local display font. */
+.vl-header .vl-wordmark { display:flex; flex-wrap:wrap; align-items:baseline; gap:.28em; font-size:clamp(30px,3.7vw,48px); margin:0; line-height:1.12; }
+.vl-wordmark .vl-wordmark-movie { font-family:var(--font-display),Georgia,serif; font-weight:750; font-style:italic; letter-spacing:-.065em; color:#edf3f3; }
+.vl-wordmark .vl-wordmark-vault { font-family:Arial,Helvetica,sans-serif; font-weight:900; letter-spacing:-.055em; color:#9bddce; }
+.vl-header-actions .vl-refresh-icon { width:44px; height:44px; min-width:44px; padding:0; justify-content:center; border-radius:50%; }
+.vl-refresh-spinning { animation:vl-refresh-turn 1s linear infinite; }
+@keyframes vl-refresh-turn { to { transform:rotate(360deg); } }
+/* No inner rectangular input ring; the existing rounded search shell takes focus. */
+.vl-page .vl-search input:focus, .vl-page .vl-search input:focus-visible { outline:none; box-shadow:none; }
+.vl-search:focus-within { border-color:#9bddce; }
+@media(max-width:600px) { .vl-header .vl-wordmark { font-size:34px; } }
+@media(prefers-reduced-motion:reduce) { .vl-refresh-spinning { animation:none; } }

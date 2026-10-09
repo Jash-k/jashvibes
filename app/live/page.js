@@ -379,16 +379,6 @@ export default function LiveTVPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [navigateChannel, enterFullscreen]);
 
-  async function copyUrl() {
-    if (!active?.url) return;
-    try {
-      await navigator.clipboard.writeText(active.url);
-      alert('Channel URL copied');
-    } catch {
-      alert(active.url);
-    }
-  }
-
   // Keyed on the filter state AND the count: switching between two catalogs of
   // equal size keeps the count identical while replacing every node, and the
   // observer would never see the replacements.
@@ -605,10 +595,6 @@ export default function LiveTVPage() {
                 </button>
               </div>
               {lastViewed?.name ? <p className="truncate px-1 text-[10px] font-semibold text-zinc-400 sm:text-xs">Last viewed: {lastViewed.name}</p> : null}
-              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-                <button onClick={enterFullscreen} className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-bold text-white transition hover:border-red-500/50">Fullscreen</button>
-                <button onClick={copyUrl} disabled={!active?.url} className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-bold text-white transition hover:border-red-500/50 disabled:opacity-40">Copy stream URL</button>
-              </div>
             </div>
             <DayStrip row={guide.get(active?.id)} at={guide.at} loading={guide.loading} />
             </div>

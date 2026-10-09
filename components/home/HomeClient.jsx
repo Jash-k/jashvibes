@@ -611,7 +611,7 @@ export default function HomeClient({ initialHero = null }) {
       />
       {/* `focusSlide` wins as soon as the client fetch lands; until then the
             server-rendered slide is already on screen. */}
-      <RailFocus slide={focusSlide || initialHero} eyebrow="Fresh from the scrape" onWatchOpen={openTitle} />
+      <RailFocus slide={focusSlide || initialHero} eyebrow={null} onWatchOpen={openTitle} />
 
       <section ref={revealRef} className="mx-auto flex w-full max-w-[1500px] flex-col gap-7 px-4 pb-20 pt-5 sm:px-6 sm:gap-9 lg:px-8">
         {scrapeStatus === 'error' && scrapeError ? (

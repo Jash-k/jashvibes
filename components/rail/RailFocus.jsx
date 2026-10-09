@@ -61,7 +61,7 @@ export default function RailFocus({ slide = null, eyebrow = 'Now on your shelf',
       <div className="jv-focus-shade" aria-hidden="true" />
 
       <div className="relative mx-auto flex w-full max-w-[1500px] flex-col gap-3.5 px-4 pb-8 pt-9 sm:px-6 lg:min-h-[44svh] lg:justify-end lg:px-8 lg:pb-10 lg:pt-16">
-        <p className="jv-focus-eyebrow">{eyebrow}</p>
+        {eyebrow ? <p className="jv-focus-eyebrow">{eyebrow}</p> : null}
 
         <div>
           <h2 className="jv-focus-title">{slide.title}</h2>
