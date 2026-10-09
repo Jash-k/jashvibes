@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import RailNav from '@/components/rail/RailNav';
 import Icon from '@/components/Icons';
 import { VaultTile, SkeletonGrid } from '@/components/vault/VaultCards';
@@ -112,7 +113,7 @@ export default function VaultPage() {
   const options = (dimension, values, key) => <div className="vl-options">{values.map((value) => { const active = key === 'qualities' ? filters.qualities.includes(value) : filters[key] === value; const total = count(dimension, value); return <button type="button" key={value} aria-pressed={active} disabled={!active && !total} onClick={() => patch({ [key]: key === 'qualities' ? active ? filters.qualities.filter((v) => v !== value) : [...filters.qualities, value] : active ? '' : value })}>{value === 'unrated' ? 'Unrated' : value}<small>{total}</small></button>; })}</div>;
   return <main className="jv-vault-page jv-rail-shift vl-page"><RailNav/>
     <section className="vl-content" ref={content}>
-      <header className="vl-header"><div><p className="vl-eyebrow">Find your perfect cut</p><h1>Through the Lens<span>.</span></h1><p>Tamil originals and dubbed stories, clearly separated.</p></div><button type="button" className="vl-refresh" disabled={refreshing} onClick={() => load(true)}><Icon name="refresh" className="h-4 w-4"/>{refreshing ? 'Refreshing…' : 'Refresh catalogue'}</button></header>
+      <header className="vl-header"><div><p className="vl-eyebrow">Find your perfect cut</p><h1>Through the Lens<span>.</span></h1><p>Tamil originals and dubbed stories, clearly separated.</p></div><div className="vl-header-actions"><Link href="/classics" className="vl-refresh vl-retro"><Icon name="film" className="h-4 w-4"/>ReTro</Link><button type="button" className="vl-refresh" disabled={refreshing} onClick={() => load(true)}><Icon name="refresh" className="h-4 w-4"/>{refreshing ? 'Refreshing…' : 'Refresh catalogue'}</button></div></header>
       <label className="vl-search"><Icon name="search" className="h-5 w-5"/><span className="sr-only">Search titles or year</span><input type="search" placeholder="Search titles or year…" value={query} onChange={(event) => setQuery(event.target.value)}/>{query ? <button type="button" aria-label="Clear search" onClick={() => setQuery('')}>×</button> : null}</label>
       <nav className="vl-tabs" aria-label="Vault categories">{VAULT_TABS.map((item) => <button type="button" key={item.id} aria-pressed={tab === item.id} onClick={() => { setTab(item.id); setFilters(EMPTY); setQuery(''); }}><span>{item.label}</span><small>{tabCounts[item.id] || 0}</small></button>)}</nav>
       <div className="vl-verification-note"><span>Tamil and dubbed collections require original-language metadata. Missing or conflicting records stay separate.</span><button type="button" aria-pressed={tab === 'unverified'} onClick={() => { setTab('unverified'); setFilters(EMPTY); setQuery(''); }}>Unverified <small>{tabCounts.unverified || 0}</small></button></div>

@@ -73,3 +73,10 @@
 .vl-verification-note > button[aria-pressed='true'] { background:#493921; border-color:#d9b879; }
 .vl-verification-note small { margin-left:8px; opacity:.8; }
 @media(max-width:600px) { .vl-verification-note { gap:10px; align-items:flex-start; }.vl-verification-note > span { font-size:10px; } }
+
+/* ReTro lives beside catalogue refresh, not in the global rail/dock. */
+.vl-header-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; flex-shrink:0; }
+.vl-retro { text-decoration:none; color:#f6cf87; border-color:#c99a4a55; background:#352919; }
+.vl-retro:hover { border-color:#f6cf87; background:#443322; }
+.vl-retro:focus-visible { outline:2px solid #f6cf87; outline-offset:3px; }
+@media(max-width:600px) { .vl-header-actions { gap:8px; } .vl-header-actions .vl-refresh { padding:10px 13px; } }

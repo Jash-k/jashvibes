@@ -15,7 +15,6 @@ export const NAV_ITEMS = [
   { href: '/live', label: 'Live', icon: 'live', accent: 'text-red-400', hint: 'Live TV and the guide' },
   { href: '/music', label: 'Music', icon: 'music', accent: 'text-emerald-300', hint: 'ராக வானம்' },
   { href: '/vault', label: 'Vault', icon: 'lock', accent: 'text-cyan-300', hint: 'The movie vault' },
-  { href: '/classics', label: 'ReTro', icon: 'film', accent: 'text-amber-400', hint: 'Vintage Tamil cinema' },
   // `hard` reloads the document instead of a client navigation: the Stremio page caches its addon
   // manifest, and a soft route change keeps a stale one alive.
   { href: '/stremio?home=1', label: 'Stremio', icon: 'sparkle', accent: 'text-fuchsia-300', hint: 'Your addon sources', hard: true },
