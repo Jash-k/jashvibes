@@ -1,4 +1,4 @@
-import { chooseLyricMatch, lyricTitle, lyricAlbum, lyricRequestMetadata, LYRICS_MATCH_VERSION } from '@/lib/lyricsMatch';
+import { chooseLyricMatch, lyricVocalVersion, lyricTitle, lyricAlbum, lyricRequestMetadata, LYRICS_MATCH_VERSION } from '@/lib/lyricsMatch';
 import { NextResponse } from 'next/server';
 import { SOURCE_GROUPS, WIRED_SOURCE_KIND, groupedSources, isPickable, sourceById } from '@/lib/musicSources';
 
@@ -239,12 +239,15 @@ async function lookupLrclibUncached({ title = '', artist = '', album = '', durat
   const exact = await lookup('/api/get', signature);
   if (exact) return exact;
   // A title search broadens retrieval, never acceptance: album/artist/duration guards remain mandatory.
-  const specific = await lookup('/api/search', { track_name: wanted.title, album_name: wanted.album });
+  // Keep the requested version in `wanted`; only broaden retrieval to the base title.
+  // Acceptance requires an explicitly agreeing vocal version, album and duration.
+  const searchTitle = lyricVocalVersion(wanted.title)?.base || wanted.title;
+  const specific = await lookup('/api/search', { track_name: searchTitle, album_name: wanted.album });
   if (specific) return specific;
   // Album punctuation/catalogue variants can prevent retrieval even when identity matches.
   // Broaden retrieval only; chooseLyricMatch still enforces title, album, artist and duration guards.
   if (wanted.album) {
-    const broad = await lookup('/api/search', { track_name: wanted.title });
+    const broad = await lookup('/api/search', { track_name: searchTitle });
     if (broad) return broad;
   }
   // Never negative-cache an incomplete lookup, even if another stage returned 404.
