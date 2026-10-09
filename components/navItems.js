@@ -19,6 +19,7 @@ export const NAV_ITEMS = [
   // `hard` reloads the document instead of a client navigation: the Stremio page caches its addon
   // manifest, and a soft route change keeps a stale one alive.
   { href: '/stremio?home=1', label: 'Stremio', icon: 'sparkle', accent: 'text-fuchsia-300', hint: 'Your addon sources', hard: true },
+  { href: '/extras', label: 'Extras', icon: 'extras', accent: 'text-orange-300', hint: 'Your embedded websites' },
 ];
 
 /** Both shells need the same answer to "is this where I am". */

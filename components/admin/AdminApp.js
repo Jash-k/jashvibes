@@ -6,6 +6,7 @@ import MusicTab from '@/components/admin/MusicTab';
 import TvTab from '@/components/admin/TvTab';
 import RetroTab from '@/components/admin/RetroTab';
 import StremioTab from '@/components/admin/StremioTab';
+import ExtrasTab from '@/components/admin/ExtrasTab';
 
 const TABS = [
   { id: 'home', label: 'Home' },
@@ -13,6 +14,7 @@ const TABS = [
   { id: 'tv', label: 'TV' },
   { id: 'retro', label: 'ReTro' },
   { id: 'stremio', label: 'Stremio' },
+  { id: 'extras', label: 'Extras' },
 ];
 
 function Gate({ onUnlocked }) {
@@ -149,7 +151,7 @@ export default function AdminApp() {
           <div>
             <p className="jv-ad-kicker">JaSH ViBeS · Control Room</p>
             <h1 className="jv-ad-heading">Admin</h1>
-            <p className="jv-ad-sub">Every section, one seat: catalog, playlists, live TV, classics and Stremio.</p>
+            <p className="jv-ad-sub">Every section, one seat: catalog, playlists, live TV, classics, Stremio and Extras.</p>
           </div>
           <div className="jv-ad-mast-actions">
             <a className="jv-ad-btn is-ghost" href="/">Open the theatre ↗</a>
@@ -178,6 +180,7 @@ export default function AdminApp() {
         {tab === 'tv' ? <TvTab /> : null}
         {tab === 'retro' ? <RetroTab /> : null}
         {tab === 'stremio' ? <StremioTab /> : null}
+        {tab === 'extras' ? <ExtrasTab /> : null}
       </div>
     </div>
   );

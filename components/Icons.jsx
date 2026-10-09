@@ -2,6 +2,13 @@
 // One consistent 24px grid for the whole app — replaces glyph emojis (✕ ⚙ ▶ ♫ 🏏).
 
 const SHAPES = {
+  extras: [{ rect: { x: 3, y: 3, width: 7, height: 7, rx: 2 } }, { rect: { x: 14, y: 3, width: 7, height: 7, rx: 2 } }, { rect: { x: 3, y: 14, width: 7, height: 7, rx: 2 } }, { d: 'M17.5 14v7M14 17.5h7' }],
+  globe: [{ circle: { cx: 12, cy: 12, r: 9 } }, { d: 'M3 12h18M12 3c-6 5-6 13 0 18M12 3c6 5 6 13 0 18' }],
+  external: [{ d: 'M14 3h7v7M21 3 10 14M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5' }],
+  edit: [{ d: 'm14 4 6 6-11 11H3v-6zM12 6l6 6' }],
+  trash: [{ d: 'M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7' }],
+  info: [{ circle: { cx: 12, cy: 12, r: 9 } }, { d: 'M12 11v6M12 7v.5' }],
+  chevU: [{ d: 'm6 14 6-6 6 6' }],
   play:    [{ fill: 'M8 5.2v13.6a.8.8 0 0 0 1.22.68l10.8-6.8a.8.8 0 0 0 0-1.36L9.22 4.52A.8.8 0 0 0 8 5.2z' }],
   plus:    [{ d: 'M12 5v14M5 12h14' }],
   check:   [{ d: 'M5 12.5l4.5 4.5L19 7' }],
