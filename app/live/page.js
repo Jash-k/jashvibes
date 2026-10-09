@@ -257,17 +257,15 @@ export default function LiveTVPage() {
 
   // Deliberately fed the WHOLE lineup, not `filteredChannels`: the response is a few KB, so searching
   // and filtering stay instant instead of turning into a request per keystroke.
-  const guide = useLiveGuide({ channels, activeId: active?.id || '' });
+  // Playback selection alone controls EPG loading; browsing/searching the wall
+  // must never request the whole lineup. Keep initial auto-play behaviour intact.
+  const guide = useLiveGuide({ channels: active?.playable ? [active] : [], activeId: active?.id || '' });
 
-  const guideCoverage = useMemo(() => {
-    const rows = [...guide.rows.values()];
-    return { linked: rows.filter((row) => row.matched).length, unlinked: rows.filter((row) => !row.matched).length };
-  }, [guide.rows]);
   const [guideRefreshing, setGuideRefreshing] = useState(false);
   const refreshGuideFeed = useCallback(async () => {
     setGuideRefreshing(true);
     try {
-      const ok = await guide.refresh();
+      const ok = await guide.refresh({ force: false });
       return ok;
     } finally {
       setGuideRefreshing(false);
@@ -509,7 +507,7 @@ export default function LiveTVPage() {
             {guideCompact ? (
               <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5 self-center py-0.5">
                 <p className="truncate text-[11px] font-black text-white">{active?.name || 'Tamil Live TV'}</p>
-                <GuideNowLine row={guide.get(active?.id)} at={guide.at} />
+                <GuideNowLine row={guide.get(active?.id)} at={guide.at} loading={guide.loading} error={guide.error} />
                 <div className="flex items-center gap-1.5">
                   <SourceBadges channel={active || {}} row={guide.get(active?.id)} />
                   <button
@@ -665,7 +663,7 @@ export default function LiveTVPage() {
               </button>
             </div>
             <div className="mt-2 border-t border-white/[0.06] pt-2">
-              <GuideStatus status={guide.status} linked={guideCoverage.linked} unlinked={guideCoverage.unlinked} onRefresh={refreshGuideFeed} refreshing={guideRefreshing} />
+              <GuideStatus activeOnly channelName={active?.name || ''} status={guide.status} loading={guide.loading} error={guide.error} onRefresh={active?.playable ? refreshGuideFeed : undefined} refreshing={guideRefreshing} />
             </div>
           </div>
 
@@ -713,12 +711,9 @@ export default function LiveTVPage() {
                     className="jv-lv-tune"
                   >
                     {channel.logo ? <img src={channel.logo} alt="" loading="lazy" /> : <span className="jv-lv-tune-none">TV</span>}
-                    <span className="jv-lv-tile-epg" aria-hidden="true">
-                      {/* A wall tile is a logo: the name, catalogs, source and badges live in the
-                          now-playing card once tuned. The per-row guide line stays mounted (its text
-                          hides, its progress hairline shows) so the wall keeps its one live query. */}
-                      <GuideNowLine row={guide.get(channel.id)} at={guide.at} />
-                    </span>
+                    {isActive ? <span className="jv-lv-tile-epg" aria-hidden="true">
+                      <GuideNowLine row={guide.get(channel.id)} at={guide.at} loading={guide.loading} error={guide.error} />
+                    </span> : null}
                   </button>
 
                   <button

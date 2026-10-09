@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * The guide surface for /live: a hook that keeps Pocket-EPG windows in sync with the lineup, and the
+ * The guide surface for /live: a hook that keeps the requested Pocket-EPG window in sync, and the
  * four pieces that render them.
  *
  * Design rules this file follows, all of them learned the hard way:
@@ -44,97 +44,111 @@ function lineupPayload(channels = []) {
   );
 }
 
+const EMPTY_ROWS = new Map();
+
 /**
- * `channels` is the **whole lineup**, not the filtered view: the response is only a few KB and
- * filtering then costs a map lookup instead of a round trip.
+ * Load only the caller's requested channels. /live supplies ONE active channel;
+ * Admin may still explicitly supply its lineup for the guide-mapping tools.
+ * Requests are aborted on selection changes/unmount, and every result is scoped
+ * to its payload so a previous channel can never flash under a new channel name.
  */
 export function useLiveGuide({ channels = [], activeId = '', intervalMs = 60_000, enabled = true } = {}) {
-  const [rows, setRows] = useState(() => new Map());
-  const [status, setStatus] = useState(null);
-  const [at, setAt] = useState(Date.now());
-  const [loading, setLoading] = useState(enabled);
-  const [error, setError] = useState('');
-  const requestRef = useRef(0);
   const payload = lineupPayload(channels);
+  const scope = `${payload}|${String(activeId)}`;
+  const available = enabled && payload !== '[]';
+  const [snapshot, setSnapshot] = useState(null);
+  const [pending, setPending] = useState(null);
+  const requestRef = useRef(0);
+  const abortRef = useRef(null);
 
-  const load = useCallback(
-    async ({ day = activeId, force = false } = {}) => {
-      const id = requestRef.current + 1;
-      requestRef.current = id;
-      if (!enabled || !payload || payload === '[]') {
-        setLoading(false);
-        return null;
+  const cancel = useCallback(() => {
+    requestRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+  }, []);
+
+  const load = useCallback(async ({ force = false, busy = false } = {}) => {
+    cancel();
+    if (!available) return null;
+    const id = requestRef.current;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const current = () => !controller.signal.aborted && requestRef.current === id;
+    if (force || busy) setPending({ scope, loading: true });
+    try {
+      // A forced feed refresh remains an explicit service/admin operation.
+      // Ordinary Live refreshes only re-read the active channel's cached slice.
+      if (force) {
+        const response = await fetch('/api/live-epg/guide', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ action: 'refresh', channels: JSON.parse(payload) }),
+          signal: controller.signal,
+        });
+        const result = await response.json().catch(() => null);
+        if (!response.ok || result?.ok === false) throw new Error(result?.error || `guide refresh failed (${response.status})`);
+        if (!current()) return null;
       }
-      if (force) setLoading(true);
-      try {
-        if (force) {
-          await fetch('/api/live-epg/guide', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json', ...(await {}) },
-            body: JSON.stringify({ action: 'refresh', channels: JSON.parse(payload) }),
-          }).catch(() => null);
-        }
-        const query = new URLSearchParams({ c: payload });
-        if (day) query.set('day', String(day));
-        const response = await fetch(`/api/live-epg/guide?${query.toString()}`, { cache: 'no-store' });
-        const data = await response.json().catch(() => null);
-        if (requestRef.current !== id) return null; // a newer request already answered
-        if (!data || data.ok === false) throw new Error(data?.error || `guide request failed (${response.status})`);
-        setRows(new Map((data.channels || []).map((row) => [row.id, row])));
-        setStatus(data.status || null);
-        setError(data.status?.error ? `Guide feed: ${data.status.error}` : '');
-        setAt(Number(data.at) || Date.now());
-        setLoading(false);
-        return data;
-      } catch (cause) {
-        if (requestRef.current === id) {
-          // Keep the last known guide on screen; the streams are fine, only the listing is stale.
-          setError(String(cause?.message || cause));
-          setLoading(false);
-        }
-        return null;
-      }
-    },
-    [activeId, enabled, payload],
-  );
+      const query = new URLSearchParams({ c: payload });
+      if (activeId) query.set('day', String(activeId));
+      const response = await fetch(`/api/live-epg/guide?${query}`, { cache: 'no-store', signal: controller.signal });
+      const data = await response.json().catch(() => null);
+      if (!current()) return null;
+      if (!response.ok || !data || data.ok === false) throw new Error(data?.error || `guide request failed (${response.status})`);
+      const requestedIds = new Set(JSON.parse(payload).map(([id]) => id));
+      setSnapshot({ scope,
+        rows: new Map((data.channels || []).filter(row => requestedIds.has(String(row.id))).map(row => [String(row.id), row])),
+        status: data.status || null, at: Number(data.at) || Date.now(),
+        error: data.status?.error ? `Guide feed: ${data.status.error}` : '',
+      });
+      return data;
+    } catch (cause) {
+      if (current()) setSnapshot(previous => ({
+        scope, rows: previous?.scope === scope ? previous.rows : EMPTY_ROWS,
+        status: previous?.scope === scope ? previous.status : null,
+        at: previous?.scope === scope ? previous.at : Date.now(),
+        error: String(cause?.message || cause),
+      }));
+      return null;
+    } finally {
+      if (current()) { setPending({ scope, loading: false }); abortRef.current = null; }
+    }
+  }, [activeId, available, cancel, payload, scope]);
 
   useEffect(() => {
-    // `payload` is a string, so this fires on a real lineup change and not on every parent re-render.
-    // Stale responses are dropped by the request id inside `load`, which is also what an unmount needs.
-    setLoading(true);
-    load({ day: activeId });
-  }, [load, payload]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (available && document.visibilityState !== 'hidden') load({ busy: true });
+    return cancel;
+  }, [available, load, cancel]);
 
-  // The clock, not the network: progress and "next starts in N min" advance on their own, and the
-  // server call only re-resolves names from an index that is already warm.
   useEffect(() => {
-    if (!enabled) return undefined;
+    if (!available) return undefined;
     let timer = null;
+    const stop = () => { window.clearInterval(timer); timer = null; };
     const start = () => {
-      if (timer) return;
+      if (timer !== null || document.visibilityState === 'hidden') return;
       timer = window.setInterval(() => {
-        if (document.visibilityState === 'visible') load({ day: activeId });
+        if (document.visibilityState !== 'hidden') load();
       }, Math.max(15_000, Number(intervalMs) || 60_000));
     };
-    const stop = () => {
-      window.clearInterval(timer);
-      timer = null;
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') { stop(); cancel(); }
+      else { load({ busy: true }); start(); }
     };
-    const onVisibility = () => (document.visibilityState === 'visible' ? start() : stop());
     start();
-    document.addEventListener?.('visibilitychange', onVisibility);
-    return () => {
-      stop();
-      document.removeEventListener?.('visibilitychange', onVisibility);
-    };
-  }, [activeId, enabled, intervalMs, load]);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => { stop(); document.removeEventListener('visibilitychange', onVisibility); };
+  }, [available, intervalMs, load, cancel]);
 
-  const refresh = useCallback(async () => {
-    const data = await load({ day: activeId, force: true });
+  const refresh = useCallback(async ({ force = true } = {}) => {
+    const data = await load({ force, busy: true });
     return Boolean(data?.ok);
-  }, [activeId, load]);
-
-  return { rows, status, at, loading, error, refresh, get: (id) => rows.get(String(id || '')) || null };
+  }, [load]);
+  const visible = available && snapshot?.scope === scope ? snapshot : null;
+  const rows = visible?.rows || EMPTY_ROWS;
+  const loading = available && (pending?.scope === scope ? pending.loading : !visible);
+  return { rows, status: visible?.status || null, at: visible?.at || Date.now(),
+    loading, error: visible?.error || '', refresh,
+    get: id => rows.get(String(id || '')) || null,
+  };
 }
 
 /* ---------------------------------------------------------------------- pieces */
@@ -158,9 +172,10 @@ export function SourceBadges({ channel, row }) {
 }
 
 /** One line for a list row: what is on, how far through it is, and what comes next. */
-export function GuideNowLine({ row, at = Date.now(), className = '' }) {
+export function GuideNowLine({ row, at = Date.now(), className = '', loading = false, error = '' }) {
   if (!row) {
-    return <p className={`truncate text-[11px] font-semibold text-zinc-500 ${className}`}>Guide loading…</p>;
+    if (!loading && !error) return null;
+    return <p className={`truncate text-[11px] font-semibold text-zinc-500 ${className}`}>{loading ? 'Guide loading…' : 'Guide unavailable'}</p>;
   }
   if (!row.matched) {
     return <p className={`truncate text-[11px] font-semibold text-zinc-500 ${className}`}>No guide match — map it in the service panel</p>;
@@ -203,7 +218,7 @@ export function ProgrammeCard({ row, channel, compact = false, onOpenPanel, at =
             <p className={`truncate font-black text-white ${compact ? 'text-[13px]' : 'text-sm sm:text-base'}`}>{show.title}</p>
           ) : (
             <p className={`truncate font-black text-zinc-400 ${compact ? 'text-[13px]' : 'text-sm'}`}>
-              {!row && loading ? 'Loading the guide…' : row && !row.matched ? 'No guide data linked' : 'Nothing scheduled on this channel today'}
+              {!row && loading ? 'Loading the guide…' : !row ? (channel?.id ? 'Guide unavailable' : 'Select a channel') : !row.matched ? 'No guide data linked' : 'Nothing scheduled on this channel today'}
             </p>
           )}
           {show ? (
@@ -282,7 +297,7 @@ export function DayStrip({ row, at = Date.now(), loading = false }) {
         </div>
       ) : (
         <p className="mt-2 text-[11px] font-semibold text-zinc-500">
-          {row && !row.matched
+          {!row ? (loading ? 'Loading this channel’s schedule…' : 'No guide loaded for this channel.') : !row.matched
             ? 'This source has no entry in the guide feed. Map it once in the service panel and the listings appear here.'
             : 'The guide feed has nothing scheduled for this channel today.'}
         </p>
@@ -295,21 +310,21 @@ export function DayStrip({ row, at = Date.now(), loading = false }) {
 /** `linked`/`unlinked` come from the caller's rows, because a lineup that has not been resolved yet
  *  is not the same as a channel the feed does not carry — the panel must not blame the user for a
  *  cold cache. */
-export function GuideStatus({ status, linked = 0, unlinked = 0, onRefresh, refreshing }) {
+export function GuideStatus({ status, linked = 0, unlinked = 0, onRefresh, refreshing, activeOnly = false, channelName = '', loading = false, error = '' }) {
   const age = status?.ageMs != null ? Math.round(status.ageMs / 60_000) : null;
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-bold text-zinc-400">
       <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5">
-        Guide: {linked} linked{unlinked ? ` · ${unlinked} to map` : ''}
+        {activeOnly ? (channelName ? `Guide · ${channelName}` : 'Guide') : <>Guide: {linked} linked{unlinked ? ` · ${unlinked} to map` : ''}</>}
       </span>
       <span title={status?.url || ''}>
-        {age == null ? 'loading' : age < 1 ? 'index fresh' : `index ${age} min old`}
-        {status?.feedChannels ? ` · ${status.feedChannels} channels` : ''}
+        {age == null ? (activeOnly ? loading ? 'loading' : channelName ? 'unavailable' : 'select a channel' : 'loading') : age < 1 ? 'index fresh' : `index ${age} min old`}
+        {!activeOnly && status?.feedChannels ? ` · ${status.feedChannels} channels` : ''}
       </span>
-      {status?.error ? <span className="text-orange-300">{status.error}</span> : null}
+      {(error || status?.error) ? <span className="text-orange-300">{error || status.error}</span> : null}
       {onRefresh ? (
         <button type="button" onClick={onRefresh} disabled={refreshing} className="rounded-full border border-red-400/30 bg-red-500/10 px-2 py-0.5 text-red-100 transition hover:border-red-400/70 disabled:opacity-50">
-          {refreshing ? 'Refreshing…' : 'Refresh feed'}
+          {refreshing ? 'Refreshing…' : activeOnly ? 'Refresh guide' : 'Refresh feed'}
         </button>
       ) : null}
     </div>
