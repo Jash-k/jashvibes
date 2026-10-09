@@ -3165,3 +3165,11 @@ html.day-mode .jv-vault-page {
 .mu-global-mini .mu-mini-close { flex:none; min-width:44px; min-height:44px; font-size:24px; line-height:1; color:#e7e7ec; border-radius:50%; }
 .mu-global-mini .mu-mini-close:hover { background:#ffffff12; }
 .mu-global-mini .mu-mini-close:focus-visible { outline:2px solid #8be5ef; outline-offset:2px; }
+
+/* Non-blocking navigation feedback: navigation and player remain usable. */
+.jv-navigation-feedback { position:fixed; top:0; left:50%; transform:translateX(-50%); z-index:210; padding:9px 18px; border-radius:0 0 12px 12px; background:#171122; color:#f8e9ff; border:1px solid #a855f755; box-shadow:0 3px 18px #0005; font:600 12px system-ui; pointer-events:none; white-space:nowrap; }
+.jv-section-loading { min-height:70vh; padding:52px 24px 100px; }
+.jv-section-loading h1 { font:700 28px system-ui; margin-bottom:12px; }
+.jv-section-skeleton { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; max-width:900px; margin-top:28px; }
+.jv-section-skeleton span { aspect-ratio:2/3; border-radius:16px; background:linear-gradient(145deg,#ffffff09,#ffffff03); }
+@media(min-width:1024px) { .jv-section-skeleton { grid-template-columns:repeat(6,minmax(0,1fr)); } }

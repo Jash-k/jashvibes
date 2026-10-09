@@ -1,6 +1,8 @@
 'use client';
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
+const CACHE_KEY = 'jash:extras:v1';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import RailNav from '@/components/rail/RailNav';
 import Icon from '@/components/Icons';
 import SiteCover from '@/components/extras/SiteCover';
@@ -10,27 +12,42 @@ const domain = url => { try { return new URL(url).hostname; } catch { return '';
 export default function ExtrasApp() {
   const [sites, setSites] = useState([]), [status, setStatus] = useState('loading');
   const [error, setError] = useState(''), [degraded, setDegraded] = useState(false), [query, setQuery] = useState('');
+  const successful = useRef(false), request = useRef(null), generation = useRef(0);
+  const [restored, setRestored] = useState(false);
   const [selection, setSelection] = useState({}), [frameKey, setFrameKey] = useState(0), [expanded, setExpanded] = useState(false), [frameState, setFrameState] = useState('loading');
   const readSelection = useCallback(() => {
     const p = new URLSearchParams(window.location.search);
     setSelection({ id: p.get('site') || '', direct: p.get('url') || '', title: (p.get('title') || 'Website').slice(0,60) });
   }, []);
   useEffect(() => { readSelection(); window.addEventListener('popstate', readSelection); return () => window.removeEventListener('popstate', readSelection); }, [readSelection]);
-  const load = useCallback(async (signal) => {
+  const load = useCallback(async () => {
+    request.current?.abort();
+    const controller = new AbortController(); request.current = controller;
+    const id = ++generation.current;
     setError('');
     try {
-      const response = await fetch('/api/embed-sites', { cache: 'no-store', signal });
+      const response = await fetch('/api/embed-sites', { cache: 'no-store', signal: controller.signal });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error || 'Could not load websites.');
+      if (controller.signal.aborted || id !== generation.current) return;
+      successful.current = true;
       setSites(data.sites || []); setDegraded(!!data.degraded); setStatus('ready');
-    } catch (err) { if (err.name !== 'AbortError') { setError('The website collection could not be loaded. Please retry.'); setStatus('error'); } }
+      writeSessionCache(CACHE_KEY, { sites: data.sites || [], degraded: !!data.degraded });
+    } catch (err) { if (!controller.signal.aborted && id === generation.current) { setError('The website collection could not be refreshed. Please retry.'); if (!successful.current) setStatus('error'); } }
   }, []);
   useEffect(() => {
-    const controller = new AbortController(); load(controller.signal);
-    const refresh = () => { if (document.visibilityState === 'visible') load(controller.signal); };
+    const cached = readSessionCache(CACHE_KEY);
+    if (Array.isArray(cached?.sites)) { successful.current = true; setSites(cached.sites); setDegraded(!!cached.degraded); setStatus('ready'); }
+    const prefs = readSessionCache(CACHE_KEY + ':prefs');
+    if (prefs) setQuery(prefs.query || '');
+    setRestored(true); restoreScroll(CACHE_KEY);
+    load();
+    let lastFocus = Date.now();
+    const refresh = () => { if (document.visibilityState === 'visible' && Date.now() - lastFocus > 60000) { lastFocus = Date.now(); load(); } };
     window.addEventListener('focus', refresh);
-    return () => { controller.abort(); window.removeEventListener('focus', refresh); };
+    return () => { request.current?.abort(); saveScroll(CACHE_KEY); window.removeEventListener('focus', refresh); };
   }, [load]);
+  useEffect(() => { if (restored) writeSessionCache(CACHE_KEY + ':prefs', { query }); }, [query, restored]);
   let direct = '', invalidDirect = false;
   if (selection.direct) { try { direct = extraUrl(selection.direct, typeof window !== 'undefined' ? window.location.origin : ''); } catch { invalidDirect = true; } }
   // Raw URL bookmarks are read-only viewing links, never new catalogue entries.
@@ -67,6 +84,7 @@ export default function ExtrasApp() {
     </> : <>
       <div className="ex-hero"><div><div className="ex-eyebrow">Your web collection</div><h1>A little more.<br/><em>All in one place.</em></h1></div><div className="ex-hero-art" aria-hidden="true"><div className="ex-art-back"/><div className="ex-art-front"><div>● ● ●</div><Icon name="globe"/></div><span>✦</span></div></div>
       <div className="ex-toolbar"><h2>Explore websites <span className="ex-count">{sites.length}</span></h2><label className="ex-search"><Icon name="search"/><input value={query} onChange={e => setQuery(e.target.value)} aria-label="Search websites" placeholder="Find a website…" type="search"/></label></div>
+      {error && successful.current ? <div className="ex-warning" role="status">{error} <button className="ex-btn" onClick={() => load()}>Retry</button></div> : null}
       {degraded ? <div className="ex-warning">Database unavailable; showing the existing environment-configured websites. Admin changes may not be reflected until the database reconnects.</div> : null}
       {status === 'loading' ? <div className="ex-grid" aria-label="Loading websites">{[0,1,2].map(i => <div key={i} className="ex-skeleton"/>)}</div> : status === 'error' ? <div className="ex-empty" role="alert">{error}<button className="ex-btn" onClick={() => { setStatus('loading'); load(); }}>Retry</button></div> : <div className="ex-grid">
         {results.map(site => <button className="ex-card" key={site.id} onClick={() => choose(site)} aria-label={`Open ${site.label}`}><SiteCover site={site}/><div className="ex-cardbody"><div className="ex-domain"><Icon name="globe"/>{domain(site.url)}</div><div className="ex-cardheading"><h3>{site.label}</h3><span className="ex-open-circle"><Icon name="arrow"/></span></div><p>{site.description || 'Open the entire website, inside your JashVibes space.'}</p><div className="ex-cardfoot"><span><Icon name="extras"/>Opens in-app</span><span>Original website</span></div></div></button>)}

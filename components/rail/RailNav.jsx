@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import MusicRouteLink from '@/components/MusicRouteLink';
+import SectionLink from '@/components/SectionLink';
 import { usePathname } from 'next/navigation';
 import Icon from '@/components/Icons';
 import { NAV_ITEMS, isNavItemActive } from '@/components/navItems';
@@ -41,12 +41,12 @@ export default function RailNav({ onOpenSearch }) {
       <ul className="jv-rail-list flex flex-1 flex-col gap-1.5 px-2 xl:gap-2 xl:px-2.5">
         {NAV_ITEMS.map((item) => {
           const active = isNavItemActive(item, pathname);
-          const NavLink = item.href === '/music' ? MusicRouteLink : Link;
+          const NavLink = SectionLink;
           return (
             <li key={item.href}>
               <NavLink
                 href={item.href}
-                onClick={item.hard ? (event) => { event.preventDefault(); window.location.assign(item.href); } : undefined}
+                label={item.label}
                 aria-current={active ? 'page' : undefined}
                 title={`${item.label} — ${item.hint}`}
                 className={`jv-rail-item${active ? ' jv-rail-item-active' : ''}`}

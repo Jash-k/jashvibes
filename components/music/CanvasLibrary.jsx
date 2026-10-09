@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useRef, useState } from 'react';
 import { TAMIL_MUSIC_DIRECTORS } from '@/lib/tamilMusicDirectors';
 import { CollectionCards, Cover, IconButton, Status, TrackRows } from './CanvasBits';
 
@@ -33,7 +33,8 @@ export default function CanvasLibrary({ music, tab, setTab, query, setQuery, onP
     else if (kind === 'playlist') music.openPlaylist(item);
     else music.openAlbum(item);
   };
-  const searching = Boolean(query.trim());
+  const searchQuery = useDeferredValue(query);
+  const searching = Boolean(searchQuery.trim());
   const state = tab === 'artists' ? { status: 'ready' } : searching ? { status: music.searchStatus } : tab === 'new' ? music.fresh : tab === 'tracks' ? music.trending : tab === 'artists' ? { status: 'ready' } : music.facets?.[tab];
   const results = music.searchResults || {};
   let cards = [], tracks = [];
@@ -41,7 +42,7 @@ export default function CanvasLibrary({ music, tab, setTab, query, setQuery, onP
     if (tab === 'artists') {
       const normalize = (value) => String(value).toLowerCase().replace(/[^a-z0-9]/g, '');
       const aliases = { arr: 'A. R. Rahman', arrahman: 'A. R. Rahman', harris: 'Harris Jayaraj', illayraja: 'Ilaiyaraaja', ilayaraja: 'Ilaiyaraaja', anirudh: 'Anirudh Ravichander' };
-      const search = normalize(aliases[normalize(query)] || query);
+      const search = normalize(aliases[normalize(searchQuery)] || searchQuery);
       cards = TAMIL_MUSIC_DIRECTORS.filter((item) => normalize(item.name).includes(search));
     }
     else if (tab === 'playlists') cards = results.playlists || [];

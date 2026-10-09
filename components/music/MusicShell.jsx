@@ -1,12 +1,14 @@
 'use client';
 
-import Link from 'next/link';
+import SectionLink from '@/components/SectionLink';
+import dynamic from 'next/dynamic';
+import { readSessionCache, writeSessionCache } from '@/lib/clientCache';
 import { useEffect, useRef, useState } from 'react';
 import { formatTime, QUALITY_LABELS } from '@/lib/musicCore';
-import { useMusic } from './MusicProvider';
+import { useMusic } from './MusicContext';
 import CanvasLibrary, { LIBRARY_TABS } from './CanvasLibrary';
-import CanvasLyrics from './CanvasLyrics';
-import PocketLock from './PocketLock';
+const CanvasLyrics = dynamic(() => import('./CanvasLyrics'));
+const PocketLock = dynamic(() => import('./PocketLock'));
 import { Cover, IconButton, MusicIcon, Sheet, TrackRows } from './CanvasBits';
 import './music-canvas.css';
 
@@ -27,20 +29,25 @@ export default function MusicShell() {
   const media = useRef(null);
   const provider = useRef(music); provider.current = music;
   const initialized = useRef(false);
+  const [restored, setRestored] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.add('music-canvas-open');
     const applyLocation = () => {
       const params = new URLSearchParams(window.location.search);
       const next = params.get('tab');
-      if (LIBRARY_TABS.some((item) => item.id === next)) setTabState(next);
+      const prefs = readSessionCache('jash:music:screen:v1');
+      const wanted = next || prefs?.tab;
+      if (LIBRARY_TABS.some((item) => item.id === wanted)) setTabState(wanted);
       // An explicit library=0 represents the player in browser history.
       // A fresh /music entry defaults to Library on mobile, even with a saved track.
       setLibraryOpen(media.current.matches && params.get('library') !== '0');
     };
     media.current = window.matchMedia('(max-width: 900px)');
     applyLocation();
-    provider.current.setQuery('');
+    const prefs = readSessionCache('jash:music:screen:v1');
+    if (prefs) setQuery(prefs.query || '');
+    setRestored(true);
     const resize = () => { applyLocation(); };
     media.current.addEventListener('change', resize);
     window.addEventListener('popstate', applyLocation);
@@ -54,6 +61,7 @@ export default function MusicShell() {
     } catch { /* storage unavailable */ }
     return () => { document.documentElement.classList.remove('music-canvas-open'); media.current.removeEventListener('change', resize); window.removeEventListener('popstate', applyLocation); };
   }, []);
+  useEffect(() => { if (restored) writeSessionCache('jash:music:screen:v1', { tab, query }); }, [tab, query, restored]);
   const update = (patch) => setLook((old) => { const value = { ...old, ...patch }; try { localStorage.setItem('jash_music_canvas', JSON.stringify(value)); } catch { /* storage unavailable */ } return value; });
   const locationState = (nextTab, open, push = true) => {
     const url = new URL(window.location.href); url.searchParams.set('tab', nextTab);
@@ -112,9 +120,9 @@ export default function MusicShell() {
 
   return <main className={`mc-app mc-style-${look.canvas} ${libraryOpen ? 'is-library-open' : ''} ${full ? 'is-focus' : ''}`} style={{ '--mc-art': image ? `url(${JSON.stringify(image)})` : 'none' }}>
     <div className="mc-app-content">
-      <aside className="mc-rail" aria-label="App navigation"><Link href="/" className="mc-wordmark" aria-label="JaSH ViBeS Home">JV</Link><nav><Link href="/" title="Home"><MusicIcon name="home"/><span>Home</span></Link><Link href="/music" aria-current="page"><MusicIcon name="play"/><span>Music</span></Link><Link href="/live"><MusicIcon name="live"/><span>Live</span></Link><Link href="/vault"><MusicIcon name="library"/><span>Vault</span></Link></nav><Link href="/" className="mc-exit">← Exit</Link></aside>
+      <aside className="mc-rail" aria-label="App navigation"><SectionLink href="/" className="mc-wordmark" aria-label="JaSH ViBeS Home">JV</SectionLink><nav><SectionLink href="/" title="Home"><MusicIcon name="home"/><span>Home</span></SectionLink><SectionLink href="/music" aria-current="page"><MusicIcon name="play"/><span>Music</span></SectionLink><SectionLink href="/live" label="Live Tv"><MusicIcon name="live"/><span>Live</span></SectionLink><SectionLink href="/vault" label="Vault"><MusicIcon name="library"/><span>Vault</span></SectionLink></nav><SectionLink href="/" className="mc-exit">← Exit</SectionLink></aside>
       <div className="mc-canvas">
-        <header className="mc-topbar"><Link href="/" className="mc-brand">JaSH ViBeS <small>MUSIC</small></Link><span className="mc-top-subtitle">Your music. Your moment.</span><div className="mc-top-actions"><IconButton icon="library" label="Open Library" className="mc-library-toggle" onClick={() => showLibrary(!libraryOpen)}/><button type="button" className="mc-header-button" onClick={() => setOverlay('queue')}><MusicIcon name="queue"/><span>Queue</span></button><button type="button" className="mc-header-button" onClick={() => setOverlay('settings')}><MusicIcon name="settings"/><span>Settings</span></button></div></header>
+        <header className="mc-topbar"><SectionLink href="/" className="mc-brand">JaSH ViBeS <small>MUSIC</small></SectionLink><span className="mc-top-subtitle">Your music. Your moment.</span><div className="mc-top-actions"><IconButton icon="library" label="Open Library" className="mc-library-toggle" onClick={() => showLibrary(!libraryOpen)}/><button type="button" className="mc-header-button" onClick={() => setOverlay('queue')}><MusicIcon name="queue"/><span>Queue</span></button><button type="button" className="mc-header-button" onClick={() => setOverlay('settings')}><MusicIcon name="settings"/><span>Settings</span></button></div></header>
         <div className="mc-workspace">
           <div ref={libraryRef} className="mc-library-dock" {...(libraryOpen ? { role: 'region', 'aria-label': 'Library browsing sheet' } : {})}><CanvasLibrary music={music} tab={tab} setTab={setTab} query={query} setQuery={setQuery} onPlay={play} onClose={() => showLibrary(false)}/></div>
           <div className={`mc-player ${mode === 'artwork' ? 'is-artwork-mode' : ''}`}>
@@ -130,8 +138,8 @@ export default function MusicShell() {
           {look.motion ? <div className={`mc-signal ${music.isPlaying ? 'is-playing' : ''}`} aria-hidden="true">{Array.from({ length: 72 }, (_, i) => <i key={i} style={{ '--bar-height': `${10 + ((i * 17) % 31)}px`, '--bar-delay': `${(i % 9) * -0.12}s`, '--bar-color': `hsl(${200 - i * 2.5} 78% 65%)` }}/>)}</div> : null}
         </footer>
         <nav className="mc-mobile-nav" aria-label="Mobile music navigation">
-          <Link href="/"><MusicIcon name="home"/><span>Home</span></Link>
-          <Link href="/live"><MusicIcon name="live"/><span>Live</span></Link>
+          <SectionLink href="/" label="Home"><MusicIcon name="home"/><span>Home</span></SectionLink>
+          <SectionLink href="/live" label="Live Tv"><MusicIcon name="live"/><span>Live</span></SectionLink>
           <button type="button" aria-current={!libraryOpen ? 'page' : undefined} onClick={() => { showLibrary(false); setMode('lyrics'); }}><MusicIcon name="play"/><span>Music</span></button>
           <button type="button" aria-current={libraryOpen ? 'page' : undefined} onClick={() => showLibrary(true)}><MusicIcon name="library"/><span>Library</span></button>
         </nav>

@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import Icon from '@/components/Icons';
 import { POSTER_SIZES_ATTR, tmdbImageSrcSet } from '@/lib/tmdbPoster';
 import { revealStyle } from '@/lib/useReveal';
@@ -9,7 +9,7 @@ function qualityChipClass(quality) {
   return 'jv-vault-chip';
 }
 
-export function VaultTile({ movie, onPlay, index = 0 }) {
+export const VaultTile = memo(function VaultTile({ movie, onPlay, index = 0 }) {
   const [failedUrl, setFailedUrl] = useState('');
   const showPoster = Boolean(movie.poster) && failedUrl !== movie.poster;
   return (
@@ -64,7 +64,7 @@ export function VaultTile({ movie, onPlay, index = 0 }) {
       </span>
     </button>
   );
-}
+});
 
 export function SkeletonGrid() {
   return (
@@ -75,4 +75,3 @@ export function SkeletonGrid() {
     </div>
   );
 }
-

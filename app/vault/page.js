@@ -1,18 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import RailNav from '@/components/rail/RailNav';
 import Icon from '@/components/Icons';
 import { VaultTile, SkeletonGrid } from '@/components/vault/VaultCards';
-import { readSessionCache, writeSessionCache } from '@/lib/clientCache';
+import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 import { watchHref } from '@/lib/watch/policy';
 import { VAULT_TABS, vaultCategory, latestVaultFirst } from '@/lib/vaultBrowse';
+import { hasVaultQuality } from '@/lib/vaultSummary';
 import { useReveal } from '@/lib/useReveal';
 import './vault-lens.css';
 
-const CACHE_KEY = 'jash:vault:v2', CACHE_TTL = 30 * 60 * 1000, STEP = 60;
+const CACHE_KEY = 'jash:vault:summary:v1', CACHE_TTL = 30 * 60 * 1000, STEP = 60;
 const EMPTY = { qualities: [], era: '', rating: '', language: '', sources: '', letter: '' };
 const LENSES = [{ id: 'quality', label: 'Quality' }, { id: 'year', label: 'Year' }, { id: 'rating', label: 'Rating' }, { id: 'more', label: 'More filters' }];
 const ERAS = ['2020s', '2010s', '2000s', '1990s', '1980s', 'Earlier'];
@@ -21,7 +22,7 @@ function eraOf(year) { return year >= 2020 ? '2020s' : year >= 2010 ? '2010s' : 
 function sourceBucket(count) { return count <= 1 ? '1' : count === 2 ? '2' : count <= 4 ? '3–4' : '5+'; }
 function matches(item, filters, query, skip = '') {
   if (query && !`${item.title} ${item.year}`.toLowerCase().includes(query)) return false;
-  if (skip !== 'quality' && filters.qualities.length && !filters.qualities.some((q) => item.embeds?.some((e) => String(e.quality).toLowerCase() === q.toLowerCase()))) return false;
+  if (skip !== 'quality' && filters.qualities.length && !filters.qualities.some((q) => hasVaultQuality(item, q))) return false;
   if (skip !== 'year' && filters.era && eraOf(item.year) !== filters.era) return false;
   if (skip !== 'rating' && filters.rating && (filters.rating === 'unrated' ? item.rating > 0 : Number(item.rating) < Number(filters.rating))) return false;
   if (skip !== 'language' && filters.language && (item.language || 'unknown') !== filters.language) return false;
@@ -55,11 +56,14 @@ export default function VaultPage() {
   const [filters, setFilters] = useState(EMPTY), [lens, setLens] = useState(''), [visible, setVisible] = useState(STEP);
   const request = useRef(null), sentinel = useRef(null), handled = useRef(false), content = useRef(null);
   const router = useRouter();
+  const [restored, setRestored] = useState(false);
+  const ready = useRef(false), firstReset = useRef(true);
+  const play = useCallback(item => router.push(watchHref(item, 'vault')), [router]);
   const load = useCallback(async (force = false) => {
     request.current?.abort(); const controller = new AbortController(); request.current = controller;
     setRefreshing(force); setError('');
     try {
-      const response = await fetch(`/api/vault${force ? '?force=1' : ''}`, { signal: controller.signal });
+      const response = await fetch(`/api/vault?view=summary${force ? '&force=1' : ''}`, { signal: controller.signal });
       const payload = await response.json();
       if (!response.ok || !Array.isArray(payload.movies)) throw new Error(payload.error || 'Vault catalogue unavailable.');
       if (controller.signal.aborted) return;
@@ -70,8 +74,16 @@ export default function VaultPage() {
   useEffect(() => {
     const cached = readSessionCache(CACHE_KEY, CACHE_TTL);
     if (Array.isArray(cached?.movies)) { setData(cached); setStatus('ready'); }
+    const prefs = readSessionCache(CACHE_KEY + ':prefs');
+    if (prefs) {
+      if (VAULT_TABS.some(t => t.id === prefs.tab) || prefs.tab === 'unverified') setTab(prefs.tab);
+      setQuery(prefs.query || ''); setSort(prefs.sort || 'latest'); setDense(!!prefs.dense);
+      setFilters({ ...EMPTY, ...prefs.filters, qualities: Array.isArray(prefs.filters?.qualities) ? prefs.filters.qualities : [] });
+      setVisible(Math.max(STEP, Number(prefs.visible) || STEP));
+    }
+    setRestored(true);
     load(new URLSearchParams(window.location.search).has('force'));
-    return () => request.current?.abort();
+    return () => { request.current?.abort(); saveScroll(CACHE_KEY); };
   }, [load]);
   useEffect(() => {
     if (handled.current || !data?.movies) return;
@@ -88,7 +100,7 @@ export default function VaultPage() {
   const movies = data?.movies || [];
   const tabCounts = useMemo(() => movies.reduce((acc, movie) => { const key = vaultCategory(movie); acc[key] = (acc[key] || 0) + 1; return acc; }, {}), [movies]);
   const collection = useMemo(() => movies.filter((movie) => vaultCategory(movie) === tab), [movies, tab]);
-  const needle = query.trim().toLowerCase();
+  const needle = useDeferredValue(query.trim().toLowerCase());
   const results = useMemo(() => {
     const list = collection.filter((movie) => matches(movie, filters, needle));
     if (sort === 'latest') list.sort(latestVaultFirst);
@@ -99,7 +111,17 @@ export default function VaultPage() {
     else list.sort((a, b) => a.title.localeCompare(b.title));
     return list;
   }, [collection, filters, needle, sort]);
-  useEffect(() => { setVisible(STEP); }, [tab, filters, query, sort]);
+  useEffect(() => {
+    if (!restored) return;
+    if (firstReset.current) { firstReset.current = false; return; }
+    setVisible(STEP);
+  }, [tab, filters, query, sort, restored]);
+  useEffect(() => {
+    if (status === 'ready' && !ready.current) { ready.current = true; restoreScroll(CACHE_KEY); }
+  }, [status]);
+  useEffect(() => {
+    if (restored) writeSessionCache(CACHE_KEY + ':prefs', { tab, query, sort, dense, filters, visible });
+  }, [tab, query, sort, dense, filters, visible, restored]);
   useEffect(() => {
     if (!sentinel.current) return;
     const observer = new IntersectionObserver((entries) => { if (entries[0]?.isIntersecting) setVisible((v) => Math.min(v + STEP, results.length)); }, { rootMargin: '700px' });
@@ -107,7 +129,18 @@ export default function VaultPage() {
   }, [results.length, visible]);
   const reveal = useReveal(`${tab}|${sort}|${query}|${JSON.stringify(filters)}|${visible}`);
   const patch = (value) => setFilters((old) => ({ ...old, ...value }));
-  const count = (dimension, value) => collection.filter((movie) => matches(movie, filters, needle, dimension) && (dimension === 'quality' ? movie.embeds?.some((e) => String(e.quality).toLowerCase() === value.toLowerCase()) : dimension === 'year' ? eraOf(movie.year) === value : dimension === 'rating' ? value === 'unrated' ? !movie.rating : Number(movie.rating) >= Number(value) : dimension === 'sources' ? sourceBucket(movie.embedCount) === value : dimension === 'language' ? (movie.language || 'unknown') === value : movie.letter === value)).length;
+  const counts = useMemo(() => {
+    const result = {};
+    if (!lens) return result;
+    const dimensions = lens === 'more' ? ['language', 'sources', 'letter'] : [lens];
+    for (const dimension of dimensions) {
+      const values = dimension === 'quality' ? ['1080p', '720p', 'HD', '360p'] : dimension === 'year' ? ERAS : dimension === 'rating' ? ['5','6','7','8','unrated'] : dimension === 'sources' ? ['1','2','3–4','5+'] : dimension === 'letter' ? ALPHABET : [...(data?.facets?.languages || []).map(l => l.code), 'unknown'];
+      const eligible = collection.filter(movie => matches(movie, filters, needle, dimension));
+      result[dimension] = Object.fromEntries(values.map(value => [value, eligible.filter(movie => dimension === 'quality' ? hasVaultQuality(movie, value) : dimension === 'year' ? eraOf(movie.year) === value : dimension === 'rating' ? value === 'unrated' ? !movie.rating : Number(movie.rating) >= Number(value) : dimension === 'sources' ? sourceBucket(movie.embedCount) === value : dimension === 'language' ? (movie.language || 'unknown') === value : movie.letter === value).length]));
+    }
+    return result;
+  }, [lens, collection, filters, needle, data?.facets]);
+  const count = (dimension, value) => counts[dimension]?.[value] || 0;
   const chips = [...filters.qualities.map((q) => ({ key: q, label: q, remove: () => patch({ qualities: filters.qualities.filter((v) => v !== q) }) })), ...Object.entries(filters).filter(([k, v]) => k !== 'qualities' && v).map(([k, v]) => ({ key: k, label: k === 'rating' ? v === 'unrated' ? 'Unrated' : `${v}+ rating` : k === 'sources' ? `${v} sources` : k === 'language' ? data?.facets?.languages?.find((x) => x.code === v)?.label || v : v, remove: () => patch({ [k]: '' }) }))];
   const selected = tab === 'unverified' ? { label: 'Unverified' } : VAULT_TABS.find((item) => item.id === tab);
   const options = (dimension, values, key) => <div className="vl-options">{values.map((value) => { const active = key === 'qualities' ? filters.qualities.includes(value) : filters[key] === value; const total = count(dimension, value); return <button type="button" key={value} aria-pressed={active} disabled={!active && !total} onClick={() => patch({ [key]: key === 'qualities' ? active ? filters.qualities.filter((v) => v !== value) : [...filters.qualities, value] : active ? '' : value })}>{value === 'unrated' ? 'Unrated' : value}<small>{total}</small></button>; })}</div>;
@@ -123,7 +156,7 @@ export default function VaultPage() {
       {error ? <div className="vl-error" role="alert">{error} <button type="button" onClick={() => load(true)}>Retry</button></div> : null}
       {status === 'loading' ? <SkeletonGrid/> : null}
       {status === 'ready' && !results.length ? <div className="vl-empty"><h3>No matching titles</h3><p>Try another category or clear your search and filters.</p><button type="button" onClick={() => { setFilters(EMPTY); setQuery(''); }}>Clear search and filters</button></div> : null}
-      {status === 'ready' ? <div className={`vl-grid ${dense ? 'is-dense' : ''}`} ref={reveal}>{results.slice(0, visible).map((movie, index) => <VaultTile key={movie.id} movie={movie} index={index} onPlay={(item) => router.push(watchHref(item, 'vault'))}/>)}</div> : null}
+      {status === 'ready' ? <div className={`vl-grid ${dense ? 'is-dense' : ''}`} ref={reveal}>{results.slice(0, visible).map((movie, index) => <VaultTile key={movie.id} movie={movie} index={index} onPlay={play}/>)}</div> : null}
       {visible < results.length ? <div className="vl-more" ref={sentinel}><button type="button" onClick={() => setVisible((v) => v + STEP)}>Show more titles</button></div> : null}
       {tab === 'unverified' ? <p className="vl-note">These records lack original-language metadata or have conflicting classifications. Their sources and playback links are unchanged; no origin is assumed.</p> : null}
     </section>

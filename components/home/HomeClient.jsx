@@ -462,7 +462,9 @@ export default function HomeClient({ initialHero = null }) {
   const focusSlide = useMemo(() => buildHeroSlide(pickHeroItem(featuredItems)), [featuredItems]);
 
   useEffect(() => {
+    const controller = new AbortController();
     const cached = readSessionCache(HOME_CACHE_KEY);
+    const hasCache = Boolean(cached?.movies?.length || cached?.series?.length);
     if (cached?.movies?.length || cached?.series?.length) {
       setMovies(cached.movies || []);
       setSeries(cached.series || []);
@@ -470,18 +472,18 @@ export default function HomeClient({ initialHero = null }) {
         movies: { page: 1, hasMore: false, loading: false, total: 0 },
         series: { page: 1, hasMore: false, loading: false, total: 0 },
       });
-      setScrapeStatus(cached.scrapeStatus || 'ready');
+      setScrapeStatus('ready');
       restoreScroll(HOME_CACHE_KEY);
-      return;
     }
 
     async function loadInitialTitles() {
       try {
-        setScrapeStatus('loading');
-        const response = await fetch(`/api/tamilmv?page=1&limit=${PAGE_SIZE}`, { cache: 'no-store' });
+        if (!hasCache) setScrapeStatus('loading');
+        const response = await fetch(`/api/tamilmv?page=1&limit=${PAGE_SIZE}`, { cache: 'no-store', signal: controller.signal });
         const data = await response.json();
 
         if (!response.ok) throw new Error(data?.error || 'Unable to load scraped titles');
+        if (controller.signal.aborted) return;
 
         setMovies(data.movies || []);
         setSeries(data.series || []);
@@ -501,15 +503,20 @@ export default function HomeClient({ initialHero = null }) {
         });
         setScrapeStatus('ready');
       } catch (error) {
+        if (controller.signal.aborted) return;
         setScrapeError(error.message || 'Unable to load scraped titles');
-        setScrapeStatus('error');
+        if (!hasCache) setScrapeStatus('error');
       }
     }
 
-    loadInitialTitles();
+    // Keep a valid multi-page session intact; it refreshes after its cache TTL expires.
+    const expandedCache = hasCache && (Number(cached.paging?.movies?.page) > 1 || Number(cached.paging?.series?.page) > 1);
+    if (!expandedCache) loadInitialTitles();
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
+    if (scrapeStatus !== 'ready') return;
     writeSessionCache(HOME_CACHE_KEY, {
       movies,
       series,

@@ -5,7 +5,7 @@ import { watchHref } from '@/lib/watch/policy';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import EmbedSiteLinks from '@/components/EmbedSiteLinks';
 import RailNav from '@/components/rail/RailNav';
-import { readSessionCache, writeSessionCache } from '@/lib/clientCache';
+import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 import { POSTER_SIZES_ATTR, tmdbImageSrcSet } from '@/lib/tmdbPoster';
 import { revealStyle, useReveal } from '@/lib/useReveal';
 import {
@@ -53,6 +53,7 @@ import {
  * class, and the rail and dock still follow the theme.
  */
 
+const SCREEN_KEY = 'jash:stremio:screen:v1';
 const CACHE_TTL = 30 * 60 * 1000;
 
 async function readJsonResponse(response, fallbackMessage = 'Request failed') {
@@ -316,7 +317,12 @@ export default function StremioPage() {
   const requestsRef = useRef({});
   const filtersRef = useRef({});
   const shelfRef = useRef({});
-  const mountedRef = useRef(true);
+  const mountedRef = useRef(true), restoredRef = useRef(false), manifestRef = useRef('');
+  const shelfEpoch = useRef(0), catalogControllers = useRef({}), pinsRevision = useRef(0);
+  const pinsRef = useRef([]), activeRef = useRef(''), pinsKnown = useRef(false);
+  const pinWrites = useRef(Promise.resolve());
+  const [reconciling, setReconciling] = useState(false);
+  const [refreshWarning, setRefreshWarning] = useState('');
 
   const activeCatalog = useMemo(
     () => pinned.find((catalog) => catalogKey(catalog) === activeKey) || pinned[0] || null,
@@ -337,9 +343,11 @@ export default function StremioPage() {
 
   useEffect(() => { filtersRef.current = filtersByCatalog; }, [filtersByCatalog]);
   useEffect(() => { shelfRef.current = shelf; }, [shelf]);
+  useEffect(() => { pinsRef.current = pinned; }, [pinned]);
+  useEffect(() => { activeRef.current = activeKey; }, [activeKey]);
 
-  const fetchPage = useCallback(async (query) => {
-    const response = await fetch(`/api/stremio/catalog?${query}`, { cache: 'no-store' });
+  const fetchPage = useCallback(async (query, signal) => {
+    const response = await fetch(`/api/stremio/catalog?${query}`, { cache: 'no-store', signal });
     const data = await readJsonResponse(response, 'Stremio request failed');
     if (!response.ok || data?.error) throw new Error(data?.error || 'Catalog failed');
     return data;
@@ -350,80 +358,105 @@ export default function StremioPage() {
   const run = useCallback(async (catalog, { append = false, filters: chosen } = {}) => {
     if (!catalog?.id) return;
     const key = catalogKey(catalog);
+    const epoch = shelfEpoch.current;
+    catalogControllers.current[key]?.abort();
+    const controller = new AbortController(); catalogControllers.current[key] = controller;
     const id = (requestsRef.current[key] || 0) + 1;
     requestsRef.current[key] = id;
     setShelf((state) => ({ ...state, [key]: markShelfLoading(state[key] || emptyShelfEntry()) }));
     try {
       const { entry } = await fetchCatalogPage({
-        fetchPage,
+        fetchPage: query => fetchPage(query, controller.signal),
         catalog,
         filters: safeFilters(chosen || filtersRef.current[key]),
         append,
         current: shelfRef.current[key] || null,
       });
-      if (!mountedRef.current || requestsRef.current[key] !== id) return;
+      if (!mountedRef.current || controller.signal.aborted || shelfEpoch.current !== epoch || requestsRef.current[key] !== id) return;
       setShelf((state) => ({ ...state, [key]: entry }));
     } catch (err) {
-      if (err?.name === 'AbortError' || !mountedRef.current || requestsRef.current[key] !== id) return;
+      if (err?.name === 'AbortError' || !mountedRef.current || controller.signal.aborted || shelfEpoch.current !== epoch || requestsRef.current[key] !== id) return;
       setShelf((state) => ({ ...state, [key]: markShelfError(state[key], err?.message || 'Catalog failed') }));
     }
   }, [fetchPage]);
 
-  // The manifest is the only thing read on arrival. Its answer decides the tabs; the first tab's page
-  // follows from there, so nothing else on the addon gets touched until you press it.
+  // Restore the last usable screen, then reconcile independent manifest/pin reads.
+  // Reads never write global pins; source changes invalidate all old shelf responses.
   useEffect(() => {
-    let cancelled = false;
-    async function loadManifest() {
-      setStatus('loading');
-      setError('');
+    if (restoredRef.current) return;
+    const cached = readSessionCache(SCREEN_KEY, CACHE_TTL);
+    const prefs = readSessionCache(SHELF_KEY, CACHE_TTL) || {};
+    if (cached?.manifest && Array.isArray(cached.options) && Array.isArray(cached.pinned)) {
+      manifestRef.current = cached.fingerprint || '';
+      setManifest(cached.manifest); setOptions(cached.options); setPinned(cached.pinned);
+      pinsRef.current = cached.pinned; pinsKnown.current = true;
+      const key = cached.pinned.some(c => catalogKey(c) === prefs.activeKey) ? prefs.activeKey : cached.activeKey;
+      setActiveKey(key || ''); activeRef.current = key || '';
+      const filters = prefs.filters || cached.filters || {};
+      setFiltersByCatalog(filters); filtersRef.current = filters;
+      const entries = cached.shelf || {};
+      setShelf(entries); shelfRef.current = entries;
+      setStatus('ready'); restoreScroll(SCREEN_KEY);
+    } else if (prefs.filters) { setFiltersByCatalog(prefs.filters); filtersRef.current = prefs.filters; }
+    restoredRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const revision = pinsRevision.current;
+    setReconciling(true); setRefreshWarning('');
+    async function reconcile() {
       try {
-        const response = await fetch('/api/stremio/manifest?source=catalog', { cache: 'no-store' });
+        // Start both requests before awaiting either; pins failure must not delay a usable manifest forever.
+        const pinsPromise = fetch('/api/stremio/pins', { cache:'no-store', signal:controller.signal })
+          .then(r => r.ok ? r.json() : null).catch(() => null);
+        const response = await fetch(`/api/stremio/manifest?source=catalog${nonce ? '&fresh=1' : ''}`, { cache:'no-store', signal:controller.signal });
         const data = await readJsonResponse(response, 'Stremio request failed');
         if (!response.ok || !data.ok) throw new Error(data?.error || 'Stremio manifest failed');
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         const list = readCatalogOptions(data.manifest?.catalogs || []);
-        let savedPins = [];
-        let pinsConfigured = false;
-        // Global pins first (Mongo — the same shelf on every device), the
-        // per-device localStorage copy stays as the offline fallback.
-        try {
-          const pinsResponse = await fetch('/api/stremio/pins', { cache: 'no-store' });
-          if (pinsResponse.ok) {
-            const pinsData = await pinsResponse.json().catch(() => ({}));
-            if (Array.isArray(pinsData.pins) && pinsData.configured) {
-              pinsConfigured = true;
-              savedPins = pinsData.pins.map((key) => list.find((item) => catalogKey(item) === key)).filter(Boolean);
-            }
-          }
-        } catch { /* offline: fall through to the device copy */ }
-        if (!pinsConfigured) {
-          try {
-            const raw = JSON.parse(window.localStorage.getItem(SELECTED_KEY) || '[]');
-            if (window.localStorage.getItem(SELECTED_KEY) != null) pinsConfigured = true;
-            if (Array.isArray(raw)) savedPins = raw.map((key) => list.find((item) => catalogKey(item) === key)).filter(Boolean);
-          } catch { /* a corrupt key just means "nothing pinned yet" */ }
+        const fingerprint = JSON.stringify([data.manifestUrl || '', data.manifest]);
+        const changed = manifestRef.current !== fingerprint;
+        if (changed) {
+          shelfEpoch.current++;
+          Object.values(catalogControllers.current).forEach(c => c.abort());
+          catalogControllers.current = {};
+          setShelf({}); shelfRef.current = {};
         }
-        const prefs = readSessionCache(SHELF_KEY, CACHE_TTL) || {};
-        const chosen = pinsConfigured ? savedPins : getDefaultPins(list, data.tamilCatalogs || {});
-        setManifest(data.manifest || null);
-        setOptions(list);
-        setPinned(chosen);
-        const wanted = chosen.find((catalog) => catalogKey(catalog) === prefs.activeKey) || chosen[0];
-        if (wanted) setActiveKey(catalogKey(wanted));
-        if (prefs.filters && typeof prefs.filters === 'object') {
-          const restored = {};
-          for (const [key, value] of Object.entries(prefs.filters)) restored[key] = safeFilters(value);
-          setFiltersByCatalog(restored);
+        manifestRef.current = fingerprint;
+        setManifest(data.manifest); setOptions(list); setError('');
+        const validate = pins => pins.map(c => list.find(item => catalogKey(item) === catalogKey(c))).filter(Boolean);
+        // Render existing/device pins immediately; global GET can update them only if no user changed pins.
+        let chosen = validate(pinsRef.current);
+        if (!pinsKnown.current) {
+          let device = null;
+          try { device = JSON.parse(window.localStorage.getItem(SELECTED_KEY) || 'null'); } catch {}
+          pinsKnown.current = Array.isArray(device);
+          chosen = Array.isArray(device) ? device.map(key => list.find(item => catalogKey(item) === key)).filter(Boolean) : getDefaultPins(list, data.tamilCatalogs || {});
+        }
+        pinsRef.current = chosen; setPinned(chosen);
+        if (!chosen.some(c => catalogKey(c) === activeRef.current)) {
+          activeRef.current = chosen[0] ? catalogKey(chosen[0]) : ''; setActiveKey(activeRef.current);
         }
         setStatus('ready');
+        const pinsData = await pinsPromise;
+        if (controller.signal.aborted || revision !== pinsRevision.current) return;
+        if (Array.isArray(pinsData?.pins) && pinsData.configured) {
+          pinsKnown.current = true;
+          chosen = pinsData.pins.map(key => list.find(item => catalogKey(item) === key)).filter(Boolean);
+          pinsRef.current = chosen; setPinned(chosen);
+          if (!chosen.some(c => catalogKey(c) === activeRef.current)) {
+            activeRef.current = chosen[0] ? catalogKey(chosen[0]) : ''; setActiveKey(activeRef.current);
+          }
+        }
       } catch (err) {
-        if (cancelled) return;
-        setError(err?.message || 'Stremio is not configured');
-        setStatus('error');
-      }
+        if (controller.signal.aborted) return;
+        if (manifestRef.current) setRefreshWarning('Could not refresh the addon. Showing your last loaded shelf.');
+        else { setError(err?.message || 'Stremio is not configured'); setStatus('error'); }
+      } finally { if (!controller.signal.aborted) setReconciling(false); }
     }
-    loadManifest();
-    return () => { cancelled = true; };
+    reconcile();
+    return () => controller.abort();
   }, [nonce]);
 
   // One page per tab, and only when that tab is what you are looking at.
@@ -435,16 +468,12 @@ export default function StremioPage() {
   }, [status, activeCatalog, activeCatalogKey, shelf, run]);
 
   useEffect(() => {
-    if (status !== 'ready') return;
-    const keys = pinned.map(catalogKey);
-    try { window.localStorage.setItem(SELECTED_KEY, JSON.stringify(keys)); } catch { /* private mode */ }
-    // Write through to the global shelf so every device sees the same order.
-    fetch('/api/stremio/pins', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ keys }),
-    }).catch(() => {});
-  }, [pinned, status]);
+    if (status !== 'ready' || !restoredRef.current || !manifestRef.current) return;
+    // Bound saved shelf data: active entry first plus up to three other recently loaded tabs.
+    const keys = [activeCatalogKey, ...Object.keys(shelf).filter(k => k !== activeCatalogKey)].slice(0, 4);
+    const entries = Object.fromEntries(keys.filter(k => shelf[k]?.fetched && !shelf[k]?.error && !shelf[k]?.loading).map(k => [k, { ...shelf[k], loading:false }]));
+    writeSessionCache(SCREEN_KEY, { manifest, options, pinned, activeKey:activeCatalogKey, filters:filtersByCatalog, shelf:entries, fingerprint:manifestRef.current });
+  }, [status, manifest, options, pinned, activeCatalogKey, filtersByCatalog, shelf]);
 
   useEffect(() => {
     if (!activeCatalogKey) return;
@@ -457,25 +486,37 @@ export default function StremioPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [sheet]);
 
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false; shelfEpoch.current++;
+      Object.values(catalogControllers.current).forEach(c => c.abort()); saveScroll(SCREEN_KEY);
+    };
+  }, []);
 
   function togglePin(catalog) {
     const key = catalogKey(catalog);
-    setPinned((current) => {
-      if (current.some((item) => catalogKey(item) === key)) {
-        const next = current.filter((item) => catalogKey(item) !== key);
-        if (activeKey === key) setActiveKey(next[0] ? catalogKey(next[0]) : '');
-        return next;
-      }
-      setActiveKey(key);
-      return [...current, catalog];
-    });
+    const current = pinsRef.current;
+    const removing = current.some(item => catalogKey(item) === key);
+    const next = removing ? current.filter(item => catalogKey(item) !== key) : [...current, catalog];
+    const revision = ++pinsRevision.current; pinsKnown.current = true;
+    pinsRef.current = next; setPinned(next);
+    if (!removing || activeRef.current === key) {
+      const active = removing ? next[0] ? catalogKey(next[0]) : '' : key;
+      activeRef.current = active; setActiveKey(active);
+    }
+    const keys = next.map(catalogKey);
+    try { window.localStorage.setItem(SELECTED_KEY, JSON.stringify(keys)); } catch {}
+    pinWrites.current = pinWrites.current.catch(() => {}).then(() => fetch('/api/stremio/pins', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ keys }) }))
+      .then(r => { if (!r.ok) throw new Error('Pin save failed'); })
+      .catch(() => { if (mountedRef.current && pinsRevision.current === revision) setRefreshWarning('Pins are saved on this device; the global shelf could not be updated.'); });
   }
 
   function applyFilters(next) {
     if (!activeCatalog) return;
     const clean = safeFilters(next);
-    setFiltersByCatalog((current) => ({ ...current, [activeCatalogKey]: clean }));
+    filtersRef.current = { ...filtersRef.current, [activeCatalogKey]:clean };
+    setFiltersByCatalog(filtersRef.current);
     setShelf((state) => ({ ...state, [activeCatalogKey]: emptyShelfEntry() }));
     setSheet('');
     // Passed in, not read back from state: this handler and the fetch share one render, so the ref the
@@ -509,6 +550,7 @@ export default function StremioPage() {
             </button>
             <h1 className="jv-st-heading">Stremio</h1>
             <div className="jv-st-top-side">
+              <button type="button" className="jv-st-reload" aria-label="Refresh addon manifest" disabled={reconciling} onClick={() => setNonce(n => n + 1)}>{reconciling ? 'Refreshing…' : 'Refresh addon'}</button>
               <span className="jv-st-pinchip">{pinned.length} catalog{pinned.length === 1 ? '' : 's'} pinned</span>
               <button type="button" className="jv-st-mobfilters" onClick={() => { setSheetField(''); setSheet('filters'); }}>
                 Filters{activeFilterCount(filters) ? ` · ${activeFilterCount(filters)}` : ''}
@@ -516,12 +558,13 @@ export default function StremioPage() {
             </div>
           </header>
 
+          {refreshWarning ? <p role="status" className="jv-st-note-body">{refreshWarning}</p> : null}
           {tabs.length ? (
             <Ruler
               tabs={tabs}
               value={activeCatalogKey}
               pinnedCount={pinned.length}
-              onChange={setActiveKey}
+              onChange={key => { activeRef.current = key; setActiveKey(key); }}
               onOpenCatalogs={() => setSheet('catalogs')}
             />
           ) : null}

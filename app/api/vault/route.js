@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { summarizeVault } from '@/lib/vaultSummary';
 import { loadVault } from '@/lib/vault';
 
 /**
@@ -23,9 +24,10 @@ export async function GET(request) {
       const movie = payload.movies.find((item) => item.id === id);
       return NextResponse.json({ movie: movie || null }, { status: movie ? 200 : 404, headers: { 'Cache-Control': 'private, max-age=60' } });
     }
-    return NextResponse.json(payload, {
+    const summary = new URL(request.url).searchParams.get('view') === 'summary';
+    return NextResponse.json(summary ? summarizeVault(payload) : payload, {
       headers: {
-        'Cache-Control': 'private, max-age=300, stale-while-revalidate=600',
+        'Cache-Control': force ? 'private, no-store' : 'private, max-age=300, stale-while-revalidate=600',
       },
     });
   } catch (error) {

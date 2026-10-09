@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import JashPlayer from '@/components/player/JashPlayerLazy';
 import { DayStrip, GuideNowLine, GuideStatus, ProgrammeCard, SourceBadges, showProgress, useLiveGuide } from '@/components/live/LiveGuide';
 import { createLiveTvPolicy, isPocketChannel } from '@/lib/player/policy/liveTv';
@@ -95,22 +95,27 @@ export default function LiveTVPage() {
     }
   }, []);
 
+  const catalogueReady = useRef(false), channelRequest = useRef(null);
+
   async function loadChannelsForSource() {
     const loadId = sourceLoadIdRef.current + 1;
     sourceLoadIdRef.current = loadId;
+    channelRequest.current?.abort();
+    const controller = new AbortController(); channelRequest.current = controller;
 
     try {
-      setStatus('loading');
+      if (!catalogueReady.current) setStatus('loading');
       setError('');
-      const response = await fetch('/api/live-tv?playable=1', { cache: 'no-store' });
+      const response = await fetch('/api/live-tv?playable=1', { cache: 'no-store', signal: controller.signal });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || 'Unable to load Live TV');
-      if (sourceLoadIdRef.current !== loadId) return;
+      if (controller.signal.aborted || sourceLoadIdRef.current !== loadId) return;
 
       // The API returns either the small manually mapped catalog or, only before
       // the first mapping exists, the Jio bootstrap fallback. Never merge raw
       // Pocket/default source catalogs into this main list.
       const loadedChannels = (data.channels || []).filter((channel) => channel.playable);
+      catalogueReady.current = true;
       setChannels(loadedChannels);
       setLastUpdated(data.updatedAt || null);
       setActive((current) => {
@@ -127,21 +132,22 @@ export default function LiveTVPage() {
       });
       setStatus('ready');
     } catch (err) {
-      if (sourceLoadIdRef.current !== loadId) return;
-      setChannels([]);
+      if (controller.signal.aborted || sourceLoadIdRef.current !== loadId) return;
+      if (!catalogueReady.current) setChannels([]);
       setError(err.message || 'Unable to load Live TV');
-      setStatus('error');
+      if (!catalogueReady.current) setStatus('error');
     }
   }
 
   useEffect(() => {
     const cached = readSessionCache(LIVE_CACHE_KEY);
     if (cached?.channels?.length) {
+      catalogueReady.current = true;
       setChannels(cached.channels || []);
       setActive(cached.active || pickInitialChannel(cached.channels || []));
       setLastViewed(cached.lastViewed || null);
-      setStatus(cached.status || 'ready');
-      setError(cached.error || '');
+      setStatus('ready');
+      setError('');
       setQuery(cached.query || '');
       const cachedCatalog = String(cached.category || 'all').toLowerCase();
       setCategory(cachedCatalog === 'all' || LIVE_CATALOGS.some((item) => item.id === cachedCatalog) ? cachedCatalog : 'all');
@@ -151,13 +157,15 @@ export default function LiveTVPage() {
       // Always revalidate from DB/service after painting cache. This prevents
       // old fallback or unselected channels from staying in the main panel.
       loadChannelsForSource();
-      return;
+      return () => { channelRequest.current?.abort(); sourceLoadIdRef.current++; };
     }
 
     loadChannelsForSource();
+    return () => { channelRequest.current?.abort(); sourceLoadIdRef.current++; };
   }, []);
 
   useEffect(() => {
+    if (!catalogueReady.current || status !== 'ready') return;
     writeSessionCache(LIVE_CACHE_KEY, { channels, active, lastViewed, status, error, query, category, showFavoritesOnly, lastUpdated });
   }, [channels, active, lastViewed, status, error, query, category, showFavoritesOnly, lastUpdated]);
 
@@ -243,8 +251,9 @@ export default function LiveTVPage() {
   })), [channels]);
   const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
 
+  const deferredQuery = useDeferredValue(query);
   const filteredChannels = useMemo(() => {
-    const q = normalize(query);
+    const q = normalize(deferredQuery);
     const filtered = channels.filter((channel) => {
       if (!channel.playable) return false;
       if (category !== 'all' && !getChannelCatalogIds(channel).includes(category)) return false;
@@ -253,10 +262,8 @@ export default function LiveTVPage() {
       return normalize(`${channel.name} ${channel.category} ${channel.region} ${channel.source} ${getChannelCatalogIds(channel).join(' ')}`).includes(q);
     });
     return sortChannelsForCatalog(filtered, category);
-  }, [channels, category, query, showFavoritesOnly, favoriteSet]);
+  }, [channels, category, deferredQuery, showFavoritesOnly, favoriteSet]);
 
-  // Deliberately fed the WHOLE lineup, not `filteredChannels`: the response is a few KB, so searching
-  // and filtering stay instant instead of turning into a request per keystroke.
   // Playback selection alone controls EPG loading; browsing/searching the wall
   // must never request the whole lineup. Keep initial auto-play behaviour intact.
   const guide = useLiveGuide({ channels: active?.playable ? [active] : [], activeId: active?.id || '' });
@@ -690,7 +697,7 @@ export default function LiveTVPage() {
 
           <div className="jv-lv-wall">
             {status === 'loading' ? <div className="jv-lv-wallnote rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">Loading Tamil channels...</div> : null}
-            {status === 'error' ? <div className="jv-lv-wallnote rounded-3xl border border-red-500/30 bg-red-950/20 p-6 text-center text-red-200">{error}</div> : null}
+            {error ? <div className="jv-lv-wallnote rounded-3xl border border-red-500/30 bg-red-950/20 p-6 text-center text-red-200">{error}</div> : null}
             {status === 'ready' && filteredChannels.length === 0 ? <div className="jv-lv-wallnote rounded-3xl border border-white/10 bg-zinc-950 p-6 text-center text-zinc-400">No manually mapped channels in this catalog.</div> : null}
 
             {filteredChannels.map((channel, index) => {

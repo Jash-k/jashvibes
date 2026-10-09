@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import MusicRouteLink from '@/components/MusicRouteLink';
+import SectionLink from '@/components/SectionLink';
 import { usePathname } from 'next/navigation';
 import Icon from '@/components/Icons';
 import { NAV_ITEMS, isNavItemActive } from '@/components/navItems';
@@ -23,12 +22,12 @@ export default function MobileDock() {
       <div className="mx-auto grid max-w-2xl" style={{ gridTemplateColumns: `repeat(${NAV_ITEMS.length}, minmax(0, 1fr))` }}>
         {DOCK_ITEMS.map((item) => {
           const active = isNavItemActive(item, pathname);
-          const NavLink = item.href === '/music' ? MusicRouteLink : Link;
+          const NavLink = SectionLink;
           return (
             <NavLink
               key={item.href}
               href={item.href}
-              onClick={item.hard ? (event) => { event.preventDefault(); window.location.assign(item.href); } : undefined}
+              label={item.label}
               aria-current={active ? 'page' : undefined}
               className={`relative flex flex-col items-center gap-1 py-2.5 text-[10px] font-bold transition duration-200 active:scale-90 ${
                 active

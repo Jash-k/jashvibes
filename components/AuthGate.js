@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { clearSessionCaches } from '@/lib/clientCache';
 import MobileDock from '@/components/MobileDock';
 
 const STORAGE_KEY = 'jash_theatre_access_token';
@@ -145,6 +146,7 @@ export default function AuthGate({ children }) {
         setStatus('unlocked');
       } catch {
         window.localStorage.removeItem(STORAGE_KEY);
+        clearSessionCaches();
         setStatus('locked');
       }
     }
@@ -181,6 +183,7 @@ export default function AuthGate({ children }) {
 
   function resetAccess() {
     window.localStorage.removeItem(STORAGE_KEY);
+        clearSessionCaches();
     // Clear the HttpOnly session cookie server-side so API access is revoked too.
     fetch('/api/auth', { method: 'DELETE', cache: 'no-store' }).catch(() => {});
     setPassword('');
