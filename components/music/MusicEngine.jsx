@@ -1,4 +1,5 @@
 'use client';
+import { lyricRequestMetadata, LYRICS_MATCH_VERSION } from '@/lib/lyricsMatch';
 import { MusicContext } from './MusicContext';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -194,8 +195,8 @@ function useMusicController(enabled) {
       setShowLyrics(Boolean(cached.showLyrics));
       setTrending(cached.trending || { status: 'idle', items: [], error: '' });
       setFresh(cached.fresh || { status: 'idle', tracks: [], albums: [], error: '' });
-      setLyrics(cached.lyricsData?.matchVersion === 2 ? cached.lyrics || '' : '');
-      setLyricsData(cached.lyricsData?.matchVersion === 2 && cached.lyricsData?.source !== 'error' ? cached.lyricsData : {});
+      setLyrics(cached.lyricsData?.matchVersion === LYRICS_MATCH_VERSION ? cached.lyrics || '' : '');
+      setLyricsData(cached.lyricsData?.matchVersion === LYRICS_MATCH_VERSION && cached.lyricsData?.source !== 'error' ? cached.lyricsData : {});
       setHomeWarning(cached.homeWarning || cached.home?.warning || cached.home?.warnings?.[0] || '');
       setStatus('ready');
       restoreScroll(MUSIC_CACHE_KEY);
@@ -302,7 +303,7 @@ function useMusicController(enabled) {
       songCacheRef.current.set(key, track);
       return track;
     }
-    if (songCacheRef.current.has(key)) return songCacheRef.current.get(key);
+    if (songCacheRef.current.has(key)) return { ...songCacheRef.current.get(key), spotify: track.spotify || null };
     if (!track?.seokey) throw new Error('Song stream id missing');
     const response = await fetch(`/api/music/song?seokey=${encodeURIComponent(track.seokey)}`, { cache: 'no-store' });
     const data = await response.json();
@@ -312,7 +313,7 @@ function useMusicController(enabled) {
       const obj = Object.fromEntries(songCacheRef.current.entries());
       window.sessionStorage.setItem(SONG_DETAIL_CACHE_KEY, JSON.stringify(obj));
     } catch {}
-    return data.item;
+    return { ...data.item, spotify: track.spotify || null };
   }
 
   const playTrack = useCallback((track, nextQueue = null, autoplay = true) => {
@@ -622,12 +623,13 @@ function useMusicController(enabled) {
     const detail = activeDetail && trackKey(activeDetail) === currentTrackRef.current ? activeDetail : active;
     const currentKey = trackKey(detail); if (!currentKey || !detail?.title) return;
     setShowLyrics(true);
-    if (!force && lyricsStatus === 'ready' && lyricsData.matchVersion === 2 && lyricsData.loadedFor === currentKey) return;
+    if (!force && lyricsStatus === 'ready' && lyricsData.matchVersion === LYRICS_MATCH_VERSION && lyricsData.loadedFor === currentKey) return;
     lyricsRequest.current?.abort(); const controller = new AbortController(); lyricsRequest.current = controller;
     const token = ++lyricsGeneration.current; const timeout = setTimeout(() => controller.abort(), 12000);
     setLyricsStatus('loading'); setLyrics('');
     try {
-      const params = new URLSearchParams({ title: detail.title, artist: detail.artists || '', album: detail.album || '', duration: String(detail.duration || ''), id: detail.trackId || '', seokey: detail.seokey || '' });
+      const metadata = lyricRequestMetadata(detail, active || {});
+      const params = new URLSearchParams({ title: metadata.title, artist: metadata.artist, album: metadata.album, duration: String(metadata.duration || ''), id: detail.trackId || '', seokey: detail.seokey || '' });
       if (force) params.set('force', '1');
       try {
         const rejected = JSON.parse(window.localStorage.getItem('jash_rejected_lyrics_v1') || '{}')[currentKey] || [];

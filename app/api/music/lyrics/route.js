@@ -1,4 +1,4 @@
-import { chooseLyricMatch, lyricTitle, lyricAlbum, LYRICS_MATCH_VERSION } from '@/lib/lyricsMatch';
+import { chooseLyricMatch, lyricTitle, lyricAlbum, lyricRequestMetadata, LYRICS_MATCH_VERSION } from '@/lib/lyricsMatch';
 import { NextResponse } from 'next/server';
 import { SOURCE_GROUPS, WIRED_SOURCE_KIND, groupedSources, isPickable, sourceById } from '@/lib/musicSources';
 
@@ -188,7 +188,8 @@ async function lookupLrclibLyrics(ctx = {}) {
   lyricPending.set(key, job); return job;
 }
 async function lookupLrclibUncached({ title = '', artist = '', album = '', duration = 0, timeout = 7000, exclude = '', force = false } = {}) {
-  const wanted = { title: lyricTitle(title), artist: normalize(artist), album: lyricAlbum(album), duration: Number(duration) || 0 };
+  const metadata = lyricRequestMetadata({ title, artists: artist, album, duration });
+  const wanted = { title: lyricTitle(metadata.title), artist: normalize(metadata.artist), album: metadata.album, duration: metadata.duration };
   if (!wanted.title || !wanted.artist) return null;
   const blocked = new Set(String(exclude).split(',').filter(Boolean));
   const deadline = Date.now() + Math.min(timeout, 7000);
@@ -206,7 +207,12 @@ async function lookupLrclibUncached({ title = '', artist = '', album = '', durat
   const exact = await lookup('/api/get', signature);
   if (exact) return exact;
   // A title search broadens retrieval, never acceptance: album/artist/duration guards remain mandatory.
-  return lookup('/api/search', { track_name: wanted.title, album_name: wanted.album });
+  const specific = await lookup('/api/search', { track_name: wanted.title, album_name: wanted.album });
+  if (specific) return specific;
+  // Album punctuation/catalogue variants can prevent retrieval even when identity matches.
+  // Broaden retrieval only; chooseLyricMatch still enforces title, album, artist and duration guards.
+  if (wanted.album && Date.now() < deadline) return lookup('/api/search', { track_name: wanted.title });
+  return null;
 }
 
 /* LRCLIB's score is unbounded-ish (title 120 + artist 70 + album 25 + duration 30 +
@@ -405,6 +411,7 @@ export async function GET(request) {
         source: forced,
         applied: result.kind,          // 'synced' | 'plain' — the UI keys the highlight off this
         matched: result.matched,
+        matchVersion: LYRICS_MATCH_VERSION,
       },
       { headers: { 'Cache-Control': 'no-store' } },
     );
