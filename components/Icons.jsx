@@ -28,6 +28,7 @@ const SHAPES = {
   sparkle: [{ d: 'M12 3.5l1.8 4.7L18.5 10l-4.7 1.8L12 16.5l-1.8-4.7L5.5 10l4.7-1.8z' }, { d: 'M18.5 16.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z' }],
   list:    [{ d: 'M8.5 6H21M8.5 12H21M8.5 18H21' }, { d: 'M3.5 6h.01M3.5 12h.01M3.5 18h.01' }],
   refresh: [{ d: 'M20.5 12A8.5 8.5 0 1 0 12 20.5' }, { d: 'M20.5 4v5.5h-5.5' }],
+  reel:    [{ circle: { cx: 11, cy: 11, r: 9 } }, { circle: { cx: 11, cy: 6, r: 1.5 } }, { circle: { cx: 16, cy: 11, r: 1.5 } }, { circle: { cx: 11, cy: 16, r: 1.5 } }, { circle: { cx: 6, cy: 11, r: 1.5 } }, { d: 'M11 11h.01M11 20h10' }],
   film:    [{ rect: { x: 3, y: 4, width: 18, height: 16, rx: 2 } }, { d: 'M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4' }],
   fullscreen: [{ d: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5' }],
   target:  [{ circle: { cx: 12, cy: 12, r: 8 } }, { circle: { cx: 12, cy: 12, r: 3 } }],

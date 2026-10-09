@@ -12,13 +12,13 @@
  */
 export const NAV_ITEMS = [
   { href: '/', label: 'Home', icon: 'home', accent: 'text-red-400', hint: 'Movies & series' },
-  { href: '/live', label: 'Live', icon: 'live', accent: 'text-red-400', hint: 'Live TV and the guide' },
+  { href: '/live', label: 'Live Tv', icon: 'tv', accent: 'text-red-400', hint: 'Live TV and the guide' },
   { href: '/music', label: 'Music', icon: 'music', accent: 'text-emerald-300', hint: 'ராக வானம்' },
-  { href: '/vault', label: 'Vault', icon: 'lock', accent: 'text-cyan-300', hint: 'The movie vault' },
+  { href: '/extras', label: 'ExTRaS', icon: 'extras', accent: 'text-orange-300', hint: 'Your embedded websites' },
+  { href: '/vault', label: 'Vault', icon: 'reel', accent: 'text-cyan-300', hint: 'The movie vault' },
   // `hard` reloads the document instead of a client navigation: the Stremio page caches its addon
   // manifest, and a soft route change keeps a stale one alive.
   { href: '/stremio?home=1', label: 'Stremio', icon: 'sparkle', accent: 'text-fuchsia-300', hint: 'Your addon sources', hard: true },
-  { href: '/extras', label: 'Extras', icon: 'extras', accent: 'text-orange-300', hint: 'Your embedded websites' },
 ];
 
 /** Both shells need the same answer to "is this where I am". */
