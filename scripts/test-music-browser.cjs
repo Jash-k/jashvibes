@@ -1,5 +1,5 @@
-// Fixture-only layout and interaction checks. npm install --no-save @playwright/test; npx playwright install chromium
-const { chromium } = require('@playwright/test');
+// Fixture-only layout and interaction checks. npm install --no-save playwright; npx playwright install chromium
+const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
 const assert = require('node:assert/strict');
 (async () => {
  const browser = await chromium.launch({headless:true});
@@ -24,8 +24,8 @@ const assert = require('node:assert/strict');
   else if(p==='/api/music/song') data={item:{...song,streamUrls:{}}};
   await route.fulfill({json:data});
  });
- await page.addInitScript(() => localStorage.setItem('jash_theatre_access_token', 'fixture')); await page.goto('http://localhost:7860/music'); await page.waitForSelector('.mc-app');
- if(viewport.width<=900) await page.getByRole('button',{name:'Open Library',exact:true}).click();
+ await page.addInitScript(() => localStorage.setItem('jash_theatre_access_token', 'fixture')); await page.goto((process.env.TEST_BASE_URL || 'http://localhost:7860') + '/music'); await page.waitForSelector('.mc-app');
+ await page.getByRole('button',{name:'Open Library',exact:true}).click();
  await page.waitForSelector('.mc-card');
  for(const name of ['New','Tracks','Albums','Artists','Playlists']) {await page.getByRole('tab',{name,exact:true}).click();await page.waitForTimeout(150); assert.equal(await page.getByRole('tab',{name,exact:true}).getAttribute('aria-selected'),'true');}
  await page.getByRole('tab',{name:'Albums',exact:true}).click();
@@ -34,15 +34,17 @@ const assert = require('node:assert/strict');
  assert.equal(await page.locator('.mc-mini-info strong').textContent(),'Nothing playing');
  await page.getByRole('button',{name:'Play all',exact:true}).click();await page.waitForTimeout(1000);
  assert.equal(await page.locator('.mc-mini-info strong').textContent(),'Honey Honey');
+ await page.getByRole('button',{name:'Open Library',exact:true}).click();
  await page.getByRole('button',{name:'Back to Albums',exact:false}).click();
  await page.getByRole('tab',{name:'New',exact:true}).click();assert.equal(await page.locator('.mc-mini-info strong').textContent(),'Honey Honey');
  await page.locator('.mc-top-actions .mc-header-button').first().click();await page.getByRole('dialog').waitFor();assert.equal(await page.locator('.mc-sheet .mc-tracks li').count(),1);await page.keyboard.press('Escape');
  await page.locator('.mc-top-actions .mc-header-button').last().click(); await page.getByRole('dialog').waitFor();await page.keyboard.press('Escape');assert.equal(await page.getByRole('dialog').count(),0);
  const geometry=await page.evaluate(()=>({body:document.documentElement.scrollHeight,height:innerHeight,width:document.documentElement.scrollWidth,inner:innerWidth,transport:document.querySelector('.mc-transport').getBoundingClientRect().bottom}));
  assert(geometry.body<=geometry.height+1,JSON.stringify(geometry));assert(geometry.width<=geometry.inner+1);assert(geometry.transport<=geometry.height+1);
- if(viewport.width<=900) await page.getByRole('button',{name:'Return to player',exact:true}).first().click();
- await page.getByRole('button',{name:'Expand lyrics',exact:true}).click(); await page.waitForTimeout(200);assert(await page.locator('.mc-lyric-lines li').count()>0);
- await page.getByRole('button',{name:'Exit lyrics focus',exact:true}).click();
+ await page.locator('.mc-library').getByRole('button',{name:'Return to player',exact:true}).click();
+ await page.waitForTimeout(200);assert(await page.locator('.mc-lyric-lines li').count()>0);
+ await page.getByRole('button',{name:viewport.width<=900?'Exit focus':'Exit lyrics focus',exact:true}).click();
+ await page.getByRole('button',{name:'Lyrics',exact:true}).click();
  assert.deepEqual(errors,[]);console.log('PASS',viewport,geometry);if(process.env.MUSIC_SCREENSHOTS) { require('node:fs').mkdirSync(process.env.MUSIC_SCREENSHOTS,{recursive:true}); await page.screenshot({path:`${process.env.MUSIC_SCREENSHOTS}/music-${viewport.width}.png`}); }await page.close();
  }
  await browser.close();

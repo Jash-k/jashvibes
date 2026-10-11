@@ -34,14 +34,15 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
 .mc-icon.is-active { color:var(--mc-accent); background:#8be5ef12; }
 .mc-icon sup { position:absolute; font-size:9px; right:8px; top:4px; }
 .mc-header-button { display:flex; align-items:center; justify-content:center; gap:8px; padding:10px 12px; min-height:44px; background:none; border:0; border-radius:12px; color:var(--mc-muted); font-size:13px; }
-.mc-library-toggle { display:none; }
+.mc-library-toggle { display:flex; }
+.mc-lyrics-exit { display:none; }
 .mc-workspace { display:grid; grid-template-columns:minmax(300px,.9fr) minmax(0,1.1fr); gap:30px; min-height:0; min-width:0; }
 .mc-library-dock { min-height:0; min-width:0; }
 .mc-library { display:flex; flex-direction:column; height:100%; min-height:0; }
 .mc-library-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; padding-bottom:14px; }
 .mc-library-heading h2, .mc-lyrics h2 { font-size:23px; font-weight:700; letter-spacing:-.5px; }
 .mc-library-heading p { font-size:12px; color:var(--mc-muted); margin-top:4px; }
-.mc-library-heading .mc-icon { display:none; }
+.mc-library-heading .mc-icon { display:flex; }
 .mc-search { display:flex; align-items:center; gap:10px; background:#ffffff08; border:1px solid var(--mc-line); border-radius:12px; padding:0 12px; flex:none; }
 .mc-search svg { flex:none; color:var(--mc-muted); }
 .mc-app .mc-search input { width:100%; background:transparent; border:0; padding:12px 0; border-radius:0; font-size:14px; }
@@ -155,8 +156,8 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
 .mc-check input { width:20px; height:20px; accent-color:var(--mc-accent); }
 .mc-notice { position:absolute; bottom:135px; left:50%; transform:translateX(-50%); z-index:110; padding:10px 20px; border-radius:24px; background:#1b303c; color:#eaf4f8; font-size:12px; opacity:0; pointer-events:none; max-width:90%; transition:opacity .2s; }
 .mc-notice.is-visible { opacity:1; }
-.mc-app.is-focus .mc-library-dock { display:none; }
-.mc-app.is-focus .mc-workspace { grid-template-columns:1fr; }
+.mc-app.is-focus:not(.is-library-open) .mc-library-dock { display:none; }
+.mc-app.is-focus:not(.is-library-open) .mc-workspace { grid-template-columns:1fr; }
 .mc-app.is-focus .mc-player { max-width:1000px; width:100%; margin:0 auto; }
 .mc-app.is-focus .mc-now-art { width:60px; }
 .mc-app.is-focus .mc-now h1 { font-size:20px; }
@@ -340,3 +341,10 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
 .mc-now .mc-vinyl img { inset:0; width:100%; height:100%; border-radius:50%; }
 .mc-now .mc-vinyl .mc-cover-fallback { inset:0; }
 .mc-now .mc-vinyl::before { content:''; position:absolute; inset:0; z-index:1; border-radius:50%; pointer-events:none; background:repeating-radial-gradient(circle at center,transparent 0 7px,#00000012 8px,transparent 9px 13px); box-shadow:inset 0 0 0 3px #0b15195c; }
+
+/* Mobile focus uses a text exit, never the fullscreen/expand glyph.
+   Artwork, Library and the Music/Lyrics actions remain available. */
+@media (max-width:900px) {
+  .mc-lyrics-expand { display:none; }
+  .mc-lyrics-exit { display:inline-flex; align-items:center; min-height:44px; }
+}

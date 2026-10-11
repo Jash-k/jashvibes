@@ -18,12 +18,13 @@ export default function MusicShell() {
   const music = useMusic();
   const [tab, setTabState] = useState('albums');
   const [query, setQuery] = useState('');
-  // Library-first on mobile even before the mount effect; desktop CSS is unchanged.
-  const [libraryOpen, setLibraryOpen] = useState(true);
+  // Fresh entries open lyrics focus on every screen; Library is an explicit action.
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [mobile, setMobile] = useState(false);
   const [overlay, setOverlay] = useState('');
   const [pocketLocked, setPocketLocked] = useState(false);
   const [mode, setMode] = useState('lyrics');
-  const [full, setFull] = useState(false);
+  const [full, setFull] = useState(true);
   const [look, setLook] = useState(DEFAULT_LOOK);
   const [notice, setNotice] = useState('');
   const media = useRef(null);
@@ -34,14 +35,17 @@ export default function MusicShell() {
   useEffect(() => {
     document.documentElement.classList.add('music-canvas-open');
     const applyLocation = () => {
+      setMobile(media.current.matches);
       const params = new URLSearchParams(window.location.search);
       const next = params.get('tab');
       const prefs = readSessionCache('jash:music:screen:v1');
       const wanted = next || prefs?.tab;
       if (LIBRARY_TABS.some((item) => item.id === wanted)) setTabState(wanted);
-      // An explicit library=0 represents the player in browser history.
-      // A fresh /music entry defaults to Library on mobile, even with a saved track.
-      setLibraryOpen(media.current.matches && params.get('library') !== '0');
+      // Explicit URL/history choices win; a bare /music always starts in lyrics focus.
+      const open = params.get('library') === '1';
+      setLibraryOpen(open);
+      setFull(params.get('focus') !== '0');
+      setMode(params.get('view') === 'artwork' ? 'artwork' : 'lyrics');
     };
     media.current = window.matchMedia('(max-width: 900px)');
     applyLocation();
@@ -63,14 +67,17 @@ export default function MusicShell() {
   }, []);
   useEffect(() => { if (restored) writeSessionCache('jash:music:screen:v1', { tab, query }); }, [tab, query, restored]);
   const update = (patch) => setLook((old) => { const value = { ...old, ...patch }; try { localStorage.setItem('jash_music_canvas', JSON.stringify(value)); } catch { /* storage unavailable */ } return value; });
-  const locationState = (nextTab, open, push = true) => {
+  const locationState = (nextTab, open, push = true, focus = full, view = mode) => {
     const url = new URL(window.location.href); url.searchParams.set('tab', nextTab);
-    if (media.current?.matches) url.searchParams.set('library', open ? '1' : '0');
-    else url.searchParams.delete('library');
-    window.history[push ? 'pushState' : 'replaceState']({}, '', url.pathname + url.search);
+    url.searchParams.set('library', open ? '1' : '0');
+    url.searchParams.set('focus', focus ? '1' : '0');
+    url.searchParams.set('view', view);
+    window.history[push ? 'pushState' : 'replaceState'](window.history.state, '', url.pathname + url.search);
   };
   const setTab = (id) => { setTabState(id); locationState(id, libraryOpen); };
   const showLibrary = (value) => { setLibraryOpen(value); locationState(tab, value); };
+  const showLyrics = (focus = true) => { setLibraryOpen(false); setFull(focus); setMode('lyrics'); locationState(tab, false, true, focus, 'lyrics'); };
+  const showArtwork = () => { setLibraryOpen(false); setMode('artwork'); setFull(false); locationState(tab, false, true, false, 'artwork'); };
   useEffect(() => {
     if (!initialized.current) { initialized.current = true; return; }
     const timer = setTimeout(() => provider.current.setQuery(query), 320);
@@ -80,14 +87,14 @@ export default function MusicShell() {
   useEffect(() => {
     const keyboard = (event) => {
       if (pocketLocked) return;
-      if (event.key === 'Escape' && !overlay) { if (libraryOpen) showLibrary(false); else setFull(false); }
+      if (event.key === 'Escape' && !overlay) { if (libraryOpen) showLibrary(false); else if (full) showLyrics(false); }
       if (event.code === 'Space' && !overlay && !['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(event.target.tagName)) { event.preventDefault(); provider.current.togglePlay(); }
     };
     window.addEventListener('keydown', keyboard); return () => window.removeEventListener('keydown', keyboard);
-  }, [overlay, libraryOpen, tab, pocketLocked]);
+  }, [overlay, libraryOpen, tab, pocketLocked, full, mode]);
   const libraryRef = useRef(null), savedFocus = useRef(null);
   useEffect(() => {
-    if (!libraryOpen || !media.current?.matches) return;
+    if (!libraryOpen || !mobile) return;
     savedFocus.current = document.activeElement;
     const background = document.querySelector('.mc-player');
     if (background) background.inert = true;
@@ -101,16 +108,12 @@ export default function MusicShell() {
     };
     document.addEventListener('keydown', trap);
     return () => { document.removeEventListener('keydown', trap); if (background) background.inert = false; savedFocus.current?.focus?.(); };
-  }, [libraryOpen, overlay]);
+  }, [libraryOpen, overlay, mobile]);
   const play = (track, tracks) => {
     if (!track) return;
     music.playTrack(track, tracks, true);
-    if (media.current?.matches) {
-      setMode('lyrics');
-      setFull(false);
-      setOverlay('');
-      showLibrary(false);
-    }
+    setOverlay('');
+    showLyrics(true);
     setNotice(`Playing ${track.title || 'track'}`);
   };
   const playing = music.playingTrack;
@@ -122,13 +125,13 @@ export default function MusicShell() {
     <div className="mc-app-content">
       <aside className="mc-rail" aria-label="App navigation"><SectionLink href="/" className="mc-wordmark" aria-label="JaSH ViBeS Home">JV</SectionLink><nav><SectionLink href="/" title="Home"><MusicIcon name="home"/><span>Home</span></SectionLink><SectionLink href="/music" aria-current="page"><MusicIcon name="play"/><span>Music</span></SectionLink><SectionLink href="/live" label="Live Tv"><MusicIcon name="live"/><span>Live</span></SectionLink><SectionLink href="/vault" label="Vault"><MusicIcon name="library"/><span>Vault</span></SectionLink></nav><SectionLink href="/" className="mc-exit">← Exit</SectionLink></aside>
       <div className="mc-canvas">
-        <header className="mc-topbar"><SectionLink href="/" className="mc-brand">JaSH ViBeS <small>MUSIC</small></SectionLink><span className="mc-top-subtitle">Your music. Your moment.</span><div className="mc-top-actions"><IconButton icon="library" label="Open Library" className="mc-library-toggle" onClick={() => showLibrary(!libraryOpen)}/><button type="button" className="mc-header-button" onClick={() => setOverlay('queue')}><MusicIcon name="queue"/><span>Queue</span></button><button type="button" className="mc-header-button" onClick={() => setOverlay('settings')}><MusicIcon name="settings"/><span>Settings</span></button></div></header>
+        <header className="mc-topbar"><SectionLink href="/" className="mc-brand">JaSH ViBeS <small>MUSIC</small></SectionLink><span className="mc-top-subtitle">Your music. Your moment.</span><div className="mc-top-actions"><IconButton icon="library" label={libraryOpen ? 'Close Library' : 'Open Library'} active={libraryOpen} className="mc-library-toggle" onClick={() => showLibrary(!libraryOpen)}/><button type="button" className="mc-header-button" onClick={() => setOverlay('queue')}><MusicIcon name="queue"/><span>Queue</span></button><button type="button" className="mc-header-button" onClick={() => setOverlay('settings')}><MusicIcon name="settings"/><span>Settings</span></button></div></header>
         <div className="mc-workspace">
           <div ref={libraryRef} className="mc-library-dock" {...(libraryOpen ? { role: 'region', 'aria-label': 'Library browsing sheet' } : {})}><CanvasLibrary music={music} tab={tab} setTab={setTab} query={query} setQuery={setQuery} onPlay={play} onClose={() => showLibrary(false)}/></div>
           <div className={`mc-player ${mode === 'artwork' ? 'is-artwork-mode' : ''}`}>
             <section className="mc-now" aria-label="Now playing"><Cover item={playing} className={`mc-now-art mc-vinyl ${music.isPlaying ? 'is-spinning' : ''}`}/><div className="mc-now-text"><h1>{playing?.title || 'Find your next favourite'}</h1><p>{playing?.artists || 'Open the Library to choose a song'}</p>{playing ? <small>{quality}{music.playerStatus === 'loading' ? ' · Connecting…' : ''}</small> : <small>Tamil music · One uninterrupted queue</small>}</div></section>
-            <CanvasLyrics music={music} look={look} update={update} full={full} onExpand={() => { setFull(!full); setMode('lyrics'); }} onSettings={() => setOverlay('settings')}/>
-            <div className="mc-player-modes" role="group" aria-label="Player view"><button type="button" aria-pressed={mode === 'artwork'} onClick={() => { setMode('artwork'); setFull(false); }}>Artwork</button><button type="button" aria-pressed={mode === 'lyrics'} onClick={() => setMode('lyrics')}>Lyrics</button></div>
+            <CanvasLyrics music={music} look={look} update={update} full={full} onExpand={() => showLyrics(!full)} onSettings={() => setOverlay('settings')}/>
+            <div className="mc-player-modes" role="group" aria-label="Player view"><button type="button" aria-pressed={mode === 'artwork'} onClick={showArtwork}>Artwork</button><button type="button" aria-pressed={mode === 'lyrics'} onClick={() => showLyrics(true)}>Lyrics</button></div>
           </div>
         </div>
         <footer className="mc-transport" aria-label="Playback controls">
@@ -140,7 +143,7 @@ export default function MusicShell() {
         <nav className="mc-mobile-nav" aria-label="Mobile music navigation">
           <SectionLink href="/" label="Home"><MusicIcon name="home"/><span>Home</span></SectionLink>
           <SectionLink href="/live" label="Live Tv"><MusicIcon name="live"/><span>Live</span></SectionLink>
-          <button type="button" aria-current={!libraryOpen ? 'page' : undefined} onClick={() => { showLibrary(false); setMode('lyrics'); }}><MusicIcon name="play"/><span>Music</span></button>
+          <button type="button" aria-current={!libraryOpen ? 'page' : undefined} onClick={() => showLyrics(true)}><MusicIcon name="play"/><span>Music</span></button>
           <button type="button" aria-current={libraryOpen ? 'page' : undefined} onClick={() => showLibrary(true)}><MusicIcon name="library"/><span>Library</span></button>
         </nav>
       </div>

@@ -31,6 +31,7 @@ const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:3000';
         await route.fulfill({ json:data });
       });
       await page.goto(base + '/music');
+      await page.getByRole('button', { name:'Open Library', exact:true }).click();
       await page.getByRole('button', { name:'Open Fixture album', exact:true }).click();
       await page.getByRole('button', { name:'Play all', exact:true }).click();
       await page.waitForFunction(() => {
@@ -44,7 +45,7 @@ const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:3000';
       await page.waitForFunction(() => document.querySelector('audio') === window.originalAudio && !originalAudio.paused && originalAudio.currentTime > window.audioAt);
       const main = page.locator(width > 1000 ? '.jv-rail' : '.mobile-dock');
       await main.getByRole('link', { name:'Music', exact:true }).click();
-      await page.locator('.mc-library').waitFor();
+      await page.locator('.mc-app').waitFor();
       assert(await page.evaluate(() => document.querySelector('audio') === window.originalAudio && !originalAudio.paused));
       assert.deepEqual(errors, []);
       console.log(`PASS ${width}px: same audio element keeps playing through Music → Home → Music.`);

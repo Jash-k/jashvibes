@@ -85,7 +85,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
       await page.getByText('Could not refresh the addon. Showing your last loaded shelf.').waitFor();
       assert(await page.getByText('New source title', { exact: true }).first().isVisible());
       await navTo('Music');
-      await page.locator('.mc-library').waitFor();
+      await page.locator('.mc-app.is-focus .mc-lyrics').waitFor();
       assert.equal(await page.evaluate(() => window.documentMarker), documentMarker);
       assert.deepEqual(errors, []);
       console.log(`PASS ${width}px: cached preferences, retained content on refresh failure, soft Stremio navigation, source invalidation, no pin writes on entry, lazy Music shell.`);

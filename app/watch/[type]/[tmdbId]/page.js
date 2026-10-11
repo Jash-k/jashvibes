@@ -327,6 +327,9 @@ export default function UnifiedWatchPage() {
             {sources.status === 'ready' && active && !embed ? (
               <JashPlayer
                 key={`${active.url}:${sources.retryKey}`}
+                // This shell has a behind-frame halo already. The player's body-portal
+                // ambient scrim would sit ABOVE the isolated watch frame and blur it.
+                policy={{ ambient: false }}
                 playbackPolicy={playbackPolicy}
                 source={{ url: active.url, kind: active.kind || detectKind(active.url) }}
                 display={{ title: context?.title, poster: context?.backdropUrl || context?.posterUrl, aspect: 'fill' }}
