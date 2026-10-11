@@ -1,0 +1,21 @@
+const fs=require('fs'),assert=require('assert/strict');
+(async()=>{
+ const c=await import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync('lib/vaultAdminCore.js')).toString('base64'));
+ const movie={id:'a',title:'Film',category:'tamil-movie',originalLanguage:'ta',embeds:[{url:'https://play.example/a',quality:'720p'}]};
+ const series={...movie,id:'b',kind:'series',category:'tamil-series',embeds:[{url:'https://play.example/b',quality:'720p',season:1,episode:1}]};
+ c.validateVaultIdentity(movie);c.validateVaultIdentity(series);
+ for(const x of [{...movie,category:'tamil-dubbed-movie'},{...series,category:'tamil-movie'},{...series,tmdbType:'movie'},{...movie,originalLanguage:''}])assert.throws(()=>c.validateVaultIdentity(x));
+ c.validateVaultIdentity({...movie,originalLanguage:'',metadataVerification:{status:'inferred'}});
+ assert.throws(()=>c.validateVaultPatch({embeds:[]}));assert.throws(()=>c.validateVaultPatch({id:'changed'}));assert.throws(()=>c.validateVaultPatch({rating:11}));assert.throws(()=>c.validateVaultPatch({tmdbId:-1}));
+ assert.throws(()=>c.validateVaultPatch({metadataVerification:{status:'verified',reason:'test',evidenceUrls:[]}}));
+ for(const u of ['http://example.com','https://127.0.0.1/a','https://[::1]/','https://user:pass@example.com','javascript:alert(1)'])assert.throws(()=>c.vaultPublicUrl(u,'test'));
+ assert.throws(()=>c.validateVaultEmbeds(series.embeds,'movie'));assert.throws(()=>c.validateVaultEmbeds(movie.embeds,'series'));
+ const e=c.validateVaultEmbeds(series.embeds,'series');assert.equal(c.buildVaultSeasons(e)[0].episodes[0].episode,1);
+ const overlays=[{id:'a',patch:{title:'Corrected'},hidden:true,revision:1},{id:'b',patch:{originalTitle:'Original'},revision:2},{id:'c',custom:{...movie,id:'c'},patch:{},revision:1}];
+ const result=c.mergeVaultRows([movie,series],overlays);assert.deepEqual(result.map(m=>m.id),['b','c']);assert.deepEqual(result[0].embeds,series.embeds);
+ assert.equal(c.mergeVaultRows([movie,series],overlays,{includeHidden:true})[0].title,'Corrected');assert.equal(movie.title,'Film');
+ assert.equal(c.mergeVaultRows([], [{id:'orphan',patch:{title:'No'}}]).length,0);
+ for(const f of ['app/api/admin/vault/route.js','app/api/admin/vault/tmdb/route.js'])assert.ok(fs.readFileSync(f,'utf8').includes('await adminDeny(request)'));
+ assert.ok(fs.readFileSync('lib/vaultAdminStore.js','utf8').includes('revision:body.revision}'));
+ console.log('Vault Admin validation, overlay, playback preservation, hiding/restoring visibility, auth wiring and revision checks passed.');
+})().catch(e=>{console.error(e);process.exitCode=1});

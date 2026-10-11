@@ -22,17 +22,17 @@ export async function GET(request) {
     const id = new URL(request.url).searchParams.get('id');
     if (id) {
       const movie = payload.movies.find((item) => item.id === id);
-      return NextResponse.json({ movie: movie || null }, { status: movie ? 200 : 404, headers: { 'Cache-Control': 'private, max-age=60' } });
+      return NextResponse.json({ movie: movie || null }, { status: movie ? 200 : 404, headers: { 'Cache-Control': 'private, no-store' } });
     }
     const summary = new URL(request.url).searchParams.get('view') === 'summary';
     return NextResponse.json(summary ? summarizeVault(payload) : payload, {
       headers: {
-        'Cache-Control': force ? 'private, no-store' : 'private, max-age=300, stale-while-revalidate=600',
+        'Cache-Control': 'private, no-store',
       },
     });
   } catch (error) {
     return NextResponse.json(
-      { error: 'The vault is unreachable right now.', detail: String(error?.message || error) },
+      { error: 'The vault is unavailable. Check upstream and database connectivity.' },
       { status: 502 },
     );
   }

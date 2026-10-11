@@ -7,12 +7,14 @@ import TvTab from '@/components/admin/TvTab';
 import RetroTab from '@/components/admin/RetroTab';
 import StremioTab from '@/components/admin/StremioTab';
 import ExtrasTab from '@/components/admin/ExtrasTab';
+import VaultTab from '@/components/admin/VaultTab';
 
 const TABS = [
   { id: 'home', label: 'Home' },
   { id: 'music', label: 'Music' },
   { id: 'tv', label: 'TV' },
   { id: 'retro', label: 'ReTro' },
+  { id: 'vault', label: 'Vault' },
   { id: 'stremio', label: 'Stremio' },
   { id: 'extras', label: 'Extras' },
 ];
@@ -181,6 +183,7 @@ export default function AdminApp() {
         {tab === 'retro' ? <RetroTab /> : null}
         {tab === 'stremio' ? <StremioTab /> : null}
         {tab === 'extras' ? <ExtrasTab /> : null}
+        {tab === 'vault' ? <VaultTab /> : null}
       </div>
     </div>
   );
