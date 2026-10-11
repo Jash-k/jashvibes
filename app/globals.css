@@ -3173,3 +3173,12 @@ html.day-mode .jv-vault-page {
 .jv-section-skeleton { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; max-width:900px; margin-top:28px; }
 .jv-section-skeleton span { aspect-ratio:2/3; border-radius:16px; background:linear-gradient(145deg,#ffffff09,#ffffff03); }
 @media(min-width:1024px) { .jv-section-skeleton { grid-template-columns:repeat(6,minmax(0,1fr)); } }
+
+/* Explicit best-effort catalogue assignments share the existing four tabs.
+   Keep the ≈ provenance badge clear of quality and series/episode chips. */
+.jv-vault-chip-inferred {
+  right: auto; left: 0.4rem;
+  color: #fde68a; border-color: rgba(251, 191, 36, 0.65);
+  font-size: 15px; line-height: 1; padding: 0.2rem 0.38rem;
+}
+.jv-vault-chip-inferred-series { top: 2rem; }
