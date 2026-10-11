@@ -47,6 +47,7 @@ export default function RailNav({ onOpenSearch }) {
               <NavLink
                 href={item.href}
                 label={item.label}
+                aria-label={item.label}
                 aria-current={active ? 'page' : undefined}
                 title={`${item.label} — ${item.hint}`}
                 className={`jv-rail-item${active ? ' jv-rail-item-active' : ''}`}
@@ -75,7 +76,7 @@ export default function RailNav({ onOpenSearch }) {
             <span className="jv-rail-label">Search</span>
           </button>
         ) : null}
-        <Link href="/admin" className="jv-rail-item" title="Admin — the control room">
+        <Link href="/admin" aria-label="Admin" className="jv-rail-item" title="Admin — the control room">
           <span className="grid h-8 w-8 place-items-center rounded-xl border border-amber-400/30 bg-amber-400/10 text-amber-300">
             <span aria-hidden="true" className="text-[15px] leading-none">⚙</span>
           </span>

@@ -17,6 +17,8 @@ const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:3000';
         return route.fulfill({ json: data });
       });
       await page.goto(base + '/music');
+      await page.locator('.mc-app.is-library-open .mc-library').waitFor();
+      await page.locator('.mc-library').getByRole('button', {name:'Return to player', exact:true}).click();
       await page.locator('.mc-app.is-focus:not(.is-library-open) .mc-lyrics').waitFor();
       assert.equal(await page.locator('.mc-library').isVisible(), false);
       assert.equal(await page.evaluate(() => Boolean(document.fullscreenElement)), false, 'in-app focus, not a browser fullscreen request');
@@ -65,7 +67,7 @@ const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:3000';
       await page.locator('.mc-app.is-focus:not(.is-library-open)').waitFor();
       assert.equal(await page.locator('.mc-player').evaluate(el => el.inert), false);
       assert.deepEqual(errors, []);
-      console.log(`PASS ${width}px: lyrics-first, mobile text exit/no expand icon, desktop expand, Library, artwork, history, responsive sizing.`);
+      console.log(`PASS ${width}px: Library-first, mobile text exit/no expand icon, desktop expand, Library, artwork, history, responsive sizing.`);
       await context.close();
     }
   } finally { await browser.close(); }

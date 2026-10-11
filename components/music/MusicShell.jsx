@@ -1,6 +1,8 @@
 'use client';
 
 import SectionLink from '@/components/SectionLink';
+import RailNav from '@/components/rail/RailNav';
+import MobileDock from '@/components/MobileDock';
 import dynamic from 'next/dynamic';
 import { readSessionCache, writeSessionCache } from '@/lib/clientCache';
 import { useEffect, useRef, useState } from 'react';
@@ -18,8 +20,8 @@ export default function MusicShell() {
   const music = useMusic();
   const [tab, setTabState] = useState('albums');
   const [query, setQuery] = useState('');
-  // Fresh entries open lyrics focus on every screen; Library is an explicit action.
-  const [libraryOpen, setLibraryOpen] = useState(false);
+  // Fresh entries open Library on every screen; selecting a song opens lyrics focus.
+  const [libraryOpen, setLibraryOpen] = useState(true);
   const [mobile, setMobile] = useState(false);
   const [overlay, setOverlay] = useState('');
   const [pocketLocked, setPocketLocked] = useState(false);
@@ -41,13 +43,13 @@ export default function MusicShell() {
       const prefs = readSessionCache('jash:music:screen:v1');
       const wanted = next || prefs?.tab;
       if (LIBRARY_TABS.some((item) => item.id === wanted)) setTabState(wanted);
-      // Explicit URL/history choices win; a bare /music always starts in lyrics focus.
-      const open = params.get('library') === '1';
+      // Explicit URL/history choices win; a bare /music always starts in Library.
+      const open = params.get('library') !== '0';
       setLibraryOpen(open);
       setFull(params.get('focus') !== '0');
       setMode(params.get('view') === 'artwork' ? 'artwork' : 'lyrics');
     };
-    media.current = window.matchMedia('(max-width: 900px)');
+    media.current = window.matchMedia('(max-width: 1023px)');
     applyLocation();
     const prefs = readSessionCache('jash:music:screen:v1');
     if (prefs) setQuery(prefs.query || '');
@@ -101,7 +103,7 @@ export default function MusicShell() {
     libraryRef.current?.querySelector('button')?.focus();
     const trap = (event) => {
       if (event.key !== 'Tab' || overlay) return;
-      const elements = [...document.querySelectorAll('.mc-library-dock button, .mc-library-dock input, .mc-library-dock select, .mc-library-dock [tabindex="0"], .mc-transport button, .mc-transport input, .mc-mobile-nav button, .mc-mobile-nav a')].filter((node) => !node.disabled && node.getClientRects().length);
+      const elements = [...document.querySelectorAll('.mc-library-dock button, .mc-library-dock input, .mc-library-dock select, .mc-library-dock [tabindex="0"], .mc-transport button, .mc-transport input, .mc-top-actions button, .mobile-dock a')].filter((node) => !node.disabled && node.getClientRects().length);
       const first = elements[0], last = elements[elements.length - 1];
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
@@ -123,7 +125,8 @@ export default function MusicShell() {
 
   return <main className={`mc-app mc-style-${look.canvas} ${libraryOpen ? 'is-library-open' : ''} ${full ? 'is-focus' : ''}`} style={{ '--mc-art': image ? `url(${JSON.stringify(image)})` : 'none' }}>
     <div className="mc-app-content">
-      <aside className="mc-rail" aria-label="App navigation"><SectionLink href="/" className="mc-wordmark" aria-label="JaSH ViBeS Home">JV</SectionLink><nav><SectionLink href="/" title="Home"><MusicIcon name="home"/><span>Home</span></SectionLink><SectionLink href="/music" aria-current="page"><MusicIcon name="play"/><span>Music</span></SectionLink><SectionLink href="/live" label="Live Tv"><MusicIcon name="live"/><span>Live</span></SectionLink><SectionLink href="/vault" label="Vault"><MusicIcon name="library"/><span>Vault</span></SectionLink></nav><SectionLink href="/" className="mc-exit">← Exit</SectionLink></aside>
+      <RailNav />
+      <MobileDock />
       <div className="mc-canvas">
         <header className="mc-topbar"><SectionLink href="/" className="mc-brand">JaSH ViBeS <small>MUSIC</small></SectionLink><span className="mc-top-subtitle">Your music. Your moment.</span><div className="mc-top-actions"><IconButton icon="library" label={libraryOpen ? 'Close Library' : 'Open Library'} active={libraryOpen} className="mc-library-toggle" onClick={() => showLibrary(!libraryOpen)}/><button type="button" className="mc-header-button" onClick={() => setOverlay('queue')}><MusicIcon name="queue"/><span>Queue</span></button><button type="button" className="mc-header-button" onClick={() => setOverlay('settings')}><MusicIcon name="settings"/><span>Settings</span></button></div></header>
         <div className="mc-workspace">
@@ -140,12 +143,7 @@ export default function MusicShell() {
           <div className="mc-transport-row"><button type="button" className="mc-mini-info" onClick={() => { if (libraryOpen) showLibrary(false); setMode('lyrics'); }} aria-label="Return to player"><Cover item={playing}/><span><strong>{playing?.title || 'Nothing playing'}</strong><small>{playing?.artists || 'Choose a song'}</small></span></button><div className="mc-transport-main"><IconButton icon="shuffle" label="Shuffle" active={music.shuffleEnabled} onClick={() => music.setShuffleEnabled(!music.shuffleEnabled)} disabled={!playing}/><IconButton icon="previous" label="Previous track" onClick={music.playPrevious} disabled={!playing}/><IconButton icon={music.isPlaying ? 'pause' : 'play'} label={music.isPlaying ? 'Pause' : 'Play'} className="mc-primary-play" onClick={music.togglePlay} disabled={!playing}/><IconButton icon="next" label="Next track" onClick={() => music.playNext()} disabled={!playing}/><IconButton icon="repeat" label={`Repeat: ${music.repeatMode}`} active={music.repeatMode !== 'off'} onClick={music.cycleRepeat} disabled={!playing}>{music.repeatMode === 'one' ? <sup>1</sup> : null}</IconButton><IconButton icon="heart" label={favorite ? 'Remove current track from favourites' : 'Save current track'} active={Boolean(favorite)} onClick={() => music.toggleFavorite(playing)} disabled={!playing}/><IconButton icon="lock" label="Enable pocket mode" className="mc-pocket-button" onClick={() => setPocketLocked(true)} disabled={!playing}/></div><label className="mc-volume"><MusicIcon name="volume"/><span className="sr-only">Volume</span><input type="range" min="0" max="1" step="0.01" value={music.muted ? 0 : music.volume} onChange={(event) => music.changeVolume(Number(event.target.value))}/></label></div>
           {look.motion ? <div className={`mc-signal ${music.isPlaying ? 'is-playing' : ''}`} aria-hidden="true">{Array.from({ length: 72 }, (_, i) => <i key={i} style={{ '--bar-height': `${10 + ((i * 17) % 31)}px`, '--bar-delay': `${(i % 9) * -0.12}s`, '--bar-color': `hsl(${200 - i * 2.5} 78% 65%)` }}/>)}</div> : null}
         </footer>
-        <nav className="mc-mobile-nav" aria-label="Mobile music navigation">
-          <SectionLink href="/" label="Home"><MusicIcon name="home"/><span>Home</span></SectionLink>
-          <SectionLink href="/live" label="Live Tv"><MusicIcon name="live"/><span>Live</span></SectionLink>
-          <button type="button" aria-current={!libraryOpen ? 'page' : undefined} onClick={() => showLyrics(true)}><MusicIcon name="play"/><span>Music</span></button>
-          <button type="button" aria-current={libraryOpen ? 'page' : undefined} onClick={() => showLibrary(true)}><MusicIcon name="library"/><span>Library</span></button>
-        </nav>
+
       </div>
     </div>
     {overlay ? <Sheet title={overlay === 'queue' ? 'Up next' : 'Music settings'} onClose={() => setOverlay('')}>

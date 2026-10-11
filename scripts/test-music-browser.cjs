@@ -25,7 +25,6 @@ const assert = require('node:assert/strict');
   await route.fulfill({json:data});
  });
  await page.addInitScript(() => localStorage.setItem('jash_theatre_access_token', 'fixture')); await page.goto((process.env.TEST_BASE_URL || 'http://localhost:7860') + '/music'); await page.waitForSelector('.mc-app');
- await page.getByRole('button',{name:'Open Library',exact:true}).click();
  await page.waitForSelector('.mc-card');
  for(const name of ['New','Tracks','Albums','Artists','Playlists']) {await page.getByRole('tab',{name,exact:true}).click();await page.waitForTimeout(150); assert.equal(await page.getByRole('tab',{name,exact:true}).getAttribute('aria-selected'),'true');}
  await page.getByRole('tab',{name:'Albums',exact:true}).click();

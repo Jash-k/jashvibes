@@ -16,7 +16,9 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
 .mc-style-cinema::before, .mc-style-noir::before { background-image:var(--mc-art); background-position:center; background-size:cover; filter:blur(2px); opacity:.3; }
 .mc-style-noir::before { filter:grayscale(1); opacity:.18; }
 .mc-style-noir { --mc-accent:#edf2f5; --mc-violet:#edf2f5; }
-.mc-app-content { height:100%; display:grid; grid-template-columns:76px minmax(0,1fr); }
+.mc-app-content { height:100%; display:block; padding-left:78px; }
+.mc-canvas { height:100%; }
+@media (min-width:1280px) { .mc-app-content { padding-left:188px; } }
 .mc-rail { border-right:1px solid var(--mc-line); background:#080b0e99; display:flex; align-items:center; flex-direction:column; padding:24px 6px; gap:36px; }
 .mc-wordmark { font-size:28px; font-weight:900; letter-spacing:-2px; background:linear-gradient(120deg,var(--mc-accent),var(--mc-violet)); color:transparent; background-clip:text; }
 .mc-rail nav { display:flex; flex-direction:column; width:100%; gap:12px; }
@@ -162,7 +164,7 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
 .mc-app.is-focus .mc-now-art { width:60px; }
 .mc-app.is-focus .mc-now h1 { font-size:20px; }
 .mc-app.is-focus .mc-lyric-lines li { font-size:clamp(26px,4vw,var(--mc-lyric-size,34px)); }
-@media (max-width:1180px) and (min-width:901px) {
+@media (max-width:1180px) and (min-width:1024px) {
   .mc-canvas { padding-left:16px; padding-right:16px; }
   .mc-workspace { gap:20px; grid-template-columns:minmax(300px,1fr) minmax(0,1fr); }
   .mc-cards { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -173,8 +175,8 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
   .mc-transport-row { grid-template-columns:minmax(0,1fr) auto; }
   .mc-lyrics h2 small { display:none; }
 }
-@media (max-width:900px) {
-  .mc-app-content { display:block; }
+@media (max-width:1023px) {
+  .mc-app-content { padding-left:0; padding-bottom:calc(64px + env(safe-area-inset-bottom)); }
   .mc-rail { display:none; }
   .mc-canvas { height:100%; grid-template-rows:56px minmax(0,1fr) auto; gap:6px; padding:env(safe-area-inset-top) 16px max(10px,env(safe-area-inset-bottom)); }
   .mc-topbar { gap:8px; }
@@ -242,7 +244,7 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
   .mc-app.is-focus .mc-now small { display:none; }
   .mc-app.is-focus .mc-lyric-lines li { font-size:clamp(24px,8vw,var(--mc-lyric-size,34px)); }
 }
-@media (max-height:700px) and (max-width:900px) {
+@media (max-height:700px) and (max-width:1023px) {
   .mc-now { flex-direction:row; text-align:left; gap:12px; }
   .mc-now-art { width:70px; height:70px; }
   .mc-now h1 { font-size:18px; }
@@ -291,8 +293,8 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
 .mc-pocket-slider > span { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding-left:36px; font-size:13px; color:#d4e2ea; pointer-events:none; }
 .mc-pocket-slider > button { position:absolute; inset:0 auto 0 0; width:56px; height:54px; display:grid; place-items:center; border:0; border-radius:50%; background:#8be5ef; color:#10171c; touch-action:none; }
 .mc-pocket-slider > button svg { transform:rotate(180deg); }
-@media (max-width:900px) {
-  .mc-canvas { grid-template-rows:56px minmax(0,1fr) auto 60px; padding-bottom:env(safe-area-inset-bottom); }
+@media (max-width:1023px) {
+  .mc-canvas { grid-template-rows:56px minmax(0,1fr) auto; padding-bottom:env(safe-area-inset-bottom); }
   .mc-mobile-nav { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-top:1px solid var(--mc-line); background:#0b141bea; align-items:stretch; }
   .mc-mobile-nav > a, .mc-mobile-nav > button { display:flex; align-items:center; justify-content:center; flex-direction:column; gap:3px; color:var(--mc-muted); min-height:56px; min-width:0; background:none; border:0; font-size:10px; border-radius:10px; }
   .mc-mobile-nav [aria-current='page'] { color:var(--mc-accent); background:#8be5ef0c; }
@@ -310,8 +312,8 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
   .mc-app.is-library-open .mc-transport-main > .mc-icon { width:30px; }
   .mc-app.is-library-open .mc-transport-main > .mc-primary-play { width:40px; }
 }
-@media (max-height:520px) and (max-width:900px) {
-  .mc-canvas { grid-template-rows:44px minmax(0,1fr) auto 50px; gap:2px; }
+@media (max-height:520px) and (max-width:1023px) {
+  .mc-canvas { grid-template-rows:44px minmax(0,1fr) auto; gap:2px; }
   .mc-mobile-nav > a, .mc-mobile-nav > button { min-height:48px; }
   .mc-now-art { width:44px; height:44px; }
   .mc-now p { display:none; }
@@ -344,7 +346,24 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
 
 /* Mobile focus uses a text exit, never the fullscreen/expand glyph.
    Artwork, Library and the Music/Lyrics actions remain available. */
-@media (max-width:900px) {
+@media (max-width:1023px) {
   .mc-lyrics-expand { display:none; }
   .mc-lyrics-exit { display:inline-flex; align-items:center; min-height:44px; }
 }
+
+/* One bright frosted surface, including the editable area. The selector beats
+   the generic dark input rule; only the outer label paints a background. */
+.mc-app .mc-search {
+  color:#193442; border:1px solid #ffffffb3; border-radius:16px;
+  background:linear-gradient(125deg,#f5fdfff0,#d8edf4df 48%,#e9e5f6e8);
+  box-shadow:inset 0 1px 0 #ffffff, inset 0 -1px 0 #ffffff70, 0 8px 24px #00000024;
+  backdrop-filter:blur(20px) saturate(140%); -webkit-backdrop-filter:blur(20px) saturate(140%);
+}
+.mc-app .mc-search:focus-within { outline:2px solid #9bdaed; outline-offset:3px; }
+.mc-app .mc-search input[type='search'] {
+  background:transparent; background-image:none; color:#193442; -webkit-text-fill-color:#193442;
+  border:0; box-shadow:none; outline:none; caret-color:#163c51;
+}
+.mc-app .mc-search input::placeholder { color:#496371; opacity:1; }
+.mc-app .mc-search svg, .mc-app .mc-search button { color:#365666; }
+.mc-app .mc-search input[type='search']::-webkit-search-cancel-button { -webkit-appearance:none; }
