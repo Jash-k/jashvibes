@@ -28,7 +28,7 @@ import { usePlaybackEngine } from './usePlaybackEngine';
 import { commandForKey, digitSeekPercent } from '@/lib/player/commands';
 import { INCIDENT_QUEUE_KEY } from '@/lib/player/prefs';
 import { buildHeaderFilter, createDirectPolicy } from '@/lib/player/policy/stream';
-import { fmtTime, warnForSource } from '@/lib/player/labels';
+import { fmtTime, playbackTimeLabel, warnForSource } from '@/lib/player/labels';
 import { Icon, PATHS } from './PlayerIcons';
 import { ChannelDrawer } from './PlayerBrowser';
 import {
@@ -247,7 +247,7 @@ export function JashPlayer(props) {
   const [preview, setPreview] = useState(null);
   const [frozenFrame, setFrozenFrame] = useState('');
 
-  const { status, statusMessage, attemptNote, errorInfo, playing, time, model, prefs, tracks, stats } = engine;
+  const { status, statusMessage, attemptNote, errorInfo, playing, time, duration, model, prefs, tracks, stats } = engine;
   useEffect(() => {
     on.onQualityApi?.({ heights: [...new Set((tracks.video || []).map((v) => Number(v.height)).filter(Boolean))].sort((a, b) => b - a), auto: prefs.qualityAuto, height: prefs.qualityHeight, select: engine.selectQualityHeight, setAuto: engine.setAutoQuality });
   }, [tracks.video, prefs.qualityHeight, prefs.qualityAuto, on.onQualityApi, engine.selectQualityHeight, engine.setAutoQuality]);
@@ -257,6 +257,12 @@ export function JashPlayer(props) {
   const winLength = win ? win.end - win.start : 0;
   const shownTime = scrubValue !== null ? scrubValue : time;
   const playedRatio = canSeek && winLength > 0 ? Math.min(1, Math.max(0, (shownTime - win.start) / winLength)) : 0;
+  // Elapsed / total runtime for the transport row. `duration` is the element's
+  // own runtime, never the seek window's length: a host that only exposes part
+  // of the file as seekable has a window shorter than the film. A live stream
+  // (Infinity), an unknown length and a nonsense placeholder all normalise to
+  // null, so the row simply carries no readout for those sources.
+  const timeLabel = canSeek ? playbackTimeLabel({ time: shownTime, start: win?.start, duration }) : null;
   const bufferedRatio = useMemo(() => {
     if (!canSeek || !winLength || !videoEl) return 0;
     try {
@@ -1038,7 +1044,9 @@ export function JashPlayer(props) {
             <Icon d={playing ? PATHS.pause : PATHS.play} className="h-4 w-4" />
           </button>
           <span className="min-w-0 flex-1 truncate text-[10px] font-black uppercase tracking-[0.18em] text-white/70">
-            {live && !canSeek ? null : fmtTime(shownTime - (win?.start || 0))}
+            {live && !canSeek
+              ? null
+              : `${fmtTime(shownTime - (win?.start || 0))}${timeLabel ? ` / ${fmtTime(timeLabel.total)}` : ''}`}
           </span>
           <button
             type="button"
@@ -1287,10 +1295,26 @@ export function JashPlayer(props) {
               >
                 <Icon d={PATHS.fwd10} className="h-[17px] w-[17px]" />
               </button>
-              {/* The elapsed/total block that used to sit here was the widest thing
-                  in the row — 8rem reserved for a number the scrub line already shows.
-                  Removed; the deck came down to a single compact bar because of it. */}
+              {/* Elapsed / total runtime, back in the transport row. Kept to the
+                  width of a clock: phones read elapsed only, and the scrub
+                  tooltip still carries the precise hover time. */}
             </>
+          ) : null}
+
+          {/* Runtime readout. Phones show the elapsed number, the full
+              "current / total" pair arrives at the sm breakpoint, and a live or
+              unknown-length source renders nothing instead of a placeholder. */}
+          {timeLabel ? (
+            <p
+              data-dvp="runtime"
+              title={`${timeLabel.short} of ${fmtTime(timeLabel.total)}`}
+              className="ml-1 shrink-0 select-none whitespace-nowrap pl-1 text-[11.5px] font-bold tabular-nums text-white/80"
+            >
+              <span className="sr-only">Playback time </span>
+              {timeLabel.short}
+              <span className="hidden text-white/40 sm:inline"> / {fmtTime(timeLabel.total)}</span>
+              <span className="sr-only"> of {fmtTime(timeLabel.total)}</span>
+            </p>
           ) : null}
 
           <div className="group/vol hidden items-center sm:flex">
