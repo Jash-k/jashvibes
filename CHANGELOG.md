@@ -1,3 +1,19 @@
+## Cleanup — deploy-ready trim (2026-10-12)
+
+- Deleted the legacy music UI that nothing imported: `MusicCurtains`, `MusicLyrics`,
+  `MusicScreens`, `MusicBits`, `lyricLook`, `MusicRouteLink` (~90 KB). The live music
+  screens are `MusicShell` + `CanvasLyrics`; `MusicProvider` lost its legacy re-export.
+- Deleted `lib/player/liveEngine.js` + `lib/player/capabilities.js`: no importer, so the
+  "planned live engine" never ran. Live playback is planned in `usePlaybackEngine.js`.
+- Removed developer endpoints that shipped in production: `/api/seed` (already broken — it
+  called the deleted `/api/zinkmovies/details`) and `/api/debug-scrapers`, plus the modules
+  they exclusively owned (`lib/autoScraper.js`, `lib/providers.js`).
+- Pruned six tests that asserted removed behaviour or could not run; added `npm run verify`
+  and `docs/TESTING.md`, which documents every script and the opt-in Playwright suites.
+- Docs corrected where they described removed modules (`LIVE-PLAYER`, `LIVE-COMPATIBILITY`,
+  `DATABASE-MAINTENANCE`); the three pre-v5 lyric notes are now marked historical in favour
+  of `docs/lyrics-pipeline.md`. `RELEASE-MANIFEST.json` no longer lists the removed routes.
+
 # Fixed Canvas Music — 2026-10-08
 
 - Approved desktop library/player split and mobile library sheet.

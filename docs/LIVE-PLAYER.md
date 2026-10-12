@@ -78,17 +78,22 @@ These modules are installed in this repo (see [CHANGES-live-player.md](../CHANGE
 for the wiring):
 
 ```
-lib/player/capabilities.js      ← probe: MSE / ManagedMediaSource / native HLS+TS /
-                                  EME (ClearKey, Widevine, PlayReady, FairPlay) /
-                                  codec table (h264, hevc, av1, aac, ac-3, ec-3…) /
-                                  WebCodecs + WebCrypto. Cached; SSR-safe.
-lib/player/streamClassifier.js  ← channel → { transport, drm, scheme, needsHeaders,
-                                  expiresAt } + peekManifest(): reads the real
-                                  CODECS out of an HLS master / MPD body
-lib/player/liveEngine.js        ← planLivePlayback(channel, caps) → ordered steps
-                                  [native | shaka | mpegts | webcodecs] × [direct | headers | jio],
-                                  or an `unsupported` verdict with an actionable hint
+lib/player/recovery.js          ← the capability probe the playback engine uses:
+                                   EME (ClearKey, Widevine, PlayReady, FairPlay),
+                                   codec table (h264, hevc, av1, aac, ac-3, ec-3…),
+                                   WebCodecs + WebCrypto. Cached; SSR-safe.
+lib/player/streamClassifier.js  ← channel → { transport, drm, scheme, needsHeaders … }
+                                   plus peekManifest(): the real CODECS out of an HLS
+                                   master / MPD body. Also used by scripts/live-doctor.mjs.
+components/player/usePlaybackEngine.js
+                                ← the ordered ladder itself: [native | shaka | mpegts |
+                                   webcodecs] × [direct | headers | jio], and the recovery
+                                   decision when a rung fails.
 ```
+
+> `lib/player/liveEngine.js` (`planLivePlayback`) and `lib/player/capabilities.js` were removed
+> in the cleanup: nothing imported them, so a "planned engine" was never wired in. The live
+> ladder that actually runs is the one in `usePlaybackEngine.js`.
 
 The coverage/codec harnesses run under plain Node and ship in the separate
 `live-player-robustness` kit (`harness/matrix.mjs`, `harness/peek.mjs`).
@@ -138,8 +143,8 @@ FLV                Chrome  → mpegts
 `const useShaka = needsEngine(...)`):
 
 ```js
-import { probeCapabilities, canUseMse } from '@/lib/player/capabilities';
-import { planLivePlayback, ENGINE, PROXY } from '@/lib/player/liveEngine';
+import { capabilitiesFor } from '@/lib/player/recovery';
+import { classifyStream } from '@/lib/player/streamClassifier';
 
 // once per session, before the first load
 const caps = await probeCapabilities();

@@ -1,4 +1,8 @@
 # Imported Spotify lyrics fix
+> **Historical.** This note describes the Spotify metadata matching behaviour of the pre-v5 pipeline.
+> The shipped design is `docs/lyrics-pipeline.md`: LRCLIB-only, tiered acceptance
+> (match version 5), database-cached. Rules here that are not in that document no
+> longer apply.
 
 Base repository: https://github.com/Jash-k/jashvibes
 Base commit: 75cb831b145b873810daf9b3e4b6c7fdb5a1d66b (performance tweak).

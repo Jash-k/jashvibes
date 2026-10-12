@@ -1,4 +1,8 @@
 # Parthu Parthu M: guarded vocal-version matching
+> **Historical.** This note describes the vocal-version matching behaviour of the pre-v5 pipeline.
+> The shipped design is `docs/lyrics-pipeline.md`: LRCLIB-only, tiered acceptance
+> (match version 5), database-cached. Rules here that are not in that document no
+> longer apply.
 
 Base: `3e52caa69eddb3af01d65ea4581e18f4274fc807` (`lyrics delay`), freshly fetched from https://github.com/Jash-k/jashvibes.
 This incremental patch preserves the already-applied lyrics lifecycle/retry fix. It is not a cumulative patch.

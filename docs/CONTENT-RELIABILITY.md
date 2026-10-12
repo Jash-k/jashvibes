@@ -22,15 +22,16 @@ Live record metadata probes:
 No record is hard-pinned and no lyric text is redistributed in this report. Actual duration/version determines acceptance.
 
 Matching:
-- Exact normalized title required, including version terms (remixes aren't silently reduced to originals).
-- Strip From-film and Original Motion Picture Soundtrack wrappers, normalize apostrophes.
-- Known album conflicts rejected; known duration differences over two seconds rejected.
-- Complete artist-name match or exact album+duration corroboration required. Missing duration requires both album and artist.
-- Both /get and /search pass the same checks; title-only scores no longer suffice.
-- Configured Saavn track-ID plain lyrics remain fallback after LRCLIB; snippet/copyright text is no longer treated as lyrics. No default dead public mirror is probed by this lyrics route.
-- Cached prior unvalidated lyrics are invalidated. Successful results cache for an hour, misses for one minute; Refresh bypasses cache.
-- Wrong lyrics? excludes the current LRCLIB record (or Saavn source) for the specific song on that device. This is local storage, not a global correction, not a report to LRCLIB. It tries another validated result and does not modify the audio queue.
+- LRCLIB is the only lyrics provider. Saavn is no longer called by this route: it had no default base and was dead unless SAAVN/SAAVN_API was configured, so it is no longer presented as a fallback.
+- Acceptance is tiered (match version 5). Strong: title + artist + album agree. Album+duration or artist+duration tiers accept records whose supporting credits differ across providers (composer vs singer, single vs soundtrack). A duration difference beyond tolerance rejects even a strong match, and conflicting M/F vocal versions always reject.
+- Retrieval asks both of LRCLIB's questions — the fielded track_name= query and free-text q= — across title variants (vocal-version base, stripped parentheticals, film name). Measured: records such as Vandikkaran Sontha are invisible to the fielded query and found by free text. Retrieval breadth never widens acceptance.
+- Every stage owns its time budget (2.5 s each, 9 s total) instead of sharing one deadline, so a slow first stage cannot cut off the stage most likely to succeed.
+- Rejections are reported with a reason (not-in-catalogue, identity-rejected, provider-error, missing-metadata), so the stage can say why instead of showing an empty column. A provider outage is retryable and never presented as "this song has no lyrics".
+- Successful lookups cache in MongoDB for 90 days and misses for 12 hours, shared by all instances and surviving deploys. Reads fail soft: without a database connection lyrics still resolve, they are simply not cached.
+- Lyrics saved by the owner (Admin → Lyrics) are served before any provider is asked, so a song LRCLIB does not carry can be filled in once and then always resolve. Viewers can also paste lyrics for one song on their own device from the lyric stage.
+- Wrong lyrics? excludes the current LRCLIB record for the specific song on that device. This is local storage, not a global correction, not a report to LRCLIB. It tries another validated result and does not modify the audio queue.
 - Community data can contain wrong text even when metadata matches. No automatic policy can prove semantic correctness. Uncertain matches return unavailable.
+- Measured coverage: 36/40 well-known Tamil film songs retrieved across both query modes (~80% with line timing, median 493 ms). The remaining songs are genuinely absent from the provider and are what the paste/owner path exists for.
 
 ## Navigation
 Music nav links explicitly prefetch the route on supported connections and on intent. Link pending state displays a lightweight shell; app/music/loading.js supplies a Suspense route boundary. Existing page and audio provider are not torn down via hard reload. Catalogue fetches remain client-side and don't gate the route.

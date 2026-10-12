@@ -367,3 +367,16 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
 .mc-app .mc-search input::placeholder { color:#496371; opacity:1; }
 .mc-app .mc-search svg, .mc-app .mc-search button { color:#365666; }
 .mc-app .mc-search input[type='search']::-webkit-search-cancel-button { -webkit-appearance:none; }
+
+/* ── lyric recovery + viewer-saved lyrics (LRCLIB-only pipeline) ────────────
+   The stage always has a next step: when nothing matched, the reason is shown
+   beside "Try again" and "Paste lyrics", and pasted text is stored per song on
+   this device. Owner-saved lyrics for everyone live in the Admin panel. */
+.mc-lyric-miss { display:flex; flex-direction:column; gap:12px; align-items:flex-start; }
+.mc-lyric-miss-actions { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.mc-lyric-paste { margin-top:14px; display:flex; flex-direction:column; gap:10px; padding:14px; border:1px solid var(--mc-line); border-radius:12px; background:#0d141aaa; }
+.mc-lyric-paste label { font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--mc-accent); }
+.mc-lyric-paste p { color:var(--mc-muted); font-size:12px; line-height:1.6; }
+.mc-lyric-paste code { color:var(--mc-accent); }
+.mc-lyric-paste textarea { width:100%; min-height:150px; resize:vertical; background:#182129; color:var(--mc-text); border:1px solid var(--mc-line); border-radius:10px; padding:12px; font:13px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace; }
+.mc-lyric-paste textarea:focus-visible { outline:2px solid var(--mc-accent); outline-offset:2px; }

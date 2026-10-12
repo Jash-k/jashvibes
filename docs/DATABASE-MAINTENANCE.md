@@ -91,8 +91,9 @@ A tidy database ends with `nothing to do — the database is already tidy`.
   `livechannels.selected_1`, `favorite_1`, `hidden_1` and the unused `musicplaylists` text
   index — is ever dropped, and their ops are printed next to them.
 * **`media` is a legacy collection.** It is the v10 catalogue (`sources[]` with embedded
-  streams). Its only readers are `/api/stream`, `/api/resolve` and `/api/seed`, and **no client
-  code calls any of them** any more. Confirm your own tooling does not either, then
+  streams). Its only readers are `/api/stream` and `/api/resolve`, and **no client
+  code calls either of them** any more. (`/api/seed`, the legacy screenscape demo seeder,
+  was removed in the cleanup — it called a `/api/zinkmovies/details` route that no longer exists.) Confirm your own tooling does not either, then
   `--drop media`.
 * **Deleting channels settles its own books.** Any run that removes channels recomputes the
   `livesources` counters in the same pass, so the next audit does not ask for a repair.

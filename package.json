@@ -9,7 +9,8 @@
     "db:audit": "node scripts/db-maintenance.cjs",
     "db:clean": "node scripts/db-maintenance.cjs --safe",
     "check": "node scripts/check-source.cjs",
-    "test:music": "node scripts/test-music-browser.cjs"
+    "test:music": "node scripts/test-music-browser.cjs",
+    "verify": "node scripts/check-source.cjs && node scripts/test-lyrics-pipeline.cjs && node scripts/test-lyrics-controller.cjs && node scripts/test-vault-admin.cjs && node scripts/test-player-runtime.cjs && node scripts/test-nav-order.cjs && node scripts/test-performance-cache.cjs && node scripts/test-extras-registry.cjs && node scripts/test-extras-covers.cjs"
   },
   "dependencies": {
     "cheerio": "^1.2.0",

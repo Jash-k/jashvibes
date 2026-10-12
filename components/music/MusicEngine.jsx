@@ -122,7 +122,6 @@ function useMusicController(enabled) {
   }
   const [lyricState, setLyricState] = useState({ status: 'idle', lyrics: '', data: {} });
   const [lyricRejection, setLyricRejection] = useState(0);
-  const [detailSettledFor, setDetailSettledFor] = useState('');
   const lyricController = useRef(null);
   if (!lyricController.current) lyricController.current = createLyricsController({ onChange: setLyricState });
   const lyricsKey = trackKey(active);
@@ -134,7 +133,13 @@ function useMusicController(enabled) {
     id: String(lyricDetail?.trackId || active?.trackId || ''), seokey: active?.seokey || '',
     exclude: rejectedLyrics.filter(value => /^\d+$/.test(value)).join(','), skipSaavn: rejectedLyrics.includes('saavn') ? '1' : '0' };
   const lyricSignature = JSON.stringify([LYRICS_MATCH_VERSION, lyricsKey, lyricParams, lyricRejection]);
-  const lyricReady = Boolean(lyricsKey && detailSettledFor === lyricsKey);
+  // Lyrics no longer wait for the song-detail request. The track already carries
+  // enough identity to look up safely, and gating on detail meant a failed detail
+  // call (a deployment with no working audio mirror) silenced the lyric stage even
+  // though lyrics come from an unrelated provider. When detail lands, lyricParams
+  // gains album/id, the signature changes, and the controller refreshes with the
+  // richer metadata — so the first answer is early, and the second is exact.
+  const lyricReady = Boolean(lyricsKey);
   // Scope output during render, before effects run: never flash the previous song's state.
   const lyricsData = lyricState.signature === lyricSignature ? lyricState.data : { loadedFor: lyricsKey };
   const lyrics = lyricState.signature === lyricSignature ? lyricState.lyrics : '';
@@ -351,7 +356,6 @@ function useMusicController(enabled) {
       try {
         setPlayerStatus('loading');
         setError('');
-        setDetailSettledFor('');
         attemptedAudio.current = new Set();
         const detail = await getTrackDetail(active);
         if (cancelled) return;
@@ -362,8 +366,6 @@ function useMusicController(enabled) {
         window.localStorage.setItem(RECENTS_KEY, JSON.stringify(nextRecents));
       } catch (err) {
         if (!cancelled) { setPlayerStatus('error'); setError(err.message || 'Unable to load song stream'); }
-      } finally {
-        if (!cancelled) setDetailSettledFor(trackKey(active));
       }
     }
     loadSong();

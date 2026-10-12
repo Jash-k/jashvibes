@@ -1,42 +1,55 @@
-import { chooseLyricMatch, lyricVocalVersion, lyricTitle, lyricAlbum, lyricRequestMetadata, LYRICS_MATCH_VERSION } from '@/lib/lyricsMatch';
 import { NextResponse } from 'next/server';
+import {
+  chooseLyricMatch, lyricAlbum, lyricRequestMetadata, lyricSearchVariants,
+  LYRICS_MATCH_VERSION, DURATION_TOLERANCE_SECONDS,
+} from '@/lib/lyricsMatch';
 import { SOURCE_GROUPS, WIRED_SOURCE_KIND, groupedSources, isPickable, sourceById } from '@/lib/musicSources';
+import { readLyricsOverride, readLyricsCache, writeLyricsCache } from '@/lib/lyricsStore';
+
+/*
+ * GET /api/music/lyrics — one source, several ways of asking.
+ *
+ * The redesign keeps LRCLIB as the only provider and moves all the robustness
+ * into three places the old cascade got wrong:
+ *
+ *   1. RETRIEVAL. LRCLIB answers two different questions: `track_name=` is
+ *      fielded and near-exact, `q=` is free text. The same record can be
+ *      invisible to one and obvious to the other ("Vandikkaran Sontha": 0 hits
+ *      fielded, 6 free-text, and the record is real — see the lifecycle docs).
+ *      So the route asks both, with title variants (vocal-version base, stripped
+ *      parentheticals, film name) that catalogue metadata makes necessary.
+ *
+ *   2. BUDGETS. The old pipeline shared one 7-second deadline across three
+ *      stages, so the stage most likely to find the song was the one that got
+ *      cut — and a spent budget surfaced as HTTP 503 "provider error" instead of
+ *      an honest "not found". Every stage now owns its budget, and the total is
+ *      bounded separately, so a slow first stage can never starve the last.
+ *
+ *   3. MEMORY. A hit is cached in MongoDB for 90 days and a miss for 12 hours,
+ *      shared by every instance and surviving deploys, with the owner's own
+ *      lyrics checked first — so a song fetched or filled in once is instant
+ *      forever, whether or not LRCLIB is reachable that day.
+ *
+ * Acceptance is still the single gate: `lyricIdentity` decides what may be
+ * shown, and a rejection is reported with its reason code rather than a blank
+ * stage. Nothing is ever substituted from a different song.
+ */
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function getSaavnApiBase() {
-  return (process.env.SAAVN || process.env.SAAVN_API || '').replace(/\/+$/, '');
-}
+const STAGE_BUDGET_MS = 2500;
+const TOTAL_BUDGET_MS = 9000;
 
 function getLyricsApiBase() {
   return (process.env.LYRICS_API || process.env.LRCLIB || 'https://lrclib.net').replace(/\/+$/, '');
 }
 
 function normalize(value = '') {
-  return String(value || '')
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&')
-    .replace(/\([^)]*(?:from|feat|remix|version|sped|slowed)[^)]*\)/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return String(value || '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 }
 
-function comparable(value = '') {
-  return normalize(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9\u0B80-\u0BFF]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function stripSyncedLyrics(value = '') {
-  return String(value || '')
-    .split(/\r?\n/)
-    .map((line) => line.replace(/^\s*\[[^\]]+\]\s*/g, '').trim())
-    .filter(Boolean)
-    .join('\n');
-}
+/* ── provider plumbing: one origin, respectful spacing, honest failures ───── */
 
 class ProviderFailure extends Error {
   constructor(message, retryAfter = 1, retryable = true) {
@@ -45,23 +58,24 @@ class ProviderFailure extends Error {
 }
 const cooldowns = new Map();
 let lyricQueue = Promise.resolve(), queued = 0;
+
 function cooldownError(origin) {
   const remaining = (cooldowns.get(origin) || 0) - Date.now();
   return remaining > 0 ? new ProviderFailure('Lyrics provider is busy.', Math.ceil(remaining / 1000)) : null;
 }
+
 async function fetchJson(url, options = {}) {
   const origin = new URL(url).origin;
   const blocked = cooldownError(origin);
   if (blocked) throw blocked;
-  if (origin !== new URL(getLyricsApiBase()).origin) return fetchJsonNow(url, options);
   if (queued >= 8) throw new ProviderFailure('Lyrics queue is busy.', 3);
-  const deadline = options.deadline || Date.now() + 7000;
+  const deadline = options.deadline || Date.now() + STAGE_BUDGET_MS;
   let expired = false, timer;
   queued++;
   const work = lyricQueue.catch(() => {}).then(async () => {
     // Expired entries do not consume a throttle slot or make a late provider request.
     if (expired || Date.now() >= deadline) throw new ProviderFailure('Lyrics queue timed out.', 2);
-    const blocked = cooldownError(origin); if (blocked) throw blocked;
+    const blockedNow = cooldownError(origin); if (blockedNow) throw blockedNow;
     await new Promise(resolve => setTimeout(resolve, 220));
     if (expired || Date.now() >= deadline) throw new ProviderFailure('Lyrics queue timed out.', 2);
     return fetchJsonNow(url, { ...options, deadline });
@@ -73,16 +87,16 @@ async function fetchJson(url, options = {}) {
     })]);
   } finally { clearTimeout(timer); }
 }
+
 async function fetchJsonNow(url, options = {}) {
-  const { timeout = 10000, deadline, ...rest } = options;
+  const { timeout = STAGE_BUDGET_MS, deadline, ...rest } = options;
   let response;
   try {
     response = await fetch(url, {
       cache: 'no-store',
       signal: AbortSignal.timeout(Math.max(1, Math.min(timeout, deadline ? deadline - Date.now() : timeout))),
       ...rest,
-      headers: { Accept: 'application/json',
-        'User-Agent': 'JaSH-ViBeS/11.0 (https://github.com/Jash-k/jashvibes)', ...(rest.headers || {}) },
+      headers: { Accept: 'application/json', 'User-Agent': 'JaSH-ViBeS/11.0 (https://github.com/Jash-k/jashvibes)', ...(rest.headers || {}) },
     });
   } catch { throw new ProviderFailure('Could not reach the lyrics provider.', 2); }
   if (response.status === 404) return null;
@@ -96,243 +110,142 @@ async function fetchJsonNow(url, options = {}) {
   try { return await response.json(); } catch { throw new ProviderFailure('Lyrics provider returned an invalid response.', 2); }
 }
 
-function extractSaavnLyrics(payload) {
-  const data = payload?.data || payload;
-  return data?.lyrics || data?.text || '';
-}
+/* ── retrieval: both LRCLIB questions, stage by stage ────────────────────── */
 
-async function lookupSaavnLyrics(id = '', { timeout = 10000 } = {}) {
-  if (!id) return null;
-  const base = getSaavnApiBase();
-  if (!base) return null;
-  const candidates = [
-    `${base}/api/songs/${encodeURIComponent(id)}/lyrics`,
-    `${base}/songs/${encodeURIComponent(id)}/lyrics`,
-    `${base}/api/lyrics?id=${encodeURIComponent(id)}`,
-  ];
-
-  let failure;
-  for (const url of candidates) {
-    let payload;
-    try { payload = await fetchJson(url, { timeout: Math.max(1, Math.floor(timeout / candidates.length)) }); }
-    catch (error) { failure = error; continue; }
-    const plainLyrics = extractSaavnLyrics(payload);
-    if (plainLyrics) {
-      return {
-        lyrics: plainLyrics,
-        plainLyrics,
-        syncedLyrics: '',
-        source: 'saavn',
-        sourceUrl: url,
-        matched: null,
-      };
-    }
-  }
-  if (failure) throw failure;
-  return null;
-}
-
-function scoreLrclibResult(item = {}, wanted = {}) {
-  const title = comparable(item.trackName || item.name || '');
-  const artist = comparable(item.artistName || '');
-  const album = comparable(item.albumName || '');
-  const wantedTitle = comparable(wanted.title || '');
-  const wantedArtist = comparable(wanted.artist || '');
-  const wantedAlbum = comparable(wanted.album || '');
+function lrclibScore(item = {}, wanted = {}) {
+  const title = item.trackName || item.name || '';
+  const wantedTitle = wanted.title || '';
+  const artist = item.artistName || '';
   let score = 0;
-
-  if (title && wantedTitle) {
-    if (title === wantedTitle) score += 120;
-    else if (title.includes(wantedTitle) || wantedTitle.includes(title)) score += 70;
-    else {
-      const tokens = wantedTitle.split(' ').filter((token) => token.length > 1);
-      const hits = tokens.filter((token) => title.includes(token)).length;
-      score += Math.round((hits / Math.max(tokens.length, 1)) * 50);
-    }
+  if (title.toLowerCase() === wantedTitle.toLowerCase()) score += 120;
+  else if (title.toLowerCase().includes(wantedTitle.toLowerCase())) score += 70;
+  const artistTokens = String(wanted.artist || '').toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length > 1);
+  const hits = artistTokens.filter((token) => artist.toLowerCase().includes(token)).length;
+  score += artistTokens.length ? Math.round((hits / artistTokens.length) * 70) : 0;
+  if (item.albumName && wanted.album && String(item.albumName).toLowerCase().includes(String(wanted.album).toLowerCase())) score += 25;
+  const delta = Math.abs((Number(item.duration) || 0) - (Number(wanted.duration) || 0));
+  if (Number(wanted.duration) > 0 && Number(item.duration) > 0) {
+    if (delta <= 2) score += 30; else if (delta <= DURATION_TOLERANCE_SECONDS) score += 20; else score += Math.max(-30, 15 - delta);
   }
-
-  if (artist && wantedArtist) {
-    const artistTokens = wantedArtist.split(' ').filter((token) => token.length > 1);
-    const hits = artistTokens.filter((token) => artist.includes(token)).length;
-    if (artist === wantedArtist) score += 70;
-    else score += Math.round((hits / Math.max(artistTokens.length, 1)) * 55);
-  }
-
-  if (album && wantedAlbum) {
-    if (album === wantedAlbum) score += 25;
-    else if (album.includes(wantedAlbum) || wantedAlbum.includes(album)) score += 12;
-  }
-
-  const wantedDuration = Number(wanted.duration || 0);
-  const itemDuration = Number(item.duration || 0);
-  if (wantedDuration > 0 && itemDuration > 0) {
-    const diff = Math.abs(wantedDuration - itemDuration);
-    if (diff <= 2) score += 30;
-    else if (diff <= 6) score += 18;
-    else if (diff <= 12) score += 6;
-    else score -= Math.min(30, diff);
-  }
-
   if (item.syncedLyrics) score += 12;
   if (item.plainLyrics) score += 8;
-  if (item.instrumental) score -= 80;
   return score;
 }
 
-function mapLrclibItem(item = {}, sourceUrl = '', wanted = {}) {
-  const plainLyrics = item.plainLyrics || stripSyncedLyrics(item.syncedLyrics || '');
-  const syncedLyrics = item.syncedLyrics || '';
+function stripTags(value = '') {
+  return String(value || '').split(/\r?\n/).map((line) => line.replace(/^\s*\[[^\]]+\]\s*/g, '').trim()).filter(Boolean).join('\n');
+}
+
+function mapResult(item, sourceUrl, wanted) {
+  const plainLyrics = item.plainLyrics || stripTags(item.syncedLyrics || '');
   return {
-    lyrics: plainLyrics || syncedLyrics || '',
+    lyrics: plainLyrics || item.syncedLyrics || '',
     plainLyrics,
-    syncedLyrics,
+    syncedLyrics: item.syncedLyrics || '',
     instrumental: Boolean(item.instrumental),
     source: 'lrclib',
     sourceUrl,
     matched: {
-      id: item.id,
-      trackName: item.trackName || item.name || '',
-      artistName: item.artistName || '',
-      albumName: item.albumName || '',
-      duration: item.duration || 0,
-      score: scoreLrclibResult(item, wanted),
+      id: item.id, trackName: item.trackName || item.name || '', artistName: item.artistName || '',
+      albumName: item.albumName || '', duration: item.duration || 0,
+      score: lrclibScore(item, wanted), tier: item.matchTier || null,
     },
+    matchVersion: LYRICS_MATCH_VERSION,
   };
 }
 
-const lyricCache = new Map(), lyricPending = new Map();
-async function lookupLrclibLyrics(ctx = {}) {
-  const metadata = lyricRequestMetadata({ title: ctx.title, artists: ctx.artist, album: ctx.album, duration: ctx.duration });
-  const key = JSON.stringify([LYRICS_MATCH_VERSION, lyricTitle(metadata.title), metadata.artist, metadata.album, metadata.duration, ctx.exclude]);
-  if (!ctx.force && lyricCache.get(key)?.expires > Date.now()) return lyricCache.get(key).value;
-  if (lyricPending.has(key)) return lyricPending.get(key);
-  const job = lookupLrclibUncached(ctx).then((value) => {
-    if (lyricCache.size >= 300) lyricCache.delete(lyricCache.keys().next().value);
-    lyricCache.set(key, { value, expires: Date.now() + (value ? 3600000 : 60000) });
-    return value;
-  }).finally(() => lyricPending.delete(key));
-  lyricPending.set(key, job); return job;
-}
-async function lookupLrclibUncached({ title = '', artist = '', album = '', duration = 0, timeout = 7000, exclude = '', force = false } = {}) {
+/**
+ * Ask LRCLIB for one song. Returns the strongest accepted record, the stages
+ * that were tried, and — when nothing matched — why, so the UI can be specific.
+ */
+async function findLyrics({ title, artist, album, duration, exclude = '', force = false, base = getLyricsApiBase() }) {
   const metadata = lyricRequestMetadata({ title, artists: artist, album, duration });
-  const wanted = { title: lyricTitle(metadata.title), artist: normalize(metadata.artist), album: metadata.album, duration: metadata.duration };
-  if (!wanted.title || !wanted.artist) return null;
+  const wanted = { title: metadata.title, artist: normalize(metadata.artist), album: metadata.album, duration: metadata.duration };
   const blocked = new Set(String(exclude).split(',').filter(Boolean));
-  const deadline = Date.now() + Math.min(timeout, 7000);
-  const base = getLyricsApiBase();
-  let failure;
-  const lookup = async (path, params) => {
-    if (Date.now() >= deadline) { failure = new ProviderFailure('Lyrics lookup timed out.', 2); return null; }
+  const attempts = [];
+  const started = Date.now();
+  let failure = null;
+  if (!wanted.title || !wanted.artist) {
+    return { result: null, attempts, reason: 'missing-metadata', failure: null };
+  }
+  const variants = lyricSearchVariants({ title: wanted.title, album: wanted.album });
+  const best = { item: null, rank: -1 };
+  const TIER = { strong: 3, 'album-duration': 2, 'artist-duration': 2, 'vocal-alias': 1 };
+
+  const ask = async (path, params, label) => {
+    if (Date.now() - started >= TOTAL_BUDGET_MS) { attempts.push({ stage: label, outcome: 'skipped-budget' }); return null; }
     const url = new URL(path, base + '/');
-    for (const [key, value] of Object.entries(params)) if (value) url.searchParams.set(key, String(value));
+    for (const [key, value] of Object.entries(params)) if (value !== '' && value != null) url.searchParams.set(key, String(value));
     let payload;
     try {
-      payload = await fetchJson(url.toString(), { timeout: 3000, deadline });
-      if (payload !== null && (path === '/api/search' ? !Array.isArray(payload) : typeof payload !== 'object' || !payload.id))
-        throw new ProviderFailure('Lyrics provider returned an invalid result.', 2);
-    } catch (error) { failure = error; return null; }
-    const items = (Array.isArray(payload) ? payload : payload ? [payload] : []).filter((item) => !blocked.has(String(item.id)));
+      payload = await fetchJson(url.toString(), { deadline: Date.now() + STAGE_BUDGET_MS });
+    } catch (error) {
+      failure = error;
+      attempts.push({ stage: label, outcome: 'error', message: error.message });
+      return null;
+    }
+    if (payload === null) { attempts.push({ stage: label, outcome: 'not-found' }); return null; }
+    const rows = (Array.isArray(payload) ? payload : [payload]).filter((row) => row && typeof row === 'object');
+    if (!rows.length) { attempts.push({ stage: label, outcome: 'empty' }); return null; }
+    const items = rows.filter((row) => !blocked.has(String(row.id)));
     const match = chooseLyricMatch(items, wanted);
-    return match ? { ...mapLrclibItem(match, url.toString(), wanted), matchVersion: LYRICS_MATCH_VERSION } : null;
+    attempts.push({ stage: label, outcome: match ? 'matched' : 'rejected', candidates: rows.length });
+    if (!match) return null;
+    const rank = TIER[match.matchTier] || 0;
+    if (rank > best.rank) { best.item = match; best.rank = rank; best.url = url.toString(); }
+    return match;
   };
-  const signature = { track_name: wanted.title, artist_name: wanted.artist, album_name: wanted.album, duration: wanted.duration > 0 && wanted.duration <= 3600 ? Math.round(wanted.duration) : '' };
-  const exact = await lookup('/api/get', signature);
-  if (exact) return exact;
-  // A title search broadens retrieval, never acceptance: album/artist/duration guards remain mandatory.
-  // Keep the requested version in `wanted`; only broaden retrieval to the base title.
-  // Acceptance requires an explicitly agreeing vocal version, album and duration.
-  const searchTitle = lyricVocalVersion(wanted.title)?.base || wanted.title;
-  const specific = await lookup('/api/search', { track_name: searchTitle, album_name: wanted.album });
-  if (specific) return specific;
-  // Album punctuation/catalogue variants can prevent retrieval even when identity matches.
-  // Broaden retrieval only; chooseLyricMatch still enforces title, album, artist and duration guards.
-  if (wanted.album) {
-    const broad = await lookup('/api/search', { track_name: searchTitle });
-    if (broad) return broad;
+
+  // 1. The exact signature. Duration is optional upstream; omitting it is better
+  //    than sending a duration that would 404 a record we then never try again.
+  await ask('/api/get', {
+    track_name: variants[0], artist_name: wanted.artist, album_name: wanted.album,
+    duration: wanted.duration > 0 && wanted.duration <= 3600 ? Math.round(wanted.duration) : '',
+  }, 'get');
+  // 2. Fielded search across title variants.
+  for (const variant of variants.slice(0, 3)) {
+    if (best.rank >= 3) break;
+    await ask('/api/search', { track_name: variant }, `search-track_name:${variant.slice(0, 40)}`);
   }
-  // Never negative-cache an incomplete lookup, even if another stage returned 404.
-  if (failure) throw failure;
-  return null;
+  // 3. Free-text search — the query that finds records the fielded one misses.
+  for (const variant of variants.slice(0, 2)) {
+    if (best.rank >= 3) break;
+    await ask('/api/search', { q: wanted.album ? `${variant} ${wanted.album}` : variant }, `search-q:${variant.slice(0, 40)}`);
+  }
+  // 3b. Last resort: artist + title as free text, which survives album suffixes.
+  if (!best.item && wanted.artist && Date.now() - started < TOTAL_BUDGET_MS) {
+    await ask('/api/search', { q: `${wanted.title} ${wanted.artist}` }, 'search-q:title+artist');
+  }
+  if (!best.item) {
+    const reason = attempts.some((a) => a.outcome === 'rejected') ? 'identity-rejected'
+      : attempts.some((a) => a.outcome === 'error') ? 'provider-error' : 'not-in-catalogue';
+    return { result: null, attempts, reason, failure };
+  }
+  return { result: mapResult(best.item, best.url, wanted), attempts, reason: null, failure };
 }
 
-/* LRCLIB's score is unbounded-ish (title 120 + artist 70 + album 25 + duration 30 +
-   synced 12 + plain 8). Normalise it to a display percentage so the picker can show
-   one honest number instead of a raw score nobody can read. */
+/* ── picker helpers ──────────────────────────────────────────────────────── */
+
 const MAX_LRCLIB_SCORE = 265;
+const scorePercent = (score = 0) => Math.max(0, Math.min(99, Math.round((Number(score) || 0) / MAX_LRCLIB_SCORE * 100)));
+const previewLines = (text = '', limit = 3) => String(text || '').split(/\r?\n/)
+  .map((line) => line.replace(/^\s*\[[^\]]+\]\s*/g, '').trim()).filter(Boolean).slice(0, limit);
+const lineCount = (text = '') => String(text || '').split(/\r?\n/)
+  .map((line) => line.replace(/^\s*\[[^\]]+\]\s*/g, '').trim()).filter(Boolean).length;
 
-function scorePercent(score = 0) {
-  return Math.max(0, Math.min(99, Math.round((Number(score) || 0) / MAX_LRCLIB_SCORE * 100)));
-}
+const NO_STORE = { 'Cache-Control': 'no-store' };
+const json = (data, status = 200) => NextResponse.json(data, { status, headers: NO_STORE });
 
-/**
- * The first few real lines of a result, so "choose your source" can show what the
- * user is about to apply instead of a name and a promise. Timestamps are stripped:
- * this is for reading, not for playing.
- */
-function previewLines(text = '', limit = 3) {
-  return String(text || '')
-    .split(/\r?\n/)
-    .map((line) => line.replace(/^\s*\[[^\]]+\]\s*/g, '').trim())
-    .filter(Boolean)
-    .slice(0, limit);
-}
+const MESSAGES = {
+  'missing-metadata': 'This song arrived without a title or artist, so there was nothing safe to look up.',
+  'not-in-catalogue': 'LRCLIB does not have this song. Nothing else is substituted — you can paste the lyrics for it.',
+  'identity-rejected': 'LRCLIB returned records for this song but none matched its title, artist and duration closely enough to show.',
+  'provider-error': 'The lyrics provider could not be reached.',
+  'user-saved': '',
+};
 
-function lineCount(text = '') {
-  return String(text || '')
-    .split(/\r?\n/)
-    .map((line) => line.replace(/^\s*\[[^\]]+\]\s*/g, '').trim())
-    .filter(Boolean).length;
-}
+/* ── GET ─────────────────────────────────────────────────────────────────── */
 
-/** Run one wired source and normalise it into a comparable shape. Never throws. */
-async function runSource(sourceId, ctx) {
-  const started = Date.now();
-  try {
-    if (sourceId === 'saavn') {
-      const result = await lookupSaavnLyrics(ctx.id, { timeout: ctx.timeout });
-      const text = result?.plainLyrics || result?.lyrics || '';
-      return {
-        id: 'saavn', ok: Boolean(text), kind: text ? 'plain' : 'none',
-        plainLyrics: text, syncedLyrics: '', matched: null, ms: Date.now() - started,
-        lines: lineCount(text), preview: previewLines(text),
-        reason: text ? null : 'No lyrics returned for this song id.',
-      };
-    }
-    if (sourceId === 'lrclib') {
-      const result = await lookupLrclibLyrics({ ...ctx, timeout: ctx.timeout });
-      const text = result?.syncedLyrics || result?.plainLyrics || '';
-      return {
-        id: 'lrclib', ok: Boolean(text),
-        kind: text ? (result.syncedLyrics ? 'synced' : 'plain') : 'none',
-        plainLyrics: result?.plainLyrics || '', syncedLyrics: result?.syncedLyrics || '',
-        matched: result?.matched || null, ms: Date.now() - started,
-        lines: lineCount(text), preview: previewLines(text),
-        match: result?.matched ? scorePercent(result.matched.score) : null,
-        reason: text ? null : 'Nothing above the match threshold for this title and artist.',
-      };
-    }
-  } catch (error) {
-    return {
-      id: sourceId, ok: false, kind: 'none', plainLyrics: '', syncedLyrics: '',
-      matched: null, ms: Date.now() - started, lines: 0, preview: [],
-      reason: error.message || 'Lookup failed', retryable: error.retryable !== false, retryAfter: error.retryAfter || 2,
-    };
-  }
-  return {
-    id: sourceId, ok: false, kind: 'none', plainLyrics: '', syncedLyrics: '',
-    matched: null, ms: 0, lines: 0, preview: [], reason: 'Not a wired source.',
-  };
-}
-
-/**
- * GET /api/music/lyrics
- *   (default)        → strict LRCLIB metadata match, then configured track-ID plain fallback
- *   ...&list=1       → every wired source, tried in parallel, with a real preview of
- *                      what each one returned. This is what "choose your source" reads.
- *   ...&source=lrclib → force one source, so the picker's choice actually applies.
- *
- * All lookup paths apply the same conservative identity checks.
- */
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const id = String(searchParams.get('id') || '').trim();
@@ -344,154 +257,124 @@ export async function GET(request) {
   const force = searchParams.get('force') === '1';
   const wantsList = searchParams.get('list') === '1';
   const forced = String(searchParams.get('source') || '').trim().toLowerCase();
+  const song = { title, artist, album, duration, id };
 
-  /* ── catalogue only: the list of sources, no provider is touched ─────────
-     The picker's "not wired" rows and the settings panel need the catalogue and
-     nothing else. Without this guard those two screens each fired the full
-     parallel lookup (two providers, 7s timeout apiece) to render static text. */
+  /* catalogue only: the list of sources, no provider is touched */
   if (wantsList && searchParams.get('catalogue') === '1' && !title && !id) {
-    return NextResponse.json(
-      { catalogue: groupedSources(), groups: SOURCE_GROUPS },
-      { headers: { 'Cache-Control': 'no-store' } },
-    );
+    return json({ catalogue: groupedSources(), groups: SOURCE_GROUPS });
   }
 
-  /* ── the picker: every wired source, in parallel, with its real output ───── */
+  /* the owner's own lyrics win before anything is asked of a provider */
+  const override = (!force && (title || id)) ? await readLyricsOverride(song) : null;
+  const overrideRow = override ? {
+    id: 'user', ok: true, kind: override.syncedLyrics ? 'synced' : 'plain',
+    plainLyrics: override.plainLyrics || '', syncedLyrics: override.syncedLyrics || '', matched: null, ms: 0,
+    lines: lineCount(override.syncedLyrics || override.plainLyrics || ''),
+    preview: previewLines(override.syncedLyrics || override.plainLyrics || ''), reason: null,
+  } : null;
+
+  /* the picker: one provider, previewed, plus whatever the owner saved */
   if (wantsList) {
-    const ctx = { id, title, artist, album, duration, exclude, force, timeout: 7000 };
-    const [saavn, lrclib] = await Promise.all([
-      runSource('saavn', ctx),
-      runSource('lrclib', ctx),
-    ]);
-    const byId = { saavn, lrclib };
-    // "Auto" is not a third lookup — it is whichever wired source the cascade would
-    // pick, which is exactly what the default path returns.
-    const autoWinner = ['lrclib', 'saavn'].find((key) => byId[key]?.ok) || null;
+    const started = Date.now();
+    const found = overrideRow ? { result: { lyrics: overrideRow.plainLyrics || overrideRow.syncedLyrics, ...overrideRow }, attempts: [], reason: null } : await findLyrics({ title, artist, album, duration, exclude, force });
+    const lrclib = found.result
+      ? {
+        id: 'lrclib', ok: true, kind: found.result.syncedLyrics ? 'synced' : 'plain',
+        plainLyrics: found.result.plainLyrics || '', syncedLyrics: found.result.syncedLyrics || '',
+        matched: found.result.matched || null, ms: Date.now() - started,
+        lines: lineCount(found.result.syncedLyrics || found.result.plainLyrics || ''),
+        preview: previewLines(found.result.syncedLyrics || found.result.plainLyrics || ''),
+        match: found.result.matched?.score != null ? scorePercent(found.result.matched.score) : null,
+        winner: overrideRow ? 'user' : 'lrclib', reason: null,
+      }
+      : {
+        id: 'lrclib', ok: false, kind: 'none', plainLyrics: '', syncedLyrics: '', matched: null,
+        ms: Date.now() - started, lines: 0, preview: [], match: null, winner: null,
+        reason: MESSAGES[found.reason] || 'No match for this song.', retryable: found.reason === 'provider-error',
+      };
     const auto = {
-      id: 'auto', ok: Boolean(autoWinner), kind: autoWinner ? byId[autoWinner].kind : 'none',
-      plainLyrics: autoWinner ? byId[autoWinner].plainLyrics : '',
-      syncedLyrics: autoWinner ? byId[autoWinner].syncedLyrics : '',
-      matched: autoWinner ? byId[autoWinner].matched : null,
-      ms: autoWinner ? byId[autoWinner].ms : 0,
-      lines: autoWinner ? byId[autoWinner].lines : 0,
-      preview: autoWinner ? byId[autoWinner].preview : [],
-      match: autoWinner && byId[autoWinner].match != null ? byId[autoWinner].match : null,
-      winner: autoWinner,
-      reason: autoWinner ? null : [saavn, lrclib].find(result => result.retryable)?.reason || 'Neither wired source returned lyrics for this track.',
-      retryable: !autoWinner && [saavn, lrclib].some(result => result.retryable),
-      retryAfter: Math.max(saavn.retryAfter || 0, lrclib.retryAfter || 0),
+      id: 'auto', ok: lrclib.ok, kind: lrclib.kind, plainLyrics: lrclib.plainLyrics, syncedLyrics: lrclib.syncedLyrics,
+      matched: lrclib.matched, ms: lrclib.ms, lines: lrclib.lines, preview: lrclib.preview, match: lrclib.match,
+      winner: lrclib.ok ? (overrideRow ? 'user' : 'lrclib') : null,
+      reason: lrclib.ok ? null : lrclib.reason, retryable: Boolean(lrclib.retryable), retryAfter: 0,
     };
-
-    const catalogue = Object.fromEntries(
-      groupedSources().flatMap((group) => group.items.map((item) => [item.id, item])),
-    );
-
-    const sources = [auto, byId.saavn, byId.lrclib].map((result) => {
+    const catalogue = Object.fromEntries(groupedSources().flatMap((group) => group.items.map((item) => [item.id, item])));
+    const rows = [...(overrideRow ? [overrideRow] : []), auto, lrclib];
+    const sources = rows.map((result) => {
       const meta = catalogue[result.id] || { id: result.id, name: result.id, mark: '?', kind: 'none' };
       return {
-        id: result.id,
-        name: meta.name,
-        mark: meta.mark,
-        pickable: true,
-        kind: result.kind === 'auto' || result.kind === 'none' ? (result.kind === 'auto' ? 'auto' : 'none') : result.kind,
-        // what APPLYING this source would do to the stage — a plain source has no timing
-        applies: result.id === 'auto' ? (meta.kind === 'auto' ? (WIRED_SOURCE_KIND[auto.winner] || 'none') : 'none') : WIRED_SOURCE_KIND[result.id] || 'none',
-        ok: result.ok,
-        lines: result.lines,
-        preview: result.preview,
-        match: result.match ?? null,
-        ms: result.ms,
-        winner: result.winner || null,
-        reason: result.reason,
-        retryable: Boolean(result.retryable), retryAfter: result.retryAfter || 0,
-        evidence: meta.evidence,
-        note: meta.note,
-        wired: true,
+        ...result,
+        name: meta.name, mark: meta.mark, pickable: true,
+        applies: result.id === 'auto' ? (WIRED_SOURCE_KIND[lrclib.winner] || 'synced') : (WIRED_SOURCE_KIND[result.id] || (result.id === 'user' ? result.kind : 'none')),
+        evidence: meta.evidence, note: meta.note, wired: true,
       };
     });
-
-    return NextResponse.json(
-      {
-        sources,
-        groups: SOURCE_GROUPS.map((group) => ({ id: group.id, label: group.label, badge: group.badge, tone: group.tone })),
-        catalogue: groupedSources(),
-        wanted: { id, title, artist, album, duration },
-      },
-      { headers: { 'Cache-Control': 'no-store' } },
-    );
+    return json({
+      sources, groups: SOURCE_GROUPS.map((g) => ({ id: g.id, label: g.label, badge: g.badge, tone: g.tone })),
+      catalogue: groupedSources(), wanted: { id, title, artist, album, duration },
+    });
   }
 
-  /* ── pinned source: what the picker's choice applies ────────────────────── */
+  /* pinned source: what the picker's choice applies */
   if (forced && forced !== 'auto') {
     if (forced === 'inst') {
-      return NextResponse.json(
-        { lyrics: '', plainLyrics: '', syncedLyrics: '', instrumental: true, source: 'inst', applied: 'none' },
-        { headers: { 'Cache-Control': 'no-store' } },
-      );
+      return json({ lyrics: '', plainLyrics: '', syncedLyrics: '', instrumental: true, source: 'inst', applied: 'none' });
+    }
+    if (forced === 'user') {
+      if (!overrideRow) return json({ lyrics: '', plainLyrics: '', syncedLyrics: '', source: 'user', applied: 'none', message: 'No saved lyrics for this song yet.' });
+      return json({
+        lyrics: overrideRow.plainLyrics || overrideRow.syncedLyrics, plainLyrics: overrideRow.plainLyrics,
+        syncedLyrics: overrideRow.syncedLyrics, instrumental: false, source: 'user',
+        applied: overrideRow.kind, matched: null, matchVersion: LYRICS_MATCH_VERSION,
+      });
     }
     if (!isPickable(forced) || !sourceById(forced)?.group) {
-      return NextResponse.json(
-        { lyrics: '', plainLyrics: '', syncedLyrics: '', source: forced, applied: 'none', message: 'That source is not wired in this app.' },
-        { headers: { 'Cache-Control': 'no-store' } },
-      );
+      return json({ lyrics: '', plainLyrics: '', syncedLyrics: '', source: forced, applied: 'none', message: 'That source is not wired in this app.' });
     }
-    const result = await runSource(forced, { id, title, artist, album, duration, exclude, force, timeout: 7000 });
-    if (!result.ok) {
-      return NextResponse.json(
-        {
-          lyrics: '', plainLyrics: '', syncedLyrics: '', source: forced, applied: 'none',
-          message: result.reason || 'That source had nothing for this track.',
-          retryable: Boolean(result.retryable), retryAfter: result.retryAfter || 0,
-        },
-        { headers: { 'Cache-Control': 'no-store' } },
-      );
-    }
-    return NextResponse.json(
-      {
-        lyrics: result.plainLyrics || result.syncedLyrics || '',
-        plainLyrics: result.plainLyrics,
-        syncedLyrics: result.syncedLyrics,
-        instrumental: false,
-        source: forced,
-        applied: result.kind,          // 'synced' | 'plain' — the UI keys the highlight off this
-        matched: result.matched,
-        matchVersion: LYRICS_MATCH_VERSION,
-      },
-      { headers: { 'Cache-Control': 'no-store' } },
-    );
   }
 
+  /* default: owner's lyrics, then the persistent cache, then LRCLIB */
   try {
-    let failure;
-    const lrclibResult = await lookupLrclibLyrics({ title, artist, album, duration, exclude, force, timeout: 7000 }).catch(error => { failure = error; return null; });
-    if (lrclibResult?.lyrics) return NextResponse.json(lrclibResult, { headers: { 'Cache-Control': 'no-store' } });
-    // Track-ID-bound plain lyrics from an explicitly configured provider only.
-    const saavnResult = searchParams.get('skipSaavn') === '1' ? null : await lookupSaavnLyrics(id, { timeout: 2500 }).catch(error => { failure = failure || error; return null; });
-    if (saavnResult?.lyrics) return NextResponse.json({ ...saavnResult, matchVersion: LYRICS_MATCH_VERSION }, { headers: { 'Cache-Control': 'no-store' } });
-
-    if (failure) throw failure;
-    return NextResponse.json(
-      {
-        lyrics: '',
-        plainLyrics: '',
-        syncedLyrics: '',
-        source: 'none',
-        message: title ? 'No confidently matched lyrics found for this track. We did not substitute another song.' : 'No song title/artist supplied for lyrics lookup.',
-      },
-      { headers: { 'Cache-Control': 'no-store' } },
-    );
+    if (overrideRow) {
+      return json({
+        lyrics: overrideRow.plainLyrics || overrideRow.syncedLyrics, plainLyrics: overrideRow.plainLyrics,
+        syncedLyrics: overrideRow.syncedLyrics, instrumental: false, source: 'user',
+        sourceUrl: '', matched: { note: override.note || '', origin: override.origin, tier: 'user' },
+        matchVersion: LYRICS_MATCH_VERSION, cached: false,
+      });
+    }
+    if (!force) {
+      const cached = await readLyricsCache(song);
+      if (cached?.status === 'ok' && cached.payload) {
+        return json({ ...cached.payload, matchVersion: LYRICS_MATCH_VERSION, cached: true });
+      }
+      if (cached?.status === 'none' && (title || id)) {
+        const reason = cached.reason || 'not-in-catalogue';
+        return json({
+          lyrics: '', plainLyrics: '', syncedLyrics: '', source: 'none', reason,
+          message: MESSAGES[reason] || 'No lyrics for this song.', retryable: reason === 'provider-error', cached: true,
+        });
+      }
+    }
+    const found = await findLyrics({ title, artist, album, duration, exclude, force });
+    if (found.result) {
+      writeLyricsCache(song, { status: 'ok', payload: found.result });   // fire and forget
+      return json(found.result);
+    }
+    writeLyricsCache(song, { status: 'none', reason: found.reason });
+    if (found.reason === 'provider-error' && found.failure?.retryable !== false) throw found.failure;
+    return json({
+      lyrics: '', plainLyrics: '', syncedLyrics: '', source: 'none', reason: found.reason,
+      message: MESSAGES[found.reason] || 'No lyrics for this song.', tried: found.attempts,
+      retryable: found.reason === 'provider-error',
+    });
   } catch (error) {
-    // Provider outages are expected, retryable outcomes — not a missing song.
+    // A provider outage is a retryable outcome, never a "this song has no lyrics" verdict.
     return NextResponse.json(
-      {
-        lyrics: '',
-        plainLyrics: '',
-        syncedLyrics: '',
-        source: 'error',
-        message: error.message || 'Lyrics lookup failed',
-        retryable: error.retryable !== false, retryAfter: error.retryAfter || 2,
-      },
-      { status: error.retryable === false ? 502 : 503, headers: { 'Cache-Control': 'no-store', 'Retry-After': String(error.retryAfter || 2) } },
+      { lyrics: '', plainLyrics: '', syncedLyrics: '', source: 'error',
+        message: error.message || 'Lyrics lookup failed', retryable: error.retryable !== false,
+        retryAfter: error.retryAfter || 2 },
+      { status: error.retryable === false ? 502 : 503, headers: { ...NO_STORE, 'Retry-After': String(error.retryAfter || 2) } },
     );
   }
 }

@@ -62,7 +62,7 @@ A native player or player-library swap cannot fix unavailable keys/DRM.
 Widevine/PlayReady/FairPlay additionally need authorized licence-server access
 and platform-specific configuration; parsing a URL is not full integration.
 Raw TS/FLV and arbitrary codecs are not newly supported by this patch. The
-unused liveEngine.js is not wired in as a claimed universal player solution.
+the unused live-engine planner was deleted in the cleanup rather than advertised as a universal player solution.
 
 Render free tier sleeps after idle time and has outbound-bandwidth limits.
 Proxy-first remains necessary for declared source headers; moving media to

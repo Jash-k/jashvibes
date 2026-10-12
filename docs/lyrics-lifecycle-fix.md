@@ -1,4 +1,8 @@
 # Lyrics lifecycle reliability patch
+> **Historical.** This note describes the request lifecycle behaviour of the pre-v5 pipeline.
+> The shipped design is `docs/lyrics-pipeline.md`: LRCLIB-only, tiered acceptance
+> (match version 5), database-cached. Rules here that are not in that document no
+> longer apply.
 
 Base: `4f8936ede6b14dc3a9735502b305b374581b896c` (`lyrics fix`).
 This is an incremental patch over the already-applied Spotify lyrics and performance fixes, not a cumulative update.

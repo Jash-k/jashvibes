@@ -1,6 +1,4 @@
 'use client';
-// Compatibility for the legacy MusicCurtains consumer retained in the fetched repo.
-export { useMusic } from './MusicContext';
 import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
