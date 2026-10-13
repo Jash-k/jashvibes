@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import dynamic from 'next/dynamic';
 import { watchHref as unifiedWatchHref } from '@/lib/watch/policy';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -10,14 +9,12 @@ import { POSTER_SIZES_ATTR, tmdbImageSrcSet } from '@/lib/tmdbPoster';
 import Icon from '@/components/Icons';
 import { parseReleaseQuality } from '@/lib/quality';
 import { isFavoriteItem, makeWatchKey, toggleFavoriteItem, useLibraryVersion } from '@/lib/watchStore';
-import RailNav from '@/components/rail/RailNav';
 import RailFocus from '@/components/rail/RailFocus';
 
 // The command palette is a 252-line modal that only exists after the user presses
 // Cmd/Ctrl-K, so it has no business in the home page's initial bundle — the same
 // deferral the player already uses. No loading shell: it is a modal, and an empty
 // frame flashing before the panel appears would read worse than a brief pause.
-const CommandPalette = dynamic(() => import('@/components/CommandPalette'), { ssr: false });
 import { buildHeroSlide, hasArt, itemQualityChip, pickHeroItem, qualitySourceText } from '@/lib/heroSlide';
 import { revealStyle, useReveal } from '@/lib/useReveal';
 
@@ -420,7 +417,6 @@ function CatalogRow({ id, label, items = [], info, status, error, onMore, onItem
 export default function HomeClient({ initialHero = null }) {
   const [movies, setMovies] = useState([]);
   const [series, setSeries] = useState([]);
-  const [paletteOpen, setPaletteOpen] = useState(false);
   const router = useRouter();
   const openTitle = useCallback(async (itemOrSlide) => {
     const item = itemOrSlide?.title
@@ -613,9 +609,6 @@ export default function HomeClient({ initialHero = null }) {
 
   return (
     <main className="jv-rail-shift min-h-dvh overflow-x-hidden bg-ink-0 text-txt-1">
-      <RailNav
-        onOpenSearch={() => setPaletteOpen(true)}
-      />
       {/* `focusSlide` wins as soon as the client fetch lands; until then the
             server-rendered slide is already on screen. */}
       <RailFocus slide={focusSlide || initialHero} eyebrow={null} onWatchOpen={openTitle} />
@@ -647,7 +640,6 @@ export default function HomeClient({ initialHero = null }) {
         />
       </section>
 
-      <CommandPalette open={paletteOpen} onClose={setPaletteOpen} />
     </main>
   );
 }

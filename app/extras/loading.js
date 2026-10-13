@@ -1,2 +1,4 @@
 import SectionLoading from '@/components/SectionLoading';
-export default function Loading() { return <SectionLoading title='ExTRaS'/>; }
+
+// Fallback geometry matches the section it stands in for; see components/Skeletons.jsx.
+export default function Loading() { return <SectionLoading title="ExTRaS" variant="cards"/>; }

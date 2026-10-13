@@ -1,9 +1,31 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { usePathname } from 'next/navigation';
 import { clearSessionCaches } from '@/lib/clientCache';
 import MobileDock from '@/components/MobileDock';
+import RailNav from '@/components/rail/RailNav';
+import BootSplash from '@/components/BootSplash';
+import LoadVeil from '@/components/LoadVeil';
+import useLoadVeil from '@/components/useLoadVeil';
+import { splashPhase } from '@/lib/bootPhase';
+import { installFetchTracker } from '@/lib/loadProgress';
+
+// The palette lives in the shell so search works from every section, not only Home.
+const CommandPalette = dynamic(() => import('@/components/CommandPalette'), { ssr: false });
+
+/* Routes that draw their own chrome. Music is a fixed canvas with its own rail and
+   dock; Admin owns its whole screen; Watch and the embed browser are full-bleed. */
+const RAIL_SECTIONS = ['/', '/vault', '/extras', '/stremio', '/classics'];
+const ownsOwnChrome = (pathname = '') => pathname.startsWith('/music') || pathname.startsWith('/admin')
+  || pathname.startsWith('/watch') || pathname.startsWith('/embed-browser');
+const wantsRail = (pathname = '') => RAIL_SECTIONS.includes(pathname) || RAIL_SECTIONS.includes(`/${pathname.split('/')[1] || ''}`);
+
+// Installed at module scope, not in an effect: a page's own effects run before the shell's,
+// so the first section's requests would otherwise be invisible to the ring. `installFetchTracker`
+// is idempotent and no-ops on the server.
+installFetchTracker();
 
 const STORAGE_KEY = 'jash_theatre_access_token';
 
@@ -115,6 +137,22 @@ export default function AuthGate({ children }) {
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState('checking');
   const [error, setError] = useState('');
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [splashElapsed, setSplashElapsed] = useState(0);
+  const bootedAt = useRef(typeof performance !== 'undefined' ? performance.now() : Date.now());
+
+  // One clock for the splash: it ticks only while the first paint is still on screen
+  // and stops as soon as the gate has settled past the minimum, so it costs nothing.
+  useEffect(() => {
+    if (status !== 'checking' && splashPhase({ status, elapsedMs: splashElapsed }).visible === false) return undefined;
+    const timer = setInterval(() => {
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      setSplashElapsed(now - bootedAt.current);
+    }, 120);
+    return () => clearInterval(timer);
+  }, [status, splashElapsed]);
+
+  // Search intent from the rail (and anywhere else that wants it later).
 
   useEffect(() => {
     const savedToken = window.localStorage.getItem(STORAGE_KEY);
@@ -190,27 +228,51 @@ export default function AuthGate({ children }) {
     setStatus('locked');
   }
 
-  if (pathname.startsWith('/admin')) return <>{children}</>;
-  if (status === 'checking') {
-    return (
-      <main className="flex min-h-dvh items-center justify-center bg-black text-zinc-100">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-zinc-700 border-t-red-600" />
-      </main>
-    );
-  }
+  // Section switches: the ring lives in the shell, outside the keyed route wrapper, so it is
+  // continuous across the commit while the content under it changes. See lib/loadProgress.js.
+  // Called before any early return — Admin skips the shell, but hooks must still run in the
+  // same order on every route or React unwinds the whole tree on the way in and out.
+  const veil = useLoadVeil(pathname);
 
-  if (status === 'unlocked') {
+  if (pathname.startsWith('/admin')) return <>{children}</>;
+
+  const splash = splashPhase({ status, elapsedMs: splashElapsed });
+
+  /* Unlocked: the shell. Rail and dock persist across every section, so a switch
+     only ever repaints the content — which is what removes the flicker. */
+  if (status === 'unlocked' && !splash.visible) {
+    const showRail = wantsRail(pathname) && !ownsOwnChrome(pathname);
     return (
       <>
-        {children}
-        {pathname !== '/music' ? <><DayNightToggle /><MobileDock /></> : null}
+        {showRail ? <RailNav onOpenSearch={() => setPaletteOpen(true)} /> : null}
+        {/* One keyed wrapper: every pathname change re-runs the content fade-in. While a
+            switch is in flight it also carries the blur — applied at mount if the load is
+            still running, so a freshly committed page never flashes sharp before it blurs. */}
+        <div key={pathname} className={`jv-route-content${veil.blurring ? ' is-loading' : ''}`} aria-busy={veil.blurring || undefined}>
+          {children}
+        </div>
+        {veil.visible && !veil.suppressed ? <LoadVeil revealing={veil.revealing} label={veil.label} /> : null}
+        {!ownsOwnChrome(pathname) ? <><DayNightToggle /><MobileDock /></> : null}
+        <CommandPalette open={paletteOpen} onClose={setPaletteOpen} />
       </>
     );
   }
 
+  /* First paint: one branded stage shared by the splash and the unlock card, so the
+     gate resolving never flashes black or moves the card. */
+  if (splash.visible) {
+    return (
+      <BootSplash
+        phase={splash.phase}
+        status={status}
+        elapsedMs={splashElapsed}
+        hint="Still checking your access — you can enter your password instead."
+      />
+    );
+  }
+
   return (
-    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-[#050505] px-4 py-6 text-zinc-100 sm:px-6">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(220,38,38,0.32),_transparent_36%),radial-gradient(circle_at_bottom_right,_rgba(234,179,8,0.12),_transparent_35%)]" />
+    <div className="jv-boot jv-boot-card-stage">
 
       <div className="relative w-full max-w-md rounded-[1.75rem] bg-[linear-gradient(115deg,#f59e0b,#dc2626_50%,#a855f7)] p-[1.5px] shadow-2xl shadow-red-950/40">
       <form
@@ -271,6 +333,6 @@ export default function AuthGate({ children }) {
         </button>
       </form>
       </div>
-    </main>
+    </div>
   );
 }

@@ -1,2 +1,4 @@
 import SectionLoading from '@/components/SectionLoading';
-export default function Loading() { return <SectionLoading title='Stremio'/>; }
+
+// Fallback geometry matches the section it stands in for; see components/Skeletons.jsx.
+export default function Loading() { return <SectionLoading title="Stremio" variant="posters" count={12}/>; }

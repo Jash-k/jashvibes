@@ -49,6 +49,7 @@ export default function RailNav({ onOpenSearch }) {
                 label={item.label}
                 aria-label={item.label}
                 aria-current={active ? 'page' : undefined}
+                idleWarm={!active}
                 title={`${item.label} — ${item.hint}`}
                 className={`jv-rail-item${active ? ' jv-rail-item-active' : ''}`}
               >

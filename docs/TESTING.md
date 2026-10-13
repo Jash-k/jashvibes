@@ -9,11 +9,12 @@ can be judged instead of guessed at.
 
 | Script | What it proves |
 |---|---|
-| `check-source.cjs` | Every `@/…` and relative import in 264 modules resolves. This is `npm run check`; a typo'd import otherwise surfaces only at runtime. |
+| `check-source.cjs` | Every `@/…` and relative import in 255 modules resolves. This is `npm run check`; a typo'd import otherwise surfaces only at runtime. |
 | `test-lyrics-pipeline.cjs` | The lyric pipeline contract: album-less matching, the four acceptance tiers, rejection reasons, M/F vocal rules, retrieval variants, ranking, cache-key stability, one wired source, the ladder and the store's fail-soft reads. |
 | `test-lyrics-controller.cjs` | The retry/cancel state machine in `lib/lyricsController.js`: superseded requests never publish, a failed refresh never erases good lyrics, retry delays are honoured. |
 | `test-vault-admin.cjs` | Vault Admin: catalogue/language conflict rules, metadata and playback staying separate, overlay visibility, custom items, auth wiring, optimistic-revision checks. |
 | `test-player-runtime.cjs` | The transport readout: live/unknown lengths suppressed, elapsed measured from the seek window, phone vs desktop forms. |
+| `test-loading-system.cjs` | The loading/switching contract: the splash minimum and slow phase, one rail/dock host across route changes, the content-only crossfade, the ~180 ms CSS delay that hides a fast fallback, per-section skeleton geometry, and exactly one pending indicator. |
 | `test-nav-order.cjs` | Desktop rail and mobile dock order, labels, active routes — the shared-nav contract. |
 | `test-performance-cache.cjs` | Session cache read/write/expiry and scroll restore. |
 | `test-extras-registry.cjs` | Extras validation: URL rules (no javascript:, no localhost/private hosts, no credentials in URLs), ordering, duplicates, version conflicts. |
@@ -44,6 +45,7 @@ and a deploy does not need it. Run them when you touch the screen they cover.
 | `live-doctor.mjs <url>` | Parses one live source and classifies every channel (transport, DRM, headers) so a dead feed can be diagnosed without opening the app. | read-only |
 | `db-maintenance.cjs` | Mongo index/hygiene audit behind `lib/dbMaintenance.cjs`: audits counters, prints what it would drop, and only drops the known low-value index set. See `docs/DATABASE-MAINTENANCE.md`. | **writes** — audit first |
 | `alias-loader.mjs` + `alias-register.mjs` | Lets plain Node run app modules that use the `@/` path alias (used by `live-doctor.mjs`). Not a test. | none |
+| `make-manifest.cjs [--release name]` | Regenerates `RELEASE-MANIFEST.json` (sha256 + bytes for every shipped file, plus the module count). `--check` reports drift instead of writing. The manifest used to be hand-edited and had started listing deleted routes. | **writes** — the manifest only |
 | `start.cjs` | The production launcher used by `npm run start` (binds `0.0.0.0`, honours `PORT`). | runtime |
 
 ## Why the folder is worth keeping

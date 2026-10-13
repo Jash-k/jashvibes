@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { watchHref } from '@/lib/watch/policy';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import EmbedSiteLinks from '@/components/EmbedSiteLinks';
-import RailNav from '@/components/rail/RailNav';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 import { POSTER_SIZES_ATTR, tmdbImageSrcSet } from '@/lib/tmdbPoster';
 import { revealStyle, useReveal } from '@/lib/useReveal';
@@ -541,7 +540,6 @@ export default function StremioPage() {
 
   return (
     <>
-      <RailNav />
       <main className="jv-st-page jv-rail-shift">
         <div className="jv-st">
           <header className="jv-st-top">

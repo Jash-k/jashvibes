@@ -35,7 +35,7 @@ const SAMPLE = Math.max(0, Number(flag('sample', 6)) || 0);
 const AS_JSON = args.includes('--json');
 
 if (!target) {
-  console.error('usage: node tools/live-doctor.mjs <m3u-url-or-path> [--sample N] [--json]');
+  console.error('usage: node scripts/live-doctor.mjs <m3u-url-or-path> [--sample N] [--json]');
   process.exit(2);
 }
 

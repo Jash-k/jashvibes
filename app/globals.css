@@ -3166,13 +3166,110 @@ html.day-mode .jv-vault-page {
 .mu-global-mini .mu-mini-close:hover { background:#ffffff12; }
 .mu-global-mini .mu-mini-close:focus-visible { outline:2px solid #8be5ef; outline-offset:2px; }
 
-/* Non-blocking navigation feedback: navigation and player remain usable. */
-.jv-navigation-feedback { position:fixed; top:0; left:50%; transform:translateX(-50%); z-index:210; padding:9px 18px; border-radius:0 0 12px 12px; background:#171122; color:#f8e9ff; border:1px solid #a855f755; box-shadow:0 3px 18px #0005; font:600 12px system-ui; pointer-events:none; white-space:nowrap; }
+/* ── Loading & switching (v11.1) ─────────────────────────────────────────────
+   One system for boot, route fallbacks and section switches. Three ideas:
+
+   1. the shell (rail, dock, palette) never unmounts, so a switch repaints the
+      content only;
+   2. nothing is shown for the first ~180 ms, so a warm route shows no loader at
+      all — the delay lives in CSS, so a fast render cannot skip it;
+   3. each skeleton matches the geometry of the section it stands in for, so the
+      arrival of real content moves nothing. */
+
+/* Boot stage: shared by the splash and the unlock card, so the gate resolving
+   never flashes black or jumps the card. */
+.jv-boot { position:fixed; inset:0; z-index:120; display:grid; place-items:center; overflow:auto;
+  background:#050012; color:#f2eefc;
+  background-image:radial-gradient(circle at 18% 10%, rgba(217,70,239,0.20), transparent 44%),
+                   radial-gradient(circle at 84% 90%, rgba(56,189,248,0.16), transparent 46%); }
+.jv-boot-card-stage { padding:1.5rem; }
+.jv-boot-splash { display:flex; flex-direction:column; align-items:center; gap:0.9rem; text-align:center; }
+.jv-boot-word { margin:0; font-family:var(--font-display, serif); font-size:1.55rem; letter-spacing:0.06em; }
+.jv-boot-note { margin:0; font-size:0.78rem; color:#b9b2cf; }
+/* The splash logo is drawn by RingLogo (a ring around the mark) — the linear bar it
+   replaced, and its `jv-boot-fill` keyframe, are gone for good: the ring *is* the progress. */
+
+/* ── The ring ────────────────────────────────────────────────────────────────
+   One object for the boot splash and every section switch. `stroke-dashoffset` is the
+   progress, so the arc is drawn by the same number that decides when the page appears;
+   the head is a small lit dot at the tip, which is what makes it read as light travelling
+   along a track instead of a bar filling up. */
+.jv-ring { position:relative; display:grid; place-items:center; }
+.jv-ring svg { position:absolute; inset:0; transform:rotate(-90deg); }
+.jv-ring-track { fill:none; stroke:rgba(255,255,255,0.10); }
+.jv-ring-arc { fill:none; stroke-linecap:round; transition:stroke-dashoffset 80ms linear; filter:drop-shadow(0 0 6px rgba(56,189,248,0.5)); }
+.jv-ring-head { filter:drop-shadow(0 0 7px rgba(255,255,255,0.9)); }
+.jv-ring-logo { border-radius:999px; object-fit:contain; opacity:0.8; filter:brightness(var(--jv-ring-bright, 0.9));
+  animation:jv-ring-blink 1.6s ease-in-out infinite; }
+@keyframes jv-ring-blink {
+  0%,100% { opacity:0.78; transform:scale(0.988); }
+  50% { opacity:1; transform:scale(1.012); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jv-ring-logo { animation:none; opacity:0.95; }
+  .jv-ring-arc { transition:none; }
+}
+
+/* ── The veil: the ring over the blurred section ─────────────────────────────
+   Above the content, below the rail (z-40) and the dock (z-60) so the chrome stays sharp
+   and pressable — a shell that greys out its own navigation reads as broken. It never
+   swallows a tap: pointer-events:none. */
+.jv-veil { position:fixed; inset:0; z-index:35; display:grid; place-items:center; pointer-events:none;
+  background:radial-gradient(420px circle at 50% 46%, rgba(5,0,18,0.72), rgba(5,0,18,0.30) 62%, rgba(5,0,18,0.04)); }
+.jv-veil-inner { display:grid; justify-items:center; gap:14px; }
+.jv-veil-label { margin:0; font:600 0.82rem/1 system-ui; letter-spacing:0.02em; color:#cdc6e4; }
+.jv-veil.is-revealing { animation:jv-veil-out 260ms ease-out both; }
+@keyframes jv-veil-out { to { opacity:0; transform:scale(1.04); } }
+@media (max-width:640px) { .jv-veil-inner { padding-bottom:64px; } } /* clear of the dock */
+
+/* Content-only crossfade. The key on this wrapper changes with the pathname, so a
+   section switch fades its content in while the rail and dock stay perfectly still. */
+.jv-route-content { min-height:100dvh; animation:jv-content-in 200ms ease-out both; }
+/* Blurred while a switch is in flight. Applied at mount when the load is still running, so a
+   freshly committed page never flashes sharp; removed in one step to reveal — the transition
+   below is what you see as the section arriving. The animation is switched off here on
+   purpose: `jv-content-in` animates transform, and an animation beats a transition, so the
+   blur's scale would be cancelled for its first 200 ms. */
+.jv-route-content.is-loading { animation:none; filter:blur(18px) saturate(0.85) brightness(0.5); transform:scale(1.028); }
+.jv-route-content { transition:filter 260ms ease-out, transform 260ms ease-out; }
+@media (max-width:640px) { .jv-route-content.is-loading { filter:blur(12px) saturate(0.85) brightness(0.55); } }
+@media (prefers-reduced-motion: reduce) { .jv-route-content { transition:none; } }
+@keyframes jv-content-in { from { opacity:0; transform:translate3d(0,6px,0); } to { opacity:1; transform:none; } }
+
+/* The 200 ms rule: a route fallback is invisible while a warm route lands, then
+   fades in. `both` keeps it hidden during the delay — the whole point. */
 .jv-section-loading { min-height:70vh; padding:52px 24px 100px; }
-.jv-section-loading h1 { font:700 28px system-ui; margin-bottom:12px; }
-.jv-section-skeleton { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; max-width:900px; margin-top:28px; }
-.jv-section-skeleton span { aspect-ratio:2/3; border-radius:16px; background:linear-gradient(145deg,#ffffff09,#ffffff03); }
-@media(min-width:1024px) { .jv-section-skeleton { grid-template-columns:repeat(6,minmax(0,1fr)); } }
+.jv-skeleton-stage { animation:jv-load-in 220ms ease-out 180ms both; }
+@keyframes jv-load-in { from { opacity:0; } to { opacity:1; } }
+.jv-section-note { margin:0 0 18px; font-size:0.8rem; color:#a79fc4; }
+
+.jv-skl { border-radius:14px; background:linear-gradient(100deg, rgba(255,255,255,0.03), rgba(255,255,255,0.08), rgba(255,255,255,0.03)); background-size:200% 100%; animation:jv-skl-sheen 1.5s linear infinite; animation-delay:var(--jv-skl-delay, 0ms); }
+.jv-skl-grid { display:grid; gap:14px; }
+.jv-skl-posters { grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); }
+.jv-skl-poster { aspect-ratio:2 / 3; }
+.jv-skl-cards { grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); }
+.jv-skl-card { aspect-ratio:16 / 9; }
+.jv-skl-channels { display:flex; flex-direction:column; gap:10px; max-width:720px; }
+.jv-skl-row { display:flex; align-items:center; gap:12px; padding:12px 14px; border:1px solid rgba(255,255,255,0.06); border-radius:14px; }
+.jv-skl-chip { flex:none; width:44px; height:30px; border-radius:8px; }
+.jv-skl-line { flex:1; height:12px; border-radius:6px; }
+.jv-skl-line.is-short { flex:0 0 84px; }
+.jv-skl-shelf { display:flex; flex-direction:column; gap:26px; }
+.jv-skl-rail { display:flex; gap:12px; margin-top:12px; overflow:hidden; }
+.jv-skl-poster.is-rail { flex:0 0 128px; }
+.jv-skl-heading { display:block; width:180px; height:16px; border-radius:6px; }
+.jv-skl-player { display:flex; flex-direction:column; gap:12px; }
+.jv-skl-frame { aspect-ratio:16 / 9; border-radius:16px; }
+@keyframes jv-skl-sheen { from { background-position:200% 0; } to { background-position:-200% 0; } }
+
+/* The pressed nav item is the ONE pending indicator — the floating "Opening X…"
+   pill is gone, because two indicators for one wait is what looked glitchy. */
+a.is-pending { opacity:0.62; }
+
+@media (prefers-reduced-motion: reduce) {
+  .jv-route-content, .jv-skeleton-stage, .jv-skl { animation:none !important; }
+  .jv-skeleton-stage { opacity:1; }
+}
 
 /* Explicit best-effort catalogue assignments share the existing four tabs.
    Keep the ≈ provenance badge clear of quality and series/episode chips. */

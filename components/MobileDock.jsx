@@ -29,6 +29,7 @@ export default function MobileDock() {
               href={item.href}
               label={item.label}
               aria-current={active ? 'page' : undefined}
+              idleWarm={!active}
               className={`relative flex flex-col items-center gap-1 py-2.5 text-[10px] font-bold transition duration-200 active:scale-90 ${
                 active
                   ? 'text-amber-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.6)]'

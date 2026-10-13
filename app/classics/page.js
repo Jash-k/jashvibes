@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { watchHref } from '@/lib/watch/policy';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import RailNav from '@/components/rail/RailNav';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 import { POSTER_SIZES_ATTR, tmdbImageSrcSet } from '@/lib/tmdbPoster';
 import { revealStyle, useReveal } from '@/lib/useReveal';
@@ -338,7 +337,6 @@ export default function TamilClassicsPage() {
 
   return (
     <>
-      <RailNav />
       <main className="jv-dec-page jv-rail-shift">
         <div className="jv-dec">
           <header className="jv-dec-top">

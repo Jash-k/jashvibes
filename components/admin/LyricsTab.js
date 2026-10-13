@@ -1,6 +1,9 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { lyricsSongKey } from '@/lib/lyricsMatch';
+// `lyricsSongKey` lives in lib/lyricsStore.js, which is server-side (mongoose).
+// This tab is a client component, so it asks the pure matcher for the same key —
+// the store's helper is literally a one-line wrapper around it.
+import { lyricCacheKey } from '@/lib/lyricsMatch';
 
 /**
  * Admin → Lyrics. Two jobs, both in service of "the lyrics section never fails":
@@ -159,7 +162,7 @@ function LyricsDialog({ form: initial, onClose, onSave }) {
           </div>
           <p className="va-muted">
             {withTiming ? 'Timed lyrics are used first and keep the karaoke highlight.' : 'Without timing the stage drops to a static read — still never empty.'}
-            {' '}Key: <code>{lyricsSongKey({ title: form.title, artist: form.artist, album: form.album })}</code>
+            {' '}Key: <code>{lyricCacheKey({ title: form.title, artist: form.artist, album: form.album })}</code>
           </p>
         </div>
         <footer>

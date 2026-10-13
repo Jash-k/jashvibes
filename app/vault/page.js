@@ -3,7 +3,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import RailNav from '@/components/rail/RailNav';
 import Icon from '@/components/Icons';
 import { VaultTile, SkeletonGrid } from '@/components/vault/VaultCards';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
@@ -144,7 +143,7 @@ export default function VaultPage() {
   const chips = [...filters.qualities.map((q) => ({ key: q, label: q, remove: () => patch({ qualities: filters.qualities.filter((v) => v !== q) }) })), ...Object.entries(filters).filter(([k, v]) => k !== 'qualities' && v).map(([k, v]) => ({ key: k, label: k === 'rating' ? v === 'unrated' ? 'Unrated' : `${v}+ rating` : k === 'sources' ? `${v} sources` : k === 'language' ? data?.facets?.languages?.find((x) => x.code === v)?.label || v : v, remove: () => patch({ [k]: '' }) }))];
   const selected = tab === 'unverified' ? { label: 'Unverified' } : VAULT_TABS.find((item) => item.id === tab);
   const options = (dimension, values, key) => <div className="vl-options">{values.map((value) => { const active = key === 'qualities' ? filters.qualities.includes(value) : filters[key] === value; const total = count(dimension, value); return <button type="button" key={value} aria-pressed={active} disabled={!active && !total} onClick={() => patch({ [key]: key === 'qualities' ? active ? filters.qualities.filter((v) => v !== value) : [...filters.qualities, value] : active ? '' : value })}>{value === 'unrated' ? 'Unrated' : value}<small>{total}</small></button>; })}</div>;
-  return <main className="jv-vault-page jv-rail-shift vl-page"><RailNav/>
+  return <main className="jv-vault-page jv-rail-shift vl-page">
     <section className="vl-content" ref={content}>
       <header className="vl-header"><div><h1 className="vl-wordmark" aria-label="MoViE VaULT"><span className="vl-wordmark-movie">MoViE</span>{' '}<span className="vl-wordmark-vault">VaULT</span></h1></div><div className="vl-header-actions"><Link href="/classics" className="vl-refresh vl-retro"><Icon name="film" className="h-4 w-4"/>ReTro</Link><button type="button" className="vl-refresh vl-refresh-icon" disabled={refreshing} onClick={() => load(true)} aria-label={refreshing ? 'Refreshing Vault' : 'Refresh Vault'} title={refreshing ? 'Refreshing…' : 'Refresh Vault'} aria-busy={refreshing}><Icon name="refresh" className={`h-4 w-4${refreshing ? ' vl-refresh-spinning' : ''}`}/></button></div></header>
       <label className="vl-search"><Icon name="search" className="h-5 w-5"/><span className="sr-only">Search titles or year</span><input type="search" placeholder="Search titles or year…" value={query} onChange={(event) => setQuery(event.target.value)}/>{query ? <button type="button" aria-label="Clear search" onClick={() => setQuery('')}>×</button> : null}</label>

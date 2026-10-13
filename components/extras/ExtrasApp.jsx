@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 const CACHE_KEY = 'jash:extras:v1';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import RailNav from '@/components/rail/RailNav';
 import Icon from '@/components/Icons';
 import SiteCover from '@/components/extras/SiteCover';
 import { extraUrl } from '@/lib/extrasRegistry';
@@ -68,7 +67,7 @@ export default function ExtrasApp() {
   const choose = (site) => { window.history.pushState(null, '', `/extras?site=${encodeURIComponent(site.id)}`); readSelection(); window.scrollTo(0,0); };
   const back = () => { window.history.pushState(null, '', '/extras'); readSelection(); setExpanded(false); };
   const results = sites.filter(s => `${s.label} ${domain(s.url)}`.toLowerCase().includes(query.toLowerCase()));
-  return <div className="ex-page"><RailNav/><main className="ex-main jv-rail-shift"><div className="ex-content">
+  return <div className="ex-page"><main className="ex-main jv-rail-shift"><div className="ex-content">
     <header className="ex-topbar"><div className="ex-crumb">JASHVIBES <span>/</span> <b>{viewing ? 'Extras / Website viewer' : 'Extras'}</b></div><Link className="ex-btn" href="/admin?tab=extras"><Icon name="gear"/> Manage sites</Link></header>
     {viewing ? <>
       <div className="ex-viewer-head"><div className="ex-viewer-title"><button className="ex-iconbtn" onClick={back} aria-label="Back to Extras"><Icon name="back"/></button><div className="ex-viewer-icon"><Icon name="globe"/></div><div><h1>{selected?.label || 'Website unavailable'}</h1><p>{selected ? domain(selected.url) : 'This destination is not available.'}</p></div></div>
