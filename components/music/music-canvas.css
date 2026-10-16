@@ -120,9 +120,9 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
 .mc-lyric-lines li.is-plain { color:#d6dfe5; font-weight:500; }
 .mc-lyrics footer { display:flex; align-items:center; justify-content:flex-end; gap:6px; min-height:44px; flex-wrap:wrap; }
 .mc-lyrics footer span { font-size:11px; color:var(--mc-muted); }
-/* The record list. One word of chrome ("Available") opens it; everything inside is symbols and
-   titles. It is an overlay inside the panel, so it cannot be clipped by the panel's own overflow and
-   it is the same list at every width. A row is only a choice — the tick writes it. */
+/* The record list. One word of chrome ("Available") opens it; everything inside is symbols, titles
+   and one dropdown. It is an overlay inside the panel, so it cannot be clipped by the panel's own
+   overflow and it is the same list at every width. A row is only a choice — the tick writes it. */
 .mc-lyric-available { display:inline-flex; align-items:center; gap:5px; min-height:36px; padding:5px 12px; border-radius:18px;
   background:#ffffff08; border:1px solid transparent; color:inherit; font-size:12px; }
 .mc-lyric-available[aria-expanded='true'] { color:var(--mc-accent); background:#8be5ef1a; border-color:#8be5ef33; }
@@ -135,10 +135,23 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
   background:none; color:inherit; text-align:left; font-size:13px; }
 .mc-lyric-option:hover { background:#ffffff0a; }
 .mc-lyric-option.is-picked { background:#8be5ef24; color:#eaf9fb; }
+/* The rest of the search: kept for the person to look through, never a candidate for this song. */
+.mc-lyric-option.is-other { opacity:.5; }
+.mc-lyric-option.is-other:hover { opacity:.85; }
 /* The dot marks the record the song is using — the saved choice, or the automatic match. */
 .mc-lyric-option.is-current::after { content:''; width:6px; height:6px; border-radius:50%; background:var(--mc-accent); flex:0 0 auto; }
 .mc-lyric-option-title { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .mc-lyric-option-time { font-size:11px; color:var(--mc-muted); font-variant-numeric:tabular-nums; }
+/* The dropdown: the whole list in one look, and the only control that says what the marks mean
+   without a sentence. Thumb-sized on a phone, same as the rows above it. */
+.mc-lyric-records { display:flex; }
+.mc-lyric-records .mc-lyric-select { width:100%; min-height:44px; padding:8px 10px; border-radius:10px;
+  background:#ffffff0a; border:1px solid var(--mc-line); color:inherit; font-size:13px; text-overflow:ellipsis; }
+.mc-lyric-records .mc-lyric-select.is-error { border-color:#ff6b8166; color:#ffb4c0; }
+/* The retry symbol sits with the pill and never inside a sentence: it only appears when there is
+   something to ask for again — a busy provider, or a list with nothing in it. */
+.mc-lyric-retry { color:var(--mc-muted); }
+.mc-lyric-retry.is-busy { color:#f0b45f; }
 .mc-lyric-pop-state { display:flex; align-items:center; justify-content:center; gap:8px; min-height:48px; color:var(--mc-muted); }
 .mc-lyric-pop-state.is-error { color:#ffb4c0; }
 .mc-lyric-pop-actions { display:flex; justify-content:flex-end; padding:2px; }

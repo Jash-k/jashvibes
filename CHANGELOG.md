@@ -1,3 +1,42 @@
+## One request per song, and a desktop that stays where it is (2026-10-16)
+
+Requested: *"i dont want that when song satrt toplay it shows lyrics panel behaviour in desktop … now i
+face provider busy error. fix this one song make one request get that all result in available tab. best
+match result showed in lyrics panel as usual. now there is no lyrics shown available dropdown. no matter
+if the song have match lyrics or not all songs i want that available shows lyrics."*
+
+- **One lookup per song, not a cascade.** The route walked a ladder — `/api/get`, up to three fielded
+  searches across title variants, two free-text ones and a last-resort query — so one song could cost a
+  dozen provider requests. LRCLIB answered the way a rate-limited community service does: HTTP 503
+  `ServerOverloaded`, which the route turned into a per-origin cooldown the panel reported as "Lyrics
+  provider is busy." There is now one search (`track_name` + `artist_name`) and, only when it comes back
+  empty, one free-text `q=` question. A refusal is never retried inside the lookup: the retry a person can
+  press is worth more than one spent automatically.
+- **The same answer fills the list.** The one search returns this song's records *and* the rest of the
+  hits, so "Available" is not a second lookup. This song's records come first; the rest follow, dimmed, and
+  are never matched automatically — but they can be chosen by hand, which is the whole point of the list.
+- **Remembered as a whole.** The matched record and the list are cached together — fifteen minutes in the
+  process, 90 days in MongoDB, a miss for 12 hours — and two callers asking for the same song at the same
+  time share the call already in flight. Opening the list is usually reading an answer that already
+  exists; a song looked up once costs nothing to look at again, and a choice costs no extra call either.
+- **Busy is not empty.** When the provider refuses, the answer remembered for that song — lyrics and list
+  — is served with a retry symbol beside the "Available" pill. Nothing is invented, no other song is
+  substituted, and a failure is written to no cache at all. A miss that was recorded *during* an outage
+  (the sticky failure state) is now ignored rather than believed for twelve hours.
+- **Desktop no longer hands the screen over.** Playing a row on a desktop used to open the lyrics focus
+  layout and move the Library the person was browsing. On a desktop nothing moves now: the row plays where
+  it sits. Phones keep the takeover, which is the layout they are built for. Focus is asked for rather than
+  assumed — the expand glyph or the Lyrics button opens the big stage, and a bare `/music` opens the plain
+  two-column screen with the lyrics at their normal size.
+- **The list is a list again.** Every record renders as a row (timed/plain glyph, title, artist when it
+  differs, length, a dot for the record in use) and the same set is offered as a dropdown below it, so the
+  whole list can be seen at once and chosen in one gesture. Selecting only marks it; the tick saves it,
+  through the same store the admin panel uses, audited as `lyrics.choose`. The panel still offers no reset
+  control — that lives in the admin Lyrics tab.
+- **Dead code removed with the cascade:** the `list=1` source list (its picker was retired a release ago
+  and nothing had called it since), `collectCandidates`, and the route's last use of `musicSources`. The
+  admin Lyrics tab, the `clear` action and the audit trail are unchanged.
+
 ## The lyrics panel: a list, a tick, and nothing to read but the lyrics (2026-10-16)
 
 Requested: *"in mobile there is no dropdown for available lyrics … i dont want albumart in lyrics panel …

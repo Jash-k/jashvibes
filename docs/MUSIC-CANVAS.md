@@ -51,20 +51,52 @@ leave locked focus. The desktop expand glyph remains. The earlier `listeningMode
 prototype in `MusicEngine` (plus its second wake-lock implementation and the unused `muLockView` helper)
 was dead code and has been removed.
 
+**A desktop is never rearranged by a song.** Starting a track used to hand the screen to the lyrics — a
+takeover that is right on a phone, where the stage *is* the screen, and wrong on a desktop, where the
+Library being browsed sits in the same view. Playing a row on a desktop now moves nothing: the row simply
+starts playing and the Library stays where it is. Focus is asked for, never assumed — the expand glyph or
+the Lyrics button opens the big centred stage, and a bare `/music` opens the two-column Library + player
+screen with the lyrics at their normal size. Phones keep the takeover, and keep `focus=1` in the URL, so a
+rotate or a Back does not change what they were looking at.
+
 Lyrics refresh, line-tap seek, follow/resume, timing offset and font-size controls are available. Plain lyrics are labelled and not fabricated as synchronized. Three appearance modes replace the ten legacy modes; the old provider-picker/translation UI is not retained — LRCLIB is still the only provider.
+
+**One request per song.** A song's lyrics and its record list come from the same lookup. The route asks
+LRCLIB one question — the fielded search, `track_name` together with `artist_name` — and asks the
+free-text `q=` question *only* when that came back with nothing at all. A refusal is never retried inside
+the lookup: a provider that refused this request would refuse the next one, and the retry a person can
+press is worth more than one spent automatically. That is the whole reason the cascade left: it walked a
+ladder (`/api/get`, three title variants, two free-text queries and a last-resort query) and could spend a
+dozen requests on one song, which is precisely how a community service starts answering 503
+`ServerOverloaded`. The one answer now carries both halves of the screen — the record the strict matcher
+accepts, shown on the stage, and every record the search returned, listed in the panel — and it is
+remembered as a whole: fifteen minutes in the process, 90 days in MongoDB (a miss for 12 hours), with two
+callers asking for the same song at the same time sharing the call already in flight. Opening the list is
+therefore usually reading an answer that already exists rather than asking again. A failure is stored
+nowhere, so the next ask is a real ask, and a miss recorded during an outage is ignored from now on
+instead of being believed for twelve hours.
+
+**When the provider is busy.** The answer remembered for that song — the matched lyrics *and* the list —
+is served instead, with a retry symbol beside the "Available" pill. The symbol appears whenever there is
+something to ask for again: a busy provider, or a list with nothing in it. Nothing is invented, no other
+song's words are substituted, and if nothing was ever saved for the song the panel keeps the honest
+retryable state.
 
 **Choosing a record.** One word in the panel's header — **Available** — opens the list of every record
 LRCLIB has for the current song: its title, its artist when that is not the song's, a glyph for timed (a
-waveform) or plain (three lines) lyrics, and its length. The record the song is using carries a dot. It
-exists because "wrong lyrics" is nearly always the right song on the wrong record — a live cut, a
-different album, a karaoke track — and the strict identity check refuses those; the list shows them anyway,
-because the owner can read the title and the length and decide. Selecting a row only *marks* it. The tick
-saves: the list closes, the record is re-read from the provider on the server (the browser sends only the
-record id), and the panel reloads the lyrics. One provider, several of its records — and the choice is
-saved for everyone, so a phone and a desktop agree, and it appears in the admin Lyrics tab. The panel
-offers no reset control: change the choice by choosing another record, or remove it from the admin tab
-(the API's `clear` action). When a save fails the tick turns red for four seconds and the reason goes to
-screen readers rather than onto the lyrics.
+waveform) or plain (three lines) lyrics, and its length. This song's own records come first; the rest of
+the search follows them, dimmed, as context to look through — never as an automatic match. The record the
+song is using carries a dot. The same set is offered again as a dropdown below the rows, so the whole list
+can be seen at once and chosen in one gesture. The list exists because "wrong lyrics" is nearly always the
+right song on the wrong record — a live cut, a different album, a karaoke track — and the strict identity
+check refuses those; the list shows them anyway, because the owner can read the title and the length and
+decide. Selecting a row (or an option) only *marks* it. The tick saves: the list closes, the record is
+re-read from the provider on the server (the browser sends only the record id), and the panel reloads the
+lyrics — from what the route already remembers, so a choice costs no extra call. One provider, several of
+its records — and the choice is saved for everyone, so a phone and a desktop agree, and it appears in the
+admin Lyrics tab. The panel offers no reset control: change the choice by choosing another record, or
+remove it from the admin tab (the API's `clear` action). When a save fails the tick turns red for four
+seconds and the reason goes to screen readers rather than onto the lyrics.
 
 **Symbols, not sentences.** The panel prints words only where they are the content: the lyric lines, the
 heading, the single word "Available", and the empty state for a song with no lyrics at all. Everything
@@ -79,9 +111,13 @@ analyser; reduced-motion hides it.
 
 ## Verification for this release
 - `npm ci` succeeded.
-- `test-lyrics-pipeline.cjs` and `test-music-pocket.cjs` pass: the picker collects every candidate and
-  saves the chosen one through the admin store with an audit entry, and no focus rule may resize the
-  sleeve, with every unlocked size asserted to still exist.
+- `test-lyrics-pipeline.cjs` and `test-music-pocket.cjs` pass: one search answers a song (the staged
+  cascade may not come back), the provider is asked at most twice and the second question only on an
+  empty answer, the list reads the same lookup the stage does, a busy provider is served from memory with
+  a retry symbol, a failure is never remembered, the tick is the only thing that writes and a choice is
+  saved through the admin store with an audit entry; and on the shell side a desktop plays a row without
+  moving any layout while no focus rule may resize the sleeve, with every unlocked size asserted to still
+  exist.
 - `npm run check` parses the source modules with no unresolved local imports (279 at the time of writing).
 - Production webpack build passed, including after dependency audit fixes.
 - Production dependency audit reported zero known vulnerabilities after compatible transitive updates.

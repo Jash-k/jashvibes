@@ -26,16 +26,23 @@ import { IconButton, MusicIcon, Status } from './CanvasBits';
  * album, a different vocal) and the strict matcher only ever shows one of them, so
  * the list is the way to a record it refused. A row is only a *choice*: nothing is
  * written until the tick is pressed.
+ *
+ * One call answers a song, and it answers both halves of this screen: the record the
+ * stage shows and every record the search returned for the list. So opening the list
+ * is usually reading an answer that already exists — and when the provider is busy,
+ * what was remembered for the song is shown with a retry symbol beside it rather
+ * than an empty panel.
  */
 
 const OWN_KEY = 'jash_own_lyrics_v1';
 
-const EMPTY_PICKER = { status: 'idle', candidates: [], autoId: '', savedId: '', current: 'auto', message: '' };
+const EMPTY_PICKER = { status: 'idle', candidates: [], autoId: '', savedId: '', current: 'auto', busy: false, message: '' };
 
 /**
- * The records the list has found for a song, kept per song so opening it again — or switching to
- * the library and back — never asks the provider twice. Cleared on a reload of the page; the saved
- * choice itself lives in the database, not here.
+ * The answer the route gave for a song, kept per song so opening the list again — or switching to
+ * the library and back — costs nothing. The route remembers the same answer on the server, so this
+ * only saves the round trip; the page can start from the server's copy instead of an empty panel.
+ * A failure is never kept here, so the next look is a real look.
  */
 const CANDIDATE_CACHE = new Map();
 
@@ -49,6 +56,19 @@ function recordLine(candidate = {}, wanted = {}) {
   const title = candidate.title || wanted.title || '';
   const artist = candidate.artist && candidate.artist !== wanted.artist ? candidate.artist : '';
   return artist ? `${title} — ${artist}` : title;
+}
+
+/**
+ * What an option says: the mark for the record in use, the mark for a record that carries timing,
+ * the record's own title, and how long it runs. Nothing else — the list is titles, not sentences.
+ */
+function candidateLabel(candidate = {}, wanted = {}, current = '') {
+  const parts = [];
+  if (candidate.id === current) parts.push('\u25cf');
+  if (candidate.synced) parts.push('\u266a');
+  parts.push(recordLine(candidate, wanted));
+  if (candidate.duration) parts.push('\u00b7 ' + mmss(candidate.duration));
+  return parts.join(' ');
 }
 
 function readOwn() {
@@ -107,32 +127,56 @@ export default function CanvasLyrics({ music, look, update, full, onExpand, onSe
   const [failed, setFailed] = useState(false);
   const wanted = music.lyricSong || {};
 
+  // A different song: the list closes, nothing is selected, a past refusal is forgotten.
+  useEffect(() => { setOpen(false); setPicked(''); setFailed(false); }, [key]);
+
+  /**
+   * Looking again is one of two things, and they are not the same request. The retry symbol means
+   * the provider refused, so ask it again, cache and all. A change that was just saved means the
+   * search did not change at all — only what this song is using did — so that one asks again
+   * locally and is answered from what the route already remembers, at no cost to the provider.
+   */
+  const [tick, setTick] = useState(0);
+  const fromProvider = useRef(false), fromLocal = useRef(false);
+  const askAgain = ({ provider = false, local = false }) => { fromProvider.current = provider; fromLocal.current = local; setTick((value) => value + 1); };
+
   useEffect(() => {
-    setOpen(false);
-    setPicked('');
-    setFailed(false);
-    if (!key) { setPicker(EMPTY_PICKER); return; }
-    const cached = CANDIDATE_CACHE.get(key);
-    if (cached) { setPicker(cached); return; }
-    setPicker({ ...EMPTY_PICKER, status: 'loading' });
+    if (!key) { setPicker(EMPTY_PICKER); return undefined; }
+    const fresh = fromProvider.current; fromProvider.current = false;
+    const again = fromLocal.current; fromLocal.current = false;
+    const known = CANDIDATE_CACHE.get(key);
+    if (!again && known) { setPicker(known); return undefined; }
+    setPicker({ ...EMPTY_PICKER, status: 'loading', busy: Boolean(known?.busy) });
     const controller = new AbortController();
-    // Deferred: the lyrics themselves come first, and this never competes with that request.
+    // Deferred: the song's own lyrics are asked for first — and the route remembers that one
+    // answer, so this is a second *reader* of it, never a second call to the provider.
     const timer = setTimeout(() => {
       const params = new URLSearchParams({ candidates: '1', title: wanted.title || '', artist: wanted.artist || '',
         album: wanted.album || '', duration: wanted.duration ? String(wanted.duration) : '', id: wanted.id || '' });
+      if (fresh) params.set('reload', '1');
       fetch('/api/music/lyrics?' + params, { signal: controller.signal, cache: 'no-store' })
         .then((response) => response.json())
         .then((data) => {
           if (controller.signal.aborted) return;
-          const next = { status: data?.ok ? 'ready' : 'error', candidates: data?.candidates || [], autoId: data?.autoId || '',
-            savedId: data?.savedId || '', current: data?.current || 'auto', message: data?.message || '' };
-          if (data?.ok) CANDIDATE_CACHE.set(key, next);
+          const candidates = Array.isArray(data?.candidates) ? data.candidates : [];
+          const busy = Boolean(data?.busy);
+          // Busy with records from before is a list with a retry symbol beside it. Busy with
+          // nothing remembered is a state the person can retry — one kept nowhere, so the next
+          // look is a real look.
+          const ready = Boolean(data?.ok) && (candidates.length > 0 || !busy);
+          const next = { status: ready ? 'ready' : 'error', candidates, autoId: data?.autoId || '',
+            savedId: data?.savedId || '', current: data?.current || 'auto', busy, message: data?.message || '' };
+          if (ready || candidates.length) CANDIDATE_CACHE.set(key, next);
           setPicker(next);
         })
-        .catch(() => { if (!controller.signal.aborted) setPicker({ ...EMPTY_PICKER, status: 'error', message: 'Could not reach the lyrics provider.' }); });
+        .catch(() => {
+          if (controller.signal.aborted) return;
+          // What the route said earlier about this song is still true; only this look failed.
+          setPicker(known || { ...EMPTY_PICKER, status: 'error', message: 'Could not reach the lyrics provider.' });
+        });
     }, 1400);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [key, wanted.title, wanted.artist, wanted.album, wanted.duration, wanted.id]);
+  }, [key, wanted.title, wanted.artist, wanted.album, wanted.duration, wanted.id, tick]);
 
   // A failure has no sentence to print, so the tick carries it: red for a moment, and the words
   // go to assistive tech only.
@@ -145,25 +189,33 @@ export default function CanvasLyrics({ music, look, update, full, onExpand, onSe
   /** The record this song is using right now: the saved choice, or the automatic match. */
   const currentId = picker.current === 'saved' ? (picker.savedId || '') : picker.autoId;
 
-  async function commit() {
-    if (!picked || picking || picked === currentId) return;
+  /**
+   * The one place a choice is written: picking a record hands this screen's one write to the same
+   * store the admin panel uses. Rows, the dropdown and the tick all end up here, so they cannot
+   * drift apart — and the lookup that follows reads what the route already remembers. There is no
+   * way back to the automatic match from here on purpose: that lives in the admin Lyrics tab.
+   */
+  async function ask(value) {
+    if (!key || !value || picking) return;
+    setPicked(value);
     setPicking(true);
     try {
       const response = await fetch('/api/music/lyrics', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'choose', candidateId: picked, ...wanted }) });
+        body: JSON.stringify({ action: 'choose', candidateId: value, ...wanted }) });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.ok) throw new Error(data.message || 'Could not save that choice.');
+      if (!response.ok || !data.ok) throw new Error(data.message || 'That change was not saved.');
       // A copy pasted on this device would otherwise keep hiding the record just chosen.
       if (saved) saveSaved(null);
-      const next = { status: 'ready', candidates: picker.candidates, autoId: picker.autoId, savedId: picked, current: 'saved', message: '' };
-      CANDIDATE_CACHE.set(key, next);
-      setPicker(next);
+      CANDIDATE_CACHE.delete(key);
       setPicked('');
       setOpen(false);
       await music.reloadLyrics?.();
+      // The search itself did not change, so this is answered from what the route remembers.
+      askAgain({ local: true });
     } catch {
       setFailed(true);
     } finally {
+      setPicked('');
       setPicking(false);
     }
   }
@@ -214,6 +266,8 @@ export default function CanvasLyrics({ music, look, update, full, onExpand, onSe
         disabled={!key} onClick={() => setOpen((value) => !value)}>
         <MusicIcon name="queue" size={18}/><span>Available</span>
       </button>
+      {key && picker.status !== 'loading' && (picker.busy || picker.status === 'error' || !picker.candidates.length)
+        ? <IconButton className={`mc-lyric-retry ${picker.busy ? 'is-busy' : ''}`} icon="refresh" label="Look for these records again" onClick={() => askAgain({ provider: true, local: true })}/> : null}
       <button className="mc-text-button" type="button" aria-label="Lyrics text settings" onClick={onSettings}>Aa</button>
       <label><span className="sr-only">Lyrics style</span><select value={look.canvas} onChange={(event) => update({ canvas: event.target.value })}><option value="bloom">Bloom</option><option value="cinema">Cinema</option><option value="noir">Noir</option></select></label>
       <IconButton className="mc-lyrics-expand" icon="expand" label={full ? 'Exit lyrics focus' : 'Expand lyrics'} active={full} onClick={onExpand}/>
@@ -223,23 +277,35 @@ export default function CanvasLyrics({ music, look, update, full, onExpand, onSe
     {open ? (
       <div className="mc-lyric-pop" role="dialog" aria-label="Available lyrics">
         {picker.status === 'loading' ? <span className="mc-lyric-pop-state" role="status"><MusicIcon name="refresh" size={16}/><span className="sr-only">Looking for other records</span></span> : null}
-        {picker.status === 'error' ? <span className="mc-lyric-pop-state is-error" role="status"><MusicIcon name="close" size={16}/><span className="sr-only">{picker.message || 'Could not list the records.'}</span></span> : null}
+        {picker.status === 'error' ? <span className="mc-lyric-pop-state is-error" role="status"><MusicIcon name={picker.busy ? 'refresh' : 'close'} size={16}/><span className="sr-only">{picker.message || 'Could not list the records.'}</span></span> : null}
         {picker.status === 'ready' && !picker.candidates.length ? <span className="mc-lyric-pop-state" role="status"><MusicIcon name="queue" size={16}/><span className="sr-only">No other records for this song</span></span> : null}
         {picker.status === 'ready' && picker.candidates.length ? <>
           <ul className="mc-lyric-pop-list">
             {picker.candidates.map((candidate) => <li key={candidate.id}>
-              <button type="button" className={`mc-lyric-option ${picked === candidate.id ? 'is-picked' : ''} ${currentId === candidate.id ? 'is-current' : ''}`}
+              <button type="button" className={`mc-lyric-option ${picked === candidate.id ? 'is-picked' : ''} ${currentId === candidate.id ? 'is-current' : ''} ${candidate.same === false ? 'is-other' : ''}`}
                 aria-pressed={picked === candidate.id} onClick={() => setPicked(candidate.id)}>
                 <MusicIcon name={candidate.synced ? 'wave' : 'text'} size={16}/>
                 <span className="mc-lyric-option-title">{recordLine(candidate, wanted)}</span>
+                {candidate.same === false ? <span className="sr-only">Not this song</span> : null}
                 <span className="mc-lyric-option-time">{mmss(candidate.duration)}</span>
               </button>
             </li>)}
           </ul>
+          {/* The same list again, as the dropdown a select gives: the whole set in one look. */}
+          <label className="mc-lyric-records">
+            <span className="sr-only">The lyric records for this song</span>
+            <select className={`mc-lyric-select ${failed ? 'is-error' : ''}`} disabled={picking}
+              value={picked || currentId}
+              onChange={(event) => { const value = event.target.value; if (value) setPicked(value); }}>
+              {!picker.candidates.some((candidate) => candidate.id === (picked || currentId)) ? <option value="">·</option> : null}
+              {picker.candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidateLabel(candidate, wanted, currentId)}</option>)}
+            </select>
+          </label>
           <div className="mc-lyric-pop-actions">
+            {/* The one button that writes anything: a record is only a choice until the tick. */}
             <IconButton className={`mc-lyric-save ${failed ? 'is-error' : ''}`} icon={failed ? 'close' : 'check'}
               label={failed ? 'Could not save that choice' : 'Use these lyrics for this song'}
-              disabled={!picked || picking || picked === currentId} onClick={commit}/>
+              disabled={!picked || picking || picked === currentId} onClick={() => ask(picked)}/>
           </div>
         </> : null}
       </div>
@@ -277,7 +343,9 @@ export default function CanvasLyrics({ music, look, update, full, onExpand, onSe
     <footer>
       <IconButton icon="add" label={mine ? 'Change my lyrics' : 'Paste my own lyrics'} disabled={!key || pasting} onClick={openPaste}/>
       {synced && !following ? <IconButton icon="follow" label="Follow the playing line again" onClick={() => setFollowing(true)}/> : null}
-      <IconButton icon="refresh" label="Look for the lyrics again" disabled={!key || music.lyricsStatus === 'loading' || mine || picker.current === 'saved'} onClick={() => music.openLyrics(true)}/>
+      {/* Asking again asks the provider for the song's lyrics *and* for its records: one gesture,
+          one lookup — never two competing ones. */}
+      <IconButton className="mc-lyric-refresh" icon="refresh" label="Look for the lyrics again" disabled={!key || music.lyricsStatus === 'loading' || mine} onClick={() => { askAgain({ provider: true, local: true }); music.openLyrics(true); }}/>
     </footer>
   </section>;
 }

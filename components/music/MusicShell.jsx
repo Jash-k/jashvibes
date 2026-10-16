@@ -47,7 +47,9 @@ export default function MusicShell() {
       // Explicit URL/history choices win; a bare /music always starts in Library.
       const open = params.get('library') !== '0';
       setLibraryOpen(open);
-      setFull(params.get('focus') !== '0');
+      // Focus is asked for, never assumed: a bare /music and every reload open the two-column
+      // screen, and only `focus=1` (the expand glyph, the Lyrics button) opens the big stage.
+      setFull(params.get('focus') === '1');
       setMode(params.get('view') === 'artwork' ? 'artwork' : 'lyrics');
     };
     media.current = window.matchMedia('(max-width: 1023px)');
@@ -186,7 +188,9 @@ export default function MusicShell() {
     if (!track) return;
     music.playTrack(track, tracks, true);
     setOverlay('');
-    showLyrics(true);
+    // Phones hand the screen to the lyrics — that is the layout they are built for. A desktop
+    // keeps its two columns: the row simply starts playing, and nothing moves.
+    if (mobile) showLyrics(true);
     setNotice(`Playing ${track.title || 'track'}`);
   };
   const playing = music.playingTrack;

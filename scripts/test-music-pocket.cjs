@@ -248,6 +248,24 @@ function fakeWakeLockEnv({ supported = true, failWith = null } = {}) {
   assert(hook.includes('installFocusWakeLock') && hook.includes('lock.stop()'), 'the hook owns acquire and release');
   assert(hook.includes("if (!active) { setStatus('idle')"), 'leaving focus releases immediately');
 
+  // ── 7. desktop: playing a row moves nothing, and the stage is asked for ──
+  // The takeover belongs to phones. On a desktop the Library stays where it is and the row simply
+  // starts playing; the big centred stage is only ever the expand glyph or the Lyrics button.
+  assert(shell.includes('if (mobile) showLyrics(true);'),
+    'only a phone hands the screen to the lyrics when a song starts');
+  assert(!/playTrack\(track, tracks, true\);\s*setOverlay\(''[^)]*\);\s*showLyrics\(true\)/.test(shell),
+    'the takeover must never be unconditional again');
+  assert(shell.includes("setFull(params.get('focus') === '1')"),
+    'focus is asked for in the URL: a bare /music opens the plain two-column screen');
+  assert(!shell.includes("params.get('focus') !== '0'"),
+    'the old "focused unless told otherwise" default is gone');
+  assert(shell.includes('onExpand={() => showLyrics(!full)}'),
+    'the expand glyph is still the way to the stage, and the way back');
+  assert(shell.includes("chooseView('lyrics')")&&shell.includes('if (view === \'artwork\') showArtwork(); else showLyrics(true);'),
+    'the Lyrics button still opens the stage when it is pressed');
+  assert(shell.includes("setNotice(`Playing ${track.title || 'track'}`)"),
+    'the row still says what started playing');
+
   // ── 6. the old prototype is gone, not shadowed ───────────────────────────
   const engine = read('components/music/MusicEngine.jsx');
   for (const dead of ['pocketMode', 'pocketHold', 'startPocketUnlock', 'listeningMode', 'wakeLockStatus', 'requestWakeLock', 'muLockView', 'startUnlockHold']) {
@@ -255,5 +273,5 @@ function fakeWakeLockEnv({ supported = true, failWith = null } = {}) {
   }
   assert(!read('lib/musicCore.js').includes('muLockView'), 'muLockView existed only for that dead memo');
 
-  console.log('PASS focus mode: the sleeve keeps its unlocked size under focus (no shrinking rule left), wake lock acquired/released/re-taken truthfully and announced by the shell when it cannot be, blur map per view, one live control above the lock, a locked screen that prints no words (lock glyph, heading, hint, labels and footer removed, no hint timer), swipe-down + slide + Esc + Back exits, no mobile exit button, old pocket prototype removed.');
+  console.log('PASS focus mode: the sleeve keeps its unlocked size under focus (no shrinking rule left), wake lock acquired/released/re-taken truthfully and announced by the shell when it cannot be, blur map per view, one live control above the lock, a locked screen that prints no words (lock glyph, heading, hint, labels and footer removed, no hint timer), swipe-down + slide + Esc + Back exits, no mobile exit button, old pocket prototype removed; desktop plays a row without moving any layout, and the stage is opened only by the expand glyph or the Lyrics button.');
 })().catch((error) => { console.error(error); process.exitCode = 1; });

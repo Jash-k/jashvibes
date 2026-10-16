@@ -1,42 +1,42 @@
 import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
 import {
-  chooseLyricMatch, lyricAlbum, lyricIdentity, lyricRequestMetadata, lyricSameTitle, lyricSearchVariants,
+  chooseLyricMatch, lyricIdentity, lyricRequestMetadata, lyricSameTitle, lyricSearchVariants,
   LYRICS_MATCH_VERSION, DURATION_TOLERANCE_SECONDS,
 } from '@/lib/lyricsMatch';
-import { SOURCE_GROUPS, WIRED_SOURCE_KIND, groupedSources, isPickable, sourceById } from '@/lib/musicSources';
+import { isPickable, sourceById } from '@/lib/musicSources';
 import { readLyricsOverride, readLyricsCache, writeLyricsCache, saveLyricsOverride, deleteLyricsOverride, lyricsSongKey } from '@/lib/lyricsStore';
 import { recordAction } from '@/lib/adminAudit';
 import LyricsOverride from '@/models/LyricsOverride';
 import { verifyRequestToken } from '@/lib/serverAuth';
 
 /*
- * GET /api/music/lyrics — one source, several ways of asking. POST — choose a record by hand.
+ * GET /api/music/lyrics — one song, one request. POST — choose a record by hand.
  *
- * The redesign keeps LRCLIB as the only provider and moves all the robustness
- * into three places the old cascade got wrong:
+ * The redesign keeps LRCLIB as the only provider, and this round makes a song cost exactly one
+ * call:
  *
- *   1. RETRIEVAL. LRCLIB answers two different questions: `track_name=` is
- *      fielded and near-exact, `q=` is free text. The same record can be
- *      invisible to one and obvious to the other ("Vandikkaran Sontha": 0 hits
- *      fielded, 6 free-text, and the record is real — see the lifecycle docs).
- *      So the route asks both, with title variants (vocal-version base, stripped
- *      parentheticals, film name) that catalogue metadata makes necessary.
+ *   1. ONE CALL. The fielded search (`track_name` + `artist_name`) answers with this song's
+ *      records. The free-text `q=` question is asked only when that came back empty — it is the
+ *      one that finds what the fielded form misses — and never as a retry after a refusal: a
+ *      provider that is refusing this request is refusing the next one too, and the owner's own
+ *      retry is worth more than one spent here. The complaint this fixes was a lookup that made a
+ *      dozen requests for one song and spent the origin's goodwill on itself.
  *
- *   2. BUDGETS. The old pipeline shared one 7-second deadline across three
- *      stages, so the stage most likely to find the song was the one that got
- *      cut — and a spent budget surfaced as HTTP 503 "provider error" instead of
- *      an honest "not found". Every stage now owns its budget, and the total is
- *      bounded separately, so a slow first stage can never starve the last.
+ *   2. ONE ANSWER FOR BOTH JOBS. The same response carries the best record the strict matcher
+ *      accepts *and* every record the search returned, so the panel's record list is not a second
+ *      look-up. This song's records come first; the rest of the hits follow, dimmed, as context
+ *      to choose from — never as an automatic match.
  *
- *   3. MEMORY. A hit is cached in MongoDB for 90 days and a miss for 12 hours,
- *      shared by every instance and surviving deploys, with the owner's own
- *      lyrics checked first — so a song fetched or filled in once is instant
- *      forever, whether or not LRCLIB is reachable that day.
+ *   3. MEMORY FIRST, ALWAYS. A song's answer is kept in this process for fifteen minutes and in
+ *      MongoDB for 90 days (a miss for 12 hours), and two callers asking for the same song at the
+ *      same time share the one call already in flight. A song fetched once is free the next time
+ *      the stage or the panel wants it, and a provider outage serves that remembered answer with
+ *      a retry symbol instead of an empty column. A failure is stored nowhere.
  *
- * Acceptance is still the single gate: `lyricIdentity` decides what may be
- * shown, and a rejection is reported with its reason code rather than a blank
- * stage. Nothing is ever substituted from a different song.
+ * Acceptance is still the single gate: `lyricIdentity` decides what may be shown, and a rejection
+ * is reported with its reason code rather than a blank stage. Nothing is ever substituted from a
+ * different song.
  */
 
 export const runtime = 'nodejs';
@@ -158,78 +158,167 @@ function mapResult(item, sourceUrl, wanted) {
   };
 }
 
+/* ── retrieval: one call per song, one memory of the answer ─────────────── */
+
 /**
- * Ask LRCLIB for one song. Returns the strongest accepted record, the stages
- * that were tried, and — when nothing matched — why, so the UI can be specific.
+ * The one place a lyrics lookup happens: memory → database → provider, and what comes back is
+ * remembered as a whole — the matched record *and* the list — under one song key.
+ *
+ * Two reasons, both about the provider's patience. One song's answer is wanted by two parts of the
+ * screen (the stage's lines and the panel's list), and a second request for one song is one more
+ * than LRCLIB needs to answer. And the retry a person presses after a 503 has to be the *next*
+ * call, so a failure is stored nowhere: it is reported, and the last good answer for that song, if
+ * there is one, is served with `stale` set.
  */
-async function findLyrics({ title, artist, album, duration, exclude = '', force = false, base = getLyricsApiBase(), collect = null }) {
+const bundles = new Map();
+const pending = new Map();
+const BUNDLE_TTL_MS = 15 * 60 * 1000;
+const BUNDLE_LIMIT = 80;
+
+function readBundle(key) {
+  const entry = key ? bundles.get(key) : null;
+  if (!entry) return null;
+  if (Date.now() - entry.at > BUNDLE_TTL_MS) { bundles.delete(key); return null; }
+  return entry;
+}
+
+function writeBundle(key, entry) {
+  if (!key) return;
+  if (bundles.size >= BUNDLE_LIMIT) bundles.delete(bundles.keys().next().value);
+  bundles.set(key, { at: Date.now(), ...entry });
+}
+
+/**
+ * ONE call. The fielded question first — `track_name` with `artist_name` — because that is the one
+ * that answers with *this* song rather than with every record sharing a word with it. A single
+ * free-text `q=` question follows only when the fielded call came back with nothing at all: an
+ * empty answer is worth one different question, a refusal is not.
+ *
+ * The rows are returned even when no record passes the strict matcher. The matcher decides what is
+ * *shown*; the list is how a person reaches the live cut or the other album it refused, so "no
+ * match" must not mean "nothing to show".
+ */
+async function searchRecords({ title, artist, album, duration, exclude = [], base = getLyricsApiBase() }) {
   const metadata = lyricRequestMetadata({ title, artists: artist, album, duration });
   const wanted = { title: metadata.title, artist: normalize(metadata.artist), album: metadata.album, duration: metadata.duration };
-  const blocked = new Set(String(exclude).split(',').filter(Boolean));
   const attempts = [];
-  const started = Date.now();
-  let failure = null;
   if (!wanted.title || !wanted.artist) {
-    return { result: null, attempts, reason: 'missing-metadata', failure: null };
+    return { wanted, rows: [], match: null, attempts, reason: 'missing-metadata', failure: null };
   }
   const variants = lyricSearchVariants({ title: wanted.title, album: wanted.album });
-  const best = { item: null, rank: -1 };
-  const TIER = { strong: 3, 'album-duration': 2, 'artist-duration': 2, 'vocal-alias': 1 };
+  const blocked = new Set(exclude);
+  let failure = null;
 
-  const ask = async (path, params, label) => {
-    if (Date.now() - started >= TOTAL_BUDGET_MS) { attempts.push({ stage: label, outcome: 'skipped-budget' }); return null; }
-    const url = new URL(path, base + '/');
-    for (const [key, value] of Object.entries(params)) if (value !== '' && value != null) url.searchParams.set(key, String(value));
+  const ask = async (params, stage) => {
+    const url = new URL('/api/search', base + '/');
+    for (const [field, value] of Object.entries(params)) if (value !== '' && value != null) url.searchParams.set(field, String(value));
     let payload;
     try {
       payload = await fetchJson(url.toString(), { deadline: Date.now() + STAGE_BUDGET_MS });
     } catch (error) {
       failure = error;
-      attempts.push({ stage: label, outcome: 'error', message: error.message });
+      attempts.push({ stage, outcome: 'error', message: error.message });
       return null;
     }
-    if (payload === null) { attempts.push({ stage: label, outcome: 'not-found' }); return null; }
-    const rows = (Array.isArray(payload) ? payload : [payload]).filter((row) => row && typeof row === 'object');
-    if (!rows.length) { attempts.push({ stage: label, outcome: 'empty' }); return null; }
-    const items = rows.filter((row) => !blocked.has(String(row.id)));
-    // The picker needs the records the matcher *did not* choose as well: "wrong lyrics" is usually a
-    // right song on the wrong record (a live cut, a different album, a karaoke version), and those
-    // are exactly the ones a single winner throws away.
-    if (collect) for (const row of items) collect(row, label, wanted);
-    const match = chooseLyricMatch(items, wanted);
-    attempts.push({ stage: label, outcome: match ? 'matched' : 'rejected', candidates: rows.length });
-    if (!match) return null;
-    const rank = TIER[match.matchTier] || 0;
-    if (rank > best.rank) { best.item = match; best.rank = rank; best.url = url.toString(); }
-    return match;
+    if (payload === null) { attempts.push({ stage, outcome: 'not-found' }); return null; }
+    const rows = (Array.isArray(payload) ? payload : [payload])
+      .filter((row) => row && typeof row === 'object' && row.id != null && !blocked.has(String(row.id)));
+    attempts.push({ stage, outcome: rows.length ? 'rows' : 'empty', candidates: rows.length });
+    return rows;
   };
 
-  // 1. The exact signature. Duration is optional upstream; omitting it is better
-  //    than sending a duration that would 404 a record we then never try again.
-  await ask('/api/get', {
-    track_name: variants[0], artist_name: wanted.artist, album_name: wanted.album,
-    duration: wanted.duration > 0 && wanted.duration <= 3600 ? Math.round(wanted.duration) : '',
-  }, 'get');
-  // 2. Fielded search across title variants.
-  for (const variant of variants.slice(0, 3)) {
-    if (best.rank >= 3) break;
-    await ask('/api/search', { track_name: variant }, `search-track_name:${variant.slice(0, 40)}`);
+  let rows = await ask({ track_name: variants[0], artist_name: wanted.artist }, `search-track_name:${variants[0].slice(0, 40)}`);
+  if (rows && !rows.length) rows = await ask({ q: `${wanted.title} ${wanted.artist}`.trim() }, 'search-q:title+artist');
+  if (!rows) return { wanted, rows: [], match: null, attempts, reason: 'provider-error', failure };
+
+  // The strict rules only ever see this song's own records; the rest of the search is shown after
+  // them, dimmed, and can be picked by hand but never chosen for the song automatically.
+  const same = rows.filter((row) => lyricSameTitle(row.trackName || row.name || '', wanted.title));
+  const match = chooseLyricMatch(same, wanted);
+  return { wanted, rows, match, attempts, reason: match ? null : (rows.length ? 'identity-rejected' : 'not-in-catalogue'), failure };
+}
+
+/** The search's rows as the panel's list: this song's records first, then the rest, dimmed. */
+function listRows({ rows = [], wanted = {}, autoId = '' }) {
+  const gap = (row) => (Number(wanted.duration) > 0 && Number(row.duration) > 0 ? Math.abs(Number(row.duration) - Number(wanted.duration)) : Number.MAX_SAFE_INTEGER);
+  return rows.map((row) => {
+    const id = String(row.id);
+    return {
+      id,
+      title: normalize(row.trackName || row.name || ''),
+      artist: normalize(row.artistName || ''),
+      album: normalize(row.albumName || ''),
+      duration: Number(row.duration) || 0,
+      synced: Boolean(row.syncedLyrics),
+      lines: lineCount(row.syncedLyrics || row.plainLyrics || ''),
+      preview: previewLines(row.syncedLyrics || row.plainLyrics || '', 2),
+      score: scorePercent(lrclibScore(row, wanted)),
+      // Whether this record carries the song's own name. `false` is not an error: it is the rest
+      // of the search, kept for the person to look through.
+      same: lyricSameTitle(row.trackName || row.name || '', wanted.title),
+      auto: id === autoId,
+    };
+  }).sort((a, b) => {
+    if (a.auto !== b.auto) return a.auto ? -1 : 1;
+    if (a.same !== b.same) return a.same ? -1 : 1;
+    if (a.synced !== b.synced) return a.synced ? -1 : 1;
+    return gap(a) - gap(b) || b.score - a.score || a.title.localeCompare(b.title);
+  });
+}
+
+/**
+ * The lookup the two routes share. `needsList` is the panel asking for the records as well; a
+ * record cached before this round (a payload with no list) still answers the stage, but the panel
+ * asks once more and the answer it gets is written with a list — so the cache heals itself instead
+ * of keeping a song listless for 90 days.
+ */
+async function lookupBundle({ song = {}, title, artist, album, duration, exclude = '', base = getLyricsApiBase(), needsList = false, skipCache = false, skipMemory = false }) {
+  const key = lyricsSongKey(song);
+  if (!skipMemory) {
+    const memory = readBundle(key);
+    if (memory && (!needsList || memory.list?.length || memory.result === null)) return { ...memory, cached: true, stale: false, busy: false };
   }
-  // 3. Free-text search — the query that finds records the fielded one misses.
-  for (const variant of variants.slice(0, 2)) {
-    if (best.rank >= 3) break;
-    await ask('/api/search', { q: wanted.album ? `${variant} ${wanted.album}` : variant }, `search-q:${variant.slice(0, 40)}`);
+  if (!skipCache && key) {
+    const stored = await readLyricsCache(song).catch(() => null);
+    // A miss recorded during an outage is not a fact about the song: it is ignored and asked again.
+    const poisoned = stored?.status === 'none' && stored.reason === 'provider-error';
+    if (stored && !poisoned && (!needsList || Array.isArray(stored.list))) {
+      const entry = {
+        result: stored.status === 'ok' ? (stored.payload || null) : null,
+        list: Array.isArray(stored.list) ? stored.list : [],
+        autoId: String(stored.autoId || ''),
+        reason: stored.status === 'ok' ? null : (stored.reason || 'not-in-catalogue'),
+        attempts: [],
+      };
+      if (entry.result || entry.list.length) writeBundle(key, entry);
+      return { ...entry, cached: true, stale: false, busy: false };
+    }
   }
-  // 3b. Last resort: artist + title as free text, which survives album suffixes.
-  if (!best.item && wanted.artist && Date.now() - started < TOTAL_BUDGET_MS) {
-    await ask('/api/search', { q: `${wanted.title} ${wanted.artist}` }, 'search-q:title+artist');
-  }
-  if (!best.item) {
-    const reason = attempts.some((a) => a.outcome === 'rejected') ? 'identity-rejected'
-      : attempts.some((a) => a.outcome === 'error') ? 'provider-error' : 'not-in-catalogue';
-    return { result: null, attempts, reason, failure };
-  }
-  return { result: mapResult(best.item, best.url, wanted), attempts, reason: null, failure };
+  // Two callers, one song, one call: whoever asks second joins the lookup already in flight — but
+  // "ask again" never joins anything, because that request would be answered by the very call it
+  // was asking to replace.
+  if (key && !skipCache && !skipMemory && pending.has(key)) return pending.get(key);
+  const work = (async () => {
+    const searched = await searchRecords({ title, artist, album, duration, exclude: String(exclude).split(',').filter(Boolean), base });
+    const autoId = searched.match?.id != null ? String(searched.match.id) : '';
+    const entry = {
+      result: searched.match ? mapResult(searched.match, new URL(`/api/get/${searched.match.id}`, base + '/').toString(), searched.wanted) : null,
+      list: listRows({ rows: searched.rows, wanted: searched.wanted, autoId }),
+      autoId,
+      reason: searched.reason,
+      attempts: searched.attempts,
+      failure: searched.failure || null,
+    };
+    // A refusal is remembered nowhere. What was found — a match, or the other records, or both —
+    // is remembered in both memories, so the next look costs nothing.
+    if (entry.result || entry.list.length) {
+      writeBundle(key, entry);
+      writeLyricsCache(song, { status: entry.result ? 'ok' : 'none', payload: entry.result, reason: entry.reason || '', list: entry.list, autoId: entry.autoId });
+    }
+    return { ...entry, cached: false, stale: false, busy: false };
+  })().finally(() => { if (key) pending.delete(key); });
+  if (key) pending.set(key, work);
+  return work;
 }
 
 /* ── picker helpers ──────────────────────────────────────────────────────── */
@@ -251,67 +340,6 @@ const MESSAGES = {
   'provider-error': 'The lyrics provider could not be reached.',
   'user-saved': '',
 };
-
-/**
- * Every record LRCLIB has for this song, as a list a person can choose from.
- *
- * The matcher is deliberately strict — it will not show a record from a different song — but
- * "wrong lyrics" is almost always the *right* song on the wrong record: a live cut, a different
- * album, a karaoke track, a version with the film's name attached. Those records are real and the
- * owner can see which is which, so the job here is to show them plainly (title, artist, timings or
- * not, length) and let a human decide. Nothing is substituted automatically: this only lists.
- */
-async function collectCandidates({ title, artist, album, duration, base = getLyricsApiBase() }) {
-  const metadata = lyricRequestMetadata({ title, artists: artist, album, duration });
-  const wanted = { title: metadata.title, artist: normalize(metadata.artist), album: metadata.album, duration: metadata.duration };
-  const seen = new Map();
-  const attempts = [];
-
-  if (!wanted.title || !wanted.artist) {
-    return { rows: [], autoId: '', attempts, message: 'This song arrived without a title or artist, so there was nothing safe to search for.' };
-  }
-
-  const found = await findLyrics({
-    title, artist, album, duration, base,
-    collect: (row, stage) => {
-      const id = row?.id != null ? String(row.id) : '';
-      if (!id) return;
-      // The free-text stages answer with loosely related songs. The list is for *this* song's other
-      // versions, so anything that is not the same title is dropped here — and the strict identity
-      // rules are not applied, because a live cut or a differently credited version is exactly what
-      // the owner came to find.
-      if (!lyricSameTitle(row.trackName || row.name || '', wanted.title)) return;
-      const previous = seen.get(id);
-      const candidate = {
-        id,
-        title: normalize(row.trackName || row.name || ''),
-        artist: normalize(row.artistName || ''),
-        album: normalize(row.albumName || ''),
-        duration: Number(row.duration) || 0,
-        // What the option says: whether this record carries timings, and how long it runs.
-        synced: Boolean(row.syncedLyrics),
-        lines: lineCount(row.syncedLyrics || row.plainLyrics || ''),
-        preview: previewLines(row.syncedLyrics || row.plainLyrics || '', 2),
-        score: scorePercent(lrclibScore(row, wanted)),
-        stage,
-      };
-      // The same record can arrive from several stages; keep whichever copy carries the timings.
-      if (!previous || (!previous.synced && candidate.synced)) seen.set(id, candidate);
-    },
-  });
-
-  const autoId = found.result?.matched?.id != null ? String(found.result.matched.id) : '';
-  const rows = [...seen.values()].sort((a, b) => {
-    if (a.id === autoId) return -1;
-    if (b.id === autoId) return 1;
-    // Timed records first, then the ones closest to the length of the track actually playing.
-    if (a.synced !== b.synced) return a.synced ? -1 : 1;
-    const da = wanted.duration ? Math.abs(a.duration - wanted.duration) : 0;
-    const db = wanted.duration ? Math.abs(b.duration - wanted.duration) : 0;
-    return da - db || a.title.localeCompare(b.title);
-  });
-  return { rows, autoId, attempts: found.attempts || [], message: rows.length ? '' : (MESSAGES[found.reason] || 'No records for this song.') };
-}
 
 const accessToken = (password = '') => crypto.createHash('sha256').update(`jash-theatre:${password}`).digest('hex');
 
@@ -443,36 +471,36 @@ export async function GET(request) {
   // `force=1` stays what the rejection path needs — bypass everything, saved lyrics included.
   const reload = searchParams.get('reload') === '1';
   const wantsCandidates = searchParams.get('candidates') === '1';
-  const wantsList = searchParams.get('list') === '1';
   const forced = String(searchParams.get('source') || '').trim().toLowerCase();
   const song = { title, artist, album, duration, id };
 
-  /* the picker's list: every record LRCLIB offers for this song, not just the winner */
+  /*
+   * The panel's one request: the record this song is using and every record the same search
+   * returned. `reload=1` is the picker's signal (re-read the saved lyrics, skip the remembered
+   * provider answer) and `force=1` skips everything — both mean "look again", so neither joins a
+   * memory.
+   */
   if (wantsCandidates) {
     if (!title && !id) return json({ ok: false, candidates: [], message: 'This song arrived without a title, so there is nothing to search for.', reason: 'missing-metadata' }, 400);
-    try {
-      const [list, override] = await Promise.all([
-        collectCandidates({ title, artist, album, duration }),
-        readLyricsOverride(song).catch(() => null),
-      ]);
-      const autoId = list.autoId;
-      const rows = list.rows.map((row) => ({ ...row, auto: row.id === autoId }));
-      // The note written by POST /choose carries the record id, so the saved choice can be shown as
-      // selected in the list rather than as a stranger among the options.
-      const savedId = /record (\d+)/.exec(override?.note || '')?.[1] || '';
-      return json({
-        ok: true, wanted: { id, title, artist, album, duration },
-        autoId, savedId, current: override ? 'saved' : 'auto', savedAt: override?.updatedAt || null,
-        candidates: rows, attempts: list.attempts, message: list.message || '',
-      });
-    } catch (error) {
-      return json({ ok: false, candidates: [], message: error.message || 'Could not list the available lyrics.', reason: 'provider-error' }, 503);
-    }
-  }
-
-  /* catalogue only: the list of sources, no provider is touched */
-  if (wantsList && searchParams.get('catalogue') === '1' && !title && !id) {
-    return json({ catalogue: groupedSources(), groups: SOURCE_GROUPS });
+    const fresh = reload || force;
+    const [bundle, override] = await Promise.all([
+      lookupBundle({ song, title, artist, album, duration, exclude, needsList: true, skipCache: fresh, skipMemory: force }),
+      readLyricsOverride(song).catch(() => null),
+    ]);
+    // The note written by POST /choose carries the record id, so the saved choice can be shown as
+    // selected in the list rather than as a stranger among the options.
+    const savedId = /record (\d+)/.exec(override?.note || '')?.[1] || '';
+    const rows = (bundle.list || []).map((row) => ({ ...row, auto: row.id === bundle.autoId, saved: row.id === savedId }));
+    const busy = bundle.reason === 'provider-error';
+    return json({
+      ok: true, wanted: { id, title, artist, album, duration },
+      autoId: bundle.autoId || '', savedId, current: override ? 'saved' : 'auto', savedAt: override?.updatedAt || null,
+      // A busy provider with records from before is still an answer: the list is served, the retry
+      // symbol is shown beside it, and an outage never empties the panel.
+      busy, stale: busy, cached: Boolean(bundle.cached), retryable: busy, retryAfter: bundle.failure?.retryAfter || 2,
+      candidates: rows, attempts: bundle.attempts || [],
+      message: busy ? 'Lyrics provider is busy.' : (bundle.reason ? (MESSAGES[bundle.reason] || '') : ''),
+    });
   }
 
   /* the owner's own lyrics win before anything is asked of a provider */
@@ -483,48 +511,6 @@ export async function GET(request) {
     lines: lineCount(override.syncedLyrics || override.plainLyrics || ''),
     preview: previewLines(override.syncedLyrics || override.plainLyrics || ''), reason: null,
   } : null;
-
-  /* the picker: one provider, previewed, plus whatever the owner saved */
-  if (wantsList) {
-    const started = Date.now();
-    const found = overrideRow ? { result: { lyrics: overrideRow.plainLyrics || overrideRow.syncedLyrics, ...overrideRow }, attempts: [], reason: null } : await findLyrics({ title, artist, album, duration, exclude, force });
-    const lrclib = found.result
-      ? {
-        id: 'lrclib', ok: true, kind: found.result.syncedLyrics ? 'synced' : 'plain',
-        plainLyrics: found.result.plainLyrics || '', syncedLyrics: found.result.syncedLyrics || '',
-        matched: found.result.matched || null, ms: Date.now() - started,
-        lines: lineCount(found.result.syncedLyrics || found.result.plainLyrics || ''),
-        preview: previewLines(found.result.syncedLyrics || found.result.plainLyrics || ''),
-        match: found.result.matched?.score != null ? scorePercent(found.result.matched.score) : null,
-        winner: overrideRow ? 'user' : 'lrclib', reason: null,
-      }
-      : {
-        id: 'lrclib', ok: false, kind: 'none', plainLyrics: '', syncedLyrics: '', matched: null,
-        ms: Date.now() - started, lines: 0, preview: [], match: null, winner: null,
-        reason: MESSAGES[found.reason] || 'No match for this song.', retryable: found.reason === 'provider-error',
-      };
-    const auto = {
-      id: 'auto', ok: lrclib.ok, kind: lrclib.kind, plainLyrics: lrclib.plainLyrics, syncedLyrics: lrclib.syncedLyrics,
-      matched: lrclib.matched, ms: lrclib.ms, lines: lrclib.lines, preview: lrclib.preview, match: lrclib.match,
-      winner: lrclib.ok ? (overrideRow ? 'user' : 'lrclib') : null,
-      reason: lrclib.ok ? null : lrclib.reason, retryable: Boolean(lrclib.retryable), retryAfter: 0,
-    };
-    const catalogue = Object.fromEntries(groupedSources().flatMap((group) => group.items.map((item) => [item.id, item])));
-    const rows = [...(overrideRow ? [overrideRow] : []), auto, lrclib];
-    const sources = rows.map((result) => {
-      const meta = catalogue[result.id] || { id: result.id, name: result.id, mark: '?', kind: 'none' };
-      return {
-        ...result,
-        name: meta.name, mark: meta.mark, pickable: true,
-        applies: result.id === 'auto' ? (WIRED_SOURCE_KIND[lrclib.winner] || 'synced') : (WIRED_SOURCE_KIND[result.id] || (result.id === 'user' ? result.kind : 'none')),
-        evidence: meta.evidence, note: meta.note, wired: true,
-      };
-    });
-    return json({
-      sources, groups: SOURCE_GROUPS.map((g) => ({ id: g.id, label: g.label, badge: g.badge, tone: g.tone })),
-      catalogue: groupedSources(), wanted: { id, title, artist, album, duration },
-    });
-  }
 
   /* pinned source: what the picker's choice applies */
   if (forced && forced !== 'auto') {
@@ -554,30 +540,15 @@ export async function GET(request) {
         matchVersion: LYRICS_MATCH_VERSION, cached: false,
       });
     }
-    if (!force && !reload) {
-      const cached = await readLyricsCache(song);
-      if (cached?.status === 'ok' && cached.payload) {
-        return json({ ...cached.payload, matchVersion: LYRICS_MATCH_VERSION, cached: true });
-      }
-      if (cached?.status === 'none' && (title || id)) {
-        const reason = cached.reason || 'not-in-catalogue';
-        return json({
-          lyrics: '', plainLyrics: '', syncedLyrics: '', source: 'none', reason,
-          message: MESSAGES[reason] || 'No lyrics for this song.', retryable: reason === 'provider-error', cached: true,
-        });
-      }
-    }
-    const found = await findLyrics({ title, artist, album, duration, exclude, force });
-    if (found.result) {
-      writeLyricsCache(song, { status: 'ok', payload: found.result });   // fire and forget
-      return json(found.result);
-    }
-    writeLyricsCache(song, { status: 'none', reason: found.reason });
-    if (found.reason === 'provider-error' && found.failure?.retryable !== false) throw found.failure;
+    // One lookup answers it all: memory, then the database, then the provider — with the matched
+    // record and the song's other records coming back together.
+    const bundle = await lookupBundle({ song, title, artist, album, duration, exclude, skipCache: force || reload, skipMemory: force });
+    if (bundle.result) return json({ ...bundle.result, cached: Boolean(bundle.cached) });
+    if (bundle.reason === 'provider-error') throw (bundle.failure || new ProviderFailure('Lyrics provider is busy.', 2));
     return json({
-      lyrics: '', plainLyrics: '', syncedLyrics: '', source: 'none', reason: found.reason,
-      message: MESSAGES[found.reason] || 'No lyrics for this song.', tried: found.attempts,
-      retryable: found.reason === 'provider-error',
+      lyrics: '', plainLyrics: '', syncedLyrics: '', source: 'none', reason: bundle.reason,
+      message: MESSAGES[bundle.reason] || 'No lyrics for this song.', tried: bundle.attempts,
+      retryable: false, cached: Boolean(bundle.cached),
     });
   } catch (error) {
     // A provider outage is a retryable outcome, never a "this song has no lyrics" verdict.

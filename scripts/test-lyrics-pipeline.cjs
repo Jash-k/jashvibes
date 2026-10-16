@@ -70,7 +70,7 @@ const load=p=>import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync(
  const sources=await load('lib/musicSources.js');
  assert.deepEqual(sources.WIRED_LYRICS_SOURCES,['lrclib']);
  const route=fs.readFileSync('app/api/music/lyrics/route.js','utf8');
- for(const needle of ["'/api/get'","track_name: variant","q: wanted.album ?","Lyrics queue is busy","Retry-After"])assert.ok(route.includes(needle),`route must keep ${needle}`);
+ for(const needle of ["'/api/search'","track_name: variants[0], artist_name: wanted.artist","Lyrics queue is busy","Retry-After"])assert.ok(route.includes(needle),`route must keep ${needle}`);
  assert.ok(!/saavn/i.test(route),'the lyrics route must no longer call Saavn');
  assert.ok(route.includes('readLyricsOverride')&&route.includes('readLyricsCache')&&route.includes('writeLyricsCache'));
  const store=fs.readFileSync('lib/lyricsStore.js','utf8');
@@ -87,14 +87,29 @@ const load=p=>import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync(
  // "Wrong lyrics?" used to reject one record on one device and hope the retry picked better. The
  // picker instead shows what the provider actually has and saves the pick for everyone, so the
  // single-winner matcher must hand over the records it loses as well.
- assert.ok(route.includes('collect = null'),'findLyrics must accept a collector');
- assert.ok(route.includes('if (collect) for (const row of items) collect(row, label, wanted);'),
-  'every record the provider returned on a stage must reach the collector, not only the winner');
+ // Round 3: one request per song. The cascade that spent a dozen calls on one song is gone, and
+ // the one search that replaced it answers both halves of the screen — the record the stage shows
+ // and every record the panel lists.
+ assert.ok(route.includes('async function searchRecords')&&!route.includes('async function findLyrics'),
+  'one search must answer a song; the staged cascade must not come back');
+ assert.equal((route.match(/await ask\(/g)||[]).length,2,
+  'a lookup may ask the provider twice at most: the fielded search, and the free-text retry');
+ assert.ok(route.includes('if (rows && !rows.length) rows = await ask({ q:'),
+  'the second question is spent only on an empty answer, never on a refusal');
+ assert.ok(!route.includes('collectCandidates'),'the second lookup that filled the list alone is gone');
+ assert.ok(route.includes('async function lookupBundle')&&route.includes('const pending = new Map()'),
+  'one answer per song is kept in memory, and the call already in flight is shared');
+ assert.ok(route.includes('lookupBundle({ song, title, artist, album, duration, exclude, needsList: true, skipCache: fresh, skipMemory: force })'),
+  'the list reads the same lookup the stage does, so a song costs one call');
+ assert.ok(route.includes("const busy = bundle.reason === 'provider-error'")&&route.includes('busy, stale: busy,'),
+  'a busy provider is reported as busy, with the answer that was remembered for the song');
+ assert.ok(route.includes('if (entry.result || entry.list.length) {')&&route.includes('const poisoned ='),
+  'only what was found is remembered, and a miss recorded during an outage is not a verdict');
  assert.ok(route.includes("searchParams.get('candidates') === '1'")&&route.includes("searchParams.get('reload') === '1'"),
-  'the list asks for candidates, and a reload skips the cached provider answer');
- assert.ok(route.includes('if (!force && !reload) {'),'a reload must not re-pick the automatic match');
- assert.ok(route.includes('collectCandidates')&&route.includes('savedId'),
-  'the list must mark the automatic match and the record the saved choice came from');
+  'the list asks for candidates, and a reload skips the remembered provider answer');
+ assert.ok(route.includes('savedId'),'the list must mark the record the saved choice came from');
+ assert.ok(!route.includes('wantsList')&&!route.includes("searchParams.get('list') === '1'"),
+  'the dead source list went with the picker it was built for');
 
  // ── the panel: one word of chrome, a list, and a tick that writes ──
  assert.ok(screen.includes('className="mc-lyric-available"')&&screen.includes('<span>Available</span>'),
@@ -104,12 +119,20 @@ const load=p=>import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync(
   'every record must be listed by title, in a list rendered inside the panel');
  assert.ok(screen.includes("name={candidate.synced ? 'wave' : 'text'}"),
   'whether a record carries timings must be a symbol, not a sentence');
- assert.ok(!/<select[^>]*picker/i.test(screen),'the record list is not a native select: it must render on a phone too');
- assert.ok(!screen.includes('candidateLabel'),'no option may be labelled by an opaque id');
+ assert.ok(!screen.includes('mc-picker'),'the footer select the owner rejected must not come back');
+ assert.ok(screen.includes('mc-lyric-records')&&screen.includes('mc-lyric-select')&&screen.includes('candidateLabel(candidate, wanted, currentId)'),
+  'the same records are offered again as a dropdown, labelled by title and marks');
+ assert.ok(!screen.includes('recordLine(candidate.id'),'a record is never shown to a person as its provider id');
  assert.ok(screen.includes('onClick={() => setPicked(candidate.id)}'),
   'choosing a row must only mark it — nothing is saved by looking');
- assert.ok(screen.includes('onClick={commit}')&&screen.includes('disabled={!picked || picking || picked === currentId}'),
+ assert.ok(screen.includes('onClick={() => ask(picked)}')&&screen.includes('disabled={!picked || picking || picked === currentId}'),
   'the tick is the only thing that writes, and it waits for a real choice');
+ assert.ok(screen.includes('mc-lyric-retry')&&screen.includes('picker.busy'),
+  'a busy provider must show a retry symbol rather than an empty panel');
+ assert.ok(screen.includes("candidate.same === false ? 'is-other'"),
+  'the rest of the search follows this song\'s own records, dimmed');
+ assert.ok(screen.includes('if (ready || candidates.length) CANDIDATE_CACHE.set(key, next);'),
+  'a failure is never remembered, so the next look is a real look');
  assert.ok((screen.match(/action: 'choose'/g)||[]).length===1,'exactly one call may save a choice');
  assert.ok(screen.includes('is-current')&&screen.includes("picker.current === 'saved' ? (picker.savedId || '') : picker.autoId"),
   'the record in use must be marked, without a word');
@@ -131,6 +154,11 @@ const load=p=>import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync(
  assert.ok(/\.mc-lyric-pop \{[^}]*position:absolute/.test(canvasCss)&&/\.mc-lyric-pop \{[^}]*max-height:calc\(100% - \d+px\)/.test(canvasCss),
   'the list opens inside the panel: never clipped by it, never floating over another section');
  assert.ok(!canvasCss.includes('.mc-picker'),'the footer select and its rules must be gone');
+ assert.ok(canvasCss.includes('.mc-lyric-option.is-other'),
+  'the rest of the search must read as secondary, not as a candidate for this song');
+ assert.ok(canvasCss.includes('.mc-lyric-records .mc-lyric-select')&&/\.mc-lyric-select \{[^}]*min-height:44px/.test(canvasCss),
+  'the dropdown must stay thumb-sized on a phone');
+ assert.ok(canvasCss.includes('.mc-lyric-retry'),'the busy mark is a control, and it has a rule');
  assert.ok(canvasCss.includes('.mc-app.is-pocket .mc-lyric-pop'),
   'a list left open must not stay sharp and live under the touch lock');
  assert.ok(/\.mc-lyric-option \{[^}]*min-height:44px/.test(canvasCss),'rows must stay thumb-sized on a phone');
