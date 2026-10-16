@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireServiceAuth } from '@/lib/serverAuth';
+import { recordAction } from '@/lib/adminAudit';
 import dbConnect from '@/lib/db';
 import LiveChannel from '@/models/LiveChannel';
 import { recalcSourceCounts } from '@/lib/liveService';
@@ -33,6 +34,11 @@ export async function POST(request) {
       filter.favorite = { $ne: true };
     }
     const res = await LiveChannel.deleteMany(filter);
+    await recordAction({
+      area: 'live', action: 'live.purge', reversible: false,
+      summary: `Purged ${res.deletedCount || 0} live channel${(res.deletedCount || 0) === 1 ? '' : 's'} (mode: ${mode}${sourceId ? `, source ${sourceId}` : ''})`,
+      target: { kind: 'live-channels', key: sourceId || mode, label: `Live channels (${mode})` },
+    });
     await recalcSourceCounts(sourceId || '');
     return json({ ok: true, removed: res.deletedCount || 0, mode });
   } catch (error) { return json({ ok: false, error: error.message }, error.status || 500); }

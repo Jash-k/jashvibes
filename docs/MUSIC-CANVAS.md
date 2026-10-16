@@ -26,15 +26,19 @@ One button, three effects, and one thing that must stay truthful:
   (`z-index:170` vs the guard's `150`) so you can change what focus shows without unlocking. It is the
   only interactive element while locked, and the touch guard is not an `aria-modal` dialog precisely
   because that control is meant to be used.
-- **Touch lock.** `PocketLock` keeps the guard: four ways out — swipe down anywhere (the vignette fades
-  as you pull, so the gesture has feedback), slide the puck right, Escape, or the Back button. Focus
-  pushes exactly one history entry, so Back leaves focus instead of leaving the Music section; a gesture
-  exit gives that entry back.
+- **Touch lock, and nothing written on it.** `PocketLock` draws one thing — the drag handle at the
+  bottom. There is no lock glyph, no "Focus locked", no swipe hint, no footer: a caption printed over the
+  lyrics you locked the screen to look at defeats the point. The swipe's own feedback is the vignette
+  thinning as you pull. Four ways out — swipe down anywhere, slide the handle right, Escape, or the Back
+  button. Focus pushes exactly one history entry, so Back leaves focus instead of leaving the Music
+  section; a gesture exit gives that entry back. The handle keeps an accessible label and the region keeps
+  an accessible name, because the words were on screen, not gone from assistive tech.
 - **Screen awake.** `lib/wakeLock.js` requests Screen Wake Lock inside the click (the API needs a user
   gesture), releases when focus ends, and re-takes it when the tab becomes visible again. Unsupported
-  browsers (iOS before 16.4, some in-app browsers) and refusals are reported to the UI, which says
-  "This browser will not hold the screen awake" rather than promising something it cannot do. No
-  silent-video fallback.
+  browsers (iOS before 16.4, some in-app browsers) and refusals are announced through the shell's status
+  line ("This browser will not hold the screen awake") — the shell, not the guard, because the guard
+  prints nothing now. Silence there would be the one lie this state must not tell. No silent-video
+  fallback.
 
 The mobile Lyrics panel has **no exit button**: the Library button leaves focus, and the gestures above
 leave locked focus. The desktop expand glyph remains. The earlier `listeningMode` / `pocketMode`

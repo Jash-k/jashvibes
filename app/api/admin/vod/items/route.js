@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDeny } from '@/lib/adminAuth';
+import { recordAction } from '@/lib/adminAudit';
 import dbConnect from '@/lib/db';
 import VodItem from '@/models/VodItem';
 
@@ -80,11 +81,19 @@ export async function PATCH(request) {
     }
 
     await dbConnect();
+    const before = await VodItem.findById(id).select('title year overrides').lean();
     const protectedPatch = { ...patch, ...Object.fromEntries(Object.entries(patch).map(([key, value]) => [`overrides.${key}`, value])) };
     const doc = await VodItem.findByIdAndUpdate(id, { $set: protectedPatch }, { new: true, runValidators: true })
       .select('title year tmdbMatched sources posterUrl')
       .lean();
     if (!doc) return NextResponse.json({ ok: false, error: 'Title not found' }, { status: 404 });
+    await recordAction({
+      area: 'retro', action: 'retro.item.edit', targetModel: 'VodItem',
+      summary: `Edited “${before?.title || doc.title}” — ${Object.keys(patch).join(', ')}`,
+      target: { kind: 'retro-item', key: id, label: doc.title },
+      before: before ? { title: before.title, year: before.year, overrides: before.overrides || {} } : null,
+      after: { title: doc.title, year: doc.year, overrides: protectedPatch },
+    });
     return NextResponse.json({ ok: true, item: { ...doc, _id: String(doc._id) } }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error.message || 'Update failed' }, { status: 400 });
@@ -97,7 +106,15 @@ export async function DELETE(request) {
   const id = new URL(request.url).searchParams.get('id') || '';
   if (!id) return NextResponse.json({ ok: false, error: 'Missing id' }, { status: 400 });
   await dbConnect();
+  const before = await VodItem.findById(id).select('title hidden overrides').lean();
   const result = await VodItem.findByIdAndUpdate(id, { $set: { hidden: true, 'overrides.hidden': true } });
   if (!result) return NextResponse.json({ ok: false, error: 'Title not found' }, { status: 404 });
+  await recordAction({
+    area: 'retro', action: 'retro.item.hide', targetModel: 'VodItem',
+    summary: `Hid “${before?.title || id}” from ReTro`,
+    target: { kind: 'retro-item', key: id, label: before?.title || id },
+    before: before ? { title: before.title, hidden: Boolean(before.hidden), overrides: before.overrides || {} } : null,
+    after: { hidden: true, overrides: { ...(before?.overrides || {}), hidden: true } },
+  });
   return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } });
 }

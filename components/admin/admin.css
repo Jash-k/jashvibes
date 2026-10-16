@@ -223,3 +223,63 @@ html.day-mode .jv-ad-scrim { background: rgba(250, 247, 242, 0.82); }
 .va-list {display:grid;gap:10px;}.va-list article {display:flex;align-items:center;gap:18px;padding:18px;border:1px solid #ffffff16;border-radius:14px;background:#ffffff03;}.va-list article.is-hidden {opacity:.65;}.va-row-main {flex:1;min-width:0;}.va-row-main strong{font-size:15px;}.va-row-main p{color:#a6a3b7;font-size:12px;margin:6px 0;}.va-row-main small{color:#8d899f;font-size:11px;overflow-wrap:anywhere;}.va-row-main>small{display:block;margin-top:7px;}.va-tag{display:inline-block;font-size:10px;padding:3px 7px;margin:2px 5px 2px 0;border-radius:5px;background:#ffffff0c;color:#c4b5fd;}.va-amber{color:#fde68a;}.va-row-actions {display:flex;gap:7px;flex-wrap:wrap;}.va-row-actions button{font-size:12px;}.va-pagination{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:20px;font-size:12px;}.va-error{color:#fda4af;background:#fb71850b;border:1px solid #fb718530;padding:12px;border-radius:8px;}
 .va-dialog {background:#111019;color:#f5f3ff;border:1px solid #ffffff28;border-radius:18px;width:min(950px,95vw);max-height:92dvh;padding:0;}.va-dialog::backdrop{background:#000b;backdrop-filter:blur(5px);}.va-dialog header,.va-dialog footer{padding:20px 24px;display:flex;justify-content:space-between;gap:16px;border-bottom:1px solid #ffffff16;}.va-dialog header p{font-size:11px;color:#9691a8;overflow-wrap:anywhere;}.va-dialog h2{font-size:21px;}.va-dialog footer{border-top:1px solid #ffffff16;border-bottom:0;justify-content:flex-end;position:sticky;bottom:0;background:#111019;}.va-editor-body {padding:24px;}.va-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}.va-dialog textarea{min-height:90px;resize:vertical;}.va-tmdb{border:1px solid #a78bfa30;background:#a78bfa08;border-radius:12px;padding:16px;margin-bottom:24px;}.va-tmdb h3{font-size:15px;}.va-tmdb p{font-size:12px;line-height:1.6;color:#aaa6be;}.va-hit{display:flex;width:100%;justify-content:space-between;gap:12px;text-align:left;margin:6px 0;font-size:12px;}.va-hit span{color:#a6a3b7;}.va-preview{margin-top:16px;padding:14px;background:#0003;border-radius:9px;}.va-preview a{font-size:12px;color:#c4b5fd;}.va-check{display:flex;gap:8px;align-items:start;font-size:12px;margin:10px 0;}.va-check span{overflow-wrap:anywhere;}.va-dialog details{margin-top:20px;border-top:1px solid #ffffff20;padding-top:16px;}.va-dialog details p{font-size:12px;color:#a6a3b7;}.va-dialog .va-json{min-height:180px;font:12px monospace;}.va-dialog summary{cursor:pointer;font-size:13px;}
 @media(max-width:650px){.va-heading{align-items:start;}.va-heading h2{font-size:23px;}.va-heading p{font-size:12px;}.va-list article{flex-direction:column;align-items:stretch;}.va-fields{grid-template-columns:1fr;}.va-editor-body{padding:16px;}.va-dialog header,.va-dialog footer{padding:16px;}.va-toolbar label{min-width:130px;}.va-pagination span{font-size:10px;text-align:center;}}
+
+/* ── Catalogue ordering controls ─────────────────────────────────────────────
+   The listing mirrors the home page, so the controls say what each view is for and the
+   row keeps its home position visible whatever the sort. */
+.jv-ad-chiplabel { font: 900 10px/1 system-ui; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ad-faint); align-self: center; padding-right: 2px; }
+.jv-ad-hint { margin: 6px 2px 0; font-size: 11.5px; color: var(--ad-faint); line-height: 1.5; }
+.jv-ad-pos { flex: none; min-width: 42px; text-align: right; font: 800 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ad-faint); }
+.jv-ad-tr.is-pinned .jv-ad-pos { color: var(--ad-amber, #f2b444); }
+.jv-ad-stat small { display: block; margin-top: 3px; font-size: 10px; font-weight: 600; color: var(--ad-faint); }
+
+/* ── History tab ─────────────────────────────────────────────────────────────
+   The badge is the whole point: an action that cannot be undone says so in place, instead of
+   offering a button the server would refuse. */
+.jv-ad-hbadge { flex: none; min-width: 74px; text-align: center; padding: 4px 8px; border-radius: 999px; font: 800 10px/1.4 system-ui; letter-spacing: 0.04em; text-transform: uppercase; }
+.jv-ad-hbadge.is-ok { color: #86efac; background: #14532d4d; border: 1px solid #22c55e59; }
+.jv-ad-hbadge.is-norev { color: #fca5a5; background: #7f1d1d40; border: 1px solid #ef444459; }
+.jv-ad-hbadge.is-undone { color: var(--ad-faint); background: #ffffff0f; border: 1px solid #ffffff1f; }
+.jv-ad-nowhy { font-size: 11.5px; color: var(--ad-faint); line-height: 1.5; }
+.jv-ad-hwhen { font-size: 11px; color: var(--ad-faint); white-space: nowrap; }
+a.jv-ad-btn { text-decoration: none; }
+
+/* ── Orphaned overrides ──────────────────────────────────────────────────────
+   One block per stuck override; the re-bind buttons carry the *reason* they were suggested in
+   their tooltip, because "closest match" without a reason is a coin flip. */
+.jv-ad-orphan { margin-top: 10px; border: 1px solid #f59e0b3d; border-radius: 10px; background: #f59e0b0d; overflow: hidden; }
+.jv-ad-orphan .jv-ad-tr { border-bottom: 1px solid #ffffff12; }
+.jv-ad-orphan code { font: 500 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ad-dim); word-break: break-all; }
+.jv-ad-tag.is-dim { opacity: 0.7; }
+
+/* ── Bulk edits, duplicates, dry runs, health ────────────────────────────────
+   The bulk bar is sticky because the selection outlives scrolling: you pick rows down the list,
+   then act on them at the top. */
+.jv-ad-bulk { position: sticky; top: 0; z-index: 6; margin-top: 12px; padding: 10px 12px; border: 1px solid #f59e0b40; border-radius: 12px; background: #12121ce8; backdrop-filter: blur(10px); }
+.jv-ad-bulk-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.jv-ad-bulk-count { font-size: 12px; font-weight: 700; color: var(--ad-dim); min-width: 96px; }
+.jv-ad-bulk-preview { margin-top: 10px; border-top: 1px solid #ffffff14; padding-top: 8px; }
+.jv-ad-bulk-summary { font-size: 12.5px; font-weight: 700; color: var(--ad-text); margin: 0 0 6px; }
+.jv-ad-bulk-diff { font: 500 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ad-dim); white-space: nowrap; }
+.jv-ad-arrow { color: var(--ad-faint); padding: 0 4px; }
+.jv-ad-input.is-narrow, .jv-ad-select { max-width: 190px; }
+.jv-ad-check { width: 16px; height: 16px; flex: none; border: 1.5px solid #ffffff30; border-radius: 5px; background: #ffffff08; cursor: pointer; }
+.jv-ad-check.is-on { background: linear-gradient(135deg, #a855f7, #38bdf8); border-color: #a855f7; box-shadow: inset 0 0 0 3px #0b0b12; }
+.jv-ad-check:focus-visible { outline: 2px solid #a855f7; outline-offset: 2px; }
+.jv-ad-pick { display: flex; align-items: center; gap: 10px; padding: 7px 6px; border-radius: 8px; cursor: pointer; }
+.jv-ad-pick:hover { background: #ffffff08; }
+.jv-ad-pick input { accent-color: #a855f7; }
+.jv-ad-pick span { min-width: 0; }
+.jv-ad-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 12px; }
+.jv-ad-card.is-tight { padding: 12px 14px; margin-top: 0; }
+.jv-ad-rows { display: flex; flex-direction: column; gap: 5px; }
+.jv-ad-kv { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
+.jv-ad-kv span { color: var(--ad-faint); }
+.jv-ad-kv b { color: var(--ad-text); font-weight: 700; text-align: right; }
+.jv-ad-dryrun { margin-top: 10px; border-top: 1px solid #ffffff14; padding-top: 8px; }
+.jv-ad-diff ul { margin: 4px 0 10px; padding-left: 18px; font-size: 12px; color: var(--ad-dim); }
+/* `is-ok`/`is-bad` already exist above; only the warning tone is new, and it keeps the same
+   border treatment so the three read as one family. */
+.jv-ad-note.is-warn { color: #fcd34d; border-color: rgba(252, 211, 77, 0.35); }
+.jv-ad-note ul { margin: 4px 0 0; padding-left: 18px; }
+.jv-ad-note code { font: 500 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }

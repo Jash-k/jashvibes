@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDeny } from '@/lib/adminAuth';
+import { recordAction } from '@/lib/adminAudit';
 import { selfApi } from '@/lib/selfApi';
 
 export const runtime = 'nodejs';
@@ -21,6 +22,13 @@ export async function POST(request) {
     });
     const results = Array.isArray(result?.results) ? result.results : [];
     const dead = results.filter((row) => row?.ok === false || String(row?.workingStatus || '').toLowerCase() === 'dead');
+    // A health probe is not an edit: recorded for the trail, explicitly not undoable (putting a
+    // stale "working" status back would be worse than useless).
+    await recordAction({
+      area: 'live', action: 'live.sweep', reversible: false,
+      summary: `Health-checked ${result?.checked || results.length} channels — ${dead.length} not answering`,
+      target: { kind: 'live-channels', key: body?.sourceId || 'all', label: 'Channel health' },
+    });
     return NextResponse.json(
       {
         ok: true,

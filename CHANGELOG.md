@@ -1,3 +1,58 @@
+## Focus mode — a locked screen with nothing written on it (2026-10-16)
+
+Requested: *"those symbol and wordings should be removed from that lyric panel — that lock symbol and
+wordings."* The lock button worked; the overlay it drew was in the way.
+
+- **The guard is now silent.** Gone: the lock glyph, the "Focus locked" heading, the paragraph under it,
+  the "Swipe down to unlock" hint (and the 3.6 s timer that brought it back on every touch), the
+  "Slide to unlock →" label, and the "Escape … or the Back button" footer. What is left is the blurred
+  surround, the lyrics (or the sleeve), the Artwork/Lyrics toggle, and one drag handle at the bottom.
+  The swipe's feedback is the vignette thinning as you pull — the gesture answers for itself.
+- **The same on every screen size**, and it never comes back: no first-run hint, no onboarding copy.
+- **The exits are unchanged** — swipe down anywhere, slide the handle right, Escape, or Back — and the
+  handle still carries an accessible label and the region an accessible name, so removing the words from
+  the screen did not remove them from assistive tech.
+- **The wake-lock outcome moved to the shell's status line.** The guard used to be where a browser that
+  cannot hold the screen awake said so; that announcement now comes from `MusicShell` (visible only in
+  the two failure cases: unsupported, or refused). Removing the caption must not remove the honesty.
+- Covered by `test-music-pocket.cjs`: the six removed phrases and the lock glyph are asserted **absent**
+  from the guard's code, the hint timer is gone with them, no CSS rules are left orphaned, and the
+  wake-lock announcement is asserted to live in the shell.
+
+## Admin controls — order, audit, orphans, bulk, health (2026-10-16)
+
+Requested: *"The Home tab shows the movie list in alphabetical order which is not useful — it shows
+what order shows in homepage"* and every improvement that would make the panel more powerful and
+efficient.
+
+- **The Home tab now mirrors the home page.** Sort defaults to the real home order (pinned first,
+  then the scraped order — the same comparator the viewer's payload is built with), with Movies/Series
+  sections, whole-catalogue counts plus "in this view", and a `#position` badge on every row. Counts
+  no longer change meaning as you filter.
+- **Every tab records what it changed, and Undo puts it back.** A new append-only `AdminAction`
+  collection stores actor/action/target with `before` and `after` snapshots; a new **History** tab
+  lists them, remembers which rows are undoable, and says why when they are not. Re-scrapes, purges
+  and imports are recorded too — marked irreversible rather than offered a fake undo. The audit write
+  can never veto the change it describes.
+- **Orphaned overrides are reported.** An override is keyed by the raw scraped title, so a forum
+  rename silently disables it; the Home tab now lists them with what they were doing and the closest
+  live rows to re-bind to, each suggestion explaining itself.
+- **Bulk edits show their work first**: pick rows (or "select this view"), preview every before →
+  after and every skipped no-op, then apply. Each changed row is separately undoable. Duplicate rows
+  are grouped with a suggested keep and merged by hiding (never deleting), carrying corrections over.
+  The whole override set exports to JSON and imports back in a merge mode that is undoable row by row.
+- **A Health tab** with per-subsystem numbers and honest ages, plus **dry runs that write nothing**:
+  the catalogue diff (what a sync would add, remove, change and — the part nobody could see before —
+  which overrides it would orphan) and a live-source diff listing channels whose catalog placement,
+  EPG override or favourite would not come back.
+- **Ordering stays mirror-only.** The rank-based drag reorder from the plan was dropped on request:
+  there is no rank field and no persisted manual order, so the panel keeps showing what viewers get.
+- New: `models/AdminAction.js`, `lib/{adminAudit,adminModels,catalogOrphans,catalogBulk}.js`,
+  `app/api/admin/{history,health}/**`, `app/api/admin/catalog/{bulk,duplicates,orphans,overrides/export,overrides/import}/**`,
+  `app/api/admin/catalog/sync {mode:'dry'}`, `app/api/admin/tv/dry-run`,
+  `components/admin/{HistoryTab,HealthTab,BulkBar,OrphanPanel,DuplicatePanel,OverrideTransfer}.js`,
+  `scripts/test-admin-controls.cjs` (in `npm run verify`), `docs/ADMIN-CONTROLS.md`.
+
 ## Music focus mode — blur, lock, wake (2026-10-16)
 
 Requested: *"remove the exit focus button in the mobile UI's lyrics panel … when I click the button all

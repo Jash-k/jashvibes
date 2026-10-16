@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDeny } from '@/lib/adminAuth';
+import { recordAction } from '@/lib/adminAudit';
 import { seedStremioAddonsIfEmpty } from '@/lib/stremioSeed';
 import StremioAddon from '@/models/StremioAddon';
 
@@ -19,6 +20,8 @@ export async function GET(request) {
   }
 }
 
+function addonSnapshot(doc = {}) { return { label: doc.label, manifestUrl: doc.manifestUrl, kind: doc.kind, enabled: doc.enabled !== false, sortOrder: Number(doc.sortOrder) || 100 }; }
+
 /** POST — add {label, manifestUrl, kind}. */
 export async function POST(request) {
   const deny = await adminDeny(request);
@@ -36,6 +39,13 @@ export async function POST(request) {
       manifestUrl: manifestUrl.replace(/\/manifest\.json.*$/i, ''),
       kind,
       sortOrder: Number(body?.sortOrder) || 100,
+    });
+    await recordAction({
+      area: 'stremio', action: 'stremio.addon.add', targetModel: 'StremioAddon',
+      summary: `Added the Stremio addon “${label}”`,
+      target: { kind: 'stremio-addon', key: String(doc._id), label },
+      before: null,
+      after: addonSnapshot(doc),
     });
     return NextResponse.json({ ok: true, addon: doc }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
@@ -57,8 +67,16 @@ export async function PATCH(request) {
     if ('kind' in body) patch.kind = body.kind === 'watch' ? 'watch' : 'catalog';
     if ('enabled' in body) patch.enabled = Boolean(body.enabled);
     if ('sortOrder' in body) patch.sortOrder = Number(body.sortOrder) || 100;
+    const before = await StremioAddon.findById(id).lean();
     const doc = await StremioAddon.findByIdAndUpdate(id, { $set: patch }, { new: true, runValidators: true }).lean();
     if (!doc) return NextResponse.json({ ok: false, error: 'Addon not found' }, { status: 404 });
+    await recordAction({
+      area: 'stremio', action: 'stremio.addon.edit', targetModel: 'StremioAddon',
+      summary: `Edited the Stremio addon “${doc.label}”`,
+      target: { kind: 'stremio-addon', key: String(doc._id), label: doc.label },
+      before: before ? addonSnapshot(before) : null,
+      after: addonSnapshot(doc),
+    });
     return NextResponse.json({ ok: true, addon: doc }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error.message || 'Update failed' }, { status: 400 });
@@ -71,6 +89,14 @@ export async function DELETE(request) {
   if (deny) return deny;
   const id = new URL(request.url).searchParams.get('id') || '';
   if (!id) return NextResponse.json({ ok: false, error: 'Missing id' }, { status: 400 });
+  const before = await StremioAddon.findById(id).lean();
   await StremioAddon.findByIdAndDelete(id);
+  await recordAction({
+    area: 'stremio', action: 'stremio.addon.remove', targetModel: 'StremioAddon',
+    summary: `Removed the Stremio addon “${before?.label || id}”`,
+    target: { kind: 'stremio-addon', key: id, label: before?.label || id },
+    before: before ? addonSnapshot(before) : null,
+    after: null,
+  });
   return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } });
 }

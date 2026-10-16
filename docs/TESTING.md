@@ -9,7 +9,7 @@ can be judged instead of guessed at.
 
 | Script | What it proves |
 |---|---|
-| `check-source.cjs` | Every `@/…` and relative import in 260 modules resolves, and every named import exists in the module it comes from. This is `npm run check`; a typo'd import otherwise surfaces only at runtime. |
+| `check-source.cjs` | Every `@/…` and relative import in 279 modules resolves, and every named import exists in the module it comes from. This is `npm run check`; a typo'd import otherwise surfaces only at runtime. |
 | `test-lyrics-pipeline.cjs` | The lyric pipeline contract: album-less matching, the four acceptance tiers, rejection reasons, M/F vocal rules, retrieval variants, ranking, cache-key stability, one wired source, the ladder and the store's fail-soft reads. |
 | `test-lyrics-controller.cjs` | The retry/cancel state machine in `lib/lyricsController.js`: superseded requests never publish, a failed refresh never erases good lyrics, retry delays are honoured. |
 | `test-vault-admin.cjs` | Vault Admin: catalogue/language conflict rules, metadata and playback staying separate, overlay visibility, custom items, auth wiring, optimistic-revision checks. |
@@ -20,6 +20,7 @@ can be judged instead of guessed at.
 | `test-performance-cache.cjs` | Session cache read/write/expiry and scroll restore. |
 | `test-extras-registry.cjs` | Extras validation: URL rules (no javascript:, no localhost/private hosts, no credentials in URLs), ordering, duplicates, version conflicts. |
 | `test-extras-covers.cjs` | Extras cover handling. |
+| `test-admin-controls.cjs` | The admin panel's control room: home order/pins/sections and home positions, undo routing and its refusal reasons, orphan detection and re-bind suggestions (including that suggestions never cross movie/series), the bulk planner's no-op and pin-preservation rules, duplicate grouping, the dry-run diff and its orphan forecast — plus the standing rule that **every** mutation route records an action and every destructive path declares itself irreversible. |
 
 One command for all of them: `npm run verify` (added by the cleanup) — it stops on
 the first failure and prints which check failed.

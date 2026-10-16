@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDeny } from '@/lib/adminAuth';
+import { recordAction } from '@/lib/adminAudit';
 import dbConnect from '@/lib/db';
 import VodItem from '@/models/VodItem';
 import { matchMovieToTMDB } from '@/lib/vodM3u';
@@ -27,12 +28,26 @@ export async function POST(request) {
 
     if (!tmdb?.tmdbId) {
       await VodItem.updateOne({ _id: id }, { $set: { tmdbMatched: false, tmdbId: undefined } });
+      await recordAction({
+        area: 'retro', action: 'retro.item.rematch', targetModel: 'VodItem',
+        summary: `Re-matched “${item.title}” — no TMDB match, marked unmatched`,
+        target: { kind: 'retro-item', key: id, label: item.title },
+        before: { tmdbId: item.tmdbId || null, tmdbMatched: Boolean(item.tmdbMatched), title: item.title, year: item.year },
+        after: { tmdbId: null, tmdbMatched: false, title: item.title, year: item.year },
+      });
       return NextResponse.json(
         { ok: true, matched: false, message: `No TMDB match for "${item.title}" — marked as unmatched.` },
         { headers: { 'Cache-Control': 'no-store' } },
       );
     }
 
+    await recordAction({
+      area: 'retro', action: 'retro.item.rematch', targetModel: 'VodItem',
+      summary: `Re-matched “${item.title}” to “${tmdb.title || item.title}”`,
+      target: { kind: 'retro-item', key: id, label: item.title },
+      before: { tmdbId: item.tmdbId || null, tmdbMatched: Boolean(item.tmdbMatched), title: item.title, year: item.year },
+      after: { tmdbId: tmdb.tmdbId, tmdbMatched: true, title: tmdb.title || item.title, year: tmdb.year ?? item.year },
+    });
     await VodItem.updateOne(
       { _id: id },
       {

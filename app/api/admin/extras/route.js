@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { adminDeny } from '@/lib/adminAuth';
 import { readExtras, writeExtras } from '@/lib/extrasStore';
+import { recordAction } from '@/lib/adminAudit';
+import Setting from '@/models/Setting';
+import { EXTRAS_KEY } from '@/lib/extrasRegistry';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,7 +29,21 @@ async function handle(request, command) {
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw Object.assign(new Error('Invalid website request.'), { status: 400 });
     const action = command === 'patch' ? body.action : command;
     if (command === 'patch' && !['edit', 'reorder'].includes(action)) throw Object.assign(new Error('Unknown website action.'), { status: 400 });
+    // Snapshot the whole registry before the write: it is one settings document, and undoing
+    // "add X" must not also lose a reorder that was saved a second earlier.
+    const before = await Setting.findOne({ key: EXTRAS_KEY }).lean().catch(() => null);
     const registry = await writeExtras(action, body, origin);
+    await recordAction({
+      area: 'extras',
+      action: `extras.${action}`,
+      targetModel: 'Setting',
+      summary: `${action === 'add' ? 'Added' : action === 'remove' ? 'Removed' : action === 'reorder' ? 'Reordered' : 'Edited'} a website on the Extras page`,
+      target: { kind: 'extras-registry', key: EXTRAS_KEY, label: 'Extras websites' },
+      before: before ? { key: before.key, value: before.value } : null,
+      // The new value, exactly as stored, so undo can also be re-applied or diffed later.
+      after: { key: EXTRAS_KEY, value: registry },
+      reversible: action !== 'import',
+    });
     return json({ ok: true, ...registry, source: 'database' });
   } catch (error) { return failure(error); }
 }

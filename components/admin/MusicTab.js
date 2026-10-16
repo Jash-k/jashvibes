@@ -1,5 +1,9 @@
 'use client';
 
+// Marks a request as coming from the admin panel. `/api/music/playlists` is also the app's own
+// endpoint, so the route records an admin action only when this header says the panel asked.
+const ADMIN_HEADER = { 'x-jash-admin': '1' };
+
 import { useCallback, useEffect, useState } from 'react';
 
 /**
@@ -39,7 +43,7 @@ export default function MusicTab() {
     try {
       const response = await fetch('/api/music/playlists', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...ADMIN_HEADER },
         body: JSON.stringify({ url: importUrl }),
       });
       const data = await response.json().catch(() => ({}));
@@ -59,7 +63,7 @@ export default function MusicTab() {
     try {
       const response = await fetch('/api/music/playlists', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...ADMIN_HEADER },
         body: JSON.stringify({ id, ...body }),
       });
       const data = await response.json().catch(() => ({}));
@@ -83,7 +87,7 @@ export default function MusicTab() {
     if (!window.confirm(`Delete "${playlist.title}" and its ${playlist.songCount} matched songs?`)) return;
     setBusy(playlist.id);
     try {
-      const response = await fetch(`/api/music/playlists?id=${encodeURIComponent(playlist.id)}`, { method: 'DELETE' });
+      const response = await fetch(`/api/music/playlists?id=${encodeURIComponent(playlist.id)}`, { method: 'DELETE', headers: { ...ADMIN_HEADER } });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.ok) throw new Error(data.error || 'Delete failed');
       setNote({ kind: 'ok', text: 'Playlist deleted.' });

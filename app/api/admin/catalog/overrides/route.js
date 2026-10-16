@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDeny } from '@/lib/adminAuth';
+import { recordAction } from '@/lib/adminAudit';
 import dbConnect from '@/lib/db';
 import CatalogOverride from '@/models/CatalogOverride';
 
@@ -22,6 +23,16 @@ export async function DELETE(request) {
   const key = new URL(request.url).searchParams.get('key') || '';
   if (!key) return NextResponse.json({ ok: false, error: 'Missing key' }, { status: 400 });
   await dbConnect();
+  const before = await CatalogOverride.findOne({ key }).lean();
   await CatalogOverride.deleteOne({ key });
+  await recordAction({
+    area: 'catalog',
+    action: 'catalog.forget',
+    summary: `Cleared every override on “${before?.titleOverride || before?.rawTitle || key}”`,
+    targetModel: 'CatalogOverride',
+    target: { kind: 'catalog-row', key, label: before?.rawTitle || key },
+    before: before ? { ...before, _id: undefined } : null,
+    after: null,
+  });
   return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } });
 }

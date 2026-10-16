@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireServiceAuth } from '@/lib/serverAuth';
+import { recordAction } from '@/lib/adminAudit';
 import dbConnect from '@/lib/db';
 import LiveSource from '@/models/LiveSource';
 import LiveChannel from '@/models/LiveChannel';
@@ -55,6 +56,11 @@ export async function POST(request) {
       );
     }
     await recalcSourceCounts();
+    await recordAction({
+      area: 'live', action: 'live.import', reversible: false,
+      summary: `Imported a live backup — ${sources.length} sources, ${channels.length} channels, ${profiles.length} profiles`,
+      target: { kind: 'live-import', key: 'import', label: 'Live service backup' },
+    });
     return json({ ok: true, sources: sources.length, channels: channels.length, profiles: profiles.length });
   } catch (error) { return json({ ok: false, error: error.message }, error.status || 500); }
 }

@@ -4,12 +4,18 @@ import { deleteImportedPlaylist, listImportedPlaylists, updateImportedPlaylist }
 import { searchPlaylists } from '@/lib/musicApi';
 import { importSpotifyPlaylist } from '@/lib/spotifyPlaylistImport';
 import { verifyRequestToken } from '@/lib/serverAuth';
+import { recordAction } from '@/lib/adminAudit';
+import MusicPlaylist from '@/models/MusicPlaylist';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 function accessToken(password = '') {
   return crypto.createHash('sha256').update(`jash-theatre:${password}`).digest('hex');
+}
+
+function isAdminCall(request) {
+  return request.headers.get('x-jash-admin') === '1';
 }
 
 function isAuthorized(request) {
@@ -86,6 +92,15 @@ export async function POST(request) {
     }
 
     const imported = results.filter((item) => item.ok).map((item) => item.playlist);
+    if (isAdminCall(request) && imported.length) {
+      // One entry per import run, marked irreversible for the same reason as a live import: it
+      // created several documents at once. Deleting the playlists from this tab is the way back.
+      await recordAction({
+        area: 'music', action: 'music.playlist.import', reversible: false,
+        summary: `Imported ${imported.length} Spotify playlist${imported.length === 1 ? '' : 's'} (${imported.map((item) => item?.title).filter(Boolean).join(', ') || 'untitled'})`,
+        target: { kind: 'music-playlists', key: 'import', label: 'Imported playlists' },
+      });
+    }
     return NextResponse.json({
       ok: imported.length > 0,
       imported,
@@ -106,7 +121,17 @@ export async function PATCH(request) {
     const body = await request.json().catch(() => ({}));
     const id = String(body.id || new URL(request.url).searchParams.get('id') || '').trim();
     if (!id) return NextResponse.json({ error: 'Playlist id is required' }, { status: 400 });
+    const before = isAdminCall(request) ? await MusicPlaylist.findById(id).lean().catch(() => null) : null;
     const item = await updateImportedPlaylist(id, body);
+    if (isAdminCall(request)) {
+      await recordAction({
+        area: 'music', action: 'music.playlist.edit', targetModel: 'MusicPlaylist',
+        summary: `Renamed/reordered the playlist “${before?.title || item?.title || id}” (${Object.keys(body).filter((key) => key !== 'id').join(', ')})`,
+        target: { kind: 'music-playlist', key: id, label: before?.title || item?.title || id },
+        before: before ? { title: before.title, sortOrder: before.sortOrder } : null,
+        after: { title: item?.title, sortOrder: item?.sortOrder },
+      });
+    }
     return NextResponse.json({ ok: true, item }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Playlist update failed' }, { status: 500 });
@@ -119,7 +144,18 @@ export async function DELETE(request) {
   try {
     const id = String(new URL(request.url).searchParams.get('id') || '').trim();
     if (!id) return NextResponse.json({ error: 'Playlist id is required' }, { status: 400 });
+    const before = isAdminCall(request) ? await MusicPlaylist.findById(id).lean().catch(() => null) : null;
     const result = await deleteImportedPlaylist(id);
+    if (isAdminCall(request)) {
+      await recordAction({
+        area: 'music', action: 'music.playlist.remove', targetModel: 'MusicPlaylist',
+        summary: `Deleted the playlist “${before?.title || id}” and its matched songs`,
+        target: { kind: 'music-playlist', key: id, label: before?.title || id },
+        // The whole document, because undo has to put the row back.
+        before: before ? { ...before, _id: undefined, __v: undefined } : null,
+        after: null,
+      });
+    }
     return NextResponse.json({ ok: result.deleted }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Playlist delete failed' }, { status: 500 });

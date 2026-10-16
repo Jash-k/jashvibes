@@ -9,6 +9,8 @@ import StremioTab from '@/components/admin/StremioTab';
 import ExtrasTab from '@/components/admin/ExtrasTab';
 import VaultTab from '@/components/admin/VaultTab';
 import LyricsTab from '@/components/admin/LyricsTab';
+import HistoryTab from '@/components/admin/HistoryTab';
+import HealthTab from '@/components/admin/HealthTab';
 
 const TABS = [
   { id: 'home', label: 'Home' },
@@ -19,6 +21,8 @@ const TABS = [
   { id: 'lyrics', label: 'Lyrics' },
   { id: 'stremio', label: 'Stremio' },
   { id: 'extras', label: 'Extras' },
+  { id: 'history', label: 'History' },
+  { id: 'health', label: 'Health' },
 ];
 
 function Gate({ onUnlocked }) {
@@ -187,6 +191,10 @@ export default function AdminApp() {
         {tab === 'extras' ? <ExtrasTab /> : null}
         {tab === 'vault' ? <VaultTab /> : null}
         {tab === 'lyrics' ? <LyricsTab /> : null}
+        {/* `?tab=history&key=<row key>` opens the log already filtered to one row — that is the
+            link every Home row gets, so "why is this like this?" is one click away. */}
+        {tab === 'history' ? <HistoryTab initialKey={new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('key') || ''} /> : null}
+        {tab === 'health' ? <HealthTab /> : null}
       </div>
     </div>
   );

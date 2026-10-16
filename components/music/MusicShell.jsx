@@ -118,6 +118,19 @@ export default function MusicShell() {
   const pocketRef = useRef(false); pocketRef.current = pocketLocked;
   const awake = useWakeLock(pocketLocked);
 
+  /**
+   * Focus mode draws no words of its own any more, so this is where the screen-awake result is
+   * reported: the shell's status line, which is not blurred and is already the app's channel for
+   * transient messages. Only the two honest failures are announced — a browser that cannot hold
+   * the screen awake (iOS < 16.4, some in-app browsers) and a refusal. Silence would be the one
+   * lie this state must not tell.
+   */
+  useEffect(() => {
+    if (!pocketLocked) return;
+    if (awake === 'unsupported') setNotice('This browser will not hold the screen awake');
+    else if (awake === 'denied') setNotice('Screen-awake permission was refused');
+  }, [pocketLocked, awake]);
+
   function enterPocket() {
     if (!playing) return;
     pocketReturn.current = { full, mode, libraryOpen, tab };
@@ -215,7 +228,7 @@ export default function MusicShell() {
         <button type="button" className="mc-button is-quiet" onClick={() => update(DEFAULT_LOOK)}>Reset appearance</button>
       </div>}
     </Sheet> : null}
-    {pocketLocked ? <PocketLock awake={awake} onUnlock={() => exitPocket()}/> : null}
+    {pocketLocked ? <PocketLock onUnlock={() => exitPocket()}/> : null}
     <div className={`mc-notice ${notice ? 'is-visible' : ''}`} role="status" aria-live="polite">{notice}</div>
   </main>;
 }

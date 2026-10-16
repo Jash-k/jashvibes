@@ -13,27 +13,31 @@ import { MusicIcon } from './CanvasBits';
  * stay sharp; the toggle is deliberately raised above this layer so you can change what the
  * focus shows without unlocking.
  *
+ * **Nothing is written on it.** The screen is the blurred surround, the lyrics (or the sleeve),
+ * and one drag handle at the bottom — no lock glyph, no "Focus locked", no "swipe down to
+ * unlock", no explanatory paragraph. Advice printed permanently over the thing you locked the
+ * screen to look at defeats the point of locking it. The drag itself is the feedback: the guard
+ * fades as you pull, so the gesture answers before it commits.
+ *
  * Four ways out, in order of how people actually leave:
- *   1. swipe down anywhere (the fast one — the vignette fades as you pull, so the gesture has
- *      visible feedback before it commits);
+ *   1. swipe down anywhere (the fast one);
  *   2. slide the puck right (deliberate, and the only one that is also keyboard reachable);
  *   3. Escape (desktop);
  *   4. the browser Back button / Android back. The shell pushes one history entry when focus
  *      starts, so back leaves focus instead of leaving the Music section.
  *
  * It is not an `aria-modal` dialog: one control outside it is meant to be used, and claiming
- * modality while leaving a live control outside would be a lie to assistive tech. The state
- * change itself is announced by the shell's status region.
+ * modality while leaving a live control outside would be a lie to assistive tech. Because the
+ * visible words are gone, the state change and the wake-lock outcome are announced by the
+ * shell's status region instead — removing the caption must not remove the announcement.
  */
 
 const SWIPE_COMMIT = 120; // px of downward travel that unlocks
 
-export default function PocketLock({ onUnlock, awake = 'idle' }) {
+export default function PocketLock({ onUnlock }) {
   const slider = useRef(null);
-  const hintTimer = useRef(0);
   const [drag, setDrag] = useState(0);          // swipe-down progress, 0…1
   const [slideProgress, setSlideProgress] = useState(0); // puck progress, 0…1
-  const [hint, setHint] = useState(true);
   const swipe = useRef(null);
   const slide = useRef(null);
   const dragRef = useRef(0); // the value pointerup should judge, even if React has not re-rendered yet
@@ -43,26 +47,14 @@ export default function PocketLock({ onUnlock, awake = 'idle' }) {
   useEffect(() => {
     const previous = document.activeElement;
     slider.current?.querySelector('button')?.focus();
-    // The hint is only useful the first few seconds; it comes back if you touch the screen.
-    hintTimer.current = window.setTimeout(() => setHint(false), 3600);
-    return () => {
-      window.clearTimeout(hintTimer.current);
-      previous?.focus?.();
-    };
+    return () => { previous?.focus?.(); };
   }, []);
-
-  function wakeHint() {
-    setHint(true);
-    window.clearTimeout(hintTimer.current);
-    hintTimer.current = window.setTimeout(() => setHint(false), 3600);
-  }
 
   // ── swipe down ────────────────────────────────────────────────────────────
   function swipeStart(event) {
     if (!event.isPrimary || event.button !== 0) return;
     if (event.target.closest?.('.mc-pocket-slider')) return; // the slider owns its own gesture
     swipe.current = { id: event.pointerId, y: event.clientY, x: event.clientX };
-    wakeHint();
   }
   function swipeMove(event) {
     const start = swipe.current;
@@ -104,13 +96,11 @@ export default function PocketLock({ onUnlock, awake = 'idle' }) {
     if (complete) unlock.current?.('slide');
   }
 
-  const awakeLine = awake === 'active' ? 'Screen stays awake' : 'This browser will not hold the screen awake';
-
   return (
     <section
-      className={`mc-pocket-lock${hint ? ' is-hinting' : ''}`}
+      className="mc-pocket-lock"
       role="region"
-      aria-label="Focus locked"
+      aria-label="Focus mode"
       tabIndex={-1}
       style={{ '--mc-pocket-drag': drag }}
       onPointerDown={swipeStart}
@@ -124,22 +114,12 @@ export default function PocketLock({ onUnlock, awake = 'idle' }) {
         if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'u') { event.preventDefault(); unlock.current?.('keyboard'); }
       }}
     >
-      <div className="mc-pocket-grab" aria-hidden="true">
-        <span />
-        <small>Swipe down to unlock</small>
-      </div>
-
-      <div className="mc-pocket-copy">
-        <MusicIcon name="lock" size={30} />
-        <h2>Focus locked</h2>
-        <p>Only your lyrics stay sharp — everything else is blurred out. Your music keeps playing, touches are locked, and {awakeLine.toLowerCase()}.</p>
-      </div>
-
+      {/* The only thing this layer draws: the handle you can drag out. No label, no glyph but
+          the direction of the drag. */}
       <div className="mc-pocket-slider" ref={slider}>
-        <span aria-hidden="true">Slide to unlock →</span>
         <button
           type="button"
-          aria-label="Drag right to unlock focus; keyboard: Control Shift U"
+          aria-label="Drag right to leave focus mode; keyboard: Control Shift U"
           style={{ transform: `translateX(${Math.max(0, (slider.current?.clientWidth || 56) - 56) * slideProgress}px)` }}
           onPointerDown={(event) => {
             if (!event.isPrimary || event.button !== 0) return;
@@ -147,7 +127,6 @@ export default function PocketLock({ onUnlock, awake = 'idle' }) {
             event.stopPropagation();
             slide.current = { id: event.pointerId, x: event.clientX, progress: 0 };
             event.currentTarget.setPointerCapture(event.pointerId);
-            wakeHint();
           }}
           onPointerMove={slideMove}
           onPointerUp={slideEnd}
@@ -157,8 +136,6 @@ export default function PocketLock({ onUnlock, awake = 'idle' }) {
           <MusicIcon name="back" />
         </button>
       </div>
-
-      <small className="mc-pocket-foot">Escape on a keyboard, or the Back button, also unlocks</small>
     </section>
   );
 }

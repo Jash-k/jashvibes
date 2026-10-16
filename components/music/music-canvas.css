@@ -324,21 +324,14 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
    swipe down, so the gesture has feedback before it commits. The status toast is left sharp
    on purpose: blurred text is unreadable, and there is one moment (entering focus) where a
    message may still be on screen. */
-.mc-pocket-lock { position:absolute; inset:0; z-index:150; color:#edf4f8; display:grid; grid-template-rows:auto 1fr auto auto; justify-items:center; align-items:center; gap:12px;
+/* The guard is silent: one drag handle at the bottom, nothing else. The vignette IS the
+   feedback — it thins as you pull the swipe down, so the gesture answers before it commits. */
+.mc-pocket-lock { position:absolute; inset:0; z-index:150; color:#edf4f8; display:grid; grid-template-rows:1fr auto; justify-items:center; align-items:end; gap:12px;
   padding:max(14px,env(safe-area-inset-top)) 24px max(18px,env(safe-area-inset-bottom));
   touch-action:none; overscroll-behavior:none;
   background:radial-gradient(120% 88% at 50% 46%, rgba(4,7,10,0) 0%, rgba(4,7,10,.28) 62%, rgba(4,7,10,.62) 100%);
   opacity:calc(1 - var(--mc-pocket-drag, 0) * .75); }
-.mc-pocket-grab { display:grid; justify-items:center; gap:6px; opacity:0; transition:opacity 220ms ease-out; }
-.mc-pocket-lock.is-hinting .mc-pocket-grab, .mc-pocket-lock:active .mc-pocket-grab { opacity:.85; }
-.mc-pocket-grab > span { width:44px; height:5px; border-radius:3px; background:#ffffff59; }
-.mc-pocket-grab > small, .mc-pocket-foot { color:#b9c6cf; font-size:11px; }
-.mc-pocket-copy { display:grid; justify-items:center; gap:8px; text-align:center; max-width:34ch; }
-.mc-pocket-copy h2 { font-size:clamp(20px,4vw,26px); }
-.mc-pocket-copy p { color:#a7b2bd; font-size:13px; line-height:1.55; }
-.mc-pocket-foot { opacity:.75; }
-.mc-pocket-slider { width:min(260px,72vw); height:52px; border:1px solid #ffffff2e; background:#0b141bd9; border-radius:26px; position:relative; user-select:none; backdrop-filter:blur(6px); }
-.mc-pocket-slider > span { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding-left:34px; font-size:12px; color:#d4e2ea; pointer-events:none; }
+.mc-pocket-slider { width:min(220px,64vw); height:52px; border:1px solid #ffffff2e; background:#0b141bd9; border-radius:26px; position:relative; user-select:none; backdrop-filter:blur(6px); }
 .mc-pocket-slider > button { position:absolute; inset:0 auto 0 0; width:52px; height:50px; display:grid; place-items:center; border:0; border-radius:50%; background:#8be5ef; color:#10171c; touch-action:none; }
 .mc-pocket-slider > button svg { transform:rotate(180deg); }
 @media (max-width:1023px) {

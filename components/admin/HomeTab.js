@@ -1,6 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import BulkBar from '@/components/admin/BulkBar';
+import DuplicatePanel from '@/components/admin/DuplicatePanel';
+import OrphanPanel from '@/components/admin/OrphanPanel';
+import OverrideTransfer from '@/components/admin/OverrideTransfer';
 
 const FILTERS = [
   ['all', 'All'],
@@ -198,24 +202,45 @@ function OverrideDialog({ row, onClose, onSaved }) {
   );
 }
 
+// Sort labels say what they are FOR, not just what they do.
+const SORTS = [
+  ['home', 'Home order'],
+  ['az', 'A–Z'],
+  ['newest', 'Newest'],
+  ['edited', 'Recently edited'],
+  ['pinned', 'Pinned first'],
+];
+const SECTIONS = [
+  ['all', 'All', 'total'],
+  ['movies', 'Movies', 'movies'],
+  ['series', 'Series', 'series'],
+];
+
 export default function HomeTab() {
   const [data, setData] = useState(null);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
+  const [sort, setSort] = useState('home');
+  const [section, setSection] = useState('all');
   const [page, setPage] = useState(1);
   const [expanded, setExpanded] = useState('');
+  // Selection lives here, not in BulkBar, so it survives a preview, a reload or a filter change.
+  const [selected, setSelected] = useState([]);
   const [matchRow, setMatchRow] = useState(null);
   const [overrideRow, setOverrideRow] = useState(null);
   const [note, setNote] = useState(null);
   const [busyAction, setBusyAction] = useState('');
 
-  const load = useCallback(async (search, activeFilter, activePage) => {
+  const load = useCallback(async (search, activeFilter, activePage, activeSort = 'home', activeSection = 'all') => {
     setStatus('loading');
     setError('');
     try {
-      const params = new URLSearchParams({ q: search || '', filter: activeFilter || 'all', page: String(activePage || 1) });
+      const params = new URLSearchParams({
+        q: search || '', filter: activeFilter || 'all', page: String(activePage || 1),
+        sort: activeSort || 'home', section: activeSection || 'all',
+      });
       const response = await fetch(`/api/admin/catalog?${params.toString()}`, { cache: 'no-store' });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload.ok) throw new Error(payload.error || 'Catalog read failed');
@@ -228,9 +253,9 @@ export default function HomeTab() {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => load(query, filter, page), 300);
+    const timer = setTimeout(() => load(query, filter, page, sort, section), 300);
     return () => clearTimeout(timer);
-  }, [query, filter, page, load]);
+  }, [query, filter, page, sort, section, load]);
 
   async function patchOverride(row, patch, message) {
     setBusyAction(row.key);
@@ -243,7 +268,7 @@ export default function HomeTab() {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload.ok) throw new Error(payload.error || 'Action failed');
       setNote({ kind: 'ok', text: message });
-      await load(query, filter, page);
+      await load(query, filter, page, sort, section);
     } catch (err) {
       setNote({ kind: 'bad', text: err.message });
     } finally {
@@ -256,7 +281,7 @@ export default function HomeTab() {
     try {
       await fetch(`/api/admin/catalog/overrides?key=${encodeURIComponent(row.key)}`, { method: 'DELETE' });
       setNote({ kind: 'ok', text: `Override cleared — "${row.title}" is back to its scraped state.` });
-      await load(query, filter, page);
+      await load(query, filter, page, sort, section);
     } catch {
       setNote({ kind: 'bad', text: 'Could not clear the override.' });
     } finally {
@@ -278,7 +303,7 @@ export default function HomeTab() {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload.ok) throw new Error(payload.error || 'Failed');
       setNote({ kind: 'ok', text: payload.message || 'Done.' });
-      await load(query, filter, page);
+      await load(query, filter, page, sort, section);
     } catch (err) {
       setNote({ kind: 'bad', text: err.message });
     } finally {
@@ -309,13 +334,20 @@ export default function HomeTab() {
   const rows = data?.rows || [];
   const counts = data?.counts || {};
 
+  function toggleSelected(key) {
+    setSelected((current) => (current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
+  }
+
   return (
     <div>
+      {/* Whole-catalogue numbers. These used to be counted over the filtered rows, so they moved
+          as you filtered and read as if they were global. The view count is now shown separately. */}
       <div className="jv-ad-stats">
-        <div className="jv-ad-stat"><span>Total titles</span><b>{counts.total ?? '—'}</b></div>
-        <div className="jv-ad-stat is-green"><span>Matched</span><b>{counts.matched ?? '—'}</b></div>
-        <div className="jv-ad-stat is-red"><span>Hidden</span><b>{counts.hidden ?? '—'}</b></div>
-        <div className="jv-ad-stat is-amber"><span>Pinned</span><b>{counts.pinned ?? '—'}</b></div>
+        <div className="jv-ad-stat"><span>Total titles</span><b>{counts.total ?? '—'}</b><small>{counts.movies ?? 0} movies · {counts.series ?? 0} series</small></div>
+        <div className="jv-ad-stat is-green"><span>Matched</span><b>{counts.matched ?? '—'}</b><small>of {counts.total ?? 0}</small></div>
+        <div className="jv-ad-stat is-red"><span>Hidden</span><b>{counts.hidden ?? '—'}</b><small>restorable</small></div>
+        <div className="jv-ad-stat is-amber"><span>Pinned</span><b>{counts.pinned ?? '—'}</b><small>float to the top</small></div>
+        <div className="jv-ad-stat"><span>In this view</span><b>{counts.view ?? 0}</b><small>after search + filter</small></div>
       </div>
 
       <div className="jv-ad-card">
@@ -327,13 +359,49 @@ export default function HomeTab() {
           <button type="button" className="jv-ad-btn is-danger" onClick={() => systemAction('purge')} disabled={Boolean(busyAction)}>Purge cache</button>
           <button type="button" className="jv-ad-btn" onClick={killAllSessions} disabled={Boolean(busyAction)} title="Revoke every admin session instantly">Kill admin sessions</button>
         </div>
-        <div className="jv-ad-chiprow">
+        {/* The list mirrors the home page by default. Every other sort is a debugging view, which
+            is why `home` is first and the rest say what they are for. */}
+        <div className="jv-ad-chiprow" role="group" aria-label="Sort">
+          <span className="jv-ad-chiplabel">Sort</span>
+          {SORTS.map(([id, label]) => (
+            <button key={id} type="button" className={`jv-ad-chip ${sort === id ? 'is-active' : ''}`} onClick={() => { setSort(id); setPage(1); }}>{label}</button>
+          ))}
+        </div>
+        <div className="jv-ad-chiprow" role="group" aria-label="Section">
+          <span className="jv-ad-chiplabel">Section</span>
+          {SECTIONS.map(([id, label, key]) => (
+            <button key={id} type="button" className={`jv-ad-chip ${section === id ? 'is-active' : ''}`} onClick={() => { setSection(id); setPage(1); }}>
+              {label}{counts[key] !== undefined ? ` (${counts[key]})` : ''}
+            </button>
+          ))}
+        </div>
+        <div className="jv-ad-chiprow" role="group" aria-label="Filter">
+          <span className="jv-ad-chiplabel">Show</span>
           {FILTERS.map(([id, label]) => (
             <button key={id} type="button" className={`jv-ad-chip ${filter === id ? 'is-active' : ''}`} onClick={() => { setFilter(id); setPage(1); }}>{label}</button>
           ))}
         </div>
+        <p className="jv-ad-hint">
+          {sort === 'home'
+            ? 'Listed in the order viewers see on the home page — pinned items first, then the scraped order. The # is the home position.'
+            : 'Sorted for review. The # still shows the home position, so you can see where a title really sits.'}
+        </p>
         {note ? <p className={`jv-ad-note ${note.kind ? `is-${note.kind}` : ''}`}>{note.text}</p> : null}
       </div>
+
+      <BulkBar
+        selected={selected}
+        view={{ q: query, filter, section }}
+        onClear={() => setSelected([])}
+        onSelectView={(keys) => setSelected(keys)}
+        onApplied={() => { setSelected([]); load(query, filter, page, sort, section); }}
+      />
+
+      {/* The report sits directly under the controls because it changes what the list means:
+          an override that stopped applying is invisible everywhere else in this panel. */}
+      <OrphanPanel onChanged={() => load(query, filter, page, sort, section)} />
+      <DuplicatePanel onChanged={() => load(query, filter, page, sort, section)} />
+      <OverrideTransfer onChanged={() => load(query, filter, page, sort, section)} />
 
       {status === 'loading' && !rows.length ? <p className="jv-ad-empty">Loading the catalog…</p> : null}
       {error ? <p className="jv-ad-note is-bad">{error}</p> : null}
@@ -344,6 +412,16 @@ export default function HomeTab() {
           {rows.map((row) => (
             <div key={row.key} className={`jv-ad-tr ${row.hidden ? 'is-hidden' : ''} ${row.pinned ? 'is-pinned' : ''}`}>
               <button type="button" className="jv-ad-trmain" onClick={() => setExpanded(expanded === row.key ? '' : row.key)} title="Tap to reveal the raw scraped title">
+                <span
+                  role="checkbox"
+                  tabIndex={0}
+                  aria-checked={selected.includes(row.key)}
+                  aria-label={`Select ${row.title}`}
+                  className={`jv-ad-check ${selected.includes(row.key) ? 'is-on' : ''}`}
+                  onClick={(event) => { event.stopPropagation(); toggleSelected(row.key); }}
+                  onKeyDown={(event) => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); toggleSelected(row.key); } }}
+                />
+                <span className="jv-ad-pos" title={`Position ${row.position ?? '—'} on the home page (${row.section === 'series' ? 'series' : 'movies'})`}>#{row.position ?? '—'}</span>
                 <span className="jv-ad-thumb">{row.posterUrl ? <img src={row.posterUrl} alt="" loading="lazy" /> : '🎬'}</span>
                 <span style={{ minWidth: 0 }}>
                   <span className="jv-ad-title">{row.title}{row.year ? ` (${row.year})` : ''}</span>
@@ -366,6 +444,7 @@ export default function HomeTab() {
                     <button type="button" className="jv-ad-btn is-sm" onClick={() => copyRaw(row.rawTitle)}>Copy raw</button>
                     <button type="button" className="jv-ad-btn is-sm is-primary" onClick={() => setMatchRow(row)}>{row.tmdbId ? 'Re-match' : 'Match to TMDB'}</button>
                     <button type="button" className="jv-ad-btn is-sm" onClick={() => setOverrideRow(row)}>Edit title / year / quality</button>
+                    <a className="jv-ad-btn is-sm" href={`/admin?tab=history&key=${encodeURIComponent(row.key)}`} title="Every change ever made to this row">History</a>
                     <button type="button" className="jv-ad-btn is-sm is-danger" onClick={() => patchOverride(row, { hidden: !row.hidden }, row.hidden ? `"${row.title}" restored to the home page.` : `"${row.title}" removed from the home page (restorable).`)}>
                       {row.hidden ? 'Restore to home' : 'Remove from home'}
                     </button>
@@ -391,8 +470,8 @@ export default function HomeTab() {
         </div>
       ) : null}
 
-      {matchRow ? <MatchDialog row={matchRow} onClose={() => setMatchRow(null)} onMatched={() => { setNote({ kind: 'ok', text: 'Matched. The poster and streams bind within a moment.' }); load(query, filter, page); }} /> : null}
-      {overrideRow ? <OverrideDialog row={overrideRow} onClose={() => setOverrideRow(null)} onSaved={() => { setNote({ kind: 'ok', text: 'Override saved.' }); load(query, filter, page); }} /> : null}
+      {matchRow ? <MatchDialog row={matchRow} onClose={() => setMatchRow(null)} onMatched={() => { setNote({ kind: 'ok', text: 'Matched. The poster and streams bind within a moment.' }); load(query, filter, page, sort, section); }} /> : null}
+      {overrideRow ? <OverrideDialog row={overrideRow} onClose={() => setOverrideRow(null)} onSaved={() => { setNote({ kind: 'ok', text: 'Override saved.' }); load(query, filter, page, sort, section); }} /> : null}
     </div>
   );
 }

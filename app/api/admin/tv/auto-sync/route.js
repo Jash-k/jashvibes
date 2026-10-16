@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDeny } from '@/lib/adminAuth';
+import { recordAction } from '@/lib/adminAudit';
 import {
   getLiveAutoSyncConfig,
   getLiveAutoSyncStatus,
@@ -41,7 +42,16 @@ export async function POST(request) {
         { headers: { 'Cache-Control': 'no-store' } },
       );
     }
-    if (body.enabled !== undefined) await setLiveAutoSyncEnabled(Boolean(body.enabled));
+    if (body.enabled !== undefined) {
+      await setLiveAutoSyncEnabled(Boolean(body.enabled));
+      // A settings flip, recorded so "who turned the nightly sync off?" has an answer. Not undoable:
+      // the schedule has already been re-armed either way.
+      await recordAction({
+        area: 'live', action: 'live.autosync', reversible: false,
+        summary: `${body.enabled ? 'Enabled' : 'Disabled'} the automatic live-TV sync`,
+        target: { kind: 'live-config', key: 'live_auto_sync', label: 'Live auto-sync' },
+      });
+    }
     const config = await getLiveAutoSyncConfig();
     return NextResponse.json(
       { ok: true, config, status: getLiveAutoSyncStatus() },

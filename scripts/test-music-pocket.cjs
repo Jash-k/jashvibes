@@ -165,6 +165,9 @@ function fakeWakeLockEnv({ supported = true, failWith = null } = {}) {
 
   // ── 4. the guard's gestures ──────────────────────────────────────────────
   const guard = read('components/music/PocketLock.jsx');
+  // Assertions read the code, not the commentary: the component's doc comment is allowed to explain
+  // what was removed, or the next reader will add the wording back as an "obvious improvement".
+  const guardCode = guard.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   for (const needed of ['onPointerDown', 'onPointerMove', 'onPointerUp', 'onPointerCancel']) {
     assert(guard.includes(needed), `the swipe needs ${needed}`);
   }
@@ -173,9 +176,25 @@ function fakeWakeLockEnv({ supported = true, failWith = null } = {}) {
   assert(guard.includes('ctrlKey && event.shiftKey'), 'the keyboard chord stays available');
   assert(guard.includes('mc-pocket-slider'), 'the slide-to-unlock puck is kept');
   assert(guard.includes('event.target.closest?.('), 'the slider must not be mistaken for a swipe start');
-  assert(guard.includes('role="region"') && !guard.includes('aria-modal="true"'),
+  assert(guardCode.includes('role="region"') && !guardCode.includes('aria-modal="true"'),
     'it is not a modal dialog: one control outside it is meant to be used');
-  assert(guard.includes("awake === 'active'"), 'the screen-awake line must depend on what the browser actually gave us');
+
+  // ── 4b. the guard draws no words (owner's call: the locked screen is the lyrics) ──
+  // The overlay used to carry a lock glyph, a "Focus locked" heading, a paragraph, a swipe hint
+  // and a footer. All of it is gone: advice printed over the thing you locked the screen to look
+  // at defeats the point. The gesture is the feedback, and the outcomes are announced instead.
+  for (const phrase of ['Focus locked', 'Swipe down to unlock', 'Slide to unlock', 'also unlocks', 'stay awake', 'Only your lyrics stay sharp']) {
+    assert(!guardCode.includes(phrase), `the guard must not print “${phrase}” any more`);
+  }
+  assert(!guardCode.includes('MusicIcon name="lock"'), 'the lock glyph is gone from the locked screen');
+  assert(!/hint|is-hinting/.test(guardCode), 'and so is the hint timer that used to bring the wording back');
+  assert(!css.includes('.mc-pocket-grab') && !css.includes('.mc-pocket-copy') && !css.includes('.mc-pocket-foot'),
+    'no orphaned rules for the removed blocks');
+  // It must still be a control someone can find and use, and still explain itself to assistive tech.
+  assert(guard.includes('aria-label="Focus mode"'), 'the region keeps an accessible name');
+  assert(guard.includes('Drag right to leave focus mode'), 'the handle keeps an accessible label');
+  // Silence would be the one lie this state must not tell — see §5 for where the outcome is announced.
+  assert(!guardCode.includes('awake'), 'the guard no longer renders the wake-lock result');
 
   // ── 5. the shell: enter, exit, and Back ──────────────────────────────────
   const shell = read('components/music/MusicShell.jsx');
@@ -183,7 +202,14 @@ function fakeWakeLockEnv({ supported = true, failWith = null } = {}) {
   assert(shell.includes('Focus: blur everything but the lyrics or sleeve'), 'the button must say what it now does');
   assert(shell.includes('is-pocket'), 'the app must carry the locked state for the CSS');
   assert(/const awake = useWakeLock\(pocketLocked\)/.test(shell), 'wake lock follows focus, nothing else');
-  assert(shell.includes('awake={awake}'), 'the guard is told what the wake lock really did');
+  assert(shell.includes('<PocketLock onUnlock={() => exitPocket()}/>'), 'the silent guard is mounted with just its exit');
+  assert(/if \(!pocketLocked\) return;/.test(shell), 'the wake-lock notice is tied to focus, not to any render');
+  // With the caption gone, the announcement is the only honest report of a browser that cannot hold
+  // the screen awake (iOS < 16.4, in-app browsers) or a refusal.
+  assert(shell.includes("awake === 'unsupported'") && shell.includes("awake === 'denied'"),
+    'the shell announces an unsupported wake lock, and a refusal');
+  assert(/setNotice\('This browser will not hold the screen awake'\)/.test(shell),
+    'the announcement names the consequence in plain words');
   assert(shell.includes('pocketReturn.current'), 'the pre-focus layout is remembered');
   assert(/setFull\(back.full\)/.test(shell) && /setLibraryOpen\(back.libraryOpen\)/.test(shell),
     'unlocking must put the screen back as it was');
@@ -211,5 +237,5 @@ function fakeWakeLockEnv({ supported = true, failWith = null } = {}) {
   }
   assert(!read('lib/musicCore.js').includes('muLockView'), 'muLockView existed only for that dead memo');
 
-  console.log('PASS focus mode: wake lock acquired/released/re-taken truthfully, blur map per view, one live control above the lock, swipe-down + slide + Esc + Back exits, no mobile exit button, old pocket prototype removed.');
+  console.log('PASS focus mode: wake lock acquired/released/re-taken truthfully and announced by the shell when it cannot be, blur map per view, one live control above the lock, a locked screen that prints no words (lock glyph, heading, hint, labels and footer removed, no hint timer), swipe-down + slide + Esc + Back exits, no mobile exit button, old pocket prototype removed.');
 })().catch((error) => { console.error(error); process.exitCode = 1; });

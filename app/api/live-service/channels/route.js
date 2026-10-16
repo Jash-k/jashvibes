@@ -1,6 +1,7 @@
 import { setSetting } from '@/models/Setting';
 import { NextResponse } from 'next/server';
 import { requireServiceAuth } from '@/lib/serverAuth';
+import { recordAction } from '@/lib/adminAudit';
 import dbConnect from '@/lib/db';
 import LiveChannel from '@/models/LiveChannel';
 import {
@@ -36,6 +37,17 @@ async function nextCatalogPosition(catalogId, increment = 100) {
   ]);
   const current = Number(rows[0]?.maxPosition || 0);
   return Math.max(increment, Math.ceil(current / increment) * increment + increment);
+}
+
+
+/** The snapshot undo restores for one channel: the owner-touched fields only. */
+function channelSnapshot(doc = {}) {
+  return {
+    channelId: doc.channelId, name: doc.name, hidden: Boolean(doc.hidden),
+    favorite: Boolean(doc.favorite), epgOverride: doc.epgOverride ?? null,
+    tvgId: doc.tvgId || '', url: doc.url || '',
+    catalogs: (doc.catalogs || []).map((item) => ({ catalogId: item.catalogId, position: item.position })),
+  };
 }
 
 export async function GET(request) {
@@ -131,6 +143,10 @@ export async function PATCH(request) {
     if (!docs.length) return json({ ok: false, error: 'Channel not found' }, 404);
 
     const action = String(body.action || '').trim();
+    // Snapshot before any mutation, so one Undo returns the channel to its previous mapping,
+    // EPG override, hidden and favourite state. Bulk actions record one entry per channel so a
+    // per-channel undo stays possible instead of an all-or-nothing guess.
+    const beforeDocs = docs.map((doc) => channelSnapshot(doc.toObject ? doc.toObject() : doc));
     const requestedCatalog = String(body.catalogId || '').trim().toLowerCase();
     const catalogId = isLiveCatalogId(requestedCatalog) ? requestedCatalog : '';
 
@@ -243,6 +259,19 @@ export async function PATCH(request) {
 
     await recalcSourceCounts();
     const updated = await LiveChannel.find({ channelId: { $in: ids } }).lean();
+    // One history entry per channel: undoing "hide" on one channel must not also undo the
+    // favourite you set on its neighbour in the same bulk request.
+    for (const before of beforeDocs) {
+      const after = updated.find((doc) => doc.channelId === before.channelId);
+      if (!after) continue;
+      await recordAction({
+        area: 'live', action: `live.channel.${action || 'update'}`, targetModel: 'LiveChannel',
+        summary: `${action ? `${action} — ` : ''}“${after.name || before.channelId}”`,
+        target: { kind: 'live-channel', key: before.channelId, label: after.name || before.channelId },
+        before,
+        after: channelSnapshot(after),
+      });
+    }
     return json({
       ok: true,
       modified,
@@ -261,9 +290,17 @@ export async function DELETE(request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('channelId') || searchParams.get('id') || '';
     if (!id) return json({ ok: false, error: 'channelId is required' }, 400);
-    const doc = await LiveChannel.findOne({ channelId: id });
+    const doc = await LiveChannel.findOne({ channelId: id }).lean();
     await LiveChannel.deleteOne({ channelId: id });
     if (doc?.sourceId) await recalcSourceCounts(doc.sourceId);
+    await recordAction({
+      area: 'live', action: 'live.channel.remove', targetModel: 'LiveChannel',
+      summary: `Deleted the live channel “${doc?.name || id}”`,
+      target: { kind: 'live-channel', key: id, label: doc?.name || id },
+      // The full document, because undo has to put the row back exactly as it was.
+      before: doc ? { ...doc, _id: undefined, __v: undefined } : null,
+      after: null,
+    });
     return json({ ok: true, removed: true });
   } catch (error) {
     return json({ ok: false, error: error.name === 'VersionError' ? 'This channel changed concurrently. Refresh and retry.' : error.message }, error.name === 'VersionError' ? 409 : error.status || 500);
