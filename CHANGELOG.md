@@ -1,3 +1,39 @@
+## Lyrics the site shows but the app did not: the question was wrong (2026-10-16)
+
+Requested: *"lyrics not available for many songs but they are have lyrics in site. so study analyze the
+whole structure and give me proper working solution."*
+
+Measured before changing anything: 116 real songs from the app's own catalogue source, queried against the
+real LRCLIB through the app's own matcher. The app found **74 %**; the artist-free question found **78 %**
+and filled the record list with a median of 19 rows instead of 3.
+
+- **The artist field was emptying the search.** LRCLIB treats `track_name` and `artist_name` as an AND
+  filter, and this app's artist string is a credit list (lyricist, composer, singers joined), which rarely
+  equals LRCLIB's own `artistName` — so the endpoint answered 200 with an **empty array** for songs it
+  plainly has. "Mozhiye", "Vazhithunaiye", "Nandanandanaa", "The One", "Dont Care": 0 rows with the
+  artist field, 20 without it, the right record among them. The route now asks `track_name` alone first.
+- **The artist still has one job.** A record can be crowded out of a common title's 20-row page
+  ("I Wanna Fly" is also a Trevi Moran song), so when the first page carries nothing the matcher accepts,
+  the artist-narrowed question is asked and its rows are **merged** with the first page — never replacing
+  them, so the list cannot shrink.
+- **The free-text question is now the last resort.** Asked only when both fielded questions returned no
+  rows at all — the question LRCLIB's own search box asks. A refusal or a rejection is never retried
+  automatically; that is what the person's retry button is for.
+- **Decorated catalogue titles are the same recording.** JioSaavn appends "(Trending Version)",
+  "(Title Theme)", "(LoFi Mix)", "(Karaoke)", "(Reprise)", "(Remix by …)" to the *same* recording, and an
+  exact-title comparison refused them silently. The new `catalogue-suffix` tier strips those decorations
+  from this app's title only and still demands artist-or-album agreement plus a length inside the
+  tolerance; the tier name is recorded with the choice, so a wrong pick is traceable. Deliberately
+  untouched: M/F vocal markers, Live, Acoustic, Instrumental and language names — those are different
+  recordings or different words, and the M/F rule exists because they can share a duration to the second.
+- **The list is now the whole answer.** Every row the search returned reaches it — this song's records
+  first, then the covers, karaoke cuts and other-language versions it is right to refuse automatically,
+  dimmed, for a deliberate one-tap pick. Together with the richer search, "Available" now has content for
+  roughly nine songs in ten instead of three in four.
+- **Unchanged:** one request per song (a working song still costs exactly one call, a revisit costs none),
+  the in-process + MongoDB memory, the busy-with-retry-symbol state, the strict gate on what is shown
+  automatically, `LYRICS_MATCH_VERSION` bumping to 6 so every cached answer is re-resolved once.
+
 ## One request per song, and a desktop that stays where it is (2026-10-16)
 
 Requested: *"i dont want that when song satrt toplay it shows lyrics panel behaviour in desktop … now i

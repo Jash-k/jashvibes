@@ -2,7 +2,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
 const load=p=>import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync(p)).toString('base64'));
 (async()=>{
  const m=await load('lib/lyricsMatch.js');
- assert.equal(m.LYRICS_MATCH_VERSION,5);
+ assert.equal(m.LYRICS_MATCH_VERSION,6);
  const song={title:'Nenjukkul Peidhidum',artist:'Harris Jayaraj',album:'Vaaranam Aayiram',duration:295};
 
  // ── the old bug: no album must still be able to match on title+artist+duration
@@ -37,9 +37,49 @@ const load=p=>import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync(
  // an unmarked catalogue title is NOT upgraded into a versioned one: it is a different record than the (Male) cut
  assert.equal(m.lyricIdentity({trackName:'Parthu Parthu',artistName:'A',albumName:'B',duration:200,plainLyrics:'x'},male).ok,false);
 
+ // ── the same credit list, written with a slash ──
+ // LRCLIB joins credits with "/" where the catalogue joins them with ",". Both must be read as the
+ // same list of names, or a record neither side disputes is refused for its punctuation.
+ assert.equal(m.lyricIdentity({trackName:'Xyz Song',artistName:'Dhanush/ Dhee',albumName:'Album',duration:280,plainLyrics:'x'},
+  {title:'Xyz Song',artist:'Dhanush, Dhee',album:'Album',duration:281}).tier,'strong',
+  'a slash-joined credit list must match a comma-joined one');
+
+ // ── the catalogue's decorations are the catalogue's, not the recording's ──
+ // JioSaavn appends "(Trending Version)", "(Title Theme)", "(LoFi Mix)", "(Karaoke)", "(Reprise)",
+ // "(Remix by …)" to the SAME recording, so exact-title matching refused songs whose lyrics the
+ // provider's own site plainly shows. The decoration is stripped for matching — and nothing else is:
+ // M/F markers, Live, Acoustic, Instrumental and language names are different recordings or
+ // different words, and must survive untouched.
+ assert.equal(m.lyricCatalogueTitle('Kannana Kanne (Trending Version)'),'Kannana Kanne');
+ assert.equal(m.lyricCatalogueTitle('Thalli Pogathey - Lofi Mix'),'Thalli Pogathey');
+ assert.equal(m.lyricCatalogueTitle('Rowdy Baby (Title Theme)'),'Rowdy Baby');
+ assert.equal(m.lyricCatalogueTitle('Xyz (Karaoke)'),'Xyz');
+ assert.equal(m.lyricCatalogueTitle('Xyz - Remix By Someone'),'Xyz');
+ assert.equal(m.lyricCatalogueTitle('Un Paarvaiyil LoFi Mix'),'Un Paarvaiyil','a bare trailing decoration is stripped too');
+ assert.equal(m.lyricCatalogueTitle('Why This Kolaveri Di? (From \"3\") (131 - 132 BPM)'),'Why This Kolaveri Di?','a tempo marker is the catalogue\'s, not the song\'s');
+ assert.equal(m.lyricCatalogueTitle('Tamil Love Mix'),'Tamil Love Mix','a lone "Mix" is a real word and survives');
+ assert.equal(m.lyricCatalogueTitle('Po Nee Po - Male Vocals'),'Po Nee Po - Male Vocals','M/F markers survive');
+ assert.equal(m.lyricCatalogueTitle('Xyz (Instrumental)'),'Xyz (Instrumental)','an instrumental is a different recording');
+ assert.equal(m.lyricCatalogueTitle('Anjaana Anjaani (Telugu)'),'Anjaana Anjaani (Telugu)','a language version is different words');
+ const plainRecord={trackName:'Kannana Kanne',artistName:'Anirudh Ravichander',albumName:'Naanum Rowdy Dhaan',duration:267,syncedLyrics:'[00:01.00] x'};
+ const decoratedSong={title:'Kannana Kanne (Trending Version)',artist:'Anirudh Ravichander',album:'Naanum Rowdy Dhaan',duration:266};
+ const tier=m.lyricIdentity(plainRecord,decoratedSong);
+ assert.equal(tier.ok,true,'a decorated catalogue title is the same recording'); assert.equal(tier.tier,'catalogue-suffix');
+ assert.equal(m.lyricIdentity({...plainRecord,duration:40},decoratedSong).ok,false,'a different length still rejects');
+ assert.equal(m.lyricIdentity({...plainRecord,artistName:'Someone Else',albumName:'Other Album'},decoratedSong).ok,false,
+  'a decoration alone is never enough: the artist or the album must agree too');
+ assert.equal(m.lyricIdentity({...plainRecord,trackName:'Kannana Kanne (Female)'},decoratedSong).ok,false,
+  'a decoration never rescues a different vocal version');
+ assert.equal(m.lyricIdentity(plainRecord,{...decoratedSong,title:'Kannana Kanne'}).tier,'strong',
+  'an undecorated match is still the strong tier');
+ assert.equal(m.chooseLyricMatch([{...plainRecord,duration:30},{...plainRecord,id:7}],decoratedSong).id,7,
+  'the tier still ranks behind a length that fits');
+
  // ── retrieval variants cover the spellings catalogue metadata produces
  const variants=m.lyricSearchVariants({title:'Vandikkaran Sontha (From "Managara Kaval")',album:'Managara Kaval'});
  assert.ok(variants.includes('Vandikkaran Sontha'));
+ assert.equal(m.lyricSearchVariants({title:'Rowdy Baby (Title Theme)',album:''})[0],'Rowdy Baby',
+  'the first question must carry the catalogue-clean title, not the decorated one');
  const withMarker=m.lyricSearchVariants({title:'Po Nee Po - Male Vocals',album:''});
  assert.ok(withMarker.includes('Po Nee Po'));
  assert.ok(withMarker.some(v=>/^po nee po$/i.test(v)));
@@ -64,7 +104,7 @@ const load=p=>import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync(
  const a=m.lyricCacheKey({title:'Nenjukkul Peidhidum (From "Vaaranam Aayiram")',artist:'Harris  Jayaraj',album:'Vaaranam Aayiram',duration:295.4,id:'abc123'});
  const b=m.lyricCacheKey({title:'nenjukkul peidhidum',artist:'harris jayaraj',album:'Vaaranam Aayiram',duration:294.6,id:'abc123'});
  assert.equal(a,b,'formatting and sub-2s duration noise must not split the cache');
- assert.ok(a.startsWith('5|'));
+ assert.ok(a.startsWith('6|'));
 
  // ── one wired source, and the route actually implements the ladder
  const sources=await load('lib/musicSources.js');
@@ -92,10 +132,20 @@ const load=p=>import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync(
  // and every record the panel lists.
  assert.ok(route.includes('async function searchRecords')&&!route.includes('async function findLyrics'),
   'one search must answer a song; the staged cascade must not come back');
- assert.equal((route.match(/await ask\(/g)||[]).length,2,
-  'a lookup may ask the provider twice at most: the fielded search, and the free-text retry');
- assert.ok(route.includes('if (rows && !rows.length) rows = await ask({ q:'),
-  'the second question is spent only on an empty answer, never on a refusal');
+ // Round 4: the question order is measured, not assumed. The artist field is an AND filter and our
+ // artist string is a credit list, so it must not be asked FIRST; it is the narrowing for a page
+ // that yielded no acceptable record. The free-text question is earned only by an empty answer.
+ assert.equal((route.match(/await ask\(/g)||[]).length,3,
+  'a lookup asks at most three questions: title, title+artist, free text');
+ const askOrder=route.indexOf("await ask({ track_name: variants[0] },")<route.indexOf("await ask({ track_name: variants[0], artist_name:")
+  &&route.indexOf("await ask({ track_name: variants[0], artist_name:")<route.indexOf("await ask({ q:");
+ assert.ok(askOrder,'title first, then the artist narrows, then the free-text question');
+ assert.ok(route.includes('if (rows && rows.length && !match) {'),
+  'the artist-narrowed question is asked only when the page carried no acceptable record');
+ assert.ok(route.includes('if (rows && !rows.length) {')&&route.includes("await ask({ q: `${variants[0]} ${wanted.artist}`.trim() }"),
+  'the free-text question is spent only on an empty answer, never on a refusal, and asks the clean title');
+ assert.ok(route.includes('function mergeRows(')&&route.includes('rows = mergeRows(rows, narrowed)'),
+  'both pages are kept: the narrowed call must not shrink the list');
  assert.ok(!route.includes('collectCandidates'),'the second lookup that filled the list alone is gone');
  assert.ok(route.includes('async function lookupBundle')&&route.includes('const pending = new Map()'),
   'one answer per song is kept in memory, and the call already in flight is shared');
@@ -108,6 +158,8 @@ const load=p=>import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync(
  assert.ok(route.includes("searchParams.get('candidates') === '1'")&&route.includes("searchParams.get('reload') === '1'"),
   'the list asks for candidates, and a reload skips the remembered provider answer');
  assert.ok(route.includes('savedId'),'the list must mark the record the saved choice came from');
+ assert.ok(route.includes('const rows = (bundle.list || []).map((row) => ({ ...row, auto: row.id === bundle.autoId, saved: row.id === savedId }));'),
+  'every row the search returned reaches the list — the covers and other languages included, dimmed');
  assert.ok(!route.includes('wantsList')&&!route.includes("searchParams.get('list') === '1'"),
   'the dead source list went with the picker it was built for');
 
@@ -180,5 +232,5 @@ const load=p=>import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync(
  assert.ok(post.includes('lyricsSnapshot'),'the audit entry must carry the before and after lyrics');
  assert.ok(post.includes('isAuthorized(request)'),'writing lyrics is an owner action');
 
- console.log('Lyrics pipeline: tiered acceptance, album-less matching, rejection reasons, retrieval variants, ranking, stable cache keys, single-source wiring, ladder, store, admin gate and screen recovery, plus the record list (every candidate collected, one word of chrome, rows that only mark a choice, a tick that writes it, no printed wording, and a list that renders inside the panel on every screen) all passed.');
+ console.log('Lyrics pipeline: tiered acceptance with the catalogue-suffix tier, decorations stripped but never M/F, Live or language markers, album-less matching, rejection reasons, retrieval variants, ranking, stable cache keys, single-source wiring, the measured question order (title, then the artist narrows, then one free-text), the merged list that covers, store, admin gate and screen recovery, plus the record list (every candidate collected, one word of chrome, rows that only mark a choice, a tick that writes it, no printed wording, and a list that renders inside the panel on every screen) all passed.');
 })().catch(e=>{console.error(e);process.exitCode=1});

@@ -61,20 +61,38 @@ rotate or a Back does not change what they were looking at.
 
 Lyrics refresh, line-tap seek, follow/resume, timing offset and font-size controls are available. Plain lyrics are labelled and not fabricated as synchronized. Three appearance modes replace the ten legacy modes; the old provider-picker/translation UI is not retained — LRCLIB is still the only provider.
 
-**One request per song.** A song's lyrics and its record list come from the same lookup. The route asks
-LRCLIB one question — the fielded search, `track_name` together with `artist_name` — and asks the
-free-text `q=` question *only* when that came back with nothing at all. A refusal is never retried inside
-the lookup: a provider that refused this request would refuse the next one, and the retry a person can
-press is worth more than one spent automatically. That is the whole reason the cascade left: it walked a
-ladder (`/api/get`, three title variants, two free-text queries and a last-resort query) and could spend a
-dozen requests on one song, which is precisely how a community service starts answering 503
-`ServerOverloaded`. The one answer now carries both halves of the screen — the record the strict matcher
-accepts, shown on the stage, and every record the search returned, listed in the panel — and it is
-remembered as a whole: fifteen minutes in the process, 90 days in MongoDB (a miss for 12 hours), with two
-callers asking for the same song at the same time sharing the call already in flight. Opening the list is
-therefore usually reading an answer that already exists rather than asking again. A failure is stored
-nowhere, so the next ask is a real ask, and a miss recorded during an outage is ignored from now on
-instead of being believed for twelve hours.
+**One request per song, asked in the order the provider answers best.** A song's lyrics and its record
+list come from the same lookup, and the lookup asks `track_name` *alone* first. That order is measured,
+not assumed: LRCLIB treats the search fields as an AND filter, and this app's artist string is a credit
+list ("Sai Abhyankkar, Sid Sriram, Karthik Netha" — lyricist, composer, singers joined) that rarely equals
+LRCLIB's own `artistName`, so `track_name` + `artist_name` answers **200 with an empty array** far more
+often than it helps. Across 116 real catalogue songs, the artist-first form found 74 % and returned an
+empty record list for 27 of them; title-first found 78 %, filled the list with a median of 19 rows, and
+left 11 songs empty. The artist form's single win — a record crowded out of a common title's 20-row page —
+is why it is still asked, but only as the *second* question, and only when the first page carried no
+record the matcher would accept. The free-text `q=` question (the one LRCLIB's own site asks) is spent
+only when both returned no rows at all, and a refusal is never retried inside the lookup: a provider that
+refused this request would refuse the next one, and the retry a person can press is worth more than one
+spent automatically. Rows from the stages that ran are merged, one copy per record, so the narrowing
+never shrinks the list. That is the whole reason the old cascade left: it walked a ladder (`/api/get`,
+three title variants, two free-text queries and a last-resort query) and could spend a dozen requests on
+one song, which is precisely how a community service starts answering 503 `ServerOverloaded`. The one
+answer now carries both halves of the screen — the record the strict matcher accepts, shown on the stage,
+and every record the search returned, listed in the panel — and it is remembered as a whole: fifteen
+minutes in the process, 90 days in MongoDB (a miss for 12 hours), with two callers asking for the same
+song at the same time sharing the call already in flight. Opening the list is therefore usually reading an
+answer that already exists rather than asking again. A failure is stored nowhere, so the next ask is a
+real ask, and a miss recorded during an outage is ignored from now on instead of being believed for
+twelve hours.
+
+**Recordings the catalogue renamed.** JioSaavn decorates some titles — "(Trending Version)",
+"(Title Theme)", "(LoFi Mix)", "(Karaoke)", "(Reprise)", "(Remix by …)" — on the *same* recording, so an
+exact-title comparison refused songs whose lyrics the provider plainly shows. The `catalogue-suffix`
+tier strips those decorations from *this app's* title only, and still requires that the record agree on
+the artist or the album **and** run within the duration tolerance; the verdict travels as the tier name
+into the audit trail. Deliberately not stripped: M/F vocal markers (different recordings that can share a
+duration to the second), Live, Acoustic, Instrumental, and language names (different words). A decoration
+alone is never enough to accept, and nothing here changes what the *provider's* decorated titles mean.
 
 **When the provider is busy.** The answer remembered for that song — the matched lyrics *and* the list —
 is served instead, with a retry symbol beside the "Available" pill. The symbol appears whenever there is
@@ -83,9 +101,10 @@ song's words are substituted, and if nothing was ever saved for the song the pan
 retryable state.
 
 **Choosing a record.** One word in the panel's header — **Available** — opens the list of every record
-LRCLIB has for the current song: its title, its artist when that is not the song's, a glyph for timed (a
-waveform) or plain (three lines) lyrics, and its length. This song's own records come first; the rest of
-the search follows them, dimmed, as context to look through — never as an automatic match. The record the
+the search returned for the current song: its title, its artist when that is not the song's, a glyph for
+timed (a waveform) or plain (three lines) lyrics, and its length. This song's own records come first; the
+rest of the search follows them, dimmed — including the covers, the karaoke cuts and the other languages
+the gate rightly refuses to show automatically — as context to look through and pick from by hand. The record the
 song is using carries a dot. The same set is offered again as a dropdown below the rows, so the whole list
 can be seen at once and chosen in one gesture. The list exists because "wrong lyrics" is nearly always the
 right song on the wrong record — a live cut, a different album, a karaoke track — and the strict identity
@@ -112,12 +131,14 @@ analyser; reduced-motion hides it.
 ## Verification for this release
 - `npm ci` succeeded.
 - `test-lyrics-pipeline.cjs` and `test-music-pocket.cjs` pass: one search answers a song (the staged
-  cascade may not come back), the provider is asked at most twice and the second question only on an
-  empty answer, the list reads the same lookup the stage does, a busy provider is served from memory with
-  a retry symbol, a failure is never remembered, the tick is the only thing that writes and a choice is
-  saved through the admin store with an audit entry; and on the shell side a desktop plays a row without
-  moving any layout while no focus rule may resize the sleeve, with every unlocked size asserted to still
-  exist.
+  cascade may not come back), the questions are asked in the measured order — title, then the artist
+  narrows, then one free-text question earned only by an empty answer — the merged list is never
+  narrowed away, `catalogue-suffix` accepts a decorated catalogue title only with artist/album agreement
+  and a matching length while M/F, Live and language markers survive untouched, the list reads the same
+  lookup the stage does, a busy provider is served from memory with a retry symbol, a failure is never
+  remembered, the tick is the only thing that writes and a choice is saved through the admin store with
+  an audit entry; and on the shell side a desktop plays a row without moving any layout while no focus
+  rule may resize the sleeve, with every unlocked size asserted to still exist.
 - `npm run check` parses the source modules with no unresolved local imports (279 at the time of writing).
 - Production webpack build passed, including after dependency audit fixes.
 - Production dependency audit reported zero known vulnerabilities after compatible transitive updates.

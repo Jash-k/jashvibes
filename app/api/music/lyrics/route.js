@@ -16,17 +16,21 @@ import { verifyRequestToken } from '@/lib/serverAuth';
  * The redesign keeps LRCLIB as the only provider, and this round makes a song cost exactly one
  * call:
  *
- *   1. ONE CALL. The fielded search (`track_name` + `artist_name`) answers with this song's
- *      records. The free-text `q=` question is asked only when that came back empty — it is the
- *      one that finds what the fielded form misses — and never as a retry after a refusal: a
- *      provider that is refusing this request is refusing the next one too, and the owner's own
- *      retry is worth more than one spent here. The complaint this fixes was a lookup that made a
- *      dozen requests for one song and spent the origin's goodwill on itself.
+ *   1. ONE CALL, IN THE RIGHT ORDER. `track_name` alone answers with the whole page — the match
+ *      and the list — and is narrowed by `artist_name` only when that page carried nothing the
+ *      matcher would accept (our artist string is a credit list, and the field is an AND filter:
+ *      measured on 116 catalogue songs, asking with it first lost songs that the title question
+ *      finds and returned an empty record list for 27 of them). The free-text `q=` question is
+ *      asked only when those two came back with no rows at all — never as a retry after a
+ *      refusal: a provider that is refusing this request is refusing the next one too, and the
+ *      owner's own retry is worth more than one spent here. The complaint this fixes was a
+ *      lookup that made a dozen requests for one song and spent the origin's goodwill on itself.
  *
  *   2. ONE ANSWER FOR BOTH JOBS. The same response carries the best record the strict matcher
  *      accepts *and* every record the search returned, so the panel's record list is not a second
- *      look-up. This song's records come first; the rest of the hits follow, dimmed, as context
- *      to choose from — never as an automatic match.
+ *      look-up. This song's records come first; everything else the search returned — the covers,
+ *      the karaoke cuts, the other languages the gate rightly refuses — follows, dimmed, as
+ *      context to choose from by hand, and is never an automatic match.
  *
  *   3. MEMORY FIRST, ALWAYS. A song's answer is kept in this process for fifteen minutes and in
  *      MongoDB for 90 days (a miss for 12 hours), and two callers asking for the same song at the
@@ -36,7 +40,10 @@ import { verifyRequestToken } from '@/lib/serverAuth';
  *
  * Acceptance is still the single gate: `lyricIdentity` decides what may be shown, and a rejection
  * is reported with its reason code rather than a blank stage. Nothing is ever substituted from a
- * different song.
+ * different song — but a title the *catalogue* decorated (it appends "(Trending Version)",
+ * "(Title Theme)", "(LoFi Mix)") is the same recording, so the newest tier accepts it when the
+ * artist or the album also agrees and the length matches. That verdict travels as the tier name
+ * `catalogue-suffix`, so a wrong pick is traceable.
  */
 
 export const runtime = 'nodejs';
@@ -188,15 +195,35 @@ function writeBundle(key, entry) {
   bundles.set(key, { at: Date.now(), ...entry });
 }
 
+function mergeRows(first = [], second = []) {
+  const seen = new Map();
+  for (const row of [...first, ...second]) {
+    const id = row?.id != null ? String(row.id) : '';
+    if (!id) continue;
+    const previous = seen.get(id);
+    if (!previous || (!previous.syncedLyrics && row.syncedLyrics)) seen.set(id, row);
+  }
+  return [...seen.values()];
+}
+
 /**
- * ONE call. The fielded question first — `track_name` with `artist_name` — because that is the one
- * that answers with *this* song rather than with every record sharing a word with it. A single
- * free-text `q=` question follows only when the fielded call came back with nothing at all: an
- * empty answer is worth one different question, a refusal is not.
+ * ONE call, asked in the order a person would ask it — measured, not assumed.
  *
- * The rows are returned even when no record passes the strict matcher. The matcher decides what is
- * *shown*; the list is how a person reaches the live cut or the other album it refused, so "no
- * match" must not mean "nothing to show".
+ *   1. `track_name` ALONE. LRCLIB treats the search fields as an AND filter, and our artist
+ *      string is a credit list (lyricist, composer, singers joined) that rarely equals LRCLIB's
+ *      own `artistName`, so `track_name` + `artist_name` answers 200 with an EMPTY array far more
+ *      often than it helps: measured on 116 real catalogue songs, title-alone found songs the
+ *      artist form lost, and returned a full 20-row list where the artist form returned none. The
+ *      title question also answers with the whole page, which is what the panel's list needs.
+ *   2. `track_name` + `artist_name` ONLY when step 1 returned rows but no record passed the
+ *      matcher — the narrowing that pulls the exact record out of a crowded common title's page.
+ *   3. `q=` free text ONLY when steps 1–2 returned no rows at all (the question LRCLIB's own site
+ *      asks). An empty answer is worth one different question; a refusal or a rejection is not.
+ *
+ * Rows from the stages that ran are merged (one copy per record, preferring the timed one) and
+ * returned even when no record passes the strict matcher. The matcher decides what is *shown*;
+ * the list is how a person reaches the live cut, the cover or the other album it refused, so
+ * "no match" must not mean "nothing to show".
  */
 async function searchRecords({ title, artist, album, duration, exclude = [], base = getLyricsApiBase() }) {
   const metadata = lyricRequestMetadata({ title, artists: artist, album, duration });
@@ -227,14 +254,29 @@ async function searchRecords({ title, artist, album, duration, exclude = [], bas
     return rows;
   };
 
-  let rows = await ask({ track_name: variants[0], artist_name: wanted.artist }, `search-track_name:${variants[0].slice(0, 40)}`);
-  if (rows && !rows.length) rows = await ask({ q: `${wanted.title} ${wanted.artist}`.trim() }, 'search-q:title+artist');
-  if (!rows) return { wanted, rows: [], match: null, attempts, reason: 'provider-error', failure };
-
   // The strict rules only ever see this song's own records; the rest of the search is shown after
   // them, dimmed, and can be picked by hand but never chosen for the song automatically.
-  const same = rows.filter((row) => lyricSameTitle(row.trackName || row.name || '', wanted.title));
-  const match = chooseLyricMatch(same, wanted);
+  const judge = (list) => chooseLyricMatch(
+    list.filter((row) => lyricSameTitle(row.trackName || row.name || '', wanted.title)), wanted,
+  );
+
+  // 1. the title alone — the answer that fills the page, and usually the match
+  let rows = await ask({ track_name: variants[0] }, `search-track_name:${variants[0].slice(0, 40)}`);
+  let match = rows && rows.length ? judge(rows) : null;
+
+  // 2. the artist narrows — only when that page carried no record the matcher would accept
+  if (rows && rows.length && !match) {
+    const narrowed = await ask({ track_name: variants[0], artist_name: wanted.artist }, 'search-title+artist');
+    if (narrowed && narrowed.length) { rows = mergeRows(rows, narrowed); match = judge(rows); }
+  }
+
+  // 3. and only a wholly empty answer earns the free-text question
+  if (rows && !rows.length) {
+    const loose = await ask({ q: `${variants[0]} ${wanted.artist}`.trim() }, 'search-q:title+artist');
+    if (loose && loose.length) { rows = loose; match = judge(rows); }
+  }
+
+  if (!rows) return { wanted, rows: [], match: null, attempts, reason: 'provider-error', failure };
   return { wanted, rows, match, attempts, reason: match ? null : (rows.length ? 'identity-rejected' : 'not-in-catalogue'), failure };
 }
 

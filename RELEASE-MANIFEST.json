@@ -1,6 +1,6 @@
 {
   "version": "11.0.0",
-  "release": "one-request-lyrics",
+  "release": "lyrics-coverage",
   "baselineCommit": "c6653cc1732448cd2ea295762b4bdf9ef38a8e5b",
   "verifiedOn": "2026-10-16",
   "verification": {
@@ -245,8 +245,8 @@
       "sha256": "779a8a9ee5567f90935ab487cc3252e3c81d77e5f3cfb3e0234de91561a4eca5"
     },
     "app/api/music/lyrics/route.js": {
-      "bytes": 31044,
-      "sha256": "c52b939ef01eab3729cae44e00b7eec6563410780e34757ec8dd612016aa4fd8"
+      "bytes": 33530,
+      "sha256": "dfe67c5d740021dc3e3074497695d2884d26df3d99ad30b9858c7be9ca7a05f7"
     },
     "app/api/music/new/route.js": {
       "bytes": 778,
@@ -477,8 +477,8 @@
       "sha256": "383f74feef0a8f0969e4820c346ce1f6fd84eb4d929ecf770eb283ca8d33abd6"
     },
     "CHANGELOG.md": {
-      "bytes": 29903,
-      "sha256": "2fef2942b10f1abc4e7dc0cf0b21812749353aa518a2d4635754919ea4e434a8"
+      "bytes": 32955,
+      "sha256": "e8635063bd891fc42602a791cb35eb92f89749b5893a22e6606dc08d2fdc04cf"
     },
     "components/admin/admin.css": {
       "bytes": 23182,
@@ -789,8 +789,8 @@
       "sha256": "0c4956c4ca9d5077fb6e91d8e3a1cd5ffe114f61f949dc2f12bb9fdaeb049c66"
     },
     "docs/MUSIC-CANVAS.md": {
-      "bytes": 12313,
-      "sha256": "0c6faa3771e48eb196d65ba6cb501c323e4766c9a7d8e9d43193939a8953f3af"
+      "bytes": 14448,
+      "sha256": "11c72889106133689ab7d687a60d1bac45dcd365a2159c9f14d3bb1d035db0b1"
     },
     "docs/music-native-navigation.md": {
       "bytes": 2556,
@@ -813,8 +813,8 @@
       "sha256": "ffc14e4cb83b1f741cc8aec125f341e7c32f6878f707709eecf148e3788aa2c6"
     },
     "docs/TESTING.md": {
-      "bytes": 7293,
-      "sha256": "c670995279ddf24478e4794c2eac78e8a2546abd31d4b6c948f295fdcbedb9c5"
+      "bytes": 7626,
+      "sha256": "8a7815ba956145d67f23896f9b2df7dcb91d2cfaead648392cacc199946a20bf"
     },
     "docs/vault-admin.md": {
       "bytes": 3141,
@@ -945,8 +945,8 @@
       "sha256": "f9894a08803925547ab9611f30fb6deb77db45eb149c1b136fc87b3a8d14485d"
     },
     "lib/lyricsMatch.js": {
-      "bytes": 12426,
-      "sha256": "41c04b2fe2845bb62d179172c74fad81899eeaa2e60000e35499f3533dbb3eb3"
+      "bytes": 16517,
+      "sha256": "e1d36e39a66b2ea50711d9b2ac5d44d978cabb49a9aad3c66c082db270d2ff04"
     },
     "lib/lyricsStore.js": {
       "bytes": 4586,
@@ -1393,8 +1393,8 @@
       "sha256": "58c15da9e999ec63d49912916d81bc2638eb0f4f340229240da22b614d630355"
     },
     "scripts/test-lyrics-pipeline.cjs": {
-      "bytes": 16532,
-      "sha256": "3d7c334f73c9bdd93f312ad2d71e1c022c3bd51477bb09e5d94c786d36f1bdd8"
+      "bytes": 21690,
+      "sha256": "1a604875ba6890e14a09bf5d5a7cec20dab83fe4f02524f106b0831f07e15600"
     },
     "scripts/test-music-browser.cjs": {
       "bytes": 5481,
