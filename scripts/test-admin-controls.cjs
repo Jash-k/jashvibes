@@ -205,6 +205,7 @@ async function importStubbed(relPath) {
     'app/api/admin/catalog/sync/route.js',
     'app/api/admin/catalog/orphans/route.js',
     'app/api/admin/lyrics/route.js',
+    'app/api/music/lyrics/route.js',
     'app/api/admin/stremio/addons/route.js',
     'app/api/admin/extras/route.js',
     'app/api/admin/vod/items/route.js',
@@ -235,6 +236,14 @@ async function importStubbed(relPath) {
     assert(lyricsCode.includes(`action: '${action}'`), `the lyrics handler must record ${action}`);
   }
   assert((lyricsCode.match(/recordAction\(/g) || []).length >= 2, 'both lyrics branches must record');
+  // The listener-side picker writes the same collection (it saves a chosen record as the owner's
+  // lyrics), so its two branches must record too — otherwise a listener's change would be the one
+  // write in the app that leaves no trace.
+  const pickerCode = fs.readFileSync('app/api/music/lyrics/route.js', 'utf8');
+  for (const action of ['lyrics.choose', 'lyrics.clear']) {
+    assert(pickerCode.includes(`action: '${action}'`), `the lyric picker must record ${action}`);
+  }
+  assert(pickerCode.includes('lyricsSnapshot'), 'the picker must record what the lyrics were before it changed them');
 
   // Vault writes all funnel through one store, so the trail lives there.
   assert(fs.readFileSync('lib/vaultAdminStore.js', 'utf8').includes('recordAction('), 'vault writes must record');

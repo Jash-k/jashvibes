@@ -53,6 +53,13 @@ const load=p=>import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync(
  assert.equal(picked.id,5,'the fully agreeing, timed record must win');
  assert.equal(m.chooseLyricMatch([{id:9,trackName:'Another',artistName:'X',albumName:'',duration:1,plainLyrics:'x'}],song),null);
 
+ // ── the picker's title rule: the same song, allowing for a version suffix, never a fragment
+ assert.equal(m.lyricSameTitle('Kannana Kanne (Female)','Kannana Kanne'),true,'a version suffix must still be the same song');
+ assert.equal(m.lyricSameTitle('Kannana Kanne - Live','Kannana Kanne'),true,'a live cut must be offered');
+ assert.equal(m.lyricSameTitle('Kannana Kanne (From "Naanum Rowdydhaan")','Kannana Kanne'),true,'the film name in brackets must not hide a record');
+ assert.equal(m.lyricSameTitle('Kanna','Kannana Kanne'),false,'a fragment of the title is a different song, not a version');
+ assert.equal(m.lyricSameTitle('Naanum Rowdydhaan Theme','Kannana Kanne'),false,'an unrelated free-text hit must never reach the list');
+
  // ── the cache key is stable, version-scoped and ignores formatting noise
  const a=m.lyricCacheKey({title:'Nenjukkul Peidhidum (From "Vaaranam Aayiram")',artist:'Harris  Jayaraj',album:'Vaaranam Aayiram',duration:295.4,id:'abc123'});
  const b=m.lyricCacheKey({title:'nenjukkul peidhidum',artist:'harris jayaraj',album:'Vaaranam Aayiram',duration:294.6,id:'abc123'});
@@ -75,5 +82,48 @@ const load=p=>import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync(
  for(const needle of ['Paste lyrics','Edit my lyrics','not-in-catalogue','identity-rejected','Saved on this device'])assert.ok(screen.includes(needle),`lyric screen must offer ${needle}`);
  const engine=fs.readFileSync('components/music/MusicEngine.jsx','utf8');
  assert.ok(!engine.includes('detailSettledFor'),'lyrics must not wait for the song-detail request');
- console.log('Lyrics pipeline: tiered acceptance, album-less matching, rejection reasons, retrieval variants, ranking, stable cache keys, single-source wiring, ladder, store, admin gate and screen recovery all passed.');
+
+ // ── the picker: every record is listed, and a choice is saved as the owner's lyrics ──
+ // "Wrong lyrics?" used to reject one record on one device and hope the retry picked better. The
+ // picker instead shows what the provider actually has and saves the pick for everyone, so the
+ // single-winner matcher must hand over the records it loses as well.
+ assert.ok(route.includes('collect = null'),'findLyrics must accept a collector');
+ assert.ok(route.includes('if (collect) for (const row of items) collect(row, label, wanted);'),
+  'every record the provider returned on a stage must reach the collector, not only the winner');
+ assert.ok(route.includes("searchParams.get('candidates') === '1'")&&route.includes("searchParams.get('reload') === '1'"),
+  'the picker asks for candidates, and a reload skips the cached provider answer');
+ assert.ok(route.includes('if (!force && !reload) {'),'a reload must not re-pick the automatic match');
+ assert.ok(route.includes('collectCandidates')&&route.includes('savedId'),
+  'the list must mark the automatic winner and the record the saved choice came from');
+ assert.ok(/candidateLabel|candidates\.map/.test(screen)===false||screen.includes('candidateLabel'),
+  'each option must be labelled by the panel, not by an opaque id');
+ assert.ok(screen.includes('Synced')&&screen.includes('Plain'),'every option must say whether the record carries timings');
+ assert.ok(screen.includes('mc-picker')&&screen.includes('records available — pick one'),'the panel must render the list');
+ const canvasCss=fs.readFileSync('components/music/music-canvas.css','utf8');
+ assert.ok(canvasCss.includes('.mc-picker { flex:1 1 auto; min-width:0; display:flex; }'),
+  'the picker must take the leftover width, not push the footer around');
+ assert.ok(canvasCss.includes('flex-wrap:wrap'),'the footer must wrap rather than squeeze the status or the refresh button');
+ assert.ok(/\.mc-picker \{ flex-basis:100%; \}/.test(canvasCss),'on a phone the picker takes its own row');
+ // Comments may name the retired control (they explain why it went), so only real code counts.
+ const screenCode=screen.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+ assert.ok(!screenCode.includes('Wrong lyrics?')&&!screenCode.includes('rejectLyrics'),
+  'the device-level rejection must be gone from the panel, replaced by the picker');
+ assert.ok(engine.includes('rejectLyrics'),'the engine keeps the rejection path for callers that still refuse a record');
+ assert.ok(screen.includes('Automatic — let the app match it again'),'the way back to the automatic match must be offered');
+ assert.ok(/picker\.current === 'saved' \? <button[^>]*onClick=\{\(\) => choose\('auto'\)\}/.test(screen),
+  'Remove my lyrics must clear a choice saved for everyone, not only a paste from this device');
+ assert.ok(engine.includes('reloadLyrics')&&engine.includes('lyricSong'),'the engine must expose a reload and the song identity');
+ assert.ok(fs.readFileSync('lib/lyricsController.js','utf8').includes("reload = false"),'the controller must support the reload that re-reads saved lyrics');
+
+ const post=route.slice(route.indexOf('export async function POST'));
+ assert.ok(post.includes("body.action === 'clear'")&&post.includes("body.action !== 'choose'"),
+  'the picker needs both directions: choose and clear');
+ assert.ok(post.includes('fetchRecordById'),'the lyrics text must be re-read from the provider, never trusted from the browser');
+ assert.ok(!/body\.syncedLyrics|body\.plainLyrics/.test(post),'no lyrics text may arrive in the request body');
+ assert.ok(post.includes('saveLyricsOverride')&&post.includes("origin: 'user'"),'a choice is saved through the store the admin panel uses');
+ assert.ok(post.includes('recordAction')&&post.includes("area: 'lyrics'"),'a choice must be audited like every other write');
+ assert.ok(post.includes('lyricsSnapshot'),'the audit entry must carry the before and after lyrics');
+ assert.ok(post.includes('isAuthorized(request)'),'writing lyrics is an owner action');
+
+ console.log('Lyrics pipeline: tiered acceptance, album-less matching, rejection reasons, retrieval variants, ranking, stable cache keys, single-source wiring, ladder, store, admin gate and screen recovery, plus the record picker (every candidate collected, labelled with title and timing, saved for everyone through the admin store and audited) all passed.');
 })().catch(e=>{console.error(e);process.exitCode=1});

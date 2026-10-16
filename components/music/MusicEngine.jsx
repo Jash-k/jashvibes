@@ -110,6 +110,11 @@ function useMusicController(enabled) {
   // though lyrics come from an unrelated provider. When detail lands, lyricParams
   // gains album/id, the signature changes, and the controller refreshes with the
   // richer metadata — so the first answer is early, and the second is exact.
+  // What the lyric picker needs to ask for alternatives: the song's own identity, without this
+  // device's rejections — a record you rejected once must still be offered in the list.
+  const lyricSong = { title: lyricMetadata.title || '', artist: lyricMetadata.artist || '',
+    album: lyricMetadata.album || '', duration: Number(lyricMetadata.duration) || 0,
+    id: String(lyricDetail?.trackId || active?.trackId || '') };
   const lyricReady = Boolean(lyricsKey);
   // Scope output during render, before effects run: never flash the previous song's state.
   const lyricsData = lyricState.signature === lyricSignature ? lyricState.data : { loadedFor: lyricsKey };
@@ -536,6 +541,14 @@ function useMusicController(enabled) {
     return lyricController.current.refresh({ force });
   }
 
+  /**
+   * Re-read the lyrics after the picker changed them. Not `force`: forcing would skip the saved
+   * lyrics and re-pick the same automatic match the owner just replaced.
+   */
+  function reloadLyrics() {
+    return lyricController.current.refresh({ reload: true });
+  }
+
   function rejectLyrics() {
     const key = currentTrackRef.current;
     const rejectedId = lyricsData?.source === 'lrclib' ? String(lyricsData?.matched?.id || '') : lyricsData?.source;
@@ -800,7 +813,7 @@ function useMusicController(enabled) {
   }
   function addToQueue(track) { setQueue((q) => dedupeQueue([...q, track])); }
   function backToAlbums() { ++collectionGeneration.current; collectionRequest.current?.abort(); setSelectedCollection(null); setCollectionStatus('idle'); setCenterTab('albums'); }
-  return { videoRef, home, status, error, setError, homeWarning, loadHome, query, setQuery, searchResults, searchStatus, selectedCollection, collectionStatus, openAlbum, openArtist, openPlaylist, backToAlbums, queueTracks, playTrack, playNext, playPrevious, addToQueue, retryTrack, closeMiniPlayer, playingTrack, activeKey, currentTime, duration, quality, setQuality, qualityChips, playerStatus, isPlaying, togglePlay, seekTo, volume, changeVolume, toggleMute, muted, shuffleEnabled, setShuffleEnabled, repeatMode, cycleRepeat, favorites, favoriteSet, favoriteTracks, recents, toggleFavorite, centerTab, setCenterTab, lyrics, lyricsData, lyricsStatus, openLyrics, rejectLyrics, syncedLyricLines, activeLyricLineIndex, lyricRows, plainLyricLines, lyricAutoScroll, setLyricAutoScroll, lyricOffset, setLyricOffset, activeLyricRef, lyricBlur, setLyricBlur, facetLists, facet, facets, loadFacet, allShelfSongs, shelfCollections, trending, loadTrending, fresh, loadFresh, refreshImportedPlaylists, showSongCrud, setShowSongCrud, crudQuery, setCrudQuery, addImportedTrack, replaceImportedTrack, removeImportedTrack };
+  return { videoRef, home, status, error, setError, homeWarning, loadHome, query, setQuery, searchResults, searchStatus, selectedCollection, collectionStatus, openAlbum, openArtist, openPlaylist, backToAlbums, queueTracks, playTrack, playNext, playPrevious, addToQueue, retryTrack, closeMiniPlayer, playingTrack, activeKey, currentTime, duration, quality, setQuality, qualityChips, playerStatus, isPlaying, togglePlay, seekTo, volume, changeVolume, toggleMute, muted, shuffleEnabled, setShuffleEnabled, repeatMode, cycleRepeat, favorites, favoriteSet, favoriteTracks, recents, toggleFavorite, centerTab, setCenterTab, lyrics, lyricsData, lyricsStatus, openLyrics, rejectLyrics, reloadLyrics, lyricSong, syncedLyricLines, activeLyricLineIndex, lyricRows, plainLyricLines, lyricAutoScroll, setLyricAutoScroll, lyricOffset, setLyricOffset, activeLyricRef, lyricBlur, setLyricBlur, facetLists, facet, facets, loadFacet, allShelfSongs, shelfCollections, trending, loadTrending, fresh, loadFresh, refreshImportedPlaylists, showSongCrud, setShowSongCrud, crudQuery, setCrudQuery, addImportedTrack, replaceImportedTrack, removeImportedTrack };
 
 }
 export default function MusicProvider({ children }) {

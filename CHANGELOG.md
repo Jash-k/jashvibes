@@ -1,3 +1,38 @@
+## Lock mode keeps the sleeve, and lyrics you can choose (2026-10-16)
+
+Requested: *"when i enter lock mode the albumart is very small. fix that"* and a way to replace the
+"Wrong lyrics?" button with the records the provider actually has.
+
+- **Lock mode no longer resizes the artwork.** Focus used to shrink the sleeve to a thumbnail —
+  `60px` on desktop, `48×48` on phones — so locking the screen turned the record into an icon. Both
+  rules are deleted rather than overridden: focus changes what is *sharp*, never how big the record
+  is. The artwork disc keeps `min(36dvh,360px)` / `min(43dvh,400px)` and the lyrics sleeve keeps its
+  own size, exactly as they are unlocked, on every breakpoint — and the phone rule that re-flowed the
+  now-playing row under focus goes with them, so the unlocked arrangement survives too.
+- **"Wrong lyrics?" is gone; a picker took its place.** The old button refused one record *on this
+  device* and hoped the retry chose better. Now the same row offers every record LRCLIB has for the
+  song — each option reads **Title — Artist · Synced or Plain · 3:42** — and the one showing is marked.
+- **The choice is saved for everyone.** Picking a record fetches that record from the provider on the
+  server (the browser never sends lyric text), saves it through the same store the admin panel uses,
+  and records it in the audit trail (`lyrics.choose`, `lyrics.clear`, with the before/after lyrics).
+  It sticks across devices, appears in the admin Lyrics tab as saved lyrics, and undo restores what
+  was there before. The list also offers **Automatic — let the app match it again**, which clears the
+  pin (`lyrics.clear`).
+- **Nothing is forced through the matcher.** The strict identity check would refuse a live cut or a
+  different album; the picker lists those records anyway, because the owner can read the title, artist,
+  album and length and decide. The matcher's verdict is recorded in the saved note, not used to hide
+  the option.
+- **"Remove my lyrics" now clears either kind of saved lyrics** — a paste from this device, or a
+  record chosen for everyone — and both go back to the automatic match. The list carries the same
+  exit as its last option, so the two controls cannot disagree about what "remove" means.
+- **One row on every screen.** The footer is one `select` that takes the leftover width and wraps to
+  its own line only if the row is too narrow; the quiet states (looking, one record only, lookup
+  failed) stay on the existing row, so the panel does not jump around. A paste saved on this device is
+  cleared when it would hide the record you just chose.
+- Covered by `test-lyrics-pipeline.cjs` (every record collected, labelled with title and timing, saved
+  and audited), `test-music-pocket.cjs` (no focus rule may resize the sleeve, and every unlocked size
+  is asserted to survive) and `test-admin-controls.cjs` (the new write path records both branches).
+
 ## Focus mode — a locked screen with nothing written on it (2026-10-16)
 
 Requested: *"those symbol and wordings should be removed from that lyric panel — that lock symbol and

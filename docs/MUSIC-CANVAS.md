@@ -33,6 +33,12 @@ One button, three effects, and one thing that must stay truthful:
   button. Focus pushes exactly one history entry, so Back leaves focus instead of leaving the Music
   section; a gesture exit gives that entry back. The handle keeps an accessible label and the region keeps
   an accessible name, because the words were on screen, not gone from assistive tech.
+- **Size is not part of focus.** Locking the screen used to shrink the sleeve to a thumbnail (60 px on
+  desktop, 48×48 on phones), which is the one thing focus had no business changing: the artwork disc and
+  the lyrics sleeve keep the measurements they have unlocked — `min(36dvh,360px)` / `min(43dvh,400px)`
+  for the disc, `clamp(110px,13vw,190px)` / `min(25dvh,220px)` for the sleeve — on every breakpoint, and
+  the phone rule that re-flowed the now-playing row under focus is gone with them. Focus changes what is
+  sharp, not how big the record is.
 - **Screen awake.** `lib/wakeLock.js` requests Screen Wake Lock inside the click (the API needs a user
   gesture), releases when focus ends, and re-takes it when the tab becomes visible again. Unsupported
   browsers (iOS before 16.4, some in-app browsers) and refusals are announced through the shell's status
@@ -45,11 +51,18 @@ leave locked focus. The desktop expand glyph remains. The earlier `listeningMode
 prototype in `MusicEngine` (plus its second wake-lock implementation and the unused `muLockView` helper)
 was dead code and has been removed.
 
-Lyrics refresh, line-tap seek, follow/resume, timing offset and font-size controls are available. Plain lyrics are labelled and not fabricated as synchronized. Three appearance modes replace the ten legacy modes; old lyric source-selection/translation UI is not retained. Current automatic lyric service remains unchanged. Appearance is stored under a new local storage key. Decorative spectrum is opt-in and is not an audio analyser; reduced-motion hides it.
+Lyrics refresh, line-tap seek, follow/resume, timing offset and font-size controls are available. Plain lyrics are labelled and not fabricated as synchronized. Three appearance modes replace the ten legacy modes; the old provider-picker/translation UI is not retained — LRCLIB is still the only provider.
+
+**Choosing a record.** The footer's one control is a list of every record LRCLIB has for the current song, each option reading `Title — Artist · Synced · 3:42` (or `Plain`), with the record that is showing marked. It exists because "wrong lyrics" is nearly always the right song on the wrong record — a live cut, a different album, a karaoke track — and the strict identity check would refuse those. Picking one re-reads that record from the provider on the server (the browser sends only the record id), saves it as the song's lyrics for everyone, and offers **Automatic — let the app match it again** to clear the pin. It is not a provider switch: one provider, several of its records. **Remove my lyrics** clears either
+kind of saved lyrics — the paste from this device or the record chosen for everyone — and both fall back
+to the automatic match. Appearance is stored under a new local storage key. Decorative spectrum is opt-in and is not an audio analyser; reduced-motion hides it.
 
 ## Verification for this release
 - `npm ci` succeeded.
-- `npm run check` parses 220 source modules with no unresolved local imports.
+- `test-lyrics-pipeline.cjs` and `test-music-pocket.cjs` pass: the picker collects every candidate and
+  saves the chosen one through the admin store with an audit entry, and no focus rule may resize the
+  sleeve, with every unlocked size asserted to still exist.
+- `npm run check` parses the source modules with no unresolved local imports (279 at the time of writing).
 - Production webpack build passed, including after dependency audit fixes.
 - Production dependency audit reported zero known vulnerabilities after compatible transitive updates.
 - Production standalone server started; health endpoint responded.

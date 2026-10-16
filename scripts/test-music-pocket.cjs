@@ -163,6 +163,24 @@ function fakeWakeLockEnv({ supported = true, failWith = null } = {}) {
   assert(/\.mc-pocket-lock \{[^}]*radial-gradient/.test(css), 'the guard is a vignette, not a curtain');
   assert(/\.mc-pocket-lock \{[^}]*var\(--mc-pocket-drag/.test(css), 'the swipe must fade the vignette as feedback');
 
+  // ── 3b. the sleeve keeps the size it had before focus ────────────────────
+  // The owner saw the artwork shrink to a thumbnail on locking and asked for the size it has
+  // unlocked to be "enough". So focus itself must not touch the artwork at all — not on desktop,
+  // not on a phone — and every unlocked size must survive.
+  assert(!/\.mc-app\.is-focus[^{]*\.mc-now-art\s*\{/.test(css),
+    'focus must not resize the sleeve: locking changes what is sharp, not how big the record is');
+  assert(!/\.mc-app\.is-focus \.mc-now \{/.test(css),
+    'focus must not re-arrange the now-playing block on phones either');
+  for (const size of [
+    '.mc-now-art { width:clamp(110px,13vw,190px)',
+    '.mc-now-art { width:auto; height:min(25dvh,220px)',
+    '.mc-player.is-artwork-mode .mc-now-art { width:auto; height:min(36dvh,360px)',
+    '.mc-player.is-artwork-mode .mc-now-art { height:min(43dvh,400px)',
+    '.mc-player.is-artwork-mode .mc-now-art { width:auto; height:min(38dvh,260px)',
+  ]) assert(css.includes(size), `the sleeve keeps its unlocked size: missing ${size}`);
+  // The artwork is a disc, so the sleeve rules must not leave it square: one aspect ratio, no explicit height in lyrics mode.
+  assert(!/\.mc-app\.is-focus \.mc-now-art[^}]*height/.test(css), 'no focus rule may pin the sleeve height');
+
   // ── 4. the guard's gestures ──────────────────────────────────────────────
   const guard = read('components/music/PocketLock.jsx');
   // Assertions read the code, not the commentary: the component's doc comment is allowed to explain
@@ -237,5 +255,5 @@ function fakeWakeLockEnv({ supported = true, failWith = null } = {}) {
   }
   assert(!read('lib/musicCore.js').includes('muLockView'), 'muLockView existed only for that dead memo');
 
-  console.log('PASS focus mode: wake lock acquired/released/re-taken truthfully and announced by the shell when it cannot be, blur map per view, one live control above the lock, a locked screen that prints no words (lock glyph, heading, hint, labels and footer removed, no hint timer), swipe-down + slide + Esc + Back exits, no mobile exit button, old pocket prototype removed.');
+  console.log('PASS focus mode: the sleeve keeps its unlocked size under focus (no shrinking rule left), wake lock acquired/released/re-taken truthfully and announced by the shell when it cannot be, blur map per view, one live control above the lock, a locked screen that prints no words (lock glyph, heading, hint, labels and footer removed, no hint timer), swipe-down + slide + Esc + Back exits, no mobile exit button, old pocket prototype removed.');
 })().catch((error) => { console.error(error); process.exitCode = 1; });

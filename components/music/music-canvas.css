@@ -115,8 +115,19 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
 .mc-lyric-lines li.is-current { color:var(--mc-accent); background:linear-gradient(100deg,var(--mc-accent),var(--mc-violet)); background-clip:text; -webkit-text-fill-color:transparent; }
 .mc-lyric-lines button { font:inherit; text-align:left; line-height:inherit; color:inherit; background:none; border:0; padding:0; width:100%; min-height:44px; }
 .mc-lyric-lines li.is-plain { color:#d6dfe5; font-weight:500; }
-.mc-lyrics footer { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:44px; }
+.mc-lyrics footer { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:44px; flex-wrap:wrap; }
 .mc-lyrics footer span { font-size:11px; color:var(--mc-muted); }
+/* The lyric picker. One control, one row: a select listing every record the provider has for this
+   song, each option reading "Title — Artist · Synced · 3:42". It takes the leftover width and wraps
+   to its own line when the row is too narrow, so the footer never squeezes the status or the
+   refresh button and the panel is the same shape on a desktop and on a phone. */
+.mc-picker { flex:1 1 auto; min-width:0; display:flex; }
+.mc-picker-field { flex:1 1 auto; min-width:0; display:flex; }
+.mc-app .mc-picker select { width:100%; min-height:34px; max-width:100%; font-size:12px; padding:5px 26px 5px 11px; border-radius:17px;
+  background:#ffffff08; color:inherit; text-overflow:ellipsis; }
+.mc-app .mc-picker select:disabled { opacity:.6; }
+.mc-picker-empty { font-size:11px; color:var(--mc-muted); }
+.mc-picker-note { flex-basis:100%; margin:0; font-size:11px; color:var(--mc-muted); line-height:1.35; }
 .mc-player-modes { display:flex; justify-content:center; gap:4px; }
 .mc-player-modes button { min-height:44px; border:0; background:none; color:var(--mc-muted); padding:8px 20px; font-size:12px; border-radius:24px; }
 .mc-player-modes button[aria-pressed='true'] { color:var(--mc-accent); background:#8be5ef12; }
@@ -161,7 +172,6 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
 .mc-app.is-focus:not(.is-library-open) .mc-library-dock { display:none; }
 .mc-app.is-focus:not(.is-library-open) .mc-workspace { grid-template-columns:1fr; }
 .mc-app.is-focus .mc-player { max-width:1000px; width:100%; margin:0 auto; }
-.mc-app.is-focus .mc-now-art { width:60px; }
 .mc-app.is-focus .mc-now h1 { font-size:20px; }
 .mc-app.is-focus .mc-lyric-lines li { font-size:clamp(26px,4vw,var(--mc-lyric-size,34px)); }
 @media (max-width:1180px) and (min-width:1024px) {
@@ -205,6 +215,9 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
   .mc-lyrics footer { min-height:36px; }
   .mc-lyrics footer span { font-size:10px; }
   .mc-lyrics footer .mc-icon { height:36px; width:36px; }
+  .mc-picker { flex-basis:100%; }
+  .mc-app .mc-picker select { max-width:100%; min-height:32px; font-size:11px; }
+  .mc-picker-note { font-size:10px; }
   .mc-player-modes button { min-height:36px; padding:6px 18px; }
   .mc-transport { padding-top:4px; }
   .mc-transport-row { display:flex; flex-direction:column; gap:6px; margin-top:2px; }
@@ -237,8 +250,8 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
   .mc-app.is-library-open .mc-signal { display:none; }
   .mc-sheet { padding:16px 16px max(16px,env(safe-area-inset-bottom)); }
   .mc-notice { bottom:130px; }
-  .mc-app.is-focus .mc-now { flex-direction:row; text-align:left; }
-  .mc-app.is-focus .mc-now-art { height:48px; width:48px; }
+  /* Phones keep the unlocked arrangement too: the sleeve above the words, at its normal size.
+     Focus only widens the player and enlarges the lyrics. */
   .mc-app.is-focus .mc-now h1 { font-size:16px; }
   .mc-app.is-focus .mc-now p { max-width:66vw; }
   .mc-app.is-focus .mc-now small { display:none; }

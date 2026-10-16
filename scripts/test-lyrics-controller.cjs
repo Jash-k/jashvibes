@@ -35,5 +35,27 @@ const reply = (body, status = 200) => ({ ok: status < 400, status, headers: new 
   const cooldown = createLyricsController({ onChange() {}, retryDelays: [2], fetcher: async () => { count++; return reply({ retryable: true, retryAfter: 1 }, 503); } });
   cooldown.select({ key: 'X', signature: 'X', ready: true, params: {} }); await pause(30); cooldown.refresh({ force: true });
   assert.equal(count, 1, 'manual refresh must not bypass Retry-After'); cooldown.dispose(); await pause(10); assert.equal(count, 1);
-  console.log('PASS controller: metadata readiness, dedupe, A→B→C late responses, cache, retained refresh, metadata invalidation, unmount, automatic recovery, bounded failure, cooldown cancellation.');
+  // ── the picker's reload ──────────────────────────────────────────────────
+  // A chosen record replaces the answer on screen, so the controller must ask again even though it
+  // is already "ready" — and must not use `force`, which bypasses the saved lyrics and would re-pick
+  // the automatic match the owner just replaced.
+  const urls = [], reloadStates = [];
+  const picker = createLyricsController({ onChange: s => reloadStates.push(s), retryDelays: [1],
+    fetcher: async (url) => { urls.push(String(url)); return reply({ plainLyrics: urls.length === 1 ? 'Automatic match' : 'Picked record' }); } });
+  picker.select({ key: 'P', signature: 'P', ready: true, params: { title: 'P' } });
+  await pause(5);
+  assert.equal(reloadStates.at(-1).lyrics, 'Automatic match');
+  assert(!urls[0].includes('reload=1') && !urls[0].includes('force=1'), 'the first read asks normally');
+  await picker.refresh({});
+  assert.equal(urls.length, 1, 'a ready answer is not re-read on its own');
+  await picker.refresh({ reload: true });
+  assert.equal(urls.length, 2, 'reload must re-read after a choice');
+  assert(urls[1].includes('reload=1') && !urls[1].includes('force=1'),
+    'reload asks for the saved lyrics; force would skip them and re-pick the automatic match');
+  assert.equal(reloadStates.at(-1).lyrics, 'Picked record');
+  await picker.refresh({ reload: true });
+  assert.equal(urls.length, 3, 'the positive cache must never answer a reload');
+  picker.dispose();
+
+  console.log('PASS controller: metadata readiness, dedupe, A→B→C late responses, cache, retained refresh, metadata invalidation, unmount, automatic recovery, bounded failure, cooldown cancellation, and the picker reload that re-reads the saved lyrics without forcing past them.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

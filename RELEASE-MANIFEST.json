@@ -245,8 +245,8 @@
       "sha256": "779a8a9ee5567f90935ab487cc3252e3c81d77e5f3cfb3e0234de91561a4eca5"
     },
     "app/api/music/lyrics/route.js": {
-      "bytes": 20510,
-      "sha256": "5317596f18f511255b0cf745845e7ebd5873bbac9b933660dd896e5555954cd1"
+      "bytes": 32581,
+      "sha256": "2bb24fec9e883a90fb26179d6a92477ad83e142b1c6d905055bb87e27d657588"
     },
     "app/api/music/new/route.js": {
       "bytes": 778,
@@ -477,8 +477,8 @@
       "sha256": "383f74feef0a8f0969e4820c346ce1f6fd84eb4d929ecf770eb283ca8d33abd6"
     },
     "CHANGELOG.md": {
-      "bytes": 20697,
-      "sha256": "660e08a032ecc8c5d8534e990d2aac6e8d129c0614b8d77ede5509bec5623bf3"
+      "bytes": 23644,
+      "sha256": "71187ba8047f16e0c633a9a7a7ae06159a4971f310d026bfce0d1dafd4c0132d"
     },
     "components/admin/admin.css": {
       "bytes": 23182,
@@ -617,20 +617,20 @@
       "sha256": "522f7060e9a978ffe41ca5256b94f39c79f893ad0d4c997a10e5dc0ef4dff3f9"
     },
     "components/music/CanvasLyrics.jsx": {
-      "bytes": 10000,
-      "sha256": "51f5dab2b89ffe7f9d9fdc165a340a5c561c587474cdcf0d2ba33b98d4ca686f"
+      "bytes": 17920,
+      "sha256": "9d7941246ea47c50fbbc80644f6ec8649aa5ac88c558db8a4ea7bd728424fa8b"
     },
     "components/music/music-canvas.css": {
-      "bytes": 32272,
-      "sha256": "4b88042e5108d1b52a368b1a387cab85c470848a6757db79d4c31d0412fc1332"
+      "bytes": 33341,
+      "sha256": "b114f0d5bfacd2e5cc6e4c81dd62aa29a992e715e463b4fa1bcf02e021def658"
     },
     "components/music/MusicContext.jsx": {
       "bytes": 263,
       "sha256": "de3bd5a563e72587f0d43b45d03df3f807e85ba1b0af71691e30e7596ae1bcb7"
     },
     "components/music/MusicEngine.jsx": {
-      "bytes": 41796,
-      "sha256": "3941d785077f20249318301996e64586a853ab44baa7ba917515fc1ee172fb10"
+      "bytes": 42528,
+      "sha256": "980ef6380cb8c33319377cb8a9e3893f39ae9444ada90709e1685d7fea06906d"
     },
     "components/music/MusicProvider.jsx": {
       "bytes": 739,
@@ -789,8 +789,8 @@
       "sha256": "0c4956c4ca9d5077fb6e91d8e3a1cd5ffe114f61f949dc2f12bb9fdaeb049c66"
     },
     "docs/MUSIC-CANVAS.md": {
-      "bytes": 6300,
-      "sha256": "a59517244059de6ae1c118a8c8af58db2bc0c9f564244323cb4b8202b941a619"
+      "bytes": 8006,
+      "sha256": "346b5127b30ef55ce8a6c2cc0f0663c8f91e2b32e5bad42aca25a9549477d800"
     },
     "docs/music-native-navigation.md": {
       "bytes": 2556,
@@ -813,8 +813,8 @@
       "sha256": "ffc14e4cb83b1f741cc8aec125f341e7c32f6878f707709eecf148e3788aa2c6"
     },
     "docs/TESTING.md": {
-      "bytes": 6252,
-      "sha256": "2d32a482096171f420d6095e40f6bba9a4f5453bb71b0e3fa91526496839f0db"
+      "bytes": 6658,
+      "sha256": "f5dd922cccfe20443ac67fff0a7616c40a7ea7f9575b58ae74a2b7fd3170ae6b"
     },
     "docs/vault-admin.md": {
       "bytes": 3141,
@@ -941,12 +941,12 @@
       "sha256": "670bb8d53f9378de01cf0d3d209719055bf8b71ea9ac7d60421b46b371ba9007"
     },
     "lib/lyricsController.js": {
-      "bytes": 5420,
-      "sha256": "9aeabbb8618b767a008b7121d93f37ab14831b736bdc20be643f35d3709f4e5b"
+      "bytes": 5826,
+      "sha256": "f9894a08803925547ab9611f30fb6deb77db45eb149c1b136fc87b3a8d14485d"
     },
     "lib/lyricsMatch.js": {
-      "bytes": 11465,
-      "sha256": "608459c0fe9b49c8a330147509d54cd69b1384614a3c3ec7e07799beea53caf0"
+      "bytes": 12426,
+      "sha256": "41c04b2fe2845bb62d179172c74fad81899eeaa2e60000e35499f3533dbb3eb3"
     },
     "lib/lyricsStore.js": {
       "bytes": 4269,
@@ -1357,8 +1357,8 @@
       "sha256": "75dbe37f5fb95b515be19d6787a942a9fb16d1d06d00559c03aed37b541908e4"
     },
     "scripts/test-admin-controls.cjs": {
-      "bytes": 16902,
-      "sha256": "8a4e461734f16928ae3062aa81ec3946868aac989958cfa7df92d8d1305c6019"
+      "bytes": 17542,
+      "sha256": "aa9ad58c2b04395a637816fb4b6a8b911efefd9fa9dd6b39f713d9b696b4a199"
     },
     "scripts/test-extras-covers.cjs": {
       "bytes": 2011,
@@ -1385,16 +1385,16 @@
       "sha256": "0ce113dd67815e83a7f09eb09bf48a5a9810b627793e9a12c04d22b5467a9f47"
     },
     "scripts/test-lyrics-controller.cjs": {
-      "bytes": 3807,
-      "sha256": "6aa066aa9fae5cb2216065e05071a71dd75d8f9f1c6e6cfe7acd7ef99223cec4"
+      "bytes": 5465,
+      "sha256": "9f7634679447f20830fd23bda7cf7e25079c96f1ccdbaa089aae9eaf17d5b176"
     },
     "scripts/test-lyrics-flow-browser.cjs": {
       "bytes": 4914,
       "sha256": "58c15da9e999ec63d49912916d81bc2638eb0f4f340229240da22b614d630355"
     },
     "scripts/test-lyrics-pipeline.cjs": {
-      "bytes": 6721,
-      "sha256": "a490cf23ac72587376b343fc054fc1b8260c4cffb4c97cc1a744ba983a2fe5eb"
+      "bytes": 11640,
+      "sha256": "5ce02c704939466d52fbb2b3ba82ff29b2632c78d8cdbc408354f4cea216c540"
     },
     "scripts/test-music-browser.cjs": {
       "bytes": 5481,
@@ -1417,8 +1417,8 @@
       "sha256": "39176980b17c3ef4babae3fb712028e3dc06ea83b4d87f497401e67f61dcd2a3"
     },
     "scripts/test-music-pocket.cjs": {
-      "bytes": 15811,
-      "sha256": "8a894bcbdc80b502502cecbd5e5c2aa86c86262c7e921aed3d315dfafcdc77b6"
+      "bytes": 17250,
+      "sha256": "511138e9c9388a141302f0b54a7dd2cd40a36603f7a37be8a7b6056249115e55"
     },
     "scripts/test-nav-order.cjs": {
       "bytes": 1824,

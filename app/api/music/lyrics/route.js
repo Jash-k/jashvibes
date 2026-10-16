@@ -1,13 +1,17 @@
+import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
 import {
-  chooseLyricMatch, lyricAlbum, lyricRequestMetadata, lyricSearchVariants,
+  chooseLyricMatch, lyricAlbum, lyricIdentity, lyricRequestMetadata, lyricSameTitle, lyricSearchVariants,
   LYRICS_MATCH_VERSION, DURATION_TOLERANCE_SECONDS,
 } from '@/lib/lyricsMatch';
 import { SOURCE_GROUPS, WIRED_SOURCE_KIND, groupedSources, isPickable, sourceById } from '@/lib/musicSources';
-import { readLyricsOverride, readLyricsCache, writeLyricsCache } from '@/lib/lyricsStore';
+import { readLyricsOverride, readLyricsCache, writeLyricsCache, saveLyricsOverride, deleteLyricsOverride, lyricsSongKey } from '@/lib/lyricsStore';
+import { recordAction } from '@/lib/adminAudit';
+import LyricsOverride from '@/models/LyricsOverride';
+import { verifyRequestToken } from '@/lib/serverAuth';
 
 /*
- * GET /api/music/lyrics — one source, several ways of asking.
+ * GET /api/music/lyrics — one source, several ways of asking. POST — choose a record by hand.
  *
  * The redesign keeps LRCLIB as the only provider and moves all the robustness
  * into three places the old cascade got wrong:
@@ -158,7 +162,7 @@ function mapResult(item, sourceUrl, wanted) {
  * Ask LRCLIB for one song. Returns the strongest accepted record, the stages
  * that were tried, and — when nothing matched — why, so the UI can be specific.
  */
-async function findLyrics({ title, artist, album, duration, exclude = '', force = false, base = getLyricsApiBase() }) {
+async function findLyrics({ title, artist, album, duration, exclude = '', force = false, base = getLyricsApiBase(), collect = null }) {
   const metadata = lyricRequestMetadata({ title, artists: artist, album, duration });
   const wanted = { title: metadata.title, artist: normalize(metadata.artist), album: metadata.album, duration: metadata.duration };
   const blocked = new Set(String(exclude).split(',').filter(Boolean));
@@ -188,6 +192,10 @@ async function findLyrics({ title, artist, album, duration, exclude = '', force 
     const rows = (Array.isArray(payload) ? payload : [payload]).filter((row) => row && typeof row === 'object');
     if (!rows.length) { attempts.push({ stage: label, outcome: 'empty' }); return null; }
     const items = rows.filter((row) => !blocked.has(String(row.id)));
+    // The picker needs the records the matcher *did not* choose as well: "wrong lyrics" is usually a
+    // right song on the wrong record (a live cut, a different album, a karaoke version), and those
+    // are exactly the ones a single winner throws away.
+    if (collect) for (const row of items) collect(row, label, wanted);
     const match = chooseLyricMatch(items, wanted);
     attempts.push({ stage: label, outcome: match ? 'matched' : 'rejected', candidates: rows.length });
     if (!match) return null;
@@ -244,6 +252,182 @@ const MESSAGES = {
   'user-saved': '',
 };
 
+/**
+ * Every record LRCLIB has for this song, as a list a person can choose from.
+ *
+ * The matcher is deliberately strict — it will not show a record from a different song — but
+ * "wrong lyrics" is almost always the *right* song on the wrong record: a live cut, a different
+ * album, a karaoke track, a version with the film's name attached. Those records are real and the
+ * owner can see which is which, so the job here is to show them plainly (title, artist, timings or
+ * not, length) and let a human decide. Nothing is substituted automatically: this only lists.
+ */
+async function collectCandidates({ title, artist, album, duration, base = getLyricsApiBase() }) {
+  const metadata = lyricRequestMetadata({ title, artists: artist, album, duration });
+  const wanted = { title: metadata.title, artist: normalize(metadata.artist), album: metadata.album, duration: metadata.duration };
+  const seen = new Map();
+  const attempts = [];
+
+  if (!wanted.title || !wanted.artist) {
+    return { rows: [], autoId: '', attempts, message: 'This song arrived without a title or artist, so there was nothing safe to search for.' };
+  }
+
+  const found = await findLyrics({
+    title, artist, album, duration, base,
+    collect: (row, stage) => {
+      const id = row?.id != null ? String(row.id) : '';
+      if (!id) return;
+      // The free-text stages answer with loosely related songs. The list is for *this* song's other
+      // versions, so anything that is not the same title is dropped here — and the strict identity
+      // rules are not applied, because a live cut or a differently credited version is exactly what
+      // the owner came to find.
+      if (!lyricSameTitle(row.trackName || row.name || '', wanted.title)) return;
+      const previous = seen.get(id);
+      const candidate = {
+        id,
+        title: normalize(row.trackName || row.name || ''),
+        artist: normalize(row.artistName || ''),
+        album: normalize(row.albumName || ''),
+        duration: Number(row.duration) || 0,
+        // What the option says: whether this record carries timings, and how long it runs.
+        synced: Boolean(row.syncedLyrics),
+        lines: lineCount(row.syncedLyrics || row.plainLyrics || ''),
+        preview: previewLines(row.syncedLyrics || row.plainLyrics || '', 2),
+        score: scorePercent(lrclibScore(row, wanted)),
+        stage,
+      };
+      // The same record can arrive from several stages; keep whichever copy carries the timings.
+      if (!previous || (!previous.synced && candidate.synced)) seen.set(id, candidate);
+    },
+  });
+
+  const autoId = found.result?.matched?.id != null ? String(found.result.matched.id) : '';
+  const rows = [...seen.values()].sort((a, b) => {
+    if (a.id === autoId) return -1;
+    if (b.id === autoId) return 1;
+    // Timed records first, then the ones closest to the length of the track actually playing.
+    if (a.synced !== b.synced) return a.synced ? -1 : 1;
+    const da = wanted.duration ? Math.abs(a.duration - wanted.duration) : 0;
+    const db = wanted.duration ? Math.abs(b.duration - wanted.duration) : 0;
+    return da - db || a.title.localeCompare(b.title);
+  });
+  return { rows, autoId, attempts: found.attempts || [], message: rows.length ? '' : (MESSAGES[found.reason] || 'No records for this song.') };
+}
+
+const accessToken = (password = '') => crypto.createHash('sha256').update(`jash-theatre:${password}`).digest('hex');
+
+/**
+ * Only the owner may rewrite the saved lyrics: the panel runs inside their session, and the same
+ * rule already guards the playlist API. A local install with no password configured is its own
+ * owner, so it stays open — the picker would be useless behind a login nobody set up.
+ */
+function isAuthorized(request) {
+  const configuredPassword = process.env.PASS || process.env.SPACE_PASSWORD || process.env.APP_PASSWORD || '';
+  const adminToken = process.env.MUSIC_ADMIN_TOKEN || process.env.SYNC || '';
+  if (!configuredPassword && !adminToken) return true;
+  if (verifyRequestToken(request)) return true;
+  const token = request.headers.get('x-jash-token') || request.headers.get('x-music-admin-token') || new URL(request.url).searchParams.get('token') || '';
+  if (adminToken && token === adminToken) return true;
+  if (configuredPassword && token === accessToken(configuredPassword)) return true;
+  return false;
+}
+
+/**
+ * POST /api/music/lyrics — { action: 'choose' | 'clear', …song, candidateId }
+ *
+ * `choose` pins one LRCLIB record to this song by saving its text through the same store the admin
+ * panel uses, so it wins on every device, survives a provider outage, and shows up in the Lyrics
+ * tab as saved lyrics. It is recorded in the audit trail like any other write.
+ *
+ * `clear` removes that pin, which is the way back to the automatic match.
+ */
+export async function POST(request) {
+  if (!isAuthorized(request)) {
+    return json({ ok: false, message: 'Sign in to change the saved lyrics.' }, 401);
+  }
+  try {
+    const body = await request.json().catch(() => ({}));
+    const song = {
+      title: String(body.title || ''), artist: String(body.artist || ''), album: String(body.album || ''),
+      duration: Number(body.duration) || 0, id: String(body.id || ''),
+    };
+    const key = lyricsSongKey(song);
+    if (!key) return json({ ok: false, message: 'This song has no identity to save lyrics against.' }, 400);
+
+    if (body.action === 'clear') {
+      const before = await LyricsOverride.findOne({ key }).lean().catch(() => null);
+      const removed = await deleteLyricsOverride(key);
+      if (removed) {
+        await recordAction({
+          area: 'lyrics', action: 'lyrics.clear', targetModel: 'LyricsOverride',
+          summary: `Cleared the saved lyrics for “${before?.title || song.title}” — back to the automatic match`,
+          target: { kind: 'lyrics-override', key, label: before?.title || song.title },
+          before: before ? lyricsSnapshot(before) : null, after: null,
+        });
+      }
+      return json({ ok: true, cleared: Boolean(removed) });
+    }
+
+    if (body.action !== 'choose') return json({ ok: false, message: 'Unknown lyrics action.' }, 400);
+
+    const candidateId = String(body.candidateId || '').replace(/[^0-9]/g, '').slice(0, 20);
+    if (!candidateId) return json({ ok: false, message: 'No lyric record was chosen.' }, 400);
+
+    // Fetch the record from the provider — never trust a copy sent by the browser.
+    const record = await fetchRecordById(candidateId);
+    if (!record) return json({ ok: false, message: 'That record is no longer available at the provider.' }, 404);
+    const plainLyrics = String(record.plainLyrics || '');
+    const syncedLyrics = String(record.syncedLyrics || '');
+    if (!plainLyrics.trim() && !syncedLyrics.trim()) {
+      return json({ ok: false, message: 'That record has no lyrics text in it.' }, 409);
+    }
+
+    const before = await LyricsOverride.findOne({ key }).lean().catch(() => null);
+    // What the automatic matcher would have said about this record. It is recorded, not enforced:
+    // the owner can see the title, artist, album and length in the dropdown, so their pick wins —
+    // but the reason travels with it, because "you chose a record the matcher would reject" is
+    // exactly the sort of thing worth being able to read back later.
+    const identity = lyricIdentity(record, { title: song.title, artist: song.artist, album: song.album, duration: song.duration });
+    const verdict = identity?.ok ? `matched: ${identity.tier || 'ok'}` : `matcher would reject: ${identity?.reason || 'unknown'}`;
+    const note = `Chosen from LRCLIB record ${candidateId} — ${normalize(record.trackName || '')}${record.artistName ? ` · ${normalize(record.artistName)}` : ''}${record.albumName ? ` · ${normalize(record.albumName)}` : ''} (${verdict})`;
+    await saveLyricsOverride(song, { plainLyrics, syncedLyrics, note: note.slice(0, 400), origin: 'user' });
+    const after = await LyricsOverride.findOne({ key }).lean().catch(() => null);
+    await recordAction({
+      area: 'lyrics', action: 'lyrics.choose', targetModel: 'LyricsOverride',
+      summary: `Picked a different lyrics record for “${song.title}” — ${syncedLyrics ? 'synced' : 'plain'} version, ${normalize(record.trackName || '')}`,
+      target: { kind: 'lyrics-override', key, label: song.title },
+      before: before ? lyricsSnapshot(before) : null,
+      after: after ? lyricsSnapshot(after) : null,
+    });
+    return json({
+      ok: true, key, synced: Boolean(syncedLyrics), plainLyrics, syncedLyrics,
+      title: normalize(record.trackName || ''), artist: normalize(record.artistName || ''),
+      identity: identity ? { ok: Boolean(identity.ok), tier: identity.tier || '', reason: identity.reason || '' } : null,
+    });
+  } catch (error) {
+    return json({ ok: false, message: error.message || 'Could not save that choice.' }, error.status || 503);
+  }
+}
+
+/** One LRCLIB record by id, through the same queue and cooldowns as every other lookup. */
+async function fetchRecordById(id, base = getLyricsApiBase()) {
+  for (const path of [`/api/get/${id}`, `/api/get?id=${id}`]) {
+    try {
+      const payload = await fetchJson(new URL(path, base + '/').toString(), { deadline: Date.now() + STAGE_BUDGET_MS });
+      if (payload && typeof payload === 'object' && !Array.isArray(payload)) return payload;
+    } catch { /* try the next shape */ }
+  }
+  return null;
+}
+
+function lyricsSnapshot(doc = {}) {
+  return {
+    key: doc.key || '', title: doc.title || '', artist: doc.artist || '', album: doc.album || '',
+    plainLyrics: String(doc.plainLyrics || '').slice(0, 40000),
+    syncedLyrics: String(doc.syncedLyrics || '').slice(0, 40000),
+    note: doc.note || '', origin: doc.origin === 'admin' ? 'admin' : 'user',
+  };
+}
+
 /* ── GET ─────────────────────────────────────────────────────────────────── */
 
 export async function GET(request) {
@@ -255,9 +439,36 @@ export async function GET(request) {
   const duration = Number(searchParams.get('duration') || 0);
   const exclude = String(searchParams.get('exclude') || '').replace(/[^0-9,]/g, '').slice(0, 500);
   const force = searchParams.get('force') === '1';
+  // `reload=1` is the picker's signal: re-read the saved lyrics and skip the cached provider answer.
+  // `force=1` stays what the rejection path needs — bypass everything, saved lyrics included.
+  const reload = searchParams.get('reload') === '1';
+  const wantsCandidates = searchParams.get('candidates') === '1';
   const wantsList = searchParams.get('list') === '1';
   const forced = String(searchParams.get('source') || '').trim().toLowerCase();
   const song = { title, artist, album, duration, id };
+
+  /* the picker's list: every record LRCLIB offers for this song, not just the winner */
+  if (wantsCandidates) {
+    if (!title && !id) return json({ ok: false, candidates: [], message: 'This song arrived without a title, so there is nothing to search for.', reason: 'missing-metadata' }, 400);
+    try {
+      const [list, override] = await Promise.all([
+        collectCandidates({ title, artist, album, duration }),
+        readLyricsOverride(song).catch(() => null),
+      ]);
+      const autoId = list.autoId;
+      const rows = list.rows.map((row) => ({ ...row, auto: row.id === autoId }));
+      // The note written by POST /choose carries the record id, so the saved choice can be shown as
+      // selected in the list rather than as a stranger among the options.
+      const savedId = /record (\d+)/.exec(override?.note || '')?.[1] || '';
+      return json({
+        ok: true, wanted: { id, title, artist, album, duration },
+        autoId, savedId, current: override ? 'saved' : 'auto', savedAt: override?.updatedAt || null,
+        candidates: rows, attempts: list.attempts, message: list.message || '',
+      });
+    } catch (error) {
+      return json({ ok: false, candidates: [], message: error.message || 'Could not list the available lyrics.', reason: 'provider-error' }, 503);
+    }
+  }
 
   /* catalogue only: the list of sources, no provider is touched */
   if (wantsList && searchParams.get('catalogue') === '1' && !title && !id) {
@@ -343,7 +554,7 @@ export async function GET(request) {
         matchVersion: LYRICS_MATCH_VERSION, cached: false,
       });
     }
-    if (!force) {
+    if (!force && !reload) {
       const cached = await readLyricsCache(song);
       if (cached?.status === 'ok' && cached.payload) {
         return json({ ...cached.payload, matchVersion: LYRICS_MATCH_VERSION, cached: true });
