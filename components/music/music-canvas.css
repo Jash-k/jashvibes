@@ -37,7 +37,7 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
 .mc-icon sup { position:absolute; font-size:9px; right:8px; top:4px; }
 .mc-header-button { display:flex; align-items:center; justify-content:center; gap:8px; padding:10px 12px; min-height:44px; background:none; border:0; border-radius:12px; color:var(--mc-muted); font-size:13px; }
 .mc-library-toggle { display:flex; }
-.mc-lyrics-exit { display:none; }
+.mc-lyrics-exit { display:none; } /* retired: the component no longer renders it */
 .mc-workspace { display:grid; grid-template-columns:minmax(300px,.9fr) minmax(0,1.1fr); gap:30px; min-height:0; min-width:0; }
 .mc-library-dock { min-height:0; min-width:0; }
 .mc-library { display:flex; flex-direction:column; height:100%; min-height:0; }
@@ -285,13 +285,61 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
 
 /* Compact app navigation occupies its own row BELOW transport, never an overlay. */
 .mc-mobile-nav, .mc-pocket-button { display:none; }
-.mc-pocket-lock { position:absolute; inset:0; z-index:150; background:#04070afa; color:#edf4f8; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:16px; padding:24px; touch-action:none; overscroll-behavior:none; }
-.mc-pocket-lock h2 { font-size:26px; }
-.mc-pocket-lock p { color:#a7b2bd; font-size:13px; text-align:center; }
-.mc-pocket-lock > small { color:#a7b2bd; font-size:11px; }
-.mc-pocket-slider { width:min(300px,100%); height:56px; border:1px solid #ffffff30; background:#15212a; border-radius:30px; position:relative; margin-top:20px; user-select:none; }
-.mc-pocket-slider > span { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding-left:36px; font-size:13px; color:#d4e2ea; pointer-events:none; }
-.mc-pocket-slider > button { position:absolute; inset:0 auto 0 0; width:56px; height:54px; display:grid; place-items:center; border:0; border-radius:50%; background:#8be5ef; color:#10171c; touch-action:none; }
+
+/* ── Focus mode ──────────────────────────────────────────────────────────────
+   The lock button blurs every layer except what you came to look at, locks touches and
+   asks the browser to keep the screen awake. Which layer stays sharp follows the
+   Artwork/Lyrics choice: in lyrics mode the lines stay crisp and the sleeve blurs, in
+   artwork mode the sleeve stays crisp (the lyrics are not rendered at all then).
+
+   Blurring is done per layer rather than on an ancestor on purpose: `filter` creates a
+   stacking context, so blurring `.mc-player` would trap `.mc-player-modes` underneath the
+   lock layer and the one control that must stay live would stop receiving taps. */
+.mc-app.is-pocket .mc-topbar,
+.mc-app.is-pocket .mc-library-dock,
+.mc-app.is-pocket .mc-transport,
+.mc-app.is-pocket .mc-now-text,
+.mc-app.is-pocket .mc-lyrics > header,
+.mc-app.is-pocket .mc-lyrics > footer,
+.mc-app.is-pocket .jv-rail,
+.mc-app.is-pocket .mobile-dock {
+  filter:blur(16px) saturate(.85) brightness(.6);
+  transition:filter 200ms ease-out;
+  pointer-events:none;
+}
+/* Lyrics mode: the sleeve is chrome too, so it blurs with everything else. */
+.mc-app.is-pocket .mc-player:not(.is-artwork-mode) .mc-now-art { filter:blur(16px) saturate(.85) brightness(.55); transition:filter 200ms ease-out; }
+/* The one thing that stays sharp and live: it decides what the focus shows. */
+.mc-app.is-pocket .mc-player-modes { position:relative; z-index:170; }
+.mc-app.is-pocket .mc-player-modes button { background:#080b0ecc; }
+@media (prefers-reduced-motion:reduce) {
+  .mc-app.is-pocket .mc-topbar, .mc-app.is-pocket .mc-library-dock, .mc-app.is-pocket .mc-transport,
+  .mc-app.is-pocket .mc-now-text, .mc-app.is-pocket .mc-lyrics > header, .mc-app.is-pocket .mc-lyrics > footer,
+  .mc-app.is-pocket .jv-rail, .mc-app.is-pocket .mobile-dock,
+  .mc-app.is-pocket .mc-player:not(.is-artwork-mode) .mc-now-art { transition:none; }
+}
+
+/* The touch guard. Transparent on purpose: the blurred layers above are the effect, this
+   layer only catches touches. The vignette pulls the eye to the middle and fades as you
+   swipe down, so the gesture has feedback before it commits. The status toast is left sharp
+   on purpose: blurred text is unreadable, and there is one moment (entering focus) where a
+   message may still be on screen. */
+.mc-pocket-lock { position:absolute; inset:0; z-index:150; color:#edf4f8; display:grid; grid-template-rows:auto 1fr auto auto; justify-items:center; align-items:center; gap:12px;
+  padding:max(14px,env(safe-area-inset-top)) 24px max(18px,env(safe-area-inset-bottom));
+  touch-action:none; overscroll-behavior:none;
+  background:radial-gradient(120% 88% at 50% 46%, rgba(4,7,10,0) 0%, rgba(4,7,10,.28) 62%, rgba(4,7,10,.62) 100%);
+  opacity:calc(1 - var(--mc-pocket-drag, 0) * .75); }
+.mc-pocket-grab { display:grid; justify-items:center; gap:6px; opacity:0; transition:opacity 220ms ease-out; }
+.mc-pocket-lock.is-hinting .mc-pocket-grab, .mc-pocket-lock:active .mc-pocket-grab { opacity:.85; }
+.mc-pocket-grab > span { width:44px; height:5px; border-radius:3px; background:#ffffff59; }
+.mc-pocket-grab > small, .mc-pocket-foot { color:#b9c6cf; font-size:11px; }
+.mc-pocket-copy { display:grid; justify-items:center; gap:8px; text-align:center; max-width:34ch; }
+.mc-pocket-copy h2 { font-size:clamp(20px,4vw,26px); }
+.mc-pocket-copy p { color:#a7b2bd; font-size:13px; line-height:1.55; }
+.mc-pocket-foot { opacity:.75; }
+.mc-pocket-slider { width:min(260px,72vw); height:52px; border:1px solid #ffffff2e; background:#0b141bd9; border-radius:26px; position:relative; user-select:none; backdrop-filter:blur(6px); }
+.mc-pocket-slider > span { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding-left:34px; font-size:12px; color:#d4e2ea; pointer-events:none; }
+.mc-pocket-slider > button { position:absolute; inset:0 auto 0 0; width:52px; height:50px; display:grid; place-items:center; border:0; border-radius:50%; background:#8be5ef; color:#10171c; touch-action:none; }
 .mc-pocket-slider > button svg { transform:rotate(180deg); }
 @media (max-width:1023px) {
   .mc-canvas { grid-template-rows:56px minmax(0,1fr) auto; padding-bottom:env(safe-area-inset-bottom); }
@@ -344,11 +392,11 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
 .mc-now .mc-vinyl .mc-cover-fallback { inset:0; }
 .mc-now .mc-vinyl::before { content:''; position:absolute; inset:0; z-index:1; border-radius:50%; pointer-events:none; background:repeating-radial-gradient(circle at center,transparent 0 7px,#00000012 8px,transparent 9px 13px); box-shadow:inset 0 0 0 3px #0b15195c; }
 
-/* Mobile focus uses a text exit, never the fullscreen/expand glyph.
-   Artwork, Library and the Music/Lyrics actions remain available. */
+/* Mobile never shows the fullscreen/expand glyph. It also no longer shows a text exit in the
+   Lyrics panel: leaving focus on a phone is the Library button, and leaving locked focus is the
+   swipe-down / slide / Back gesture on the lock layer. */
 @media (max-width:1023px) {
   .mc-lyrics-expand { display:none; }
-  .mc-lyrics-exit { display:inline-flex; align-items:center; min-height:44px; }
 }
 
 /* One bright frosted surface, including the editable area. The selector beats

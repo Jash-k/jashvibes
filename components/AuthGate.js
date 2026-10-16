@@ -234,7 +234,17 @@ export default function AuthGate({ children }) {
   // same order on every route or React unwinds the whole tree on the way in and out.
   const veil = useLoadVeil(pathname);
 
-  if (pathname.startsWith('/admin')) return <>{children}</>;
+  if (pathname.startsWith('/admin')) {
+    // Admin skips the shell (no rail, no dock, no keyed route wrapper), but it is a destination
+    // like any other, so the ring is rendered here too — otherwise "every route" would quietly
+    // mean "every route except the one at the bottom of the rail".
+    return (
+      <>
+        {children}
+        {veil.visible ? <LoadVeil revealing={veil.revealing} label={veil.label || 'Admin'} /> : null}
+      </>
+    );
+  }
 
   const splash = splashPhase({ status, elapsedMs: splashElapsed });
 
@@ -251,7 +261,7 @@ export default function AuthGate({ children }) {
         <div key={pathname} className={`jv-route-content${veil.blurring ? ' is-loading' : ''}`} aria-busy={veil.blurring || undefined}>
           {children}
         </div>
-        {veil.visible && !veil.suppressed ? <LoadVeil revealing={veil.revealing} label={veil.label} /> : null}
+        {veil.visible ? <LoadVeil revealing={veil.revealing} label={veil.label} /> : null}
         {!ownsOwnChrome(pathname) ? <><DayNightToggle /><MobileDock /></> : null}
         <CommandPalette open={paletteOpen} onClose={setPaletteOpen} />
       </>

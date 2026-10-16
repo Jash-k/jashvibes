@@ -24,12 +24,14 @@ const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:3000';
       assert.equal(await page.evaluate(() => Boolean(document.fullscreenElement)), false, 'in-app focus, not a browser fullscreen request');
       assert(await page.getByRole('button', { name: 'Open Library', exact: true }).isVisible());
       if (width <= 900) {
+        // Mobile has no exit button in the Lyrics panel (removed on request). The glyph is hidden
+        // and the Library button is what leaves focus.
         assert.equal(await page.locator('.mc-lyrics-expand').isVisible(), false);
-        const exit = page.getByRole('button', { name: 'Exit focus', exact: true });
-        await exit.click();
-        await page.locator('.mc-app:not(.is-focus)').waitFor();
-        assert.equal(await page.getByRole('button', { name: 'Expand lyrics', exact: true }).isVisible(), false);
-        await page.getByRole('button', { name: 'Lyrics', exact: true }).click();
+        assert.equal(await page.locator('.mc-lyrics-exit').count(), 0, 'no text exit is rendered at all');
+        await page.getByRole('button', { name: 'Open Library', exact: true }).click();
+        await page.locator('.mc-app.is-library-open').waitFor();
+        await page.locator('.mc-library').getByRole('button', { name: 'Return to player', exact: true }).click();
+        await page.locator('.mc-app.is-focus:not(.is-library-open) .mc-lyrics').waitFor();
       } else {
         await page.getByRole('button', { name: 'Exit lyrics focus', exact: true }).click();
         await page.locator('.mc-app:not(.is-focus)').waitFor();

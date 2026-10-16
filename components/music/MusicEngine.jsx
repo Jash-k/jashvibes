@@ -19,7 +19,6 @@ import {
   MU_MINI_DRAG_CLOSE_PX,
   muCurtainPosition,
   muCurtainVars,
-  muLockView,
   muLyricRows,
   muQualityChips,
   normalizeSearchResults,
@@ -62,8 +61,6 @@ function useMusicController(enabled) {
   const songCacheRef = useRef(new Map());
   const prefetchingRef = useRef(new Set());
   const autoAdvanceRef = useRef(false);
-  const wakeLockRef = useRef(null);
-  const unlockHoldTimerRef = useRef(null);
   const activeLyricRef = useRef(null);
   const [query, setQuery] = useState('');
   const [home, setHome] = useState({ sections: [], artists: [], playlists: [], releases: { tracks: [], albums: [] } });
@@ -76,8 +73,6 @@ function useMusicController(enabled) {
   const dragStartRef = useRef(null);
   const [dragDy, setDragDy] = useState(0);
   const [showSongCrud, setShowSongCrud] = useState(false);
-  const [listeningMode, setListeningMode] = useState(false);
-  const [wakeLockStatus, setWakeLockStatus] = useState('idle');
   const [quality, setQuality] = useState('');
   const [status, setStatus] = useState('loading');
   const [searchStatus, setSearchStatus] = useState('idle');
@@ -96,30 +91,6 @@ function useMusicController(enabled) {
   const [cardHidden, setCardHidden] = useState(false);
   const [mSearch, setMSearch] = useState(false);
   const searchRef = useRef(null);
-  const [pocketMode, setPocketMode] = useState(false);
-  const [pocketHold, setPocketHold] = useState(0);
-  const pocketHoldRef = useRef(null);
-  useEffect(() => {
-    if (!pocketMode) return undefined;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previous; };
-  }, [pocketMode]);
-  function enterPocketMode() { if (playingTrack) setPocketMode(true); }
-  function startPocketUnlock() {
-    if (pocketHoldRef.current) clearInterval(pocketHoldRef.current);
-    const startedAt = Date.now();
-    setPocketHold(0.01);
-    pocketHoldRef.current = setInterval(() => {
-      const progress = (Date.now() - startedAt) / 1300;
-      if (progress >= 1) { clearInterval(pocketHoldRef.current); pocketHoldRef.current = null; setPocketHold(0); setPocketMode(false); }
-      else setPocketHold(Math.min(0.99, progress));
-    }, 50);
-  }
-  function cancelPocketUnlock() {
-    if (pocketHoldRef.current) { clearInterval(pocketHoldRef.current); pocketHoldRef.current = null; }
-    setPocketHold(0);
-  }
   const [lyricState, setLyricState] = useState({ status: 'idle', lyrics: '', data: {} });
   const [lyricRejection, setLyricRejection] = useState(0);
   const lyricController = useRef(null);
@@ -256,17 +227,7 @@ function useMusicController(enabled) {
   }, [active, showMiniPlayer]);
 
   useEffect(() => {
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && listeningMode) requestWakeLock();
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
-  }, [listeningMode]);
-
-  useEffect(() => {
     return () => {
-      try { wakeLockRef.current?.release?.(); } catch {}
-      if (unlockHoldTimerRef.current) window.clearTimeout(unlockHoldTimerRef.current);
     };
   }, []);
 
@@ -552,56 +513,6 @@ function useMusicController(enabled) {
     } else setMuted(true);
   }
 
-  async function requestWakeLock() {
-    if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) {
-      setWakeLockStatus('unsupported');
-      return false;
-    }
-    try {
-      if (wakeLockRef.current && !wakeLockRef.current.released) return true;
-      const lock = await navigator.wakeLock.request('screen');
-      wakeLockRef.current = lock;
-      setWakeLockStatus('active');
-      lock.addEventListener?.('release', () => {
-        if (listeningMode && document.visibilityState === 'visible') setWakeLockStatus('released');
-      });
-      return true;
-    } catch (error) {
-      setWakeLockStatus(error?.name === 'NotAllowedError' ? 'blocked' : 'error');
-      return false;
-    }
-  }
-
-  async function enableListeningMode() {
-    setListeningMode(true);
-    setWakeLockStatus('requesting');
-    await requestWakeLock();
-  }
-
-  async function disableListeningMode() {
-    setListeningMode(false);
-    setWakeLockStatus('idle');
-    if (unlockHoldTimerRef.current) window.clearTimeout(unlockHoldTimerRef.current);
-    unlockHoldTimerRef.current = null;
-    try { await wakeLockRef.current?.release?.(); } catch {}
-    wakeLockRef.current = null;
-  }
-
-  function toggleListeningMode() {
-    if (listeningMode) disableListeningMode();
-    else enableListeningMode();
-  }
-
-  function startUnlockHold() {
-    if (unlockHoldTimerRef.current) window.clearTimeout(unlockHoldTimerRef.current);
-    unlockHoldTimerRef.current = window.setTimeout(() => disableListeningMode(), 1500);
-  }
-
-  function cancelUnlockHold() {
-    if (unlockHoldTimerRef.current) window.clearTimeout(unlockHoldTimerRef.current);
-    unlockHoldTimerRef.current = null;
-  }
-
   function closeMiniPlayer() {
     // Stop attachment and invalidate pending current-track requests; retain personal data and queue.
     currentTrackRef.current = '';
@@ -618,16 +529,6 @@ function useMusicController(enabled) {
     lyricController.current.select(null);
     setShowMiniPlayer(false);
     setShowLyrics(false);
-  }
-
-  function wakeLockStatusText() {
-    if (wakeLockStatus === 'active') return 'Screen awake is active';
-    if (wakeLockStatus === 'requesting') return 'Requesting screen wake lock...';
-    if (wakeLockStatus === 'unsupported') return 'Wake Lock is not supported here, but touch lock is active';
-    if (wakeLockStatus === 'blocked') return 'Wake Lock blocked by browser/battery settings, touch lock is active';
-    if (wakeLockStatus === 'released') return 'Wake Lock was released; keep app visible to reactivate';
-    if (wakeLockStatus === 'error') return 'Wake Lock failed, touch lock is active';
-    return 'Touch lock active';
   }
 
   function openLyrics(force = false) {
@@ -869,13 +770,6 @@ function useMusicController(enabled) {
     const index = queueTracks.findIndex((track) => trackKey(track) === key);
     return index >= 0 ? (queueTracks[index + 1] || queueTracks[0]) : queueTracks[0];
   }, [queueTracks, playingTrack]);
-  const lockView = useMemo(() => muLockView({
-    pocketMode,
-    listeningMode,
-    wakeLockStatus,
-    hold: pocketHold,
-    nextTitle: upNext?.title || '',
-  }), [pocketMode, listeningMode, wakeLockStatus, pocketHold, upNext?.title]);
   const fromFacet = (id, fallback) => (facet.id === id && facet.items.length ? facet.items.length : fallback);
   const facetCounts = {
     albums: fromFacet('albums', home?.releases?.albums?.length || searchResults?.albums?.length || 0),
@@ -906,7 +800,7 @@ function useMusicController(enabled) {
   }
   function addToQueue(track) { setQueue((q) => dedupeQueue([...q, track])); }
   function backToAlbums() { ++collectionGeneration.current; collectionRequest.current?.abort(); setSelectedCollection(null); setCollectionStatus('idle'); setCenterTab('albums'); }
-  return { videoRef, home, status, error, setError, homeWarning, loadHome, query, setQuery, searchResults, searchStatus, selectedCollection, collectionStatus, openAlbum, openArtist, openPlaylist, backToAlbums, queueTracks, playTrack, playNext, playPrevious, addToQueue, retryTrack, closeMiniPlayer, playingTrack, activeKey, currentTime, duration, quality, setQuality, qualityChips, playerStatus, isPlaying, togglePlay, seekTo, volume, changeVolume, toggleMute, muted, shuffleEnabled, setShuffleEnabled, repeatMode, cycleRepeat, favorites, favoriteSet, favoriteTracks, recents, toggleFavorite, centerTab, setCenterTab, lyrics, lyricsData, lyricsStatus, openLyrics, rejectLyrics, syncedLyricLines, activeLyricLineIndex, lyricRows, plainLyricLines, lyricAutoScroll, setLyricAutoScroll, lyricOffset, setLyricOffset, activeLyricRef, lyricBlur, setLyricBlur, facetLists, facet, facets, loadFacet, allShelfSongs, shelfCollections, trending, loadTrending, fresh, loadFresh, refreshImportedPlaylists, listeningMode, toggleListeningMode, pocketMode, enterPocketMode, setPocketMode, showSongCrud, setShowSongCrud, crudQuery, setCrudQuery, addImportedTrack, replaceImportedTrack, removeImportedTrack };
+  return { videoRef, home, status, error, setError, homeWarning, loadHome, query, setQuery, searchResults, searchStatus, selectedCollection, collectionStatus, openAlbum, openArtist, openPlaylist, backToAlbums, queueTracks, playTrack, playNext, playPrevious, addToQueue, retryTrack, closeMiniPlayer, playingTrack, activeKey, currentTime, duration, quality, setQuality, qualityChips, playerStatus, isPlaying, togglePlay, seekTo, volume, changeVolume, toggleMute, muted, shuffleEnabled, setShuffleEnabled, repeatMode, cycleRepeat, favorites, favoriteSet, favoriteTracks, recents, toggleFavorite, centerTab, setCenterTab, lyrics, lyricsData, lyricsStatus, openLyrics, rejectLyrics, syncedLyricLines, activeLyricLineIndex, lyricRows, plainLyricLines, lyricAutoScroll, setLyricAutoScroll, lyricOffset, setLyricOffset, activeLyricRef, lyricBlur, setLyricBlur, facetLists, facet, facets, loadFacet, allShelfSongs, shelfCollections, trending, loadTrending, fresh, loadFresh, refreshImportedPlaylists, showSongCrud, setShowSongCrud, crudQuery, setCrudQuery, addImportedTrack, replaceImportedTrack, removeImportedTrack };
 
 }
 export default function MusicProvider({ children }) {

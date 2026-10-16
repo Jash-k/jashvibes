@@ -138,7 +138,14 @@ async function loadLib(files) {
   assert.equal(load.readLoad().label, 'ExTraS', 'the newest load survives a stale abort');
   load.abortLoad(second.id);
   assert.equal(load.readLoad().active, false, 'an uncommitted load can be dropped');
-  assert.equal(load.beginPendingLoad({ href: '/watch/movie/1', label: 'Watch' }).suppressed, true, 'full-bleed surfaces get no ring');
+  // Scope: every route, no exceptions. Watch, the embed browser and Admin are covered too, and
+  // the suppression switch that used to exclude them is gone rather than left as dead code.
+  load.__resetLoadProgress();
+  load.beginPendingLoad({ href: '/watch/movie/599', label: 'Watch' });
+  const watchLoad = load.readLoad();
+  assert.equal('suppressed' in watchLoad, false, 'the store must not score routes as un-ringable');
+  assert.equal(watchLoad.active, true);
+  assert.equal(load.beginPendingLoad({ href: '/admin', label: 'Admin' }).href, '/admin');
   load.__resetLoadProgress();
 
   // ── 4. the shell owns the chrome; pages must not draw their own ────────────
@@ -148,14 +155,24 @@ async function loadLib(files) {
   assert(gate.includes('key={pathname} className={`jv-route-content'), 'content wrapper must be keyed by pathname');
   assert(gate.includes('veil.blurring ? ' ), 'the wrapper must carry the blur while a switch is in flight');
   assert(gate.includes('<LoadVeil'), 'the shell must render the ring');
-  assert(gate.indexOf('<LoadVeil') > gate.indexOf('jv-route-content'), 'the ring must sit OUTSIDE the keyed wrapper, or it remounts mid-transition');
+  // Within the shell branch specifically: the first `<LoadVeil` in the file is Admin's copy.
+  const shellBranch = gate.slice(gate.indexOf('const showRail'), gate.indexOf('<CommandPalette'));
+  assert(shellBranch.includes('jv-route-content') && shellBranch.includes('<LoadVeil'));
+  assert(shellBranch.indexOf('<LoadVeil') > shellBranch.indexOf('jv-route-content'),
+    'the ring must sit OUTSIDE the keyed wrapper, or it remounts mid-transition');
   // Anchored on the early return itself: `pathname.startsWith('/admin')` also appears in
   // ownsOwnChrome near the top, and matching that would make this assertion meaningless.
-  assert(gate.indexOf('useLoadVeil(pathname)') < gate.indexOf("if (pathname.startsWith('/admin')) return"),
+  assert(gate.indexOf('useLoadVeil(pathname)') < gate.indexOf("if (pathname.startsWith('/admin')) {"),
     'the veil hook must run before the early returns — a conditional hook unwinds the tree');
   assert(/const RAIL_SECTIONS = \['\/', '\/vault', '\/extras', '\/stremio', '\/classics'\]/.test(gate));
   assert(/ownsOwnChrome[\s\S]{0,160}'\/music'[\s\S]{0,200}'\/admin'[\s\S]{0,200}'\/watch'[\s\S]{0,200}'\/embed-browser'/.test(gate));
   assert(gate.includes('BootSplash'), 'the checking state must render the splash, not a bare spinner');
+  // Admin returns before the shell branch, so it carries its own copy of the veil.
+  const adminBranch = gate.slice(gate.indexOf("if (pathname.startsWith('/admin')) {"), gate.indexOf("if (pathname.startsWith('/admin')) {") + 700);
+  assert(adminBranch.includes('<LoadVeil'), 'Admin is a destination too: the ring must be rendered there');
+  assert(!gate.includes('veil.suppressed'), 'no route may skip the ring');
+  const storeCode = read('lib/loadProgress.js');
+  assert(!storeCode.includes('NO_VEIL') && !storeCode.includes('suppressed'), 'no suppression switch left behind');
   assert(/<RailNav onOpenSearch=\{/.test(gate), 'the rail must be handed the palette opener');
 
   for (const file of [

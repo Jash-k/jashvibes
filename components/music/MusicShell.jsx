@@ -8,6 +8,7 @@ import { readSessionCache, writeSessionCache } from '@/lib/clientCache';
 import { useEffect, useRef, useState } from 'react';
 import { formatTime, QUALITY_LABELS } from '@/lib/musicCore';
 import { useMusic } from './MusicContext';
+import useWakeLock from './useWakeLock';
 import CanvasLibrary, { LIBRARY_TABS } from './CanvasLibrary';
 const CanvasLyrics = dynamic(() => import('./CanvasLyrics'));
 const PocketLock = dynamic(() => import('./PocketLock'));
@@ -80,6 +81,19 @@ export default function MusicShell() {
   const showLibrary = (value) => { setLibraryOpen(value); locationState(tab, value); };
   const showLyrics = (focus = true) => { setLibraryOpen(false); setFull(focus); setMode('lyrics'); locationState(tab, false, true, focus, 'lyrics'); };
   const showArtwork = () => { setLibraryOpen(false); setMode('artwork'); setFull(false); locationState(tab, false, true, false, 'artwork'); };
+  /**
+   * The Artwork/Lyrics choice. While focus is locked the choice still changes what stays
+   * sharp, but it must not change the layout or add a history entry — that would give the
+   * Back button something to pop other than the lock itself.
+   */
+  const chooseView = (view) => {
+    if (pocketLocked) {
+      setMode(view);
+      locationState(tab, false, false, true, view);
+      return;
+    }
+    if (view === 'artwork') showArtwork(); else showLyrics(true);
+  };
   useEffect(() => {
     if (!initialized.current) { initialized.current = true; return; }
     const timer = setTimeout(() => provider.current.setQuery(query), 320);
@@ -94,6 +108,50 @@ export default function MusicShell() {
     };
     window.addEventListener('keydown', keyboard); return () => window.removeEventListener('keydown', keyboard);
   }, [overlay, libraryOpen, tab, pocketLocked, full, mode]);
+  // ── focus mode (the lock button) ──────────────────────────────────────────
+  /**
+   * One button, three effects: blur every layer except the lyrics/sleeve, lock touches, and
+   * ask the browser to keep the screen awake. The pre-focus layout is remembered so unlocking
+   * puts the screen back exactly as it was.
+   */
+  const pocketReturn = useRef(null);
+  const pocketRef = useRef(false); pocketRef.current = pocketLocked;
+  const awake = useWakeLock(pocketLocked);
+
+  function enterPocket() {
+    if (!playing) return;
+    pocketReturn.current = { full, mode, libraryOpen, tab };
+    setOverlay('');
+    setLibraryOpen(false);
+    setFull(true);            // focus layout; the Artwork/Lyrics choice is kept as it is
+    setPocketLocked(true);
+    // One history entry, so Back leaves focus instead of leaving the Music section.
+    try { window.history.pushState({ ...window.history.state, jvFocus: 1 }, '', window.location.href); } catch { /* history unavailable */ }
+    // And keep the URL honest about the locked layout (replace, not push: the entry above is the
+    // one Back should pop). Without this, a rotate re-reads the old params and re-opens the library
+    // underneath the blur.
+    locationState(tab, false, false, true, mode);
+  }
+
+  function exitPocket(fromHistory = false) {
+    if (!pocketRef.current) return;
+    const back = pocketReturn.current;
+    pocketReturn.current = null;
+    setPocketLocked(false);
+    if (back) { setFull(back.full); setLibraryOpen(back.libraryOpen); setMode(back.mode); }
+    // A gesture exit has to give back the history entry we pushed; a Back exit is already there.
+    if (!fromHistory) {
+      locationState(back?.tab || tab, back?.libraryOpen ?? false, false, back?.full ?? false, back?.mode || mode);
+      try { window.history.back(); } catch { /* history unavailable */ }
+    }
+  }
+
+  useEffect(() => {
+    const onPop = () => { if (pocketRef.current) exitPocket(true); };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
   const libraryRef = useRef(null), savedFocus = useRef(null);
   useEffect(() => {
     if (!libraryOpen || !mobile) return;
@@ -123,7 +181,7 @@ export default function MusicShell() {
   const image = playing?.image || '';
   const quality = QUALITY_LABELS[music.quality] || music.quality || 'Source quality';
 
-  return <main className={`mc-app mc-style-${look.canvas} ${libraryOpen ? 'is-library-open' : ''} ${full ? 'is-focus' : ''}`} style={{ '--mc-art': image ? `url(${JSON.stringify(image)})` : 'none' }}>
+  return <main className={`mc-app mc-style-${look.canvas} ${libraryOpen ? 'is-library-open' : ''} ${full ? 'is-focus' : ''} ${pocketLocked ? 'is-pocket' : ''}`} style={{ '--mc-art': image ? `url(${JSON.stringify(image)})` : 'none' }}>
     <div className="mc-app-content">
       <RailNav />
       <MobileDock />
@@ -134,13 +192,13 @@ export default function MusicShell() {
           <div className={`mc-player ${mode === 'artwork' ? 'is-artwork-mode' : ''}`}>
             <section className="mc-now" aria-label="Now playing"><Cover item={playing} className={`mc-now-art mc-vinyl ${music.isPlaying ? 'is-spinning' : ''}`}/><div className="mc-now-text"><h1>{playing?.title || 'Find your next favourite'}</h1><p>{playing?.artists || 'Open the Library to choose a song'}</p>{playing ? <small>{quality}{music.playerStatus === 'loading' ? ' · Connecting…' : ''}</small> : <small>Tamil music · One uninterrupted queue</small>}</div></section>
             <CanvasLyrics music={music} look={look} update={update} full={full} onExpand={() => showLyrics(!full)} onSettings={() => setOverlay('settings')}/>
-            <div className="mc-player-modes" role="group" aria-label="Player view"><button type="button" aria-pressed={mode === 'artwork'} onClick={showArtwork}>Artwork</button><button type="button" aria-pressed={mode === 'lyrics'} onClick={() => showLyrics(true)}>Lyrics</button></div>
+            <div className="mc-player-modes" role="group" aria-label="Player view">{/* Stays sharp and live while focus is locked: it is the one control that changes what the lock shows. */}<button type="button" aria-pressed={mode === 'artwork'} onClick={() => chooseView('artwork')}>Artwork</button><button type="button" aria-pressed={mode === 'lyrics'} onClick={() => chooseView('lyrics')}>Lyrics</button></div>
           </div>
         </div>
         <footer className="mc-transport" aria-label="Playback controls">
           {music.playerStatus === 'error' ? <div className="mc-play-error" role="alert"><span>{music.error || 'Playback unavailable'}</span><button type="button" onClick={music.retryTrack}>Retry</button><button type="button" onClick={() => music.playNext()}>Skip</button></div> : null}
           <div className="mc-seek"><span>{formatTime(music.currentTime)}</span><input type="range" aria-label="Playback position" aria-valuetext={`${formatTime(music.currentTime)} of ${formatTime(music.duration)}`} min="0" max={music.duration || 1} step="0.1" value={Math.min(music.currentTime || 0, music.duration || 1)} disabled={!music.duration} onChange={(event) => music.seekTo(Number(event.target.value))}/><span>{formatTime(music.duration)}</span></div>
-          <div className="mc-transport-row"><button type="button" className="mc-mini-info" onClick={() => { if (libraryOpen) showLibrary(false); setMode('lyrics'); }} aria-label="Return to player"><Cover item={playing}/><span><strong>{playing?.title || 'Nothing playing'}</strong><small>{playing?.artists || 'Choose a song'}</small></span></button><div className="mc-transport-main"><IconButton icon="shuffle" label="Shuffle" active={music.shuffleEnabled} onClick={() => music.setShuffleEnabled(!music.shuffleEnabled)} disabled={!playing}/><IconButton icon="previous" label="Previous track" onClick={music.playPrevious} disabled={!playing}/><IconButton icon={music.isPlaying ? 'pause' : 'play'} label={music.isPlaying ? 'Pause' : 'Play'} className="mc-primary-play" onClick={music.togglePlay} disabled={!playing}/><IconButton icon="next" label="Next track" onClick={() => music.playNext()} disabled={!playing}/><IconButton icon="repeat" label={`Repeat: ${music.repeatMode}`} active={music.repeatMode !== 'off'} onClick={music.cycleRepeat} disabled={!playing}>{music.repeatMode === 'one' ? <sup>1</sup> : null}</IconButton><IconButton icon="heart" label={favorite ? 'Remove current track from favourites' : 'Save current track'} active={Boolean(favorite)} onClick={() => music.toggleFavorite(playing)} disabled={!playing}/><IconButton icon="lock" label="Enable pocket mode" className="mc-pocket-button" onClick={() => setPocketLocked(true)} disabled={!playing}/></div><label className="mc-volume"><MusicIcon name="volume"/><span className="sr-only">Volume</span><input type="range" min="0" max="1" step="0.01" value={music.muted ? 0 : music.volume} onChange={(event) => music.changeVolume(Number(event.target.value))}/></label></div>
+          <div className="mc-transport-row"><button type="button" className="mc-mini-info" onClick={() => { if (libraryOpen) showLibrary(false); setMode('lyrics'); }} aria-label="Return to player"><Cover item={playing}/><span><strong>{playing?.title || 'Nothing playing'}</strong><small>{playing?.artists || 'Choose a song'}</small></span></button><div className="mc-transport-main"><IconButton icon="shuffle" label="Shuffle" active={music.shuffleEnabled} onClick={() => music.setShuffleEnabled(!music.shuffleEnabled)} disabled={!playing}/><IconButton icon="previous" label="Previous track" onClick={music.playPrevious} disabled={!playing}/><IconButton icon={music.isPlaying ? 'pause' : 'play'} label={music.isPlaying ? 'Pause' : 'Play'} className="mc-primary-play" onClick={music.togglePlay} disabled={!playing}/><IconButton icon="next" label="Next track" onClick={() => music.playNext()} disabled={!playing}/><IconButton icon="repeat" label={`Repeat: ${music.repeatMode}`} active={music.repeatMode !== 'off'} onClick={music.cycleRepeat} disabled={!playing}>{music.repeatMode === 'one' ? <sup>1</sup> : null}</IconButton><IconButton icon="heart" label={favorite ? 'Remove current track from favourites' : 'Save current track'} active={Boolean(favorite)} onClick={() => music.toggleFavorite(playing)} disabled={!playing}/><IconButton icon="lock" label="Focus: blur everything but the lyrics or sleeve, lock touches, keep the screen awake" className="mc-pocket-button" onClick={enterPocket} disabled={!playing}/></div><label className="mc-volume"><MusicIcon name="volume"/><span className="sr-only">Volume</span><input type="range" min="0" max="1" step="0.01" value={music.muted ? 0 : music.volume} onChange={(event) => music.changeVolume(Number(event.target.value))}/></label></div>
           {look.motion ? <div className={`mc-signal ${music.isPlaying ? 'is-playing' : ''}`} aria-hidden="true">{Array.from({ length: 72 }, (_, i) => <i key={i} style={{ '--bar-height': `${10 + ((i * 17) % 31)}px`, '--bar-delay': `${(i % 9) * -0.12}s`, '--bar-color': `hsl(${200 - i * 2.5} 78% 65%)` }}/>)}</div> : null}
         </footer>
 
@@ -157,7 +215,7 @@ export default function MusicShell() {
         <button type="button" className="mc-button is-quiet" onClick={() => update(DEFAULT_LOOK)}>Reset appearance</button>
       </div>}
     </Sheet> : null}
-    {pocketLocked ? <PocketLock onUnlock={() => setPocketLocked(false)}/> : null}
+    {pocketLocked ? <PocketLock awake={awake} onUnlock={() => exitPocket()}/> : null}
     <div className={`mc-notice ${notice ? 'is-visible' : ''}`} role="status" aria-live="polite">{notice}</div>
   </main>;
 }

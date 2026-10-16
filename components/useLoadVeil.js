@@ -30,7 +30,7 @@ export default function useLoadVeil(pathname) {
   useEffect(() => subscribeLoad(() => setState((prev) => {
     const next = coarse(readLoad());
     const same = prev.visible === next.visible && prev.revealing === next.revealing
-      && prev.label === next.label && prev.suppressed === next.suppressed;
+      && prev.label === next.label;
     return same ? prev : next;
   })), []);
 
@@ -43,6 +43,5 @@ function coarse(load) {
     revealing: Boolean(load.done),
     blurring: load.visible && !load.done,
     label: load.label,
-    suppressed: load.suppressed,
   };
 }

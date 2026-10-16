@@ -1,3 +1,35 @@
+## Music focus mode — blur, lock, wake (2026-10-16)
+
+Requested: *"remove the exit focus button in the mobile UI's lyrics panel … when I click the button all
+UI is blurred, only lyrics or album art depends what I choose … and the mobile screen won't turn off."*
+
+- **The lock button is now focus mode.** One press does three things: every layer except the lyrics (or
+  the sleeve, in artwork mode) blurs, touches lock, and the browser is asked to keep the screen awake.
+  Nothing is destroyed — unlocking restores the layout you were in, including the library.
+- **The Artwork/Lyrics choice decides what stays sharp**, and the toggle itself stays sharp *and live*
+  above the touch guard (`z-index:170` over the guard's `150`) so the choice can be changed without
+  unlocking. It is the only interactive element while locked; the guard is a `region`, not an
+  `aria-modal` dialog, because claiming modality while leaving a control outside would lie to AT.
+- **Four ways out:** swipe down anywhere (the vignette fades as you pull), slide the puck right,
+  Escape, or Back. Focus pushes exactly one history entry, so Back leaves focus instead of leaving
+  Music; a gesture exit hands that entry back. A locked screen with no exit would have been a trap.
+- **The mobile Lyrics panel has no exit button any more** (`mc-lyrics-exit` is gone from the component,
+  and the mobile rule that revealed it is deleted). On a phone, the Library button leaves focus and the
+  gestures above leave locked focus. The desktop expand glyph is unchanged.
+- **Screen awake** is `lib/wakeLock.js`: requested inside the click (the API requires a user gesture),
+  released when focus ends or the section is left, re-taken when the tab returns. iOS before 16.4 and
+  refusals are surfaced, so the screen says "This browser will not hold the screen awake" instead of
+  promising something it cannot do. No silent-video hack.
+- **Removed as verified-dead while in there:** `MusicEngine`'s older `pocketMode` / `listeningMode`
+  prototype, its second wake-lock implementation and the `muLockView` helper it fed — that memo was
+  computed and never read, and nothing outside the engine referenced any of it. Leaving a second,
+  unrelated pocket implementation beside the new one is how two behaviours start fighting.
+- **New guard:** `scripts/test-music-pocket.cjs` (in `npm run verify`) drives the wake lock for real and
+  pins the blur map, the layering, the four exits and the removals. Writing it found a real bug: a
+  visibility change arriving while a lock request was still unanswered fired a **second** request, and
+  the extra sentinel was unreachable — a leaked wake lock. The controller now allows one request at a
+  time. The two opt-in Playwright music passes were updated to leave focus the way mobile now does.
+
 ## The ring — one progress bar for the whole app (2026-10-13, second pass)
 
 Requested design: *"the section in background with blur, our logo blink, and the ring light along
@@ -39,6 +71,18 @@ with the logo works as progress bar; when the light completes the circle … sho
   remount on the commit — a blink at exactly the worst frame.
 - `api` tracking counts same-origin `/api` requests only (byte proxies, `/api/auth` and `/api/health`
   excluded), installed at module scope so the first section's requests are counted too.
+
+### Scope: every route, no exceptions
+- The ring now covers **Watch, the embed browser and Admin** as well. Those three were briefly
+  excluded because they own their whole screen, and the owner asked for them too, so the exclusion
+  was removed rather than left behind as a dead switch (`suppressed` / `NO_VEIL` are gone from
+  `lib/loadProgress.js`).
+- Admin returns before the shell branch in `AuthGate` (no rail, no dock, no keyed wrapper), so it
+  carries its own copy of the veil — otherwise "every route" would quietly have meant "every route
+  except the one at the bottom of the rail".
+- Worth knowing: Watch and Admin already print their own loading text ("Resolving…", the admin
+  gate), so on those two the ring and that text are briefly on screen together. Blur is unchanged —
+  those pages have no `.jv-route-content` wrapper, so nothing there is blurred, only ringed.
 
 ### Checks
 - `scripts/test-loading-system.cjs` grew real behavioural tests (it loads `lib/loadProgress.js` and

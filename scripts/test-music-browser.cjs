@@ -42,7 +42,9 @@ const assert = require('node:assert/strict');
  assert(geometry.body<=geometry.height+1,JSON.stringify(geometry));assert(geometry.width<=geometry.inner+1);assert(geometry.transport<=geometry.height+1);
  await page.locator('.mc-library').getByRole('button',{name:'Return to player',exact:true}).click();
  await page.waitForTimeout(200);assert(await page.locator('.mc-lyric-lines li').count()>0);
- await page.getByRole('button',{name:viewport.width<=900?'Exit focus':'Exit lyrics focus',exact:true}).click();
+ // Desktop leaves focus with the glyph; mobile leaves it with the Library button (no exit button there).
+ if (viewport.width<=900) { await page.getByRole('button',{name:'Open Library',exact:true}).click(); }
+ else { await page.getByRole('button',{name:'Exit lyrics focus',exact:true}).click(); }
  await page.getByRole('button',{name:'Lyrics',exact:true}).click();
  assert.deepEqual(errors,[]);console.log('PASS',viewport,geometry);if(process.env.MUSIC_SCREENSHOTS) { require('node:fs').mkdirSync(process.env.MUSIC_SCREENSHOTS,{recursive:true}); await page.screenshot({path:`${process.env.MUSIC_SCREENSHOTS}/music-${viewport.width}.png`}); }await page.close();
  }
