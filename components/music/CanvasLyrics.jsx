@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parseSyncedLyrics, trackKey } from '@/lib/musicCore';
-import { IconButton, Status } from './CanvasBits';
+import { IconButton, MusicIcon, Status } from './CanvasBits';
 
 /*
  * The lyric stage.
@@ -13,20 +13,29 @@ import { IconButton, Status } from './CanvasBits';
  * has something to do next instead of an empty column:
  *
  *   found        lines, with the karaoke highlight when the source carried timing
- *   not found    the reason the lookup could not accept anything, plus
- *                "Try again" and "Paste lyrics"
+ *   not found    the reason the lookup could not accept anything, plus retry
  *   unavailable  a provider failure (retryable), never confused with "no lyrics"
  *
- * Saved lyrics live on this device (localStorage) so a viewer can fix a song
+ * The stage prints words only where they are the content: the lyric lines and the
+ * empty state. Its controls are symbols — the panel is for reading, not for reading
+ * about. Saved lyrics live on this device (localStorage) so a viewer can fix a song
  * themselves; the owner panel saves them for everyone.
+ *
+ * The one control that needed more than a symbol is the record list behind
+ * "Available": LRCLIB keeps several records for the same song (a live cut, another
+ * album, a different vocal) and the strict matcher only ever shows one of them, so
+ * the list is the way to a record it refused. A row is only a *choice*: nothing is
+ * written until the tick is pressed.
  */
 
 const OWN_KEY = 'jash_own_lyrics_v1';
 
+const EMPTY_PICKER = { status: 'idle', candidates: [], autoId: '', savedId: '', current: 'auto', message: '' };
+
 /**
- * The records the picker has listed for a song, kept per song so opening the panel again — or
- * switching to the library and back — never asks the provider twice. Cleared on a reload of the
- * page; the saved choice itself lives in the database, not here.
+ * The records the list has found for a song, kept per song so opening it again — or switching to
+ * the library and back — never asks the provider twice. Cleared on a reload of the page; the saved
+ * choice itself lives in the database, not here.
  */
 const CANDIDATE_CACHE = new Map();
 
@@ -35,14 +44,11 @@ const mmss = (seconds) => {
   return total ? `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}` : '';
 };
 
-/** One line per record: what it is, and whether it carries timings. */
-function candidateLabel(candidate = {}, wanted = {}) {
-  const title = candidate.title || wanted.title || 'Untitled record';
-  const bits = [title];
-  if (candidate.artist && candidate.artist !== wanted.artist) bits.push(candidate.artist);
-  const kind = candidate.synced ? 'Synced' : 'Plain';
-  const length = mmss(candidate.duration);
-  return `${bits.join(' — ')} · ${kind}${length ? ` · ${length}` : ''}`;
+/** What a row says: the record's own title, and its artist when it is not the song's. */
+function recordLine(candidate = {}, wanted = {}) {
+  const title = candidate.title || wanted.title || '';
+  const artist = candidate.artist && candidate.artist !== wanted.artist ? candidate.artist : '';
+  return artist ? `${title} — ${artist}` : title;
 }
 
 function readOwn() {
@@ -93,20 +99,24 @@ export default function CanvasLyrics({ music, look, update, full, onExpand, onSe
   const synced = lines.length > 0 && lines[0].time != null;
   const mine = ownLines.length > 0;
 
-  // ── the picker: every record LRCLIB offers for this song ───────────────────
-  const [picker, setPicker] = useState({ status: 'idle', candidates: [], autoId: '', savedId: '', current: 'auto', message: '' });
+  // ── the record list: every record LRCLIB offers for this song ───────────────
+  const [picker, setPicker] = useState(EMPTY_PICKER);
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState('');
   const [picking, setPicking] = useState(false);
-  const [pickerNote, setPickerNote] = useState('');
+  const [failed, setFailed] = useState(false);
   const wanted = music.lyricSong || {};
 
   useEffect(() => {
-    setPickerNote('');
-    if (!key) { setPicker({ status: 'idle', candidates: [], autoId: '', savedId: '', current: 'auto', message: '' }); return; }
+    setOpen(false);
+    setPicked('');
+    setFailed(false);
+    if (!key) { setPicker(EMPTY_PICKER); return; }
     const cached = CANDIDATE_CACHE.get(key);
     if (cached) { setPicker(cached); return; }
-    setPicker({ status: 'loading', candidates: [], autoId: '', savedId: '', current: 'auto', message: '' });
+    setPicker({ ...EMPTY_PICKER, status: 'loading' });
     const controller = new AbortController();
-    // Deferred: the lyrics themselves come first, and the lookup never competes with that request.
+    // Deferred: the lyrics themselves come first, and this never competes with that request.
     const timer = setTimeout(() => {
       const params = new URLSearchParams({ candidates: '1', title: wanted.title || '', artist: wanted.artist || '',
         album: wanted.album || '', duration: wanted.duration ? String(wanted.duration) : '', id: wanted.id || '' });
@@ -119,44 +129,40 @@ export default function CanvasLyrics({ music, look, update, full, onExpand, onSe
           if (data?.ok) CANDIDATE_CACHE.set(key, next);
           setPicker(next);
         })
-        .catch(() => { if (!controller.signal.aborted) setPicker({ status: 'error', candidates: [], autoId: '', savedId: '', current: 'auto', message: 'Could not list the other lyrics just now.' }); });
+        .catch(() => { if (!controller.signal.aborted) setPicker({ ...EMPTY_PICKER, status: 'error', message: 'Could not reach the lyrics provider.' }); });
     }, 1400);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [key, wanted.title, wanted.artist, wanted.album, wanted.duration, wanted.id]);
 
-  function forgetCandidates() { CANDIDATE_CACHE.delete(key); }
+  // A failure has no sentence to print, so the tick carries it: red for a moment, and the words
+  // go to assistive tech only.
+  useEffect(() => {
+    if (!failed) return;
+    const timer = setTimeout(() => setFailed(false), 4000);
+    return () => clearTimeout(timer);
+  }, [failed]);
 
-  async function choose(choice) {
-    if (!choice || picking) return;
+  /** The record this song is using right now: the saved choice, or the automatic match. */
+  const currentId = picker.current === 'saved' ? (picker.savedId || '') : picker.autoId;
+
+  async function commit() {
+    if (!picked || picking || picked === currentId) return;
     setPicking(true);
-    setPickerNote('');
     try {
-      if (choice === 'auto') {
-        const response = await fetch('/api/music/lyrics', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'clear', ...wanted }) });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data.ok) throw new Error(data.message || 'Could not go back to the automatic match.');
-        // A pick saved for this song only matters while it exists; the panel reloads from the provider.
-        forgetCandidates();
-        setPicker({ status: 'loading', candidates: [], autoId: '', savedId: '', current: 'auto', message: '' });
-        setPickerNote('Back to the automatic match.');
-        await music.reloadLyrics?.();
-        return;
-      }
       const response = await fetch('/api/music/lyrics', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'choose', candidateId: choice, ...wanted }) });
+        body: JSON.stringify({ action: 'choose', candidateId: picked, ...wanted }) });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.ok) throw new Error(data.message || 'Could not save that choice.');
-      // A pasted copy on this device would otherwise keep hiding the record just chosen.
-      if (saved) { saveSaved(null); setPickerNote('Your pasted lyrics on this device were replaced by the record you picked.'); }
-      else setPickerNote(`Saved for this song — ${data.synced ? 'synced' : 'plain'} lyrics.`);
-      forgetCandidates();
-      const fresh = { status: 'ready', candidates: picker.candidates, autoId: picker.autoId, savedId: choice, current: 'saved', message: '' };
-      CANDIDATE_CACHE.set(key, fresh);
-      setPicker(fresh);
+      // A copy pasted on this device would otherwise keep hiding the record just chosen.
+      if (saved) saveSaved(null);
+      const next = { status: 'ready', candidates: picker.candidates, autoId: picker.autoId, savedId: picked, current: 'saved', message: '' };
+      CANDIDATE_CACHE.set(key, next);
+      setPicker(next);
+      setPicked('');
+      setOpen(false);
       await music.reloadLyrics?.();
-    } catch (error) {
-      setPickerNote(error.message || 'Could not change the lyrics.');
+    } catch {
+      setFailed(true);
     } finally {
       setPicking(false);
     }
@@ -187,6 +193,11 @@ export default function CanvasLyrics({ music, look, update, full, onExpand, onSe
     setPasting(false);
   }
 
+  function openPaste() {
+    setDraft(saved ? (saved.syncedLyrics || saved.plainLyrics || '') : '');
+    setPasting(true);
+  }
+
   const reasonText = {
     'missing-metadata': 'This song arrived without a title or artist, so there was nothing safe to search for.',
     'not-in-catalogue': 'LRCLIB does not carry this song. Nothing else is substituted for it.',
@@ -198,7 +209,41 @@ export default function CanvasLyrics({ music, look, update, full, onExpand, onSe
     {/* Desktop keeps the expand glyph as its focus control. Mobile deliberately has no
         visible exit here: the Library button leaves focus, and the lock button's focus mode
         is the one with a gesture to leave. */}
-    <header><h2>Lyrics <small>{mine ? 'Your lyrics' : synced ? 'Synced' : lines.length ? 'Plain lyrics' : ''}</small></h2><div className="mc-lyric-tools"><button className="mc-text-button" type="button" aria-label="Lyrics text settings" onClick={onSettings}>Aa</button><label><span className="sr-only">Lyrics style</span><select value={look.canvas} onChange={(event) => update({ canvas: event.target.value })}><option value="bloom">Bloom</option><option value="cinema">Cinema</option><option value="noir">Noir</option></select></label><IconButton className="mc-lyrics-expand" icon="expand" label={full ? 'Exit lyrics focus' : 'Expand lyrics'} active={full} onClick={onExpand}/></div></header>
+    <header><h2>Lyrics</h2><div className="mc-lyric-tools">
+      <button className="mc-lyric-available" type="button" aria-label="Available lyrics" aria-expanded={open}
+        disabled={!key} onClick={() => setOpen((value) => !value)}>
+        <MusicIcon name="queue" size={18}/><span>Available</span>
+      </button>
+      <button className="mc-text-button" type="button" aria-label="Lyrics text settings" onClick={onSettings}>Aa</button>
+      <label><span className="sr-only">Lyrics style</span><select value={look.canvas} onChange={(event) => update({ canvas: event.target.value })}><option value="bloom">Bloom</option><option value="cinema">Cinema</option><option value="noir">Noir</option></select></label>
+      <IconButton className="mc-lyrics-expand" icon="expand" label={full ? 'Exit lyrics focus' : 'Expand lyrics'} active={full} onClick={onExpand}/>
+    </div></header>
+    {/* The list opens inside the panel, so it is the same list on a phone and on a desktop and it
+        can never be clipped or float over a different section. */}
+    {open ? (
+      <div className="mc-lyric-pop" role="dialog" aria-label="Available lyrics">
+        {picker.status === 'loading' ? <span className="mc-lyric-pop-state" role="status"><MusicIcon name="refresh" size={16}/><span className="sr-only">Looking for other records</span></span> : null}
+        {picker.status === 'error' ? <span className="mc-lyric-pop-state is-error" role="status"><MusicIcon name="close" size={16}/><span className="sr-only">{picker.message || 'Could not list the records.'}</span></span> : null}
+        {picker.status === 'ready' && !picker.candidates.length ? <span className="mc-lyric-pop-state" role="status"><MusicIcon name="queue" size={16}/><span className="sr-only">No other records for this song</span></span> : null}
+        {picker.status === 'ready' && picker.candidates.length ? <>
+          <ul className="mc-lyric-pop-list">
+            {picker.candidates.map((candidate) => <li key={candidate.id}>
+              <button type="button" className={`mc-lyric-option ${picked === candidate.id ? 'is-picked' : ''} ${currentId === candidate.id ? 'is-current' : ''}`}
+                aria-pressed={picked === candidate.id} onClick={() => setPicked(candidate.id)}>
+                <MusicIcon name={candidate.synced ? 'wave' : 'text'} size={16}/>
+                <span className="mc-lyric-option-title">{recordLine(candidate, wanted)}</span>
+                <span className="mc-lyric-option-time">{mmss(candidate.duration)}</span>
+              </button>
+            </li>)}
+          </ul>
+          <div className="mc-lyric-pop-actions">
+            <IconButton className={`mc-lyric-save ${failed ? 'is-error' : ''}`} icon={failed ? 'close' : 'check'}
+              label={failed ? 'Could not save that choice' : 'Use these lyrics for this song'}
+              disabled={!picked || picking || picked === currentId} onClick={commit}/>
+          </div>
+        </> : null}
+      </div>
+    ) : null}
     <div className="mc-lyric-scroll" ref={scroll} tabIndex={0} aria-label="Lyrics text" onWheel={() => setFollowing(false)} onTouchStart={() => setFollowing(false)} onKeyDown={(event) => { if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown'].includes(event.key)) setFollowing(false); }}>
       {!music.playingTrack ? <Status title="Your music, in focus">Choose a track from the Library to start listening.</Status>
         : loading ? <Status title="Finding lyrics…">{settled ? music.lyricsData?.message : ''}</Status>
@@ -209,7 +254,7 @@ export default function CanvasLyrics({ music, look, update, full, onExpand, onSe
                   {reasonText || music.lyricsData?.message || 'You can keep listening, try again, or paste the lyrics yourself.'}
                 </Status>
                 <div className="mc-lyric-miss-actions">
-                  <button className="mc-text-button" type="button" onClick={() => { setPasting(true); setDraft(''); }}>Paste lyrics</button>
+                  <IconButton icon="add" label="Paste these lyrics yourself" disabled={pasting} onClick={openPaste}/>
                 </div>
               </div>
             ) : (
@@ -227,45 +272,12 @@ export default function CanvasLyrics({ music, look, update, full, onExpand, onSe
         </div>
       ) : null}
     </div>
+    {/* Symbols only, and nothing else: a line of status words under a lyric is one more thing
+        between the reader and the song. Secrets that must be announced go to screen readers. */}
     <footer>
-      {lines.length && settled && music.lyricsData?.message ? <span role="status">{music.lyricsData.message}</span> : null}
-      {/* The picker. It replaces the old "Wrong lyrics?" device-level rejection: instead of
-          refusing one record and hoping the retry picks better, you see every record LRCLIB has
-          — each one's title, and whether it carries timings — and choose. The choice is saved for
-          everyone, so a phone and a desktop show the same lyrics, and it is the only way the
-          footer changes size: one row, at every width. */}
-      {(picker.status === 'ready' || picker.current === 'saved') && (picker.current === 'saved' || picker.candidates.length) ? <div className="mc-picker">
-        <label className="mc-picker-field">
-          <span className="sr-only">Choose the lyrics for this song</span>
-          <select value={picker.current === 'saved' ? (picker.savedId || '') : ''} disabled={picking}
-            onChange={(event) => { const value = event.target.value; if (value) choose(value); }}>
-            {picker.current === 'saved' ? <>
-              <option value="">{picker.savedId ? 'Saved lyrics — pick another record' : 'Saved lyrics — pick the record to pin'}</option>
-              {picker.candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidateLabel(candidate, wanted)}</option>)}
-              <option value="auto">Automatic — let the app match it again</option>
-            </> : <>
-              <option value="">{picker.candidates.length === 1 ? '1 record available for this song' : `${picker.candidates.length} records available — pick one`}</option>
-              {picker.candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidateLabel(candidate, wanted)}{candidate.id === picker.autoId ? ' · showing now' : ''}</option>)}
-            </>}
-          </select>
-        </label>
-      </div> : null}
-
-      {/* The quiet states stay on the footer's own row so the footer only ever gains a second row
-          when there is a real list to choose from. */}
-      {picker.status === 'ready' && picker.current !== 'saved' && !picker.candidates.length ? <span className="mc-picker-empty">{picker.message || 'Only one record exists for this song, and it is the one showing.'}</span> : null}
-      {picker.status === 'loading' && !mine ? <span className="mc-picker-empty">Looking for other versions…</span> : null}
-      {picker.status === 'error' ? <span className="mc-picker-empty">{picker.message || 'Could not list the other lyrics.'}</span> : null}
-      {mine ? <button className="mc-text-button" type="button" onClick={() => { setPasting(true); setDraft(saved?.syncedLyrics || saved?.plainLyrics || ''); }}>Edit my lyrics</button> : null}
-      {/* One button, both kinds of saved lyrics: a paste on this device, or a record chosen for
-          everyone. Either way it is the owner's lyrics, and removing them goes back to the match. */}
-      {mine ? <button className="mc-text-button" type="button" onClick={() => saveSaved(null)}>Remove my lyrics</button>
-        : picker.current === 'saved' ? <button className="mc-text-button" type="button" disabled={picking} onClick={() => choose('auto')}>Remove my lyrics</button>
-        : null}
-      {!lines.length ? <button className="mc-text-button" type="button" disabled={pasting} onClick={() => { setPasting(true); setDraft(''); }}>Paste lyrics</button> : null}
-      {synced && !following ? <button className="mc-button" type="button" onClick={() => setFollowing(true)}>Resume follow</button> : <span>{mine ? 'Saved on this device' : picker.current === 'saved' ? 'Saved for everyone' : synced ? 'Tap a line to seek' : lines.length ? 'Timing is not available for these lyrics' : ''}</span>}
-      <IconButton icon="refresh" label="Refresh lyrics" disabled={!key || music.lyricsStatus === 'loading' || mine || picker.current === 'saved'} onClick={() => music.openLyrics(true)} />
-      {pickerNote ? <p className="mc-picker-note" role="status">{pickerNote}</p> : null}
+      <IconButton icon="add" label={mine ? 'Change my lyrics' : 'Paste my own lyrics'} disabled={!key || pasting} onClick={openPaste}/>
+      {synced && !following ? <IconButton icon="follow" label="Follow the playing line again" onClick={() => setFollowing(true)}/> : null}
+      <IconButton icon="refresh" label="Look for the lyrics again" disabled={!key || music.lyricsStatus === 'loading' || mine || picker.current === 'saved'} onClick={() => music.openLyrics(true)}/>
     </footer>
   </section>;
 }

@@ -149,8 +149,10 @@ function fakeWakeLockEnv({ supported = true, failWith = null } = {}) {
   for (const selector of ['.mc-topbar', '.mc-library-dock', '.mc-transport', '.mc-now-text', '.mc-lyrics > header', '.mc-lyrics > footer', '.jv-rail', '.mobile-dock']) {
     assert(css.includes(`.mc-app.is-pocket ${selector}`), `${selector} must blur in focus mode`);
   }
-  assert(/\.mc-app\.is-pocket \.mc-player:not\(\.is-artwork-mode\) \.mc-now-art \{[^}]*filter:blur/.test(css),
-    'in lyrics mode the sleeve is chrome too and must blur');
+  assert(/\.mc-player:not\(\.is-artwork-mode\) \.mc-now-art \{ display:none; \}/.test(css),
+    'the lyrics view renders no artwork at all: the panel is lyrics, so there is nothing to blur');
+  assert(!/\.mc-app\.is-pocket \.mc-player:not\(\.is-artwork-mode\) \.mc-now-art/.test(css),
+    'the sleeve blur rule for lyrics mode went with the sleeve itself');
   assert(!/\.mc-app\.is-pocket \.mc-now \{[^}]*blur/.test(css),
     'the sleeve must not be blurred wholesale: artwork mode keeps it sharp');
   assert(/\.mc-app\.is-pocket \.mc-lyric-scroll/.test(css) === false, 'the lyrics themselves must never blur');
@@ -172,12 +174,10 @@ function fakeWakeLockEnv({ supported = true, failWith = null } = {}) {
   assert(!/\.mc-app\.is-focus \.mc-now \{/.test(css),
     'focus must not re-arrange the now-playing block on phones either');
   for (const size of [
-    '.mc-now-art { width:clamp(110px,13vw,190px)',
-    '.mc-now-art { width:auto; height:min(25dvh,220px)',
     '.mc-player.is-artwork-mode .mc-now-art { width:auto; height:min(36dvh,360px)',
     '.mc-player.is-artwork-mode .mc-now-art { height:min(43dvh,400px)',
     '.mc-player.is-artwork-mode .mc-now-art { width:auto; height:min(38dvh,260px)',
-  ]) assert(css.includes(size), `the sleeve keeps its unlocked size: missing ${size}`);
+  ]) assert(css.includes(size), `the disc keeps its unlocked size: missing ${size}`);
   // The artwork is a disc, so the sleeve rules must not leave it square: one aspect ratio, no explicit height in lyrics mode.
   assert(!/\.mc-app\.is-focus \.mc-now-art[^}]*height/.test(css), 'no focus rule may pin the sleeve height');
 

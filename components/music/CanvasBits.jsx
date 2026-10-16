@@ -14,6 +14,11 @@ export function MusicIcon({ name, size = 22 }) {
     settings: 'M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6', library: 'M4 4h6v16H4zM14 4l5-1 3 16-5 1z',
     expand: 'M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5', volume: 'M4 9h4l5-4v14l-5-4H4zM17 8a6 6 0 010 8',
     home: 'M3 11l9-8 9 8M5 10v11h5v-7h4v7h5V10', live: 'M4 6h16v14H4zM8 2l4 4 4-4', refresh: 'M20 7v5h-5M20 12a8 8 0 10-2 6',
+    // The lyrics list is symbol-only: a tick saves, a waveform means the record is timed, three
+    // staggered lines mean it is plain text, and the crosshair puts the highlight back on the
+    // playing line.
+    check: 'M5 13l4 4L19 7', wave: 'M4 12h2l2-5 3 10 3-14 3 9h3', text: 'M5 7h14M5 12h14M5 17h9',
+    follow: 'M12 3v3M12 18v3M3 12h3M18 12h3M12 8a4 4 0 100 8 4 4 0 000-8',
   };
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name] || paths.play} /></svg>;
 }

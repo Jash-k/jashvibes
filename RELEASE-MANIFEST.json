@@ -1,6 +1,6 @@
 {
   "version": "11.0.0",
-  "release": "admin-controls",
+  "release": "lyrics-panel",
   "baselineCommit": "c6653cc1732448cd2ea295762b4bdf9ef38a8e5b",
   "verifiedOn": "2026-10-16",
   "verification": {
@@ -477,8 +477,8 @@
       "sha256": "383f74feef0a8f0969e4820c346ce1f6fd84eb4d929ecf770eb283ca8d33abd6"
     },
     "CHANGELOG.md": {
-      "bytes": 23644,
-      "sha256": "71187ba8047f16e0c633a9a7a7ae06159a4971f310d026bfce0d1dafd4c0132d"
+      "bytes": 26370,
+      "sha256": "0a3c799426a3755e51db743334940d5c43fb5e6ec0ab7f9e83d5cffeab100b78"
     },
     "components/admin/admin.css": {
       "bytes": 23182,
@@ -609,20 +609,20 @@
       "sha256": "ec9f52ae6d35629bed34ba9663134e12e68a8d68ed7a588f575ea469539861b2"
     },
     "components/music/CanvasBits.jsx": {
-      "bytes": 6597,
-      "sha256": "4fc39ed0cb075df38a321ecc7edc3f49bfd90f7f237605e2c21d24eaa76b181f"
+      "bytes": 6983,
+      "sha256": "d111a78816cfc6c39adbd58e479679040f0e05062523b87d8c9ae60b4c78ed8b"
     },
     "components/music/CanvasLibrary.jsx": {
       "bytes": 8538,
       "sha256": "522f7060e9a978ffe41ca5256b94f39c79f893ad0d4c997a10e5dc0ef4dff3f9"
     },
     "components/music/CanvasLyrics.jsx": {
-      "bytes": 17920,
-      "sha256": "9d7941246ea47c50fbbc80644f6ec8649aa5ac88c558db8a4ea7bd728424fa8b"
+      "bytes": 16658,
+      "sha256": "0a21ee2a36153ddb70b44559096acefd7e8fa26877139a3f2237b2386c4e091a"
     },
     "components/music/music-canvas.css": {
-      "bytes": 33341,
-      "sha256": "b114f0d5bfacd2e5cc6e4c81dd62aa29a992e715e463b4fa1bcf02e021def658"
+      "bytes": 34749,
+      "sha256": "9649acb2e23dcc820a067f123c50570175cf01833a28bc1852c2be8ab5812cc7"
     },
     "components/music/MusicContext.jsx": {
       "bytes": 263,
@@ -789,8 +789,8 @@
       "sha256": "0c4956c4ca9d5077fb6e91d8e3a1cd5ffe114f61f949dc2f12bb9fdaeb049c66"
     },
     "docs/MUSIC-CANVAS.md": {
-      "bytes": 8006,
-      "sha256": "346b5127b30ef55ce8a6c2cc0f0663c8f91e2b32e5bad42aca25a9549477d800"
+      "bytes": 9065,
+      "sha256": "aa8f30370ef417f1901fe8a2343e8b067963faa85e3a82ac780dbabce6bc2568"
     },
     "docs/music-native-navigation.md": {
       "bytes": 2556,
@@ -813,8 +813,8 @@
       "sha256": "ffc14e4cb83b1f741cc8aec125f341e7c32f6878f707709eecf148e3788aa2c6"
     },
     "docs/TESTING.md": {
-      "bytes": 6658,
-      "sha256": "f5dd922cccfe20443ac67fff0a7616c40a7ea7f9575b58ae74a2b7fd3170ae6b"
+      "bytes": 6828,
+      "sha256": "2ff3d54bf9e8cc4e3b90a8828954e27f851fb40530786003d09b838f7b6ef251"
     },
     "docs/vault-admin.md": {
       "bytes": 3141,
@@ -1393,8 +1393,8 @@
       "sha256": "58c15da9e999ec63d49912916d81bc2638eb0f4f340229240da22b614d630355"
     },
     "scripts/test-lyrics-pipeline.cjs": {
-      "bytes": 11640,
-      "sha256": "5ce02c704939466d52fbb2b3ba82ff29b2632c78d8cdbc408354f4cea216c540"
+      "bytes": 14017,
+      "sha256": "1771ba80eeec19df328ebd203f7416f2c98783c9b823e265c88ec57a51de1a98"
     },
     "scripts/test-music-browser.cjs": {
       "bytes": 5481,
@@ -1417,8 +1417,8 @@
       "sha256": "39176980b17c3ef4babae3fb712028e3dc06ea83b4d87f497401e67f61dcd2a3"
     },
     "scripts/test-music-pocket.cjs": {
-      "bytes": 17250,
-      "sha256": "511138e9c9388a141302f0b54a7dd2cd40a36603f7a37be8a7b6056249115e55"
+      "bytes": 17325,
+      "sha256": "71819322e14fe95e58a974392758a5dc5ef3477a75a58ebfb6a253736dce512d"
     },
     "scripts/test-nav-order.cjs": {
       "bytes": 1824,

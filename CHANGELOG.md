@@ -1,3 +1,34 @@
+## The lyrics panel: a list, a tick, and nothing to read but the lyrics (2026-10-16)
+
+Requested: *"in mobile there is no dropdown for available lyrics … i dont want albumart in lyrics panel …
+i dont want the remove lyrics button and those wordings … very minimalistic like 'available' … when i
+select the lyrics dont immediately add to that song, i select small ok button … as much as communicate
+with symbols and buttons are enough."*
+
+- **The artwork is gone from the Lyrics view.** The sleeve was chrome around a lyric, and on a locked
+  screen it was a shrunken disc next to the words. Now the Lyrics view renders no artwork at all — the
+  disc belongs to the Artwork view, where it keeps the size it has always had. (That also retires the
+  sleeve's blur rule under the touch lock: there is no sleeve to blur.)
+- **The record list lives in the header, behind one word: "Available".** The old list sat in the footer
+  row, which is hidden on short screens — a phone in landscape showed nothing at all, which is exactly
+  the report. The control is in the header now, so it exists at every size and orientation, and the list
+  it opens renders *inside* the panel: never clipped by it, never floating over another section.
+- **Two steps, so nothing is written while you look.** Tapping a record only marks it (the row
+  highlights); nothing is saved until the tick is pressed. The tick writes the choice, closes the list
+  and reloads the lyrics. It is disabled until you pick a record that is not the one already in use.
+- **No wording.** The status line, "Resume follow", "Remove my lyrics", "Edit my lyrics", "Saved for
+  everyone", "records available", "showing now" and the per-record "Synced"/"Plain" words are all gone.
+  A record's timing is a glyph now — a waveform for timed, three lines for plain — and the record in use
+  is marked with a dot. The footer is three symbols: paste, follow (only when you have scrolled off the
+  playing line), refresh. The panel's only words are its heading, "Lyrics", and "Available".
+- **Silence is not dishonesty.** When a save fails there is no sentence to print, so the tick turns red
+  for four seconds and the reason is announced to screen readers, not painted over the lyrics. The
+  paste form keeps its own help line (a form is not chrome).
+- **Unchanged underneath:** the choice is still saved for everyone through the same store the admin panel
+  uses, audited (`lyrics.choose`), shown in the admin Lyrics tab, and re-read from the provider on the
+  server. The API keeps its `clear` action, but the panel deliberately offers no reset control — the
+  owner asked for no words and no extra buttons, so a choice is changed by choosing another record.
+
 ## Lock mode keeps the sleeve, and lyrics you can choose (2026-10-16)
 
 Requested: *"when i enter lock mode the albumart is very small. fix that"* and a way to replace the

@@ -79,7 +79,7 @@ const load=p=>import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync(
  const admin=fs.readFileSync('app/api/admin/lyrics/route.js','utf8');
  assert.ok(admin.includes('await adminDeny(request)'));
  const screen=fs.readFileSync('components/music/CanvasLyrics.jsx','utf8');
- for(const needle of ['Paste lyrics','Edit my lyrics','not-in-catalogue','identity-rejected','Saved on this device'])assert.ok(screen.includes(needle),`lyric screen must offer ${needle}`);
+ for(const needle of ['not-in-catalogue','identity-rejected','Paste the lyrics for','retry={() => music.openLyrics(true)}'])assert.ok(screen.includes(needle),`lyric screen must still handle ${needle}`);
  const engine=fs.readFileSync('components/music/MusicEngine.jsx','utf8');
  assert.ok(!engine.includes('detailSettledFor'),'lyrics must not wait for the song-detail request');
 
@@ -91,27 +91,54 @@ const load=p=>import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync(
  assert.ok(route.includes('if (collect) for (const row of items) collect(row, label, wanted);'),
   'every record the provider returned on a stage must reach the collector, not only the winner');
  assert.ok(route.includes("searchParams.get('candidates') === '1'")&&route.includes("searchParams.get('reload') === '1'"),
-  'the picker asks for candidates, and a reload skips the cached provider answer');
+  'the list asks for candidates, and a reload skips the cached provider answer');
  assert.ok(route.includes('if (!force && !reload) {'),'a reload must not re-pick the automatic match');
  assert.ok(route.includes('collectCandidates')&&route.includes('savedId'),
-  'the list must mark the automatic winner and the record the saved choice came from');
- assert.ok(/candidateLabel|candidates\.map/.test(screen)===false||screen.includes('candidateLabel'),
-  'each option must be labelled by the panel, not by an opaque id');
- assert.ok(screen.includes('Synced')&&screen.includes('Plain'),'every option must say whether the record carries timings');
- assert.ok(screen.includes('mc-picker')&&screen.includes('records available — pick one'),'the panel must render the list');
- const canvasCss=fs.readFileSync('components/music/music-canvas.css','utf8');
- assert.ok(canvasCss.includes('.mc-picker { flex:1 1 auto; min-width:0; display:flex; }'),
-  'the picker must take the leftover width, not push the footer around');
- assert.ok(canvasCss.includes('flex-wrap:wrap'),'the footer must wrap rather than squeeze the status or the refresh button');
- assert.ok(/\.mc-picker \{ flex-basis:100%; \}/.test(canvasCss),'on a phone the picker takes its own row');
- // Comments may name the retired control (they explain why it went), so only real code counts.
+  'the list must mark the automatic match and the record the saved choice came from');
+
+ // ── the panel: one word of chrome, a list, and a tick that writes ──
+ assert.ok(screen.includes('className="mc-lyric-available"')&&screen.includes('<span>Available</span>'),
+  'the records open from a single "Available" control');
+ assert.ok(screen.includes('aria-expanded={open}'),'the control must report whether the list is open');
+ assert.ok(screen.includes('mc-lyric-pop')&&screen.includes('mc-lyric-option')&&screen.includes('recordLine(candidate, wanted)'),
+  'every record must be listed by title, in a list rendered inside the panel');
+ assert.ok(screen.includes("name={candidate.synced ? 'wave' : 'text'}"),
+  'whether a record carries timings must be a symbol, not a sentence');
+ assert.ok(!/<select[^>]*picker/i.test(screen),'the record list is not a native select: it must render on a phone too');
+ assert.ok(!screen.includes('candidateLabel'),'no option may be labelled by an opaque id');
+ assert.ok(screen.includes('onClick={() => setPicked(candidate.id)}'),
+  'choosing a row must only mark it — nothing is saved by looking');
+ assert.ok(screen.includes('onClick={commit}')&&screen.includes('disabled={!picked || picking || picked === currentId}'),
+  'the tick is the only thing that writes, and it waits for a real choice');
+ assert.ok((screen.match(/action: 'choose'/g)||[]).length===1,'exactly one call may save a choice');
+ assert.ok(screen.includes('is-current')&&screen.includes("picker.current === 'saved' ? (picker.savedId || '') : picker.autoId"),
+  'the record in use must be marked, without a word');
+
+ // ── no wording: the panel is for reading, so only content and one label remain ──
  const screenCode=screen.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
  assert.ok(!screenCode.includes('Wrong lyrics?')&&!screenCode.includes('rejectLyrics'),
-  'the device-level rejection must be gone from the panel, replaced by the picker');
+  'the device-level rejection must be gone from the panel');
+ // (The paste form keeps its own help line about where a paste is saved: that is a form, not chrome.)
+ for(const retired of ['Saved for everyone','Remove my lyrics','Edit my lyrics','records available','showing now','Looking for other versions','Tap a line to seek','Timing is not available','Resume follow','Your lyrics','Plain lyrics','Automatic — let the app match it again','Saved lyrics — pick','Only one record exists'])
+  assert.ok(!screenCode.includes(retired),`the panel must not print “${retired}” any more`);
+ const footer=screenCode.slice(screenCode.indexOf('<footer>'),screenCode.indexOf('</footer>'));
+ assert.ok(footer.includes('IconButton'),'the footer is a row of symbols');
+ assert.ok(!/>[A-Za-z][^<>{}]*</.test(footer),'the footer must print no words at all');
+ assert.ok(screenCode.includes('<h2>Lyrics</h2>'),'the panel keeps its one heading, without a status tag');
+
+ const canvasCss=fs.readFileSync('components/music/music-canvas.css','utf8');
+ assert.ok(/\.mc-lyrics \{[^}]*position:relative/.test(canvasCss),'the panel must anchor its own list');
+ assert.ok(/\.mc-lyric-pop \{[^}]*position:absolute/.test(canvasCss)&&/\.mc-lyric-pop \{[^}]*max-height:calc\(100% - \d+px\)/.test(canvasCss),
+  'the list opens inside the panel: never clipped by it, never floating over another section');
+ assert.ok(!canvasCss.includes('.mc-picker'),'the footer select and its rules must be gone');
+ assert.ok(canvasCss.includes('.mc-app.is-pocket .mc-lyric-pop'),
+  'a list left open must not stay sharp and live under the touch lock');
+ assert.ok(/\.mc-lyric-option \{[^}]*min-height:44px/.test(canvasCss),'rows must stay thumb-sized on a phone');
  assert.ok(engine.includes('rejectLyrics'),'the engine keeps the rejection path for callers that still refuse a record');
- assert.ok(screen.includes('Automatic — let the app match it again'),'the way back to the automatic match must be offered');
- assert.ok(/picker\.current === 'saved' \? <button[^>]*onClick=\{\(\) => choose\('auto'\)\}/.test(screen),
-  'Remove my lyrics must clear a choice saved for everyone, not only a paste from this device');
+ // The panel deliberately offers no way back: the owner asked for no words and no extra buttons,
+ // so a saved choice is changed by choosing another record and undone from the admin Lyrics tab.
+ assert.ok(!screen.includes("choose('auto')")&&!screen.includes("action: 'clear'"),
+  'the panel must not carry a reset control it was asked not to show');
  assert.ok(engine.includes('reloadLyrics')&&engine.includes('lyricSong'),'the engine must expose a reload and the song identity');
  assert.ok(fs.readFileSync('lib/lyricsController.js','utf8').includes("reload = false"),'the controller must support the reload that re-reads saved lyrics');
 
@@ -125,5 +152,5 @@ const load=p=>import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync(
  assert.ok(post.includes('lyricsSnapshot'),'the audit entry must carry the before and after lyrics');
  assert.ok(post.includes('isAuthorized(request)'),'writing lyrics is an owner action');
 
- console.log('Lyrics pipeline: tiered acceptance, album-less matching, rejection reasons, retrieval variants, ranking, stable cache keys, single-source wiring, ladder, store, admin gate and screen recovery, plus the record picker (every candidate collected, labelled with title and timing, saved for everyone through the admin store and audited) all passed.');
+ console.log('Lyrics pipeline: tiered acceptance, album-less matching, rejection reasons, retrieval variants, ranking, stable cache keys, single-source wiring, ladder, store, admin gate and screen recovery, plus the record list (every candidate collected, one word of chrome, rows that only mark a choice, a tick that writes it, no printed wording, and a list that renders inside the panel on every screen) all passed.');
 })().catch(e=>{console.error(e);process.exitCode=1});

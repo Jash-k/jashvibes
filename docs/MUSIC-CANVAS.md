@@ -53,9 +53,29 @@ was dead code and has been removed.
 
 Lyrics refresh, line-tap seek, follow/resume, timing offset and font-size controls are available. Plain lyrics are labelled and not fabricated as synchronized. Three appearance modes replace the ten legacy modes; the old provider-picker/translation UI is not retained — LRCLIB is still the only provider.
 
-**Choosing a record.** The footer's one control is a list of every record LRCLIB has for the current song, each option reading `Title — Artist · Synced · 3:42` (or `Plain`), with the record that is showing marked. It exists because "wrong lyrics" is nearly always the right song on the wrong record — a live cut, a different album, a karaoke track — and the strict identity check would refuse those. Picking one re-reads that record from the provider on the server (the browser sends only the record id), saves it as the song's lyrics for everyone, and offers **Automatic — let the app match it again** to clear the pin. It is not a provider switch: one provider, several of its records. **Remove my lyrics** clears either
-kind of saved lyrics — the paste from this device or the record chosen for everyone — and both fall back
-to the automatic match. Appearance is stored under a new local storage key. Decorative spectrum is opt-in and is not an audio analyser; reduced-motion hides it.
+**Choosing a record.** One word in the panel's header — **Available** — opens the list of every record
+LRCLIB has for the current song: its title, its artist when that is not the song's, a glyph for timed (a
+waveform) or plain (three lines) lyrics, and its length. The record the song is using carries a dot. It
+exists because "wrong lyrics" is nearly always the right song on the wrong record — a live cut, a
+different album, a karaoke track — and the strict identity check refuses those; the list shows them anyway,
+because the owner can read the title and the length and decide. Selecting a row only *marks* it. The tick
+saves: the list closes, the record is re-read from the provider on the server (the browser sends only the
+record id), and the panel reloads the lyrics. One provider, several of its records — and the choice is
+saved for everyone, so a phone and a desktop agree, and it appears in the admin Lyrics tab. The panel
+offers no reset control: change the choice by choosing another record, or remove it from the admin tab
+(the API's `clear` action). When a save fails the tick turns red for four seconds and the reason goes to
+screen readers rather than onto the lyrics.
+
+**Symbols, not sentences.** The panel prints words only where they are the content: the lyric lines, the
+heading, the single word "Available", and the empty state for a song with no lyrics at all. Everything
+else is a glyph — paste, follow and refresh in the footer row, timed/plain in the list, a dot for the
+record in use, a red tick for a failed save. The paste form keeps its own help line, because a form is not
+chrome. **The Lyrics view renders no artwork**: the sleeve was chrome around a lyric and a shrunken disc
+on a locked screen, so it is not rendered there at all (which is also why the sleeve has no blur rule
+under the touch lock any more). The disc belongs to the Artwork view, where it keeps its full size.
+
+Appearance is stored under a new local storage key. Decorative spectrum is opt-in and is not an audio
+analyser; reduced-motion hides it.
 
 ## Verification for this release
 - `npm ci` succeeded.

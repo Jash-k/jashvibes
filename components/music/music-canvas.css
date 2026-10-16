@@ -95,12 +95,15 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
 .mc-state p { margin:8px 0 14px; font-size:13px; }
 .mc-player { display:grid; grid-template-rows:auto minmax(0,1fr) auto; min-height:0; min-width:0; }
 .mc-now { display:flex; align-items:center; gap:20px; padding-bottom:16px; }
+/* The sleeve belongs to the Artwork view. In the Lyrics view the panel is lyrics, so the cover
+   is not rendered at all — that is why there is no blur rule for it here any more. */
 .mc-now-art { width:clamp(110px,13vw,190px); }
+.mc-player:not(.is-artwork-mode) .mc-now-art { display:none; }
 .mc-now-text { min-width:0; }
 .mc-now h1 { font-size:clamp(20px,2.2vw,32px); font-weight:650; line-height:1.2; }
 .mc-now p { font-size:13px; color:var(--mc-muted); margin:8px 0; line-height:1.5; }
 .mc-now small { font-size:11px; color:var(--mc-accent); display:inline-block; padding:4px 8px; border:1px solid var(--mc-line); border-radius:14px; }
-.mc-lyrics { display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+.mc-lyrics { display:flex; flex-direction:column; min-height:0; overflow:hidden; position:relative; }
 .mc-lyrics > header { display:flex; align-items:center; gap:10px; justify-content:space-between; padding:8px 0 12px; }
 .mc-lyrics h2 small { font-size:10px; color:var(--mc-muted); font-weight:450; margin-left:8px; }
 .mc-lyric-tools { display:flex; align-items:center; gap:6px; }
@@ -115,19 +118,32 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
 .mc-lyric-lines li.is-current { color:var(--mc-accent); background:linear-gradient(100deg,var(--mc-accent),var(--mc-violet)); background-clip:text; -webkit-text-fill-color:transparent; }
 .mc-lyric-lines button { font:inherit; text-align:left; line-height:inherit; color:inherit; background:none; border:0; padding:0; width:100%; min-height:44px; }
 .mc-lyric-lines li.is-plain { color:#d6dfe5; font-weight:500; }
-.mc-lyrics footer { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:44px; flex-wrap:wrap; }
+.mc-lyrics footer { display:flex; align-items:center; justify-content:flex-end; gap:6px; min-height:44px; flex-wrap:wrap; }
 .mc-lyrics footer span { font-size:11px; color:var(--mc-muted); }
-/* The lyric picker. One control, one row: a select listing every record the provider has for this
-   song, each option reading "Title — Artist · Synced · 3:42". It takes the leftover width and wraps
-   to its own line when the row is too narrow, so the footer never squeezes the status or the
-   refresh button and the panel is the same shape on a desktop and on a phone. */
-.mc-picker { flex:1 1 auto; min-width:0; display:flex; }
-.mc-picker-field { flex:1 1 auto; min-width:0; display:flex; }
-.mc-app .mc-picker select { width:100%; min-height:34px; max-width:100%; font-size:12px; padding:5px 26px 5px 11px; border-radius:17px;
-  background:#ffffff08; color:inherit; text-overflow:ellipsis; }
-.mc-app .mc-picker select:disabled { opacity:.6; }
-.mc-picker-empty { font-size:11px; color:var(--mc-muted); }
-.mc-picker-note { flex-basis:100%; margin:0; font-size:11px; color:var(--mc-muted); line-height:1.35; }
+/* The record list. One word of chrome ("Available") opens it; everything inside is symbols and
+   titles. It is an overlay inside the panel, so it cannot be clipped by the panel's own overflow and
+   it is the same list at every width. A row is only a choice — the tick writes it. */
+.mc-lyric-available { display:inline-flex; align-items:center; gap:5px; min-height:36px; padding:5px 12px; border-radius:18px;
+  background:#ffffff08; border:1px solid transparent; color:inherit; font-size:12px; }
+.mc-lyric-available[aria-expanded='true'] { color:var(--mc-accent); background:#8be5ef1a; border-color:#8be5ef33; }
+.mc-lyric-available:disabled { opacity:.5; }
+.mc-lyric-pop { position:absolute; z-index:40; top:48px; left:0; right:0; max-height:calc(100% - 58px); overflow:auto;
+  overscroll-behavior:contain; padding:6px; border:1px solid var(--mc-line); border-radius:14px;
+  background:#0d1519f5; box-shadow:0 18px 50px #0007; display:flex; flex-direction:column; gap:4px; }
+.mc-lyric-pop-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; }
+.mc-lyric-option { display:flex; align-items:center; gap:9px; width:100%; min-height:44px; padding:8px 10px; border:0; border-radius:10px;
+  background:none; color:inherit; text-align:left; font-size:13px; }
+.mc-lyric-option:hover { background:#ffffff0a; }
+.mc-lyric-option.is-picked { background:#8be5ef24; color:#eaf9fb; }
+/* The dot marks the record the song is using — the saved choice, or the automatic match. */
+.mc-lyric-option.is-current::after { content:''; width:6px; height:6px; border-radius:50%; background:var(--mc-accent); flex:0 0 auto; }
+.mc-lyric-option-title { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mc-lyric-option-time { font-size:11px; color:var(--mc-muted); font-variant-numeric:tabular-nums; }
+.mc-lyric-pop-state { display:flex; align-items:center; justify-content:center; gap:8px; min-height:48px; color:var(--mc-muted); }
+.mc-lyric-pop-state.is-error { color:#ffb4c0; }
+.mc-lyric-pop-actions { display:flex; justify-content:flex-end; padding:2px; }
+.mc-lyric-save { background:#8be5ef1f; color:var(--mc-accent); }
+.mc-lyric-save.is-error { background:#ff6b8122; color:#ffb4c0; }
 .mc-player-modes { display:flex; justify-content:center; gap:4px; }
 .mc-player-modes button { min-height:44px; border:0; background:none; color:var(--mc-muted); padding:8px 20px; font-size:12px; border-radius:24px; }
 .mc-player-modes button[aria-pressed='true'] { color:var(--mc-accent); background:#8be5ef12; }
@@ -215,9 +231,9 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
   .mc-lyrics footer { min-height:36px; }
   .mc-lyrics footer span { font-size:10px; }
   .mc-lyrics footer .mc-icon { height:36px; width:36px; }
-  .mc-picker { flex-basis:100%; }
-  .mc-app .mc-picker select { max-width:100%; min-height:32px; font-size:11px; }
-  .mc-picker-note { font-size:10px; }
+  .mc-lyric-available { font-size:11px; padding:4px 9px; gap:4px; min-height:32px; }
+  .mc-lyric-pop { top:42px; max-height:calc(100% - 50px); }
+  .mc-lyric-option { font-size:12px; min-height:42px; }
   .mc-player-modes button { min-height:36px; padding:6px 18px; }
   .mc-transport { padding-top:4px; }
   .mc-transport-row { display:flex; flex-direction:column; gap:6px; margin-top:2px; }
@@ -314,22 +330,21 @@ html.music-canvas-open, html.music-canvas-open body { overflow: hidden; overscro
 .mc-app.is-pocket .mc-now-text,
 .mc-app.is-pocket .mc-lyrics > header,
 .mc-app.is-pocket .mc-lyrics > footer,
+.mc-app.is-pocket .mc-lyric-pop,
 .mc-app.is-pocket .jv-rail,
 .mc-app.is-pocket .mobile-dock {
   filter:blur(16px) saturate(.85) brightness(.6);
   transition:filter 200ms ease-out;
   pointer-events:none;
 }
-/* Lyrics mode: the sleeve is chrome too, so it blurs with everything else. */
-.mc-app.is-pocket .mc-player:not(.is-artwork-mode) .mc-now-art { filter:blur(16px) saturate(.85) brightness(.55); transition:filter 200ms ease-out; }
 /* The one thing that stays sharp and live: it decides what the focus shows. */
 .mc-app.is-pocket .mc-player-modes { position:relative; z-index:170; }
 .mc-app.is-pocket .mc-player-modes button { background:#080b0ecc; }
 @media (prefers-reduced-motion:reduce) {
   .mc-app.is-pocket .mc-topbar, .mc-app.is-pocket .mc-library-dock, .mc-app.is-pocket .mc-transport,
   .mc-app.is-pocket .mc-now-text, .mc-app.is-pocket .mc-lyrics > header, .mc-app.is-pocket .mc-lyrics > footer,
-  .mc-app.is-pocket .jv-rail, .mc-app.is-pocket .mobile-dock,
-  .mc-app.is-pocket .mc-player:not(.is-artwork-mode) .mc-now-art { transition:none; }
+  .mc-app.is-pocket .mc-lyric-pop,
+  .mc-app.is-pocket .jv-rail, .mc-app.is-pocket .mobile-dock { transition:none; }
 }
 
 /* The touch guard. Transparent on purpose: the blurred layers above are the effect, this
