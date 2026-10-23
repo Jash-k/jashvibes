@@ -1,3 +1,36 @@
+## Sony channels still missing after the fix, and the health button nobody could find (2026-10-23)
+
+Two follow-ups from actually running the previous patch, plus one layout request.
+
+**1. The Sony channels still did not appear — and the fix was the reason why.**
+Repointing the dead host was not enough. The source had "synced" before (into zero
+channels) with no error recorded, and the self-heal pass skips exactly that case:
+`if (doc.lastSyncedAt && !doc.lastError) continue;` — it reads "genuinely empty
+upstream". So the row kept its timestamp and stayed empty, and looked healthy while
+it did. Reproduced against a real database, then fixed three ways:
+
+- repointing a dead source now clears `lastSyncedAt` **and** triggers a sync
+  immediately, instead of waiting for the hourly pass;
+- a default source sitting at **zero channels is retried on every boot**, whether or
+  not its last sync reported an error. "Synced cleanly into nothing" is precisely what
+  a dead host or an unreadable feed looks like — both are cured by new code, not by
+  another sync being impossible. Custom sources are left alone;
+- the three copies of the fire-and-forget sync (onboarding, self-heal, repoint) are
+  now one `syncInBackground()` helper, so a failure always lands in `lastError`.
+
+Measured, fresh process against a database where Sony was configured but empty:
+**0 → 9 channels on boot, with nobody pressing Sync.**
+
+**2. There was no health button in the Admin panel** because it was inside the service
+panel overlay, which only exists after you press "Open service panel". It is now on
+the **Admin → TV tab itself**: one dot per source, a **Check** button, and a compact
+list of whatever is not answering.
+
+**3. The TV tab was three wordy cards.** It is now a single compact card — title, dots,
+and five small buttons (`Panel`, `Check`, `Sweep`, `Sync`, `Auto ON/OFF`) — with notes
+and dead-source lists appearing only when there is something to say. The old three-card
+layout carried roughly 90 words of standing explanation; the new one carries none.
+
 ## Sony Sports in Live TV: the feed was fine, one field name was wrong (2026-10-23)
 
 Requested: *"i want stream4liv.netlify.app sony sports source in live tv section. already i have jio and i

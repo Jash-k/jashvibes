@@ -803,9 +803,8 @@ function LiveServicePanel({ open, onClose, onPreview, onMainRefresh, epg = null 
                   <select value={sourceForm.type} onChange={(e) => setSourceForm((f) => ({ ...f, type: e.target.value }))} className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white"><option value="m3u">M3U</option><option value="json">JSON</option></select>
                   <button className="rounded-2xl bg-red-500 px-3 py-2 text-sm font-black text-white">Add / Save Source</button>
                 </form>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-xs text-zinc-500">Dot: green answered, red not — check before blaming the parser.</p>
-                  <button onClick={checkSourceHealth} disabled={healthChecking} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-black disabled:opacity-40">{healthChecking ? 'Checking…' : 'Check all'}</button>
+                <div className="flex flex-wrap items-center justify-end gap-3">
+                  <button onClick={checkSourceHealth} disabled={healthChecking} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-black disabled:opacity-40">{healthChecking ? '…' : 'Check'}</button>
                 </div>
                 {sources.map((source) => <div key={source.sourceId || source.id} className="rounded-3xl border border-white/10 bg-white/[0.03] p-3">
                   <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-black">{healthDot(source)}{source.label}</p><p className="break-all text-xs text-zinc-500">{source.url}</p><p className="mt-1 text-xs text-zinc-500">{source.channelCount || 0} channels • {source.mappedCount ?? source.selectedCount ?? 0} mapped • priority {source.priority}{source.autoMapCatalog ? ` • auto→${source.autoMapCatalog}` : ''}</p>{source.lastError ? <p className="mt-2 rounded-xl border border-red-400/25 bg-red-500/10 p-2 text-xs text-red-200">{source.lastError}</p> : null}</div><span className="rounded-full bg-white/[0.06] px-2 py-1 text-[10px] font-bold uppercase">{source.type}</span></div>

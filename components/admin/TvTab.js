@@ -42,6 +42,8 @@ export default function TvTab() {
   const [sweeping, setSweeping] = useState(false);
   const [note, setNote] = useState(null);
   const [dead, setDead] = useState([]);
+  const [sources, setSources] = useState([]);
+  const [checking, setChecking] = useState(false);
   const [guideChannels, setGuideChannels] = useState([]);
   useEffect(() => { fetch('/api/live-service/channels?mapped=1&limit=1000', { cache: 'no-store' }).then((r) => r.json()).then((d) => setGuideChannels(d.channels || [])).catch(() => {}); }, [panelOpen]);
   const guide = useLiveGuide({ channels: guideChannels });
@@ -80,6 +82,8 @@ export default function TvTab() {
   }, []);
 
   useEffect(() => { loadAutoSync(); }, [loadAutoSync]);
+  // Load the source list once so the dots exist before the first Check.
+  useEffect(() => { checkSources(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, []);
   // While a run is live, poll like the ReTro sync does — the work happens in
   // the server background, this is purely a status light.
   useEffect(() => {
@@ -140,6 +144,32 @@ export default function TvTab() {
     return `Last pass ${new Date(finished).toLocaleTimeString()} — ${okCount}/${total} sources synced${sweepText}${errText}`;
   })();
 
+  /**
+   * Is each feed still answering? A source can sit in this tab looking
+   * perfectly healthy while its host has been gone for months — you only find
+   * out when a sync reports zero channels, which reads like a parsing problem
+   * rather than a dead URL. One dot per source, no paragraph needed.
+   */
+  async function checkSources() {
+    setChecking(true);
+    try {
+      const response = await fetch('/api/live-service/sources?health=1', { cache: 'no-store' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.ok === false) throw new Error(data.error || 'Check failed');
+      const rows = data.sources || [];
+      setSources(rows);
+      const down = rows.filter((item) => item.health && !item.health.ok);
+      setNote({
+        kind: down.length ? 'bad' : 'ok',
+        text: down.length
+          ? `${down.length} of ${rows.length} sources not answering — ${down.map((item) => item.label).join(', ')}`
+          : `All ${rows.length} sources answered.`,
+      });
+    } catch (err) {
+      setNote({ kind: 'bad', text: err.message });
+    } finally { setChecking(false); }
+  }
+
   async function sweep() {
     setSweeping(true);
     setNote({ kind: null, text: 'Sweeping channels — probing streams, this can take up to a minute…' });
@@ -162,27 +192,55 @@ export default function TvTab() {
 
   return (
     <div>
-      <div className="jv-ad-card">
-        <div className="jv-ad-toolbar" style={{ marginTop: 0 }}>
-          <div style={{ flex: 1, minWidth: 220 }}>
-            <p className="jv-ad-card-title">Live TV service panel</p>
-            <p className="jv-ad-card-sub">Sources, manual mapping, catalog order, duplicates, backups and the EPG binding picker — everything that used to live behind /live, in one overlay.</p>
-          </div>
-          <button type="button" className="jv-ad-btn is-primary" onClick={() => setPanelOpen(true)}>Open service panel</button>
+      <div className="jv-ad-card is-tight">
+        <div className="jv-ad-toolbar" style={{ marginTop: 0, marginBottom: 0 }}>
+          <p className="jv-ad-card-title" style={{ flex: 1, minWidth: 64 }}>Live TV</p>
+          {sources.length ? (
+            <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+              {sources.map((source) => {
+                const health = source.health;
+                const title = `${source.label} — ${!health ? 'not checked' : health.ok ? `HTTP ${health.status} in ${health.ms} ms` : (health.error || `HTTP ${health.status}`)}`;
+                return (
+                  <span
+                    key={source.sourceId || source.id}
+                    title={title}
+                    style={{
+                      width: 7, height: 7, borderRadius: 999,
+                      background: !health ? '#52525b' : health.ok ? '#4ade80' : '#f43f5e',
+                    }}
+                  />
+                );
+              })}
+            </span>
+          ) : null}
+          <button type="button" className="jv-ad-btn is-sm is-primary" onClick={() => setPanelOpen(true)}>Panel</button>
+          <button type="button" className="jv-ad-btn is-sm" onClick={checkSources} disabled={checking}>{checking ? '…' : 'Check'}</button>
+          <button type="button" className="jv-ad-btn is-sm" onClick={sweep} disabled={sweeping}>{sweeping ? '…' : 'Sweep'}</button>
+          <button type="button" className="jv-ad-btn is-sm" onClick={runAutoSync} disabled={autoToggling || autoStatus?.running}>
+            {autoStatus?.running ? '…' : 'Sync'}
+          </button>
+          <button type="button" className={`jv-ad-btn is-sm ${autoEnabled ? 'is-primary' : ''}`} onClick={toggleAuto} disabled={autoToggling}>
+            {autoEnabled ? 'Auto ON' : 'Auto OFF'}
+          </button>
         </div>
-      </div>
 
-      <div className="jv-ad-card">
-        <div className="jv-ad-toolbar" style={{ marginTop: 0 }}>
-          <div style={{ flex: 1, minWidth: 220 }}>
-            <p className="jv-ad-card-title">Health sweep</p>
-            <p className="jv-ad-card-sub">Probe a batch of channels and flag the ones that no longer answer. Dead channels are marked in the panel, where you can purge them.</p>
-          </div>
-          <button type="button" className="jv-ad-btn is-amber" onClick={sweep} disabled={sweeping}>{sweeping ? 'Sweeping…' : 'Run sweep'}</button>
-        </div>
+        <p className={`jv-ad-note ${autoStatus?.error ? 'is-bad' : ''}`}>{autoSummary}</p>
         {note ? <p className={`jv-ad-note ${note.kind ? `is-${note.kind}` : ''}`}>{note.text}</p> : null}
+        {autoNote ? <p className={`jv-ad-note ${autoNote.kind ? `is-${autoNote.kind}` : ''}`}>{autoNote.text}</p> : null}
+
+        {sources.filter((item) => item.health && !item.health.ok).length ? (
+          <div className="jv-ad-table" style={{ marginTop: 8 }}>
+            {sources.filter((item) => item.health && !item.health.ok).map((item) => (
+              <div key={item.sourceId || item.id} className="jv-ad-row">
+                <span className="jv-ad-row-ico">📡</span>
+                <div className="jv-ad-row-who"><b>{item.label}</b><span>{item.health.error || `HTTP ${item.health.status}`}</span></div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         {dead.length ? (
-          <div className="jv-ad-table" style={{ marginTop: 10 }}>
+          <div className="jv-ad-table" style={{ marginTop: 8 }}>
             {dead.map((channel) => (
               <div key={channel.id || channel.name} className="jv-ad-row">
                 <span className="jv-ad-row-ico">📡</span>
@@ -191,23 +249,6 @@ export default function TvTab() {
             ))}
           </div>
         ) : null}
-      </div>
-
-      <div className="jv-ad-card">
-        <div className="jv-ad-toolbar" style={{ marginTop: 0 }}>
-          <div style={{ flex: 1, minWidth: 220 }}>
-            <p className="jv-ad-card-title">Auto-sync sources</p>
-            <p className="jv-ad-card-sub">Re-syncs every live source on a timer (default hourly) and then health-probes the Sports catalog — checks follow the HLS chain down to real video segments. A channel that fails twice leaves the catalog; it returns automatically if it plays again. Withdrawn sources (Cricket 4K Pack, Sports Backup, romaxa55) and their channels are purged on boot.</p>
-          </div>
-          <button type="button" className="jv-ad-btn is-amber" onClick={runAutoSync} disabled={autoToggling || autoStatus?.running}>
-            {autoStatus?.running ? 'Syncing…' : 'Sync now'}
-          </button>
-          <button type="button" className={`jv-ad-btn ${autoEnabled ? 'is-primary' : ''}`} onClick={toggleAuto} disabled={autoToggling}>
-            {autoEnabled ? 'Auto: ON' : 'Auto: OFF'}
-          </button>
-        </div>
-        <p className={`jv-ad-note ${autoStatus?.error ? 'is-bad' : ''}`}>{autoSummary}</p>
-        {autoNote ? <p className={`jv-ad-note ${autoNote.kind ? `is-${autoNote.kind}` : ''}`}>{autoNote.text}</p> : null}
       </div>
 
       {panelOpen ? (

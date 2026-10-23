@@ -1,6 +1,6 @@
 {
   "version": "11.0.0",
-  "release": "sony-live-sources",
+  "release": "sony-live-sources-2",
   "baselineCommit": "c6653cc1732448cd2ea295762b4bdf9ef38a8e5b",
   "verifiedOn": "2026-10-23",
   "verification": {
@@ -477,8 +477,8 @@
       "sha256": "383f74feef0a8f0969e4820c346ce1f6fd84eb4d929ecf770eb283ca8d33abd6"
     },
     "CHANGELOG.md": {
-      "bytes": 35958,
-      "sha256": "b7d3b1c732a654ee464e95b5291b265da307500538bc5fa29654509173e8716a"
+      "bytes": 38025,
+      "sha256": "a047dd35dc58a36ff1f4b6c669bd901631865542394dc40f282ceb86b7262793"
     },
     "components/admin/admin.css": {
       "bytes": 23182,
@@ -537,8 +537,8 @@
       "sha256": "993a388784b76efce5579415c1b94243f2b09d94f56199998cfa82d23bb66561"
     },
     "components/admin/TvTab.js": {
-      "bytes": 10208,
-      "sha256": "22e09c0be4c383e853d43bb69a656d1303c36a8b6812faca3ad49329e9ec6647"
+      "bytes": 11811,
+      "sha256": "b6da0b3298668bcb92a2316c37bb4e0e77ecf4646249a6c18b3fd1027a482460"
     },
     "components/admin/VaultTab.js": {
       "bytes": 14117,
@@ -597,8 +597,8 @@
       "sha256": "12b410a1d5509cc3c09ca6894b5b57e91a1ad1f89392ff84f5cca75980f6ab82"
     },
     "components/live/LiveServicePanel.js": {
-      "bytes": 63564,
-      "sha256": "187f028b554764af76761b2b852488111ab62624568b5673485035349b04c897"
+      "bytes": 63423,
+      "sha256": "fd27a06034db5b21feca881c5d8381a9002f18a0e4dba8db6f436e878c6f4ded"
     },
     "components/LoadVeil.jsx": {
       "bytes": 1529,
@@ -929,8 +929,8 @@
       "sha256": "0637955c6ff062915dd9814d9dfc9c336bdbc92451304cc314ebda1c224c389d"
     },
     "lib/liveService.js": {
-      "bytes": 17454,
-      "sha256": "60ccc72e26227f5bb0c7c1ae053b0b573e846b29b8e9a828853a1583fe2beede"
+      "bytes": 18569,
+      "sha256": "0e60105da9505853dd9f2c7d3646e6b9c20a5460ff55de20ecb9c8adfce577ff"
     },
     "lib/liveTv.js": {
       "bytes": 54906,
