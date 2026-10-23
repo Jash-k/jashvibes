@@ -1,10 +1,10 @@
 {
   "version": "11.0.0",
-  "release": "sony-live-sources-2",
+  "release": "snap-speed",
   "baselineCommit": "c6653cc1732448cd2ea295762b4bdf9ef38a8e5b",
   "verifiedOn": "2026-10-23",
   "verification": {
-    "sourceModules": 280,
+    "sourceModules": 281,
     "productionBuild": "passed",
     "standaloneStartupAndHealth": "passed",
     "fixtureBrowserViewports": [
@@ -173,8 +173,8 @@
       "sha256": "4c5d13c63be2a1afe62c9b30a699ffb669f5e0ee08d933c119eca16f1e1f31ff"
     },
     "app/api/live-service/channels/route.js": {
-      "bytes": 14541,
-      "sha256": "4b5f79a9028d94726169499e571aa1e8fde4b8d83671c83e94b445009739811d"
+      "bytes": 15823,
+      "sha256": "28c8b23c2748bb9c94c1dd983fd7e4eaa93d5174f8d662832e739175dd5ad612"
     },
     "app/api/live-service/check/route.js": {
       "bytes": 1474,
@@ -245,8 +245,8 @@
       "sha256": "779a8a9ee5567f90935ab487cc3252e3c81d77e5f3cfb3e0234de91561a4eca5"
     },
     "app/api/music/lyrics/route.js": {
-      "bytes": 33530,
-      "sha256": "dfe67c5d740021dc3e3074497695d2884d26df3d99ad30b9858c7be9ca7a05f7"
+      "bytes": 34157,
+      "sha256": "f6a43391aa9fd69e221be6bc77ffaf7ad54cd07cc0152da85a42b427dc36ece8"
     },
     "app/api/music/new/route.js": {
       "bytes": 778,
@@ -837,8 +837,8 @@
       "sha256": "9df1b68c320af4a6365378d293d825c5ef734300c98fb246575cbf8a0e99f796"
     },
     "instrumentation.js": {
-      "bytes": 2459,
-      "sha256": "5178b83204ee85a6bb4e774075106844ea5c47e368bf18401e2ac24a22362a36"
+      "bytes": 3545,
+      "sha256": "4e8ab84a577e4a1719897ef855c8f68cba818c3c01be1d0831a09499e790f043"
     },
     "jsconfig.json": {
       "bytes": 93,
@@ -871,6 +871,10 @@
     "lib/catalogOrphans.js": {
       "bytes": 7941,
       "sha256": "d3fe27b477453eae8c55427c4ac2c8444beabebb0d58724c0bfbfceef978a026"
+    },
+    "lib/catalogVersion.js": {
+      "bytes": 940,
+      "sha256": "f8aa731b8dd214c16cb609ce34db86f87b85f8203b974ccf5d0a59430d6d1f87"
     },
     "lib/classicsDecade.js": {
       "bytes": 9680,
@@ -929,12 +933,12 @@
       "sha256": "0637955c6ff062915dd9814d9dfc9c336bdbc92451304cc314ebda1c224c389d"
     },
     "lib/liveService.js": {
-      "bytes": 18569,
-      "sha256": "0e60105da9505853dd9f2c7d3646e6b9c20a5460ff55de20ecb9c8adfce577ff"
+      "bytes": 21386,
+      "sha256": "aa989cc4071a9513875f4b180882162762e9d308fcd1e0a3aa5da9c44a441b17"
     },
     "lib/liveTv.js": {
-      "bytes": 54906,
-      "sha256": "81b9ba0010ed1c42cc0a52b7660bb58b1b7b0dead52431c956a801e8ef6677b3"
+      "bytes": 56786,
+      "sha256": "cded3d2eed41005c2c1a3ea5c54376cf7e1ef6e3c11a259c8285750ad4586a18"
     },
     "lib/loadProgress.js": {
       "bytes": 9815,
@@ -961,8 +965,8 @@
       "sha256": "38db5dc6421c490450e3f7a97c5ae8835a9d9f671c81e5338dad03ec03f3e06d"
     },
     "lib/musicApi.js": {
-      "bytes": 37106,
-      "sha256": "468ca033b5ab52c18e2bdcdb4737f426ec119c8faedf9a075b50d94569c65bc1"
+      "bytes": 40897,
+      "sha256": "1912158df8cd26f485d95428e4f9f135bba969f4e136914f68fe15cd32639c68"
     },
     "lib/musicCore.js": {
       "bytes": 8196,
@@ -1197,16 +1201,16 @@
       "sha256": "8fea76b5ea0a8727f26a199bd6e7adb7773d9884d4d061a55be44db72c48de9d"
     },
     "models/LiveChannel.js": {
-      "bytes": 3229,
-      "sha256": "2a7cbde9071f2c8620b37ac5178b252ef732f3dbcd0a660a0d5477fc3436d60b"
+      "bytes": 4484,
+      "sha256": "bb2a59d23a73716f88eee6b0b2cc26eb6eb04d25daecde9f890c78c4bc28427b"
     },
     "models/LiveProfile.js": {
       "bytes": 421,
       "sha256": "005f07171e1f21c761e408cfb2dd13b343d159678f8fed9477c68549fa182245"
     },
     "models/LiveSource.js": {
-      "bytes": 1359,
-      "sha256": "3a0ad696fa563160501a33aca227b644e5709e2b3dff272eb1c70af15a72f0df"
+      "bytes": 2031,
+      "sha256": "d9263fb9cb343e0afa8d6afb08056629d5250b72a73d4ca197b021b7670a94ab"
     },
     "models/LyricsCache.js": {
       "bytes": 1461,

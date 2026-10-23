@@ -50,7 +50,14 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const STAGE_BUDGET_MS = 2500;
-const TOTAL_BUDGET_MS = 9000;
+// C — a full multi-stage lookup could previously run for nine seconds before giving
+// up. Six still covers every provider we talk to and surfaces a failure sooner.
+const TOTAL_BUDGET_MS = Number(process.env.LYRICS_TOTAL_BUDGET_MS || 6000);
+// C — how long a provider that just answered 503 is left alone. It was two seconds,
+// which meant that during an outage every retry paid another full stage budget
+// (~2.5 s of waiting) before failing again. Fifteen turns an outage into one slow
+// request per fifteen seconds instead of a slow request on every song.
+const BUSY_COOLDOWN_MS = Number(process.env.LYRICS_BUSY_COOLDOWN_MS || 15000);
 
 function getLyricsApiBase() {
   return (process.env.LYRICS_API || process.env.LRCLIB || 'https://lrclib.net').replace(/\/+$/, '');
@@ -114,7 +121,7 @@ async function fetchJsonNow(url, options = {}) {
   if (response.status === 429 || response.status === 503) {
     const retry = response.headers.get('retry-after');
     const until = /^\d+$/.test(retry || '') ? Date.now() + Number(retry) * 1000 : Date.parse(retry || '');
-    cooldowns.set(new URL(url).origin, Number.isFinite(until) ? until : Date.now() + (response.status === 429 ? 30000 : 2000));
+    cooldowns.set(new URL(url).origin, Number.isFinite(until) ? until : Date.now() + (response.status === 429 ? 30000 : BUSY_COOLDOWN_MS));
     throw new ProviderFailure('Lyrics provider is busy.', Math.max(1, Math.ceil(((cooldowns.get(new URL(url).origin)) - Date.now()) / 1000)));
   }
   if (!response.ok) throw new ProviderFailure(`Lyrics provider returned HTTP ${response.status}.`, 2, response.status >= 500);

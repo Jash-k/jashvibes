@@ -50,6 +50,25 @@ function channelSnapshot(doc = {}) {
   };
 }
 
+/*
+ * D1 — fetch only the fields a row actually renders.
+ *
+ * A stored channel carries ~40 properties and every one of them was being sent to
+ * the admin panel. Six are never read by `toClientChannel` at all: normalizedName is
+ * a lowercased duplicate of name, createdAt/updatedAt/__v are Mongoose bookkeeping,
+ * failStreak and sourceTvgId belong to the health sweep and the importer. Dropping
+ * them is invisible to every caller and trims both the database transfer and the
+ * memory held per page.
+ */
+const LIST_PROJECTION = [
+  'channelId', 'sourceId', 'source', 'tvgId', 'epgOverride', 'mappingManaged',
+  'logicalChannelId', 'name', 'customName', 'url', 'logo', 'customLogo', 'category',
+  'catalogs', 'language', 'region', 'format', 'playable', 'selected', 'favorite',
+  'hidden', 'order', 'profiles', 'keyId', 'key', 'licenseKey', 'licenseType',
+  'cookie', 'userAgent', 'referer', 'headers', 'workingStatus', 'autoHidden',
+  'lastCheckedAt', 'lastSeenAt',
+].join(' ');
+
 export async function GET(request) {
   try {
     await requireServiceAuth(request);
@@ -100,11 +119,15 @@ export async function GET(request) {
     if (mapped === '1' || catalogId) {
       // The mapped set is intentionally small. Sort after loading so each catalog
       // uses its own embedded position rather than Mongo's minimum array value.
-      docs = await LiveChannel.find(filter).limit(5000).lean();
+      // The mapped set is sorted by each channel's own embedded catalog position,
+      // which MongoDB cannot do in one pass, so it is sorted here and sliced — but
+      // it is still capped, and now projected like the other branch.
+      docs = await LiveChannel.find(filter).select(LIST_PROJECTION).limit(5000).lean();
       docs = sortChannelsForCatalog(docs.map(toClientChannel), catalogId || 'all')
         .slice((page - 1) * limit, page * limit);
     } else {
       docs = await LiveChannel.find(filter)
+        .select(LIST_PROJECTION)
         .sort({ selected: -1, favorite: -1, name: 1 })
         .skip((page - 1) * limit)
         .limit(limit)

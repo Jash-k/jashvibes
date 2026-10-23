@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { bumpLiveCatalog } from '@/lib/catalogVersion';
 
 const LiveSourceSchema = new mongoose.Schema({
   sourceId: { type: String, required: true, unique: true, index: true },
@@ -23,5 +24,20 @@ const LiveSourceSchema = new mongoose.Schema({
   lastSyncedAt: { type: Date, default: null },
   lastError: { type: String, default: '' },
 }, { timestamps: true });
+
+
+/* A3 — invalidate the cached Live catalogue on any write to this collection.
+ *
+ * Every write path (Admin panel, hourly auto-sync, onboarding, import, self-heal)
+ * invalidates automatically, so no route has to remember to. `bulkWrite` fires this
+ * once per operation, not once per document, so a 2 800-row sync costs one bump.
+ */
+const INVALIDATING_HOOKS = [
+  'save', 'insertMany', 'updateOne', 'updateMany', 'findOneAndUpdate',
+  'deleteOne', 'deleteMany', 'findOneAndDelete', 'findOneAndReplace', 'bulkWrite',
+];
+for (const hook of INVALIDATING_HOOKS) {
+  LiveSourceSchema.post(hook, bumpLiveCatalog);
+}
 
 export default mongoose.models.LiveSource || mongoose.model('LiveSource', LiveSourceSchema);

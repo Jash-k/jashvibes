@@ -26,6 +26,29 @@ export async function register() {
     try { const { registerLiveAutoSyncScheduler } = await import('@/lib/liveAutoSync'); registerLiveAutoSyncScheduler(); } catch (error) { console.error('[live-auto-sync]', error.message); }
   }
 
+  // F1 — reconcile the collection's indexes with the schema.
+  //
+  // Mongoose's autoIndex builds indexes the schema declares but never removes stale
+  // ones, so the ten standalone indexes dropped in this release would otherwise sit
+  // on the collection forever: still maintained on every upsert of every hourly sync,
+  // still never read by a query. `syncIndexes()` is the only thing that removes them.
+  //
+  // Runs once per process, in the background, and a failure is logged and ignored —
+  // booting must never depend on housekeeping. Set LIVE_INDEX_SYNC=0 to skip.
+  if (String(process.env.LIVE_INDEX_SYNC || '1') !== '0') {
+    try {
+      const [{ default: dbConnect }, { default: LiveChannel }] = await Promise.all([
+        import('@/lib/db'),
+        import('@/models/LiveChannel'),
+      ]);
+      await dbConnect();
+      await LiveChannel.syncIndexes({ background: true });
+      console.info('[index-sync] livechannels indexes reconciled with schema');
+    } catch (error) {
+      console.warn(`[index-sync] skipped: ${error?.message || error}`);
+    }
+  }
+
   if (String(process.env.KEEPALIVE || '1') === '0') {
     console.info('[keepalive] disabled via KEEPALIVE=0');
     return;
