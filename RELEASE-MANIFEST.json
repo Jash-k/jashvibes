@@ -1,10 +1,10 @@
 {
   "version": "11.0.0",
-  "release": "lyrics-coverage",
+  "release": "sony-live-sources",
   "baselineCommit": "c6653cc1732448cd2ea295762b4bdf9ef38a8e5b",
-  "verifiedOn": "2026-10-16",
+  "verifiedOn": "2026-10-23",
   "verification": {
-    "sourceModules": 279,
+    "sourceModules": 280,
     "productionBuild": "passed",
     "standaloneStartupAndHealth": "passed",
     "fixtureBrowserViewports": [
@@ -201,8 +201,8 @@
       "sha256": "19781f1d233893b77a2468bc4bda94f3c5759e2fc5e7557df0c93db4de3d8bfb"
     },
     "app/api/live-service/sources/route.js": {
-      "bytes": 5734,
-      "sha256": "22cef6d7f28934830ab3ea1e10232ce31bf2538ab655485b9bfc5e9489b4eb86"
+      "bytes": 7267,
+      "sha256": "78850ea70311c75ca4b7daff406aa7943e063c536b791c2a70d5dcccbd3c1ad9"
     },
     "app/api/live-service/sync/route.js": {
       "bytes": 1244,
@@ -477,8 +477,8 @@
       "sha256": "383f74feef0a8f0969e4820c346ce1f6fd84eb4d929ecf770eb283ca8d33abd6"
     },
     "CHANGELOG.md": {
-      "bytes": 32955,
-      "sha256": "e8635063bd891fc42602a791cb35eb92f89749b5893a22e6606dc08d2fdc04cf"
+      "bytes": 35958,
+      "sha256": "b7d3b1c732a654ee464e95b5291b265da307500538bc5fa29654509173e8716a"
     },
     "components/admin/admin.css": {
       "bytes": 23182,
@@ -597,8 +597,8 @@
       "sha256": "12b410a1d5509cc3c09ca6894b5b57e91a1ad1f89392ff84f5cca75980f6ab82"
     },
     "components/live/LiveServicePanel.js": {
-      "bytes": 61329,
-      "sha256": "d060e2f38d4656fe55790dbc75267ab7545cfd7033728d2133e8cf41e17df973"
+      "bytes": 63564,
+      "sha256": "187f028b554764af76761b2b852488111ab62624568b5673485035349b04c897"
     },
     "components/LoadVeil.jsx": {
       "bytes": 1529,
@@ -761,8 +761,8 @@
       "sha256": "abd541496aa1564f675db3479686bdc53a3fee5c82f38019ae84541444f45e8e"
     },
     "docs/LIVE-COMPATIBILITY.md": {
-      "bytes": 5472,
-      "sha256": "cf385cc2bf48c740c5288f8cbccc9f78956985daedf832f522b8dc06b6acd7a3"
+      "bytes": 8083,
+      "sha256": "dfc570c0dbb23aff5e02ee8836462a5a6f5f16b7a191e61a1dc5c4fde7c885f3"
     },
     "docs/live-doctor.md": {
       "bytes": 1383,
@@ -813,8 +813,8 @@
       "sha256": "ffc14e4cb83b1f741cc8aec125f341e7c32f6878f707709eecf148e3788aa2c6"
     },
     "docs/TESTING.md": {
-      "bytes": 7626,
-      "sha256": "8a7815ba956145d67f23896f9b2df7dcb91d2cfaead648392cacc199946a20bf"
+      "bytes": 8638,
+      "sha256": "894d08e47466f0c8415cf5af3341ce859b802a67a76e083635ebcbf681598922"
     },
     "docs/vault-admin.md": {
       "bytes": 3141,
@@ -929,12 +929,12 @@
       "sha256": "0637955c6ff062915dd9814d9dfc9c336bdbc92451304cc314ebda1c224c389d"
     },
     "lib/liveService.js": {
-      "bytes": 15339,
-      "sha256": "67c10ad2cdeaf5558234981a5a37ea51b4ed4f2b538a999a432a53db300a7f8f"
+      "bytes": 17454,
+      "sha256": "60ccc72e26227f5bb0c7c1ae053b0b573e846b29b8e9a828853a1583fe2beede"
     },
     "lib/liveTv.js": {
-      "bytes": 52245,
-      "sha256": "53795895e9773e153a4a64a989c1415e649bf154b2e8c717a273b55ce872eace"
+      "bytes": 54906,
+      "sha256": "81b9ba0010ed1c42cc0a52b7660bb58b1b7b0dead52431c956a801e8ef6677b3"
     },
     "lib/loadProgress.js": {
       "bytes": 9815,
@@ -1205,8 +1205,8 @@
       "sha256": "005f07171e1f21c761e408cfb2dd13b343d159678f8fed9477c68549fa182245"
     },
     "models/LiveSource.js": {
-      "bytes": 1010,
-      "sha256": "a2c67b080e386f43c86e19d312830226eaf855ed5711674feeecf31ba08d510b"
+      "bytes": 1359,
+      "sha256": "3a0ad696fa563160501a33aca227b644e5709e2b3dff272eb1c70af15a72f0df"
     },
     "models/LyricsCache.js": {
       "bytes": 1461,
@@ -1257,8 +1257,8 @@
       "sha256": "4e667f68db0833496b9259d189616fd2083b967f14503a3565811c9421ce575e"
     },
     "package.json": {
-      "bytes": 1407,
-      "sha256": "e338b67c3f7a7b118c9343dc7a0d2b09bffb28db8a2ede85c376943a350fac12"
+      "bytes": 1483,
+      "sha256": "b2cf2f6a8b0572ed3298446bbcb77d68d15f29457eb3bf4e15305a24633cefd2"
     },
     "postcss.config.js": {
       "bytes": 83,
@@ -1375,6 +1375,10 @@
     "scripts/test-live-guide-browser.cjs": {
       "bytes": 7495,
       "sha256": "549cb194752d69cc5e4e57764239d2032ed3836cf62eed3c202c1b3029ec4d1e"
+    },
+    "scripts/test-live-sources.mjs": {
+      "bytes": 11716,
+      "sha256": "b78457c66dfdd1abf66a9687f31e9b6e6acba0738aac85e75d1a831f77acd322"
     },
     "scripts/test-live-startup.cjs": {
       "bytes": 3339,

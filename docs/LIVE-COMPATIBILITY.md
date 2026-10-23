@@ -88,3 +88,49 @@ Optional browser test requires Playwright + Chromium and your own ffmpeg DASH
 fixture directory with manifest.mpd and segments:
 `LIVE_FIXTURE_DIR=/path/to/fixture node scripts/test-live-browser.cjs`
 Run a production app on port 7860 first. No owner keys belong in fixtures/logs.
+
+## Sony / Stream4Liv source wiring (v11)
+
+The Sony Sports section of `stream4liv.netlify.app` is a static single-page app
+with **263 channels hardcoded into its JS bundle** (`/assets/index-<hash>.js`) —
+there is no playlist file and no API to subscribe to, and the bundle filename is
+a build hash that changes on every deploy. Do not wire the bundle itself as a
+source; it will 404 the next time they publish.
+
+Feed in use instead — same maintainer the site reads its `__hdnea__` token from,
+refreshed by GitHub Actions:
+
+- channels: `https://raw.githubusercontent.com/sportlive18/Sportlink-wtf/refs/heads/main/sony.json`
+- token:    `https://raw.githubusercontent.com/sportlive18/Sportlink-wtf/refs/heads/main/cookie.json`
+
+**Field name.** These feeds name the stream field **`stream_url`**. Any feed
+using that name silently parsed to zero channels, because `mapChannel()` only
+knew `url` / `streamUrl` — and the source still reported a *successful* sync, so
+the only symptom was an empty catalogue. `stream_url` is now in the chain. When
+adding any new JSON source, check the field name first: `npm run live:doctor`
+against the URL is the fastest way (it reports `channels parsed: 0` in red).
+
+**What the feed carries.** 31 channels, all `jiotvmblive.cdn.jio.com` DASH, each
+with its own ClearKey `key_id`/`key` pair and a six-hour `__hdnea__` token. The
+source is configured with `titleFilter: 'Sony Sports|Sony Ten'` (9 channels —
+the file also carries SET, SAB, Max, BBC Earth, Yay and Animax) and
+`autoMapCatalog: 'sports'`.
+
+**Why it is worth having** even though `jstr4web.json` already carries seven
+"Sony LIV Sports" rows: those are the `SonyLIV_Sports_*_MOB` encodes, while this
+feed carries the HD Ten/Six set (`Ten_HD`, `Ten2_HD`, `Ten3_HD`, `Six_HD`) that
+`jstr4web.json` has none of.
+
+**Playback path.** ClearKey + a per-request cookie means a browser cannot fetch
+these directly: everything routes through `/api/live-jio`, which carries the
+`Cookie` / `User-Agent` / `Referer` and refuses any host outside
+`JIO_STREAM_HOSTS`. Jio's CDN answers **451 outside India**, so a datacenter
+probe always looks "broken" — that is geography, not a fault.
+
+**Token rotation.** The cookie expires roughly every six hours. It is refreshed
+automatically by `getFreshJioCookie()` and injected by `injectJioCookie()` on
+every catalogue read, so a stale token in the feed file costs nothing.
+
+**Self-heal.** A host that stops resolving is tombstoned in
+`REMOVED_SOURCE_PATTERNS`. A database seeded by an older release is repointed to
+the current default on the next boot rather than failing forever.

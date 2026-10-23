@@ -4,12 +4,20 @@ import dbConnect from '@/lib/db';
 import LiveSource from '@/models/LiveSource';
 import LiveChannel from '@/models/LiveChannel';
 import { ensureLiveServiceSeeded, sourceIdFromLabel, toClientSource, recalcSourceCounts } from '@/lib/liveService';
+import { isDeadSourceUrl, probeLiveSourceUrl } from '@/lib/liveTv';
 import { recordAction } from '@/lib/adminAudit';
+import { isLiveCatalogId } from '@/lib/liveCatalogs';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 function json(data, status = 200) { return NextResponse.json(data, { status, headers: { 'Cache-Control': 'no-store' } }); }
+
+/** Only a real catalog id is accepted — a typo must not map channels nowhere. */
+function normalizeAutoMap(value = '') {
+  const id = String(value || '').trim().toLowerCase();
+  return isLiveCatalogId(id) ? id : '';
+}
 
 /** The snapshot undo restores for a source. */
 function sourceSnapshot(doc = {}) {
@@ -17,7 +25,8 @@ function sourceSnapshot(doc = {}) {
     sourceId: doc.sourceId, label: doc.label, url: doc.url, type: doc.type,
     enabled: doc.enabled !== false, trustTamil: Boolean(doc.trustTamil),
     priority: Number(doc.priority ?? 50), autoPurge: Boolean(doc.autoPurge),
-    titleFilter: doc.titleFilter || '', deleted: Boolean(doc.deleted),
+    titleFilter: doc.titleFilter || '', autoMapCatalog: doc.autoMapCatalog || '',
+    deleted: Boolean(doc.deleted),
   };
 }
 
@@ -26,6 +35,26 @@ export async function GET(request) {
     await requireServiceAuth(request);
     await ensureLiveServiceSeeded();
     const sources = await LiveSource.find({ deleted: { $ne: true } }).sort({ priority: 1, label: 1 }).lean();
+
+    // ?health=1 answers "is this feed still there?" without syncing anything.
+    // Admin shows the verdict next to each source so a host that quietly went
+    // away is visible instead of only showing up as an empty channel count.
+    if (['1', 'true', 'yes'].includes(String(new URL(request.url).searchParams.get('health') || '').toLowerCase())) {
+      const probes = await Promise.all(sources.map(async (doc) => {
+        if (isDeadSourceUrl(doc.url)) {
+          return { sourceId: doc.sourceId, ok: false, status: 0, ms: 0, error: 'Host no longer exists' };
+        }
+        const result = await probeLiveSourceUrl(doc.url);
+        return { sourceId: doc.sourceId, ...result };
+      }));
+      const byId = new Map(probes.map((item) => [item.sourceId, item]));
+      return json({
+        ok: true,
+        checkedAt: new Date().toISOString(),
+        sources: sources.map((doc) => ({ ...toClientSource(doc), health: byId.get(doc.sourceId) || null })),
+      });
+    }
+
     return json({ ok: true, sources: sources.map(toClientSource) });
   } catch (error) { return json({ ok: false, error: error.message }, error.status || 500); }
 }
@@ -42,7 +71,7 @@ export async function POST(request) {
     const before = await LiveSource.findOne({ sourceId }).lean();
     const doc = await LiveSource.findOneAndUpdate(
       { sourceId },
-      { $set: { deleted: false, sourceId, label, url, headers: body.headers || {}, type: body.type === 'json' ? 'json' : 'm3u', enabled: body.enabled !== false, trustTamil: Boolean(body.trustTamil), priority: Number(body.priority ?? 50), autoPurge: Boolean(body.autoPurge), titleFilter: String(body.titleFilter || '').trim() } },
+      { $set: { deleted: false, sourceId, label, url, headers: body.headers || {}, type: body.type === 'json' ? 'json' : 'm3u', enabled: body.enabled !== false, trustTamil: Boolean(body.trustTamil), priority: Number(body.priority ?? 50), autoPurge: Boolean(body.autoPurge), titleFilter: String(body.titleFilter || '').trim(), autoMapCatalog: normalizeAutoMap(body.autoMapCatalog) } },
       { upsert: true, new: true },
     );
     await recordAction({
@@ -65,6 +94,7 @@ export async function PATCH(request) {
     if (!sourceId) return json({ ok: false, error: 'sourceId is required' }, 400);
     const patch = {};
     ['label', 'url', 'type', 'enabled', 'trustTamil', 'priority', 'autoPurge', 'titleFilter', 'headers'].forEach((key) => { if (body[key] !== undefined) patch[key] = body[key]; });
+    if (body.autoMapCatalog !== undefined) patch.autoMapCatalog = normalizeAutoMap(body.autoMapCatalog);
     if (patch.type && !['m3u', 'json'].includes(patch.type)) patch.type = 'm3u';
     const before = await LiveSource.findOne({ sourceId }).lean();
     const doc = await LiveSource.findOneAndUpdate({ sourceId }, { $set: patch }, { new: true });

@@ -1,3 +1,44 @@
+## Sony Sports in Live TV: the feed was fine, one field name was wrong (2026-10-23)
+
+Requested: *"i want stream4liv.netlify.app sony sports source in live tv section. already i have jio and i
+want other sources to wired properly in our app."*
+
+Studied the site first. It is a static single-page app with **263 channels hardcoded in its JS bundle** —
+there is no playlist file and no API. Its "Sony Sports" tab is 33 channels of Jio DASH
+(`jiotvmblive.cdn.jio.com/bpk-tv/Ten_*_MOB/WDVLive/index.mpd`), each with its own ClearKey pair and a
+six-hour `__hdnea__` CDN token.
+
+Four separate faults, each measured rather than assumed:
+
+1. **The parser did not know the field the feed uses.** `mapChannel()` read the stream URL as
+   `raw.url || raw.streamUrl || raw.link || raw.href`. Every Sony/Stream4Liv feed names it
+   **`stream_url`**. Result: **0 of 31 channels parsed**, and the source still reported a successful
+   sync — the failure is invisible from the UI. Renaming the field to `url` in the same file gives 31.
+   Fixed by adding `stream_url` to the chain; `url` and `streamUrl` still work.
+2. **The Sony source in the code pointed at a host that no longer exists**
+   (`sayan-sportlink-sonynetwork.pages.dev` — NXDOMAIN), so it could never have synced anything.
+   Repointed at `sportlive18/Sportlink-wtf/sony.json`: the same maintainer Stream4Liv reads its token
+   from, auto-refreshed by GitHub Actions, with 29 of its 31 channel names identical to Stream4Liv's tab.
+3. **The primary Jio cookie URL was 404** (`sportlive18/jio-tv-auto-update-playlist`). It recovered on a
+   fallback from a different provider. The Sportlink-wtf `cookie.json` now leads the list, so the token
+   and the channel list come from one place.
+4. **A synced source still showed nothing**, because the Live TV page only renders manually mapped
+   channels. Sources can now nominate `autoMapCatalog`; the Sony feed uses `sports`.
+
+Also: the feed is filtered to sports only (`titleFilter`), a dead host is tombstoned and **self-heals on
+boot** (a database seeded by an older release gets repointed instead of failing forever), Admin gained a
+**Check all** button that shows a green/red dot per source so a dead feed is visible without a sync, and
+two genuinely dead exports (`SPORTS_ALLOW_PATTERN` / `isWantedSportsChannel`, `REMOVED_SOURCE_IDS`) were
+deleted along with three unused imports.
+
+Measured through the running app against a real database: source seeds → sync parses **9/9** → all nine
+auto-mapped into Sports → `/api/live-tv` serves all nine as `dash` with their ClearKey and cookie intact →
+re-sync preserves a manual mapping and creates no duplicates. `live-doctor` on the feed: **0 → 31**.
+
+Not verified here: the sandbox is a US datacenter and every Jio CDN request answers **HTTP 451**
+(geo-restricted). Parsing, key attachment, cookie handling and proxy routing are all verified — actual
+playback needs a run from India. The proxy accepts the Jio host and refuses anything else.
+
 ## Lyrics the site shows but the app did not: the question was wrong (2026-10-16)
 
 Requested: *"lyrics not available for many songs but they are have lyrics in site. so study analyze the
