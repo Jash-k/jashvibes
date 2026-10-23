@@ -6,6 +6,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import JashPlayer from '@/components/player/JashPlayerLazy';
 import { DayStrip, GuideNowLine, GuideStatus, ProgrammeCard, SourceBadges, showProgress, useLiveGuide } from '@/components/live/LiveGuide';
 import { createLiveTvPolicy, isPocketChannel } from '@/lib/player/policy/liveTv';
+import { probeCapabilities } from '@/lib/player/capabilities';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 import {
   LIVE_CATALOGS,
@@ -52,6 +53,8 @@ export default function LiveTVPage() {
   // a ref, not state: the player reads it while building the policy and must
   // not be rebuilt (and reloaded) by the write that sets it.
   const pocketProxyRef = useRef(new Set());
+  const [caps, setCaps] = useState(null);
+  useEffect(() => { probeCapabilities().then(setCaps).catch(()=>{}); }, []);
   const [channels, setChannels] = useState([]);
   const [active, setActive] = useState(null);
   const [lastViewed, setLastViewed] = useState(null);
@@ -399,7 +402,7 @@ export default function LiveTVPage() {
           </div>
           <div className="flex items-center justify-center gap-2 text-center">
             <BrandLogo size="mini" />
-            <p className="text-[9px] font-black uppercase tracking-[0.26em] text-red-500 sm:text-[10px] sm:tracking-[0.32em]">Tamil Live TV <span className="ml-1 rounded bg-white/10 px-1 py-px align-middle normal-case tracking-normal text-zinc-500">K5</span></p>
+            <p className="text-[9px] font-black uppercase tracking-[0.26em] text-red-500 sm:text-[10px] sm:tracking-[0.32em]">Tamil Live TV <span className="ml-1 rounded bg-white/10 px-1 py-px align-middle normal-case tracking-normal text-zinc-500">K5</span>{caps ? <span className="ml-1 rounded bg-emerald-500/20 px-1 py-px text-[8px] font-bold text-emerald-300">{caps.hasMSE ? 'MSE✓' : ''}{caps.hasMMS ? '+MMS' : ''}{caps.nativeHls ? ' HLS✓' : ''}{caps.codecs?.hevc ? ' HEVC✓' : ''}</span> : null}</p>
           </div>
           <button
             type="button"

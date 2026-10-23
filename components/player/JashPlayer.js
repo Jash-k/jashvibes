@@ -1,4 +1,5 @@
 'use client';
+// Universal Live Player — v11.1: HLS/DASH/DRM/MPEGTS unified
 
 // Shaka's own stylesheet travels with the player instead of the root layout: it is 24 KB of
 // render-blocking CSS for UI that only exists once a video mounts. Imported here, it lands in the

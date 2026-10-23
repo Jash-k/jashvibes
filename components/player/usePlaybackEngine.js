@@ -38,7 +38,10 @@ import {
 } from '@/lib/player/kind';
 import { isDrmConfigError, mapPlaybackError } from '@/lib/player/errors';
 import { clamp, readPrefs, writePref } from '@/lib/player/prefs';
-import { DEFAULT_LADDER, RUNGS, capabilitiesFor, nextRecoveryAction } from '@/lib/player/recovery';
+import { DEFAULT_LADDER, RUNGS, capabilitiesFor, nextRecoveryAction, isCorsLikeError } from '@/lib/player/recovery';
+import { probeCapabilities } from '@/lib/player/capabilities';
+import { buildLivePlan } from '@/lib/player/liveEngine';
+import { proxyMediaUrl, proxyLicenseUrl, needsProxy } from '@/lib/player/httpProxy';
 import { createSubtitleTrack, releaseSubtitleTrack, shiftVttCues, subtitleStyleToCss } from '@/lib/player/subtitles';
 
 const TIME_TICK_MS = 250;
@@ -62,6 +65,12 @@ async function loadShaka() {
     const shaka = module.default || window.shaka || module;
     if (!shaka?.Player) throw new Error('Shaka Player failed to load.');
     shaka.polyfill?.installAll?.();
+    // Enable ManagedMediaSource on iOS 17.4+ for DASH + EME support
+    try {
+      if (typeof ManagedMediaSource !== 'undefined' && shaka.media && shaka.media.ManagedMediaSource) {
+        // Shaka 4.16+ will auto-use MMS when streaming.useManagedMediaSource=true
+      }
+    } catch {}
     window.shaka = shaka;
   }
   return window.shaka;
@@ -78,6 +87,24 @@ async function ensureMuxjs() {
   muxPromise = muxPromise || import('mux.js');
   const module = await muxPromise;
   window.muxjs = module.default || module;
+}
+
+// ManagedMediaSource flag helper
+function shouldUseManagedMediaSource() {
+  try {
+    return typeof ManagedMediaSource !== 'undefined' && !!ManagedMediaSource.isTypeSupported;
+  } catch { return false; }
+}
+
+// Lazy mpegts loader — optional dependency
+let mpegtsPromise = null;
+async function loadMpegtsAdapter() {
+  if (typeof window === 'undefined') return null;
+  if (window.mpegts) return window.mpegts;
+  if (!mpegtsPromise) {
+    mpegtsPromise = import('@/lib/player/mpegtsAdapter').then(m => m).catch(() => null);
+  }
+  try { return await mpegtsPromise; } catch { return null; }
 }
 
 export function usePlaybackEngine(options = {}) {
@@ -598,6 +625,11 @@ export function usePlaybackEngine(options = {}) {
     const player = playerRef.current;
     playerRef.current = null;
     if (!player) return;
+    // MPEGTS handle
+    if (player._mpegts) {
+      try { await player.destroy?.(); } catch {}
+      return;
+    }
     // destroy() owns unload + detach. Overlapping detach/destroy operations
     // can leave Shaka's operation queue waiting on itself after a failed load.
     try { await player.destroy?.(); } catch {}
@@ -691,7 +723,10 @@ export function usePlaybackEngine(options = {}) {
     }
 
     const kind = source.kind && source.kind !== 'auto' ? source.kind : detectKind(url);
-    const useShaka = needsEngine(url, kind, { allowNativeHls: allowNativeHlsRef.current && source.allowNativeHls !== false && !source.hasDrm });
+    // Universal engine decision: TS/FLV via mpegts.js when Shaka would struggle
+    const isTsOrFlv = /\.(ts|m2ts|mts)(\?|#|$)/i.test(url) || /[?&]extension=ts\b|\.flv(\?|#|$)|extension=flv|\/live\/[^/]+\/[^/]+\/\d+(\.ts)?(\?|#|$)/i.test(url);
+    const preferMpegts = isTsOrFlv && !dropDrm;
+    const useShaka = preferMpegts ? false : needsEngine(url, kind, { allowNativeHls: allowNativeHlsRef.current && source.allowNativeHls !== false && !source.hasDrm });
     const suppliedDrm = dropDrm ? {} : source.drm || {};
     const hasDrm = Boolean(suppliedDrm?.clearKeys && Object.keys(suppliedDrm.clearKeys).length) || Boolean(suppliedDrm?.servers);
     activePolicy.lastDrm = hasDrm;
@@ -709,6 +744,40 @@ export function usePlaybackEngine(options = {}) {
         'timeout',
       );
     }, timeoutMs);
+
+    // MPEG-TS live edge: try mpegts.js when requested and available
+    if (preferMpegts) {
+      try {
+        commitStatus('loading', 'Loading live TS feed…');
+        const adapter = await loadMpegtsAdapter();
+        if (adapter?.createMpegtsPlayer && isAlive(generation)) {
+          const headers = source.http ? liveSourceHeadersFromPolicy(source, channel) : {};
+          const handle = await adapter.createMpegtsPlayer(el, url, { live: true, headers, referer: source?.meta?.referer || '' });
+          // Store handle for destroy
+          playerRef.current = { destroy: handle.destroy, _mpegts: handle };
+          handle.onError((e) => failureRef.current?.(mapPlaybackError(e, { offline: offlineRef.current }), 'mpegts'));
+          // Trigger play
+          try { await handle.play?.(); } catch {}
+          window.clearTimeout(timeoutRef.current);
+          commitStatus('ready', '');
+          refreshModel();
+          return;
+        }
+      } catch (mpegErr) {
+        console.warn('[mpegts] fallback to native/shaka:', mpegErr?.message);
+        // Fall through to Shaka/native
+      }
+    }
+
+    function liveSourceHeadersFromPolicy(src, ch) {
+      try {
+        const c = ch || {};
+        const h = { ...(c.headers || {}) };
+        if (c.referer) h.Referer = c.referer;
+        if (c.userAgent) h['User-Agent'] = c.userAgent;
+        return h;
+      } catch { return {}; }
+    }
 
     try {
       if (useShaka) {
@@ -731,12 +800,27 @@ export function usePlaybackEngine(options = {}) {
           return;
         }
 
+        // Universal tuning: merge policy config with live-optimized defaults
+        const useMMS = shouldUseManagedMediaSource();
+        const baseConfig = activePolicy.playerConfig || {
+          streaming: { bufferingGoal: 20, rebufferingGoal: 3 },
+          abr: { enabled: true, defaultBandwidthEstimate: 1_200_000 },
+        };
         player.configure({
-          ...(activePolicy.playerConfig || {
-            streaming: { bufferingGoal: 20, rebufferingGoal: 3 },
-            abr: { enabled: true, defaultBandwidthEstimate: 1_200_000 },
-          }),
-          drm: suppliedDrm,
+          ...baseConfig,
+          streaming: {
+            lowLatencyMode: true,
+            inaccurateManifestTolerance: 0,
+            useNativeHlsForFairPlay: false,
+            ...(useMMS ? { useManagedMediaSource: true } : {}),
+            ...(baseConfig.streaming || {}),
+          },
+          drm: {
+            ...suppliedDrm,
+            // Ensure license retries are bounded and use proxy when needed
+            retryParameters: { maxAttempts: 2, baseDelay: 500, timeout: 5000 },
+            ...(suppliedDrm?.advanced ? { advanced: suppliedDrm.advanced } : {}),
+          },
         });
         if (!prefsRef.current.qualityAuto) player.configure('abr.enabled', false);
 
@@ -883,6 +967,7 @@ export function usePlaybackEngine(options = {}) {
 
     const ladder = activePolicy?.ladder || DEFAULT_LADDER;
     const live = derivePlaybackModel(el).live;
+    const canCorsRetry = !String(el?.currentSrc || el?.src || '').includes('/api/live-proxy') && !String(el?.currentSrc || el?.src || '').includes('/api/live-jio');
     const caps = capabilitiesFor({
       engine: playerRef.current,
       url: el?.currentSrc || el?.src,
@@ -892,6 +977,7 @@ export function usePlaybackEngine(options = {}) {
       model: { live, canSeek: derivePlaybackModel(el).canSeek },
       error: mapped,
       seeking: Boolean(el?.seeking) || Date.now() < seekGraceUntilRef.current || Date.now() < coarseSeekHoldRef.current,
+      canCorsRetry,
     });
     if (activePolicy?.startupAware && !firstPlaybackRef.current) {
       // retryStreaming only resumes an already-created streaming engine.
@@ -952,6 +1038,23 @@ export function usePlaybackEngine(options = {}) {
         }
 
         switch (action.rung) {
+          case RUNGS.CORS_RETRY: {
+            // Auto-proxy: rewrite current URL via server and reload
+            const curUrl = el?.currentSrc || el?.src || '';
+            const channelForProxy = activePolicy?.channel || {};
+            try {
+              const proxied = proxyMediaUrl(curUrl, { url: curUrl, headers: channelForProxy.headers || {}, referer: channelForProxy.referer || '', userAgent: channelForProxy.userAgent || '', cookie: channelForProxy.cookie || '' });
+              // Also mark policy that proxy is needed for next attempt
+              if (activePolicy && typeof activePolicy.describe === 'function') {
+                const desc = activePolicy.describe();
+                if (desc && 'liveProxyEnabled' in desc) desc.liveProxyEnabled = true;
+              }
+              await attach({ reason: 'cors-retry', urlOverride: proxied });
+            } catch {
+              await attach({ reason: 'cors-retry' });
+            }
+            break;
+          }
           case RUNGS.RETRY_STREAMING:
             await playerRef.current?.retryStreaming?.();
             stallSamplesRef.current = 0;
