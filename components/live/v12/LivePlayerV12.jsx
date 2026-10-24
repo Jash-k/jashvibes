@@ -2,15 +2,14 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import JashPlayer from '@/components/player/JashPlayerLazy';
 import { createLiveTvPolicy } from '@/lib/player/policy/liveTv';
-import { probeCapabilities } from '@/lib/player/capabilities';
 
 export default function LivePlayerV12({ logical, variantIdx=0, onErrorNeedingFallback }) {
   const variant = logical?.variants?.[variantIdx] || logical?.best;
   const displayName = logical?.displayName || logical?.name || variant?.name || 'Live Channel';
   const [resolved, setResolved] = useState(null);
-  const [caps, setCaps] = useState(null);
   const [err, setErr] = useState('');
-  useEffect(()=>{ probeCapabilities().then(setCaps).catch(()=>{}); },[]);
+  // JashPlayer/usePlaybackEngine probe EME/codec capabilities internally — no
+  // caps prop exists on the player, so this page does not probe at all.
   const gen = useRef(0);
 
   const resolve = useCallback(async ()=>{
@@ -32,8 +31,10 @@ export default function LivePlayerV12({ logical, variantIdx=0, onErrorNeedingFal
         cookie: variant.cookie, userAgent: variant.userAgent, referer: variant.referer, headers: variant.headers||{},
       };
       const policy = createLiveTvPolicy(channel, { origin: typeof window!=='undefined'?window.location.origin:'', allowNativeHls:true });
-      // policy expects to resolve via its own resolve() — but we already have playUrl
-      // Instead, feed resolved URL directly via JashPlayer source
+      // JashPlayer runs this policy itself: its resolve() owns Jio token
+      // injection, ClearKey/Widevine DRM, header rewriting and the
+      // direct -> proxy recovery ladder. The /api/live/resolve call above only
+      // guarantees a fresh token and a non-empty URL before the player mounts.
       setResolved({ playUrl: data.playUrl, originUrl: data.originUrl, policy, channel, expiresAt: data.expiresAt, freshness: data.freshness, drm: data.drm });
     }catch(e){
       if (my!==gen.current) return;
@@ -63,13 +64,26 @@ export default function LivePlayerV12({ logical, variantIdx=0, onErrorNeedingFal
       </div>
     );
   }
-  if (!resolved || !caps) return <div className="rounded-xl border border-white/10 bg-black p-6 text-zinc-400">Resolving {variant.sourceLabel}…</div>;
+  if (!resolved) return <div className="rounded-xl border border-white/10 bg-black p-6 text-zinc-400">Resolving {variant.sourceLabel}…</div>;
 
-  // Use JashPlayer with policy + caps
+  // Contract mirrors LiveServicePanel's ServicePreviewPlayer and the /watch
+  // page: a policy WITH a resolve() must arrive as `playbackPolicy` — the bare
+  // `policy` prop is only a shallow config overlay and never reaches the
+  // engine. `source.url` identifies the stream (source key, chrome, stats);
+  // the policy resolves the actual playback URL, rewriting to /api/live-proxy
+  // when the variant needs server-side headers. A per-channel key remounts the
+  // engine cleanly on every channel zap / variant-ladder switch.
   return (
     <div className="space-y-2">
       <div className="rounded-2xl overflow-hidden border border-white/10 bg-black">
-        <JashPlayer caps={caps} policy={resolved.policy} channel={resolved.channel} />
+        <JashPlayer
+          key={`${resolved.channel.channelId}:${variantIdx}`}
+          source={{ url: resolved.originUrl, kind: 'auto', label: resolved.channel.name }}
+          playbackPolicy={resolved.policy}
+          live
+          poster={resolved.channel.logo || ''}
+          display={{ title: resolved.channel.name, poster: resolved.channel.logo || '' }}
+        />
       </div>
       <div className="flex items-center justify-between text-xs text-zinc-400">
         <span>{resolved.channel.name} • {variant.sourceLabel} • {variant.format.toUpperCase()} {resolved.freshness?`• token ${resolved.freshness}`:''}</span>
