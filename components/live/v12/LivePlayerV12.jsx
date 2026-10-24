@@ -5,8 +5,8 @@ import { createLiveTvPolicy } from '@/lib/player/policy/liveTv';
 import { probeCapabilities } from '@/lib/player/capabilities';
 
 export default function LivePlayerV12({ logical, variantIdx=0, onErrorNeedingFallback }) {
-  const displayName = logical?.displayName || logical?.name || variant?.name || 'Live Channel';
   const variant = logical?.variants?.[variantIdx] || logical?.best;
+  const displayName = logical?.displayName || logical?.name || variant?.name || 'Live Channel';
   const [resolved, setResolved] = useState(null);
   const [caps, setCaps] = useState(null);
   const [err, setErr] = useState('');
@@ -37,9 +37,14 @@ export default function LivePlayerV12({ logical, variantIdx=0, onErrorNeedingFal
       setResolved({ playUrl: data.playUrl, originUrl: data.originUrl, policy, channel, expiresAt: data.expiresAt, freshness: data.freshness, drm: data.drm });
     }catch(e){
       if (my!==gen.current) return;
+      // Auto ladder: if this variant has no URL, try next without showing error first
+      if (/no playable url|not found/i.test(e.message) && logical?.variants?.length > variantIdx+1) {
+        onErrorNeedingFallback?.(logical, variantIdx);
+        return;
+      }
       setErr(e.message);
     }
-  },[variant]);
+  },[variant, logical, variantIdx, onErrorNeedingFallback]);
 
   useEffect(()=>{ resolve(); },[resolve]);
 

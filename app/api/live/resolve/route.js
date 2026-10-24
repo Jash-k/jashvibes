@@ -40,7 +40,19 @@ export async function GET(request) {
       }
     }
     if (!doc) return NextResponse.json({ ok:false, error:'No playable URL was resolved for this title.', hint:'Sync the source that carries this title in Admin → TV Service → Sync (Jash Live / Tamil FTA may be empty).'}, {status:404});
-    if (!doc.url) return NextResponse.json({ ok:false, error:`No playable URL was resolved for "${doc.name}" — URL missing in DB. Re-sync ${doc.sourceId||'its source'} in Admin → TV Service.`, hint:'URL empty — source parse stored no URL'}, {status:404});
+    // If this variant has empty URL (stale doc from blob HTML), ladder to another variant with same base name that has URL
+    if (!doc.url || !String(doc.url).trim()) {
+      const all = await LiveChannel.find({}).lean();
+      const nNorm = String(doc.normalizedName||doc.name||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+      const alt = all.find(d=> d.channelId !== doc.channelId && String(d.normalizedName||d.name||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim() === nNorm && d.url && String(d.url).trim());
+      if (alt) doc = alt;
+      else {
+        // Try any same display base
+        const fallback = all.find(d=> d.url && String(d.name||'').toLowerCase().includes(String(doc.name||'').toLowerCase().split(' ')[0]))
+        if (fallback && fallback.url) doc = fallback;
+        else return NextResponse.json({ ok:false, error:`No playable URL was resolved for "${doc.name}" — URL missing in DB. Re-sync ${doc.sourceId||'its source'} in Admin → TV Service.`, hint:'URL empty — source parse stored no URL', candidates: all.filter(d=> String(d.normalizedName||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim() === nNorm).map(d=>({sourceId:d.sourceId, hasUrl:!!d.url})) }, {status:404});
+      }
+    }
 
     // Build client channel shape
     let channel = {
