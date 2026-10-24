@@ -10,7 +10,7 @@
     "db:clean": "node scripts/db-maintenance.cjs --safe",
     "check": "node scripts/check-source.cjs",
     "test:music": "node scripts/test-music-browser.cjs",
-    "verify": "node scripts/check-source.cjs && node scripts/test-loading-system.cjs && node scripts/test-music-pocket.cjs && node scripts/test-lyrics-pipeline.cjs && node scripts/test-lyrics-controller.cjs && node scripts/test-vault-admin.cjs && node scripts/test-player-runtime.cjs && node scripts/test-nav-order.cjs && node scripts/test-performance-cache.cjs && node scripts/test-extras-registry.cjs && node scripts/test-extras-covers.cjs && node scripts/test-admin-controls.cjs && node --import ./scripts/alias-register.mjs scripts/test-live-sources.mjs",
+    "verify": "node scripts/check-source.cjs && node scripts/test-loading-system.cjs && node scripts/test-music-pocket.cjs && node scripts/test-lyrics-pipeline.cjs && node scripts/test-lyrics-controller.cjs && node scripts/test-vault-admin.cjs && node scripts/test-player-runtime.cjs && node scripts/test-nav-order.cjs && node scripts/test-performance-cache.cjs && node scripts/test-extras-registry.cjs && node scripts/test-extras-covers.cjs && node scripts/test-admin-controls.cjs && node --import ./scripts/alias-register.mjs scripts/test-live-sources.mjs && node --import ./scripts/alias-register.mjs scripts/test-live-catalogs.mjs",
     "manifest": "node scripts/make-manifest.cjs",
     "manifest:check": "node scripts/make-manifest.cjs --check"
   },

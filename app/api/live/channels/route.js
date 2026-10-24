@@ -6,18 +6,40 @@ import { getDefaultLiveSources } from '@/lib/liveTv';
 import { deduplicateChannels, isDummyVariant } from '@/lib/live/pipeline/deduplicate.js';
 import { policyForLogicalChannel } from '@/lib/live/playback/policy.js';
 import { isMainstreamTamilChannel } from '@/lib/live/pipeline/normalize.js';
+import { LIVE_CATALOGS, isLiveCatalogId, normalizeCatalogMemberships } from '@/lib/liveCatalogs';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+/** Lowest catalog position any variant of this group holds (999999 if unmapped). */
+function groupCatalogPosition(group, catalogId = 'all') {
+  let lowest = 999999;
+  for (const variant of group.variants || []) {
+    const memberships = normalizeCatalogMemberships(variant.catalogs || []);
+    for (const membership of memberships) {
+      if (catalogId !== 'all' && membership.catalogId !== catalogId) continue;
+      lowest = Math.min(lowest, membership.position);
+    }
+  }
+  return lowest;
+}
+
+function groupHasCatalog(group, catalogId) {
+  return (group.variants || []).some((variant) => (variant.catalogIds || []).includes(catalogId));
+}
+
 /**
- * GET /api/live/channels?tamilOnly=1&source=all
- * Returns deduplicated logical channels (one card per base-name) with fallback ladder.
+ * GET /api/live/channels?tamilOnly=1&source=all&catalog=main
+ * Returns deduplicated logical channels (one card per base-name) with fallback
+ * ladder, filtered by source/catalog and ordered by the persisted catalog
+ * positions set in Admin → TV.
  */
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const sourceFilter = String(searchParams.get('source')||'all').toLowerCase();
+    const requestedCatalog = String(searchParams.get('catalog')||'').toLowerCase();
+    const catalogFilter = isLiveCatalogId(requestedCatalog) ? requestedCatalog : '';
     const tamilOnly = ['1','true','yes'].includes(String(searchParams.get('tamilOnly')||'').toLowerCase());
     const includeUnplayable = false;
 
@@ -56,6 +78,11 @@ export async function GET(request) {
       source: d.source,
       tvgId: d.tvgId||'',
       priority: d.priority ?? 99,
+      catalogs: Array.isArray(d.catalogs) ? d.catalogs : [],
+      catalogIds: (d.catalogs || []).map((item) => (typeof item === 'string' ? item : item?.catalogId)).filter(Boolean),
+      logicalChannelId: d.logicalChannelId || '',
+      order: d.order ?? 9999,
+      mappingManaged: Boolean(d.mappingManaged),
     })).filter(ch => {
       if (!ch.playable) return false;
       if (isDummyVariant(ch)) return false;
@@ -77,12 +104,34 @@ export async function GET(request) {
       });
     }
 
+    // Catalog filter (persisted memberships written by the background grouping
+    // pass / Admin mapping). Variants are kept intact so the fallback ladder
+    // still reaches every source for the title.
+    if (catalogFilter) {
+      logical = logical.filter((g) => groupHasCatalog(g, catalogFilter));
+    }
+
+    // Owner order first (per-catalog positions), name as the stable tiebreak.
+    logical = [...logical].sort((a, b) => {
+      const positionDiff = groupCatalogPosition(a, catalogFilter) - groupCatalogPosition(b, catalogFilter);
+      if (positionDiff) return positionDiff;
+      return String(a.displayName || '').localeCompare(String(b.displayName || ''));
+    });
+
+    // Per-catalog group counts for the public catalog tabs.
+    const catalogs = LIVE_CATALOGS.map((catalog) => ({
+      ...catalog,
+      count: allLogical.filter((g) => groupHasCatalog(g, catalog.id)).length,
+    }));
+
     return NextResponse.json({
       ok:true,
       deduplicated:true,
       groups: logical.length,
       totalVariants: flat.length,
       logical,
+      catalog: catalogFilter || 'all',
+      catalogs,
       // keep flat for backward compat
       flat: logical.flatMap(g=> g.variants.map(v=> ({...v, logicalId:g.logicalId, displayName:g.displayName}))),
       sources: defaults,

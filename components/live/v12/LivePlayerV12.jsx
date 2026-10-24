@@ -66,10 +66,9 @@ export default function LivePlayerV12({ logical, variantIdx=0, onErrorNeedingFal
   }
   if (!resolved) return <div className="rounded-xl border border-white/10 bg-black p-6 text-zinc-400">Resolving {variant.sourceLabel}…</div>;
 
-  // Contract mirrors LiveServicePanel's ServicePreviewPlayer and the /watch
-  // page: a policy WITH a resolve() must arrive as `playbackPolicy` — the bare
-  // `policy` prop is only a shallow config overlay and never reaches the
-  // engine. `source.url` identifies the stream (source key, chrome, stats);
+  // Contract mirrors the /watch page and the service-preview player: a policy
+  // WITH a resolve() must arrive as `playbackPolicy` — the bare `policy` prop
+  // is only a shallow config overlay and never reaches the engine. `source.url` identifies the stream (source key, chrome, stats);
   // the policy resolves the actual playback URL, rewriting to /api/live-proxy
   // when the variant needs server-side headers. A per-channel key remounts the
   // engine cleanly on every channel zap / variant-ladder switch.

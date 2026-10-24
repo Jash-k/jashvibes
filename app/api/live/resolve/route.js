@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import LiveChannel from '@/models/LiveChannel';
 import { getFreshJioCookie, injectJioCookie } from '@/lib/liveTv';
-import { isJioChannel } from '@/lib/jioPlayback';
+import { isHjhWorkerChannel, isJioChannel } from '@/lib/jioPlayback';
 import { buildLiveDrm, buildClearKeys } from '@/lib/player/policy/liveTv';
 import { needsProxyForVariant, isGeoSensitive } from '@/lib/live/playback/policy.js';
 import { readTokenExpiry } from '@/lib/player/streamClassifier';
@@ -63,8 +63,10 @@ export async function GET(request) {
       userAgent: doc.userAgent, referer: doc.referer, headers: doc.headers || {},
     };
 
-    // Inject fresh Jio token if needed (isJioChannel includes __hdnea__ check now)
-    if (isJioChannel(channel)) {
+    // Inject fresh Jio token if needed. HJH worker URLs are self-tokenizing
+    // (their 302 already carries a fresh __hdnea__), so the token sweep must
+    // not block or rewrite them.
+    if (isJioChannel(channel) && !isHjhWorkerChannel(channel)) {
       try {
         const cookie = await getFreshJioCookie();
         if (cookie) {

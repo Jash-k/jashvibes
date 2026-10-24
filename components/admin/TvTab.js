@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import LiveChannelManager from './LiveChannelManager';
 
 function HealthDot({ health }){
   const title = !health ? 'Not checked' : health.ok ? `HTTP ${health.status} in ${health.ms}ms` : (health.error||`HTTP ${health.status}`);
@@ -22,6 +23,7 @@ export default function TvTabV12(){
   const [showAdd,setShowAdd]=useState(false);
   const [form,setForm]=useState({label:'', url:'', type:'m3u', priority:50});
   const [jioStatus,setJioStatus]=useState('');
+  const [view,setView]=useState('sources');
 
   const api = useCallback(async(path, opts={})=>{
     const res = await fetch(path, { cache:'no-store', ...opts, headers:{'Content-Type':'application/json', ...(opts.headers||{})} });
@@ -119,6 +121,13 @@ export default function TvTabV12(){
 
   return (
     <div className="space-y-4">
+      {/* Sources vs channel manager */}
+      <div className="flex gap-2">
+        <button onClick={()=>setView('sources')} className={`rounded-full px-4 py-1.5 text-xs font-black ${view==='sources'?'bg-red-600 text-white':'border border-white/10'}`}>Sources & Sync</button>
+        <button onClick={()=>setView('channels')} className={`rounded-full px-4 py-1.5 text-xs font-black ${view==='channels'?'bg-red-600 text-white':'border border-white/10'}`}>Channels · Catalogs · Reorder</button>
+      </div>
+
+      {view === 'channels' ? <LiveChannelManager /> : (<>
       {/* Header */}
       <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -207,7 +216,7 @@ export default function TvTabV12(){
             <option value="hjh-jio">HJH</option>
             <option value="jash-live">Jash Live</option>
             <option value="pocket-tamil">Pocket</option>
-            <option value="tamil-iptv">Tamil IPTV</option>
+            <option value="iptv-org-tamil">Tamil FTA</option>
           </select>
         </div>
         {loadingCh ? <p className="p-4 text-sm text-zinc-400">Loading Tamil channels…</p> : null}
@@ -234,6 +243,7 @@ export default function TvTabV12(){
           <li>If “No playable URL” persists for a title → Report dead (coming) — means all variants for that title have empty URL or expired token → re-sync that source</li>
         </ol>
       </div>
+      </>)}
     </div>
   );
 }

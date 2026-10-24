@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { setSetting } from '@/models/Setting';
 import { NextResponse } from 'next/server';
 import { requireServiceAuth } from '@/lib/serverAuth';
@@ -16,6 +17,7 @@ import {
   normalizeCatalogMemberships,
   sortChannelsForCatalog,
 } from '@/lib/liveCatalogs';
+import { cleanHttpUrl, detectManualFormat } from '@/lib/live/manualChannel';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -37,6 +39,74 @@ async function nextCatalogPosition(catalogId, increment = 100) {
   ]);
   const current = Number(rows[0]?.maxPosition || 0);
   return Math.max(increment, Math.ceil(current / increment) * increment + increment);
+}
+
+/**
+ * POST /api/live-service/channels
+ * Owner-authored channel (not attached to a synced source). It is born
+ * mappingManaged so no sync can ever overwrite or remove it, and it carries
+ * the same catalog/position contract as synced rows.
+ */
+export async function POST(request) {
+  try {
+    await requireServiceAuth(request);
+    await dbConnect();
+    const body = await request.json().catch(() => ({}));
+    const name = String(body.name || '').trim().slice(0, 120);
+    const url = cleanHttpUrl(body.url || '');
+    if (!name) return json({ ok: false, error: 'name is required' }, 400);
+    if (!url) return json({ ok: false, error: 'a valid http(s) stream URL is required' }, 400);
+
+    const catalogIds = [...new Set((body.catalogIds || []).map((item) => String(item || '').toLowerCase()).filter(isLiveCatalogId))];
+    const catalogs = [];
+    for (const catalogId of catalogIds) {
+      catalogs.push({ catalogId, position: await nextCatalogPosition(catalogId) });
+    }
+
+    const channelId = `manual-${crypto.createHash('sha1').update(`${name}|${url}|${Date.now()}`).digest('hex').slice(0, 16)}`;
+    const doc = await LiveChannel.create({
+      channelId,
+      sourceId: 'manual',
+      source: 'Manual',
+      tvgId: String(body.tvgId || '').trim().slice(0, 120),
+      name,
+      normalizedName: normalizeLiveKey(name),
+      customName: name,
+      url,
+      logo: cleanHttpUrl(body.logo || '') || String(body.logo || '').trim().slice(0, 1024),
+      category: String(body.category || 'Live').trim().slice(0, 80) || 'Live',
+      catalogs,
+      language: String(body.language || 'Tamil').trim().slice(0, 40),
+      format: detectManualFormat(url, body.format),
+      playable: true,
+      selected: catalogs.length > 0,
+      mappingManaged: true,
+      profiles: ['default'],
+      keyId: String(body.keyId || '').trim(),
+      key: String(body.key || '').trim(),
+      licenseKey: String(body.licenseKey || '').trim(),
+      licenseType: String(body.licenseType || '').trim().slice(0, 60),
+      cookie: String(body.cookie || '').trim(),
+      userAgent: String(body.userAgent || '').trim(),
+      referer: String(body.referer || '').trim(),
+      headers: (body.headers && typeof body.headers === 'object' && !Array.isArray(body.headers)) ? body.headers : {},
+      workingStatus: 'unknown',
+      lastSeenAt: new Date(),
+    });
+
+    await recalcSourceCounts('manual');
+    await recordAction({
+      area: 'live', action: 'live.channel.create', targetModel: 'LiveChannel',
+      summary: `Created manual channel “${name}”`,
+      target: { kind: 'live-channel', key: channelId, label: name },
+      before: null,
+      after: channelSnapshot(doc.toObject ? doc.toObject() : doc),
+    });
+    return json({ ok: true, channel: toClientChannel(doc) }, 201);
+  } catch (error) {
+    if (error?.code === 11000) return json({ ok: false, error: 'A channel with this id already exists' }, 409);
+    return json({ ok: false, error: error.message }, error.status || 500);
+  }
 }
 
 
@@ -201,6 +271,32 @@ export async function PATCH(request) {
       return json({ ok: true, modified: 2, catalogs: LIVE_CATALOGS, channels: swapped.map(toClientChannel) });
     }
 
+    // Drag-and-drop reorder: rewrite every membership position in one catalog
+    // to match the exact order the manager sent. Positions stay on the 100-step
+    // grid so single up/down swaps remain meaningful afterwards.
+    if (action === 'reorderCatalog') {
+      if (!catalogId) return json({ ok: false, error: 'Valid catalogId is required' }, 400);
+      const orderedIds = Array.isArray(body.orderedIds) ? body.orderedIds.filter(Boolean) : [];
+      if (orderedIds.length < 2) return json({ ok: false, error: 'orderedIds must list at least two channels' }, 400);
+      const targetDocs = await LiveChannel.find({ channelId: { $in: orderedIds } });
+      const byId = new Map(targetDocs.map((doc) => [doc.channelId, doc]));
+      let changed = 0;
+      for (const [index, id] of orderedIds.entries()) {
+        const doc = byId.get(id);
+        if (!doc) continue;
+        const memberships = normalizeCatalogMemberships(doc.catalogs || []);
+        const membership = memberships.find((item) => item.catalogId === catalogId);
+        if (!membership) continue;
+        membership.position = (index + 1) * 100;
+        doc.catalogs = memberships;
+        doc.mappingManaged = true;
+        await doc.save();
+        changed += 1;
+      }
+      const reordered = await LiveChannel.find({ channelId: { $in: orderedIds } }).lean();
+      return json({ ok: true, modified: changed, catalogs: LIVE_CATALOGS, channels: reordered.map(toClientChannel) });
+    }
+
     const nextPositions = new Map();
     let modified = 0;
 
@@ -271,9 +367,30 @@ export async function PATCH(request) {
       if (action === 'favorite') doc.favorite = true;
       if (action === 'unfavorite') doc.favorite = false;
 
-      ['customName', 'customLogo', 'category', 'profiles', 'workingStatus', 'logicalChannelId'].forEach((key) => {
+      ['customName', 'category', 'profiles', 'workingStatus', 'logicalChannelId'].forEach((key) => {
         if (body[key] !== undefined) doc[key] = body[key];
       });
+      // Owner-facing aliases: a name/logo edit must survive the next sync, so
+      // it lands in the custom fields the sync's $set deliberately omits.
+      if (body.name !== undefined) doc.customName = String(body.name).trim().slice(0, 120);
+      if (body.logo !== undefined) doc.customLogo = String(body.logo).trim().slice(0, 1024);
+      if (body.customLogo !== undefined) doc.customLogo = String(body.customLogo).trim().slice(0, 1024);
+      if (body.url !== undefined) {
+        const nextUrl = cleanHttpUrl(body.url);
+        if (!nextUrl) return json({ ok: false, error: 'a valid http(s) stream URL is required' }, 400);
+        doc.url = nextUrl;
+      }
+      if (body.tvgId !== undefined) doc.tvgId = String(body.tvgId).trim().slice(0, 120);
+      if (body.format !== undefined) {
+        const nextFormat = String(body.format).toLowerCase();
+        if (['hls', 'dash', 'video', 'unknown'].includes(nextFormat)) doc.format = nextFormat;
+      }
+      ['keyId', 'key', 'licenseKey', 'licenseType', 'cookie', 'userAgent', 'referer'].forEach((key) => {
+        if (body[key] !== undefined) doc[key] = String(body[key] ?? '').trim();
+      });
+      if (body.headers !== undefined) {
+        doc.headers = (body.headers && typeof body.headers === 'object' && !Array.isArray(body.headers)) ? body.headers : {};
+      }
       if (body.order !== undefined && Number.isFinite(Number(body.order))) doc.order = Math.max(0, Number(body.order));
 
       await doc.save();
