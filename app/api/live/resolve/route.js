@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import LiveChannel from '@/models/LiveChannel';
-import { getFreshJioCookie, injectJioCookie } from '@/lib/liveTv';
+import { getFreshJioCookie, injectJioCookie, resolveHjhWorkerUrl, extractJioCookieFromText } from '@/lib/liveTv';
 import { isHjhWorkerChannel, isJioChannel } from '@/lib/jioPlayback';
 import { buildLiveDrm, buildClearKeys } from '@/lib/player/policy/liveTv';
 import { needsProxyForVariant, isGeoSensitive } from '@/lib/live/playback/policy.js';
@@ -63,10 +63,21 @@ export async function GET(request) {
       userAgent: doc.userAgent, referer: doc.referer, headers: doc.headers || {},
     };
 
-    // Inject fresh Jio token if needed. HJH worker URLs are self-tokenizing
-    // (their 302 already carries a fresh __hdnea__), so the token sweep must
-    // not block or rewrite them.
-    if (isJioChannel(channel) && !isHjhWorkerChannel(channel)) {
+    // HJH worker channels: resolve the 302 server-side (safe from any country —
+    // the Cloudflare worker is not geo-fenced), capture the fresh signed Jio
+    // CDN URL and its __hdnea__ token, and hand both to the player. Media
+    // itself stays browser-direct, so no Render bandwidth or 451 risk.
+    if (isHjhWorkerChannel(channel)) {
+      try {
+        const signedUrl = await resolveHjhWorkerUrl(channel.url);
+        const token = extractJioCookieFromText(signedUrl);
+        if (signedUrl) channel.url = signedUrl;
+        if (token) channel.cookie = token;
+      } catch {
+        /* fall through with the worker URL; the client policy will try */
+      }
+    } else if (isJioChannel(channel)) {
+      // Regular Jio channels still use the rotating shared token sweep.
       try {
         const cookie = await getFreshJioCookie();
         if (cookie) {
@@ -99,6 +110,9 @@ export async function GET(request) {
       channel: { id: channel.id, name: channel.name, logo: channel.logo, category: channel.category, sourceId: channel.sourceId, source: channel.source },
       playUrl,
       originUrl: channel.url,
+      // Fresh __hdnea__ captured from the HJH worker 302; the client policy
+      // re-attaches it to every segment so relative DASH URLs stay signed.
+      cookie: channel.cookie || '',
       drm, clearKeys,
       format: channel.format,
       needsProxy, geoSensitive: geo,

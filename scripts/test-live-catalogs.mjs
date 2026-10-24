@@ -13,6 +13,8 @@ import { createLiveTvPolicy } from '@/lib/player/policy/liveTv';
 import { SOURCE_REGISTRY } from '@/lib/live/registry.js';
 import { planLiveGroupingAndCatalogs } from '@/lib/liveService';
 import { cleanHttpUrl, detectManualFormat } from '@/lib/live/manualChannel';
+import { resolveHjhWorkerUrl, extractJioCookieFromText } from '@/lib/liveTv';
+import http from 'node:http';
 
 let passed = 0;
 const check = (label, fn) => { fn(); passed += 1; console.log('  PASS', label); };
@@ -64,28 +66,78 @@ for (const sample of [ch('Sun TV'), ch('Random X'), ch('Jesus Calls', 'Religious
   });
 }
 
-console.log('6. HJH worker channels are self-tokenizing');
+console.log('6. HJH worker channels: worker-redirect token + signed segments');
 check('worker URL is detected', () => {
   assert.equal(isHjhWorkerChannel({ url: 'https://hjh-545.pages.dev/stream?id=starplus' }), true);
   assert.equal(isHjhWorkerChannel({ url: 'https://jiotvpllive.cdn.jio.com/x/index.mpd?__hdnea__=a' }), false);
 });
 {
-  const channel = {
-    id: 'h1', channelId: 'h1', name: 'Star Plus', sourceId: 'hjh-jio', source: 'HJH',
-    url: 'https://hjh-545.pages.dev/stream?id=starplus', format: 'dash',
-    keyId: 'ae3d3b12ab0f5dada0f2423d1cc7b403', key: '4577d96a74683b0c261cc5c0e30af011',
-    headers: {}, cookie: '', referer: '', userAgent: '', category: 'Entertainment',
-  };
-  const policy = createLiveTvPolicy(channel, { origin: 'http://localhost:7860' });
-  const resolved = await policy.resolve({});
-  check('HJH resolves straight to the worker URL with no /api/live-jio token', () => {
-    assert.equal(resolved.url, channel.url);
+  // Loopback stand-in for the Cloudflare worker: 302 to a signed Jio CDN MPD.
+  const token = '__hdnea__=st=1700000000~exp=9999999999~acl=/bpk-tv/J_Movies_MOB/WDVLive/*~hmac=abcdef0123456789';
+  let finalSigned = '';
+  const server = http.createServer((req, res) => {
+    if (req.url.startsWith('/stream')) { res.writeHead(302, { Location: finalSigned }); return res.end(); }
+    res.writeHead(200, { 'content-type': 'application/dash+xml' }); res.end('<MPD/>');
   });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  const workerUrl = `http://127.0.0.1:${port}/stream?id=jmovies`;
+  finalSigned = `http://127.0.0.1:${port}/bpk-tv/J_Movies_MOB/WDVLive/index.mpd?${token}`;
+
+  const resolvedWorker = await resolveHjhWorkerUrl(workerUrl);
+  check('resolveHjhWorkerUrl follows the 302 and returns the signed MPD', () => {
+    assert.equal(resolvedWorker, finalSigned);
+  });
+  check('token extracted from inside the signed URL query', () => {
+    assert.equal(extractJioCookieFromText(finalSigned), token);
+  });
+
+  // Channel shape exactly as /api/live/resolve builds it after worker resolution.
+  const channel = {
+    id: 'h1', channelId: 'h1', name: 'J Movies', sourceId: 'hjh-jio', source: 'HJH',
+    url: finalSigned, workerUrl, format: 'dash',
+    keyId: 'ae3d3b12ab0f5dada0f2423d1cc7b403', key: '4577d96a74683b0c261cc5c0e30af011',
+    headers: {}, cookie: token, referer: '', userAgent: '', category: 'Movies',
+  };
+  // Any call to /api/live-jio would hit this and fail the check.
+  const fetchImpl = async (url) => { throw new Error(`unexpected fetch: ${url}`); };
+  const policy = createLiveTvPolicy(channel, { origin: 'http://localhost:7860', fetchImpl });
+  const resolved = await policy.resolve({});
+
+  check('HJH never calls the Render /api/live-jio sweep', () => {
+    assert.equal(resolved.meta.accessSource, 'hjh-worker');
+  });
+  check('HJH keeps the signed CDN manifest URL', () => assert.equal(resolved.url, finalSigned));
   check('HJH keeps its ClearKey DRM', () => {
     assert.equal(Object.keys(resolved.drm.clearKeys || {}).length, 1);
     assert.equal(resolved.hasDrm, true);
   });
-  check('HJH is treated as DASH via the stored format hint', () => assert.equal(resolved.kind, 'dash'));
+
+  // The reported production failure: relative DASH segments lose the query.
+  const bareSegment = `http://127.0.0.1:${port}/bpk-tv/J_Movies_MOB/WDVLive/dash/J_Movies_MOB-audio_98834_eng=98800.dash`;
+  const req = { uris: [bareSegment], headers: {} };
+  resolved.http.requestFilter(1, req, { shaka: { net: { NetworkingEngine: { RequestType: { MANIFEST: 0, SEGMENT: 1, LICENSE: 2 } } } } });
+  check('unsigned segment URLs get the __hdnea__ token re-attached (fixes 403)', () => {
+    assert.match(req.uris[0], /__hdnea__=/);
+    assert.ok(req.uris[0].startsWith(bareSegment));
+  });
+  // Idempotent on an already-signed URL.
+  const req2 = { uris: [finalSigned], headers: {} };
+  resolved.http.requestFilter(1, req2, { shaka: { net: { NetworkingEngine: { RequestType: { MANIFEST: 0, SEGMENT: 1, LICENSE: 2 } } } } });
+  check('signed manifest URL is not double-tokenized', () => {
+    const occurrences = (req2.uris[0].match(/__hdnea__=/g) || []).length;
+    assert.equal(occurrences, 1);
+  });
+
+  // Recovery must refresh via the worker, never enable a Render Jio proxy.
+  const first = await policy.recover({ error: { code: 1002, message: '403' } });
+  check('first HJH recovery is a worker reload, not a proxy rung', () => {
+    assert.equal(first.retry, 'reload');
+  });
+  const second = await policy.recover({ error: { code: 1002, message: '403' } });
+  check('HJH recovery ends after one refresh (no proxy loop)', () => assert.equal(second, null));
+
+  server.close();
 }
 
 console.log('7. Tamil FTA source id alignment');

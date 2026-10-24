@@ -22,13 +22,18 @@ export default function LivePlayerV12({ logical, variantIdx=0, onErrorNeedingFal
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error||'Resolve failed');
       if (my!==gen.current) return;
-      // Build channel shape for policy
+      // Build channel shape for policy. data.cookie carries the fresh __hdnea__
+      // token the resolve API captured from an HJH worker 302; workerUrl keeps
+      // the original signpost so the policy can refresh an expired token
+      // without any Render-side token sweep.
       const channel = {
         id: data.channel.id, channelId: data.channel.id, name: data.channel.name,
         url: data.originUrl, logo: data.channel.logo, category: data.channel.category,
         sourceId: variant.sourceId, source: variant.sourceId, format: data.format,
         keyId: variant.keyId, key: variant.key, licenseKey: variant.licenseKey, licenseType: variant.licenseType,
-        cookie: variant.cookie, userAgent: variant.userAgent, referer: variant.referer, headers: variant.headers||{},
+        cookie: data.cookie || variant.cookie || '',
+        userAgent: variant.userAgent, referer: variant.referer, headers: variant.headers||{},
+        workerUrl: variant.url,
       };
       const policy = createLiveTvPolicy(channel, { origin: typeof window!=='undefined'?window.location.origin:'', allowNativeHls:true });
       // JashPlayer runs this policy itself: its resolve() owns Jio token
