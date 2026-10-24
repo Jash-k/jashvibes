@@ -24,17 +24,38 @@ export default function LiveV12Page(){
   const load=useCallback(async(source='all')=>{
     setStatus('loading'); setError('');
     try{
-      const url = source==='all' ? '/api/live/channels?tamilOnly=0' : `/api/live/channels?source=${encodeURIComponent(source)}`;
+      // Always tamilOnly=1 for mainstream Tamil (user request) — keeps proxy counts accurate
+      const url = source==='all'
+        ? '/api/live/channels?tamilOnly=1'
+        : `/api/live/channels?tamilOnly=1&source=${encodeURIComponent(source)}`;
       const res = await fetch(url,{cache:'no-store'});
       const data = await res.json();
       if(!res.ok) throw new Error(data?.error||'Failed to load');
-      const groups = data.logical||[];
+      if (data.needSync) throw new Error(data.hint || 'No channels synced yet');
+      const groups = (data.logical||[]).filter(g=> g.variants?.some(v=> !!v.url));
       setLogical(groups);
-      // counts per source
-      const c = { all: groups.length };
-      for(const g of groups){ for(const sid of (g.sourceIds||[])){ c[sid]=(c[sid]||0)+1; } }
-      setCounts(c);
-      if(groups.length && !activeLogical) setActiveLogical(groups[0]);
+      // counts: use totalVariants per source from server if provided, else derive
+      // For All view, allLogical already includes every source variant, so per-source count is accurate
+      // For filtered view, total groups === filtered count
+      if (source === 'all') {
+        const c = { all: groups.length };
+        for(const g of groups){ for(const sid of (g.sourceIds||[])){ c[sid]=(c[sid]||0)+1; } }
+        // Ensure all known sources appear even with 0
+        for(const sid of ['jio-tamil','hjh-jio','jash-live','pocket-tamil','tamil-iptv']){ if(!(sid in c)) c[sid]=0; }
+        setCounts(c);
+      } else {
+        // Keep existing counts when filtering, don't overwrite with filtered count
+        setCounts(prev => ({ ...prev, [source]: groups.length }));
+      }
+      if(groups.length){
+        // keep current active if still exists, else pick first
+        setActiveLogical(prev=>{
+          if(prev?.logicalId && groups.some(g=>g.logicalId===prev.logicalId)) return prev;
+          return groups[0];
+        });
+      } else {
+        setError(source==='all' ? 'No Tamil mainstream channels found — sync sources in Admin → TV Service' : `No channels for ${source} (sync it in Admin → TV Service)`);
+      }
       setStatus('ready');
     }catch(e){ setError(e.message); setStatus('error'); }
   },[]);

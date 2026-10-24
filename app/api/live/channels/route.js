@@ -5,6 +5,7 @@ import LiveChannel from '@/models/LiveChannel';
 import { getDefaultLiveSources } from '@/lib/liveTv';
 import { deduplicateChannels, isDummyVariant } from '@/lib/live/pipeline/deduplicate.js';
 import { policyForLogicalChannel } from '@/lib/live/playback/policy.js';
+import { isMainstreamTamilChannel } from '@/lib/live/pipeline/normalize.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,12 +25,11 @@ export async function GET(request) {
     // Ensure sources seeded so admin shows them
     const defaults = getDefaultLiveSources({ includePocket:true });
     // For channels, use DB LiveChannel docs (synced via /api/live-service/sync)
-    const query = {};
-    if (sourceFilter !== 'all') query.sourceId = sourceFilter;
-
-    const docs = await LiveChannel.find(query).lean().catch(()=>[]);
+    // For accurate per-source tabs, always load ALL then filter in-memory
+    // Querying by sourceId would lose dedup groups that have that source among variants
+    const docs = await LiveChannel.find({}).lean().catch(()=>[]);
     if (!docs.length) {
-      return NextResponse.json({ ok:true, logical:[], flat:[], groups:0, totalVariants:0, sources: defaults.map(s=>({id:s.id,label:s.label,url:s.url,type:s.type})), deduplicated:true }, { headers:{'Cache-Control':'no-store'}});
+      return NextResponse.json({ ok:true, logical:[], flat:[], groups:0, totalVariants:0, sources: defaults.map(s=>({id:s.id,label:s.label,url:s.url,type:s.type})), deduplicated:true, needSync:true, hint: 'No channels in DB yet — run Admin → TV Service → Sync' }, { headers:{'Cache-Control':'no-store'}});
     }
 
     // Convert docs → flat channel shape used by deduplicate
@@ -59,14 +59,23 @@ export async function GET(request) {
     })).filter(ch => {
       if (!ch.playable) return false;
       if (isDummyVariant(ch)) return false;
-      if (tamilOnly) {
-        const hay = `${ch.name} ${ch.category} ${ch.language}`.toLowerCase();
-        if (!hay.includes('tamil')) return false;
-      }
+      if (!ch.url) return false;
+      if (tamilOnly && !isMainstreamTamilChannel(ch)) return false;
       return true;
     });
 
-    const logical = deduplicateChannels(flat).map(policyForLogicalChannel);
+    const allLogical = deduplicateChannels(flat).map(policyForLogicalChannel);
+
+    // Source filter: keep only groups that have at least one variant from requested source
+    let logical = allLogical;
+    if (sourceFilter !== 'all') {
+      logical = allLogical.filter(g => g.variants.some(v => String(v.sourceId).toLowerCase() === sourceFilter));
+      // Trim variants to only that source for accurate card variant count when filtered
+      logical = logical.map(g => {
+        const variants = g.variants.filter(v => String(v.sourceId).toLowerCase() === sourceFilter);
+        return { ...g, variants, best: variants[0] || g.best, variantCount: variants.length };
+      });
+    }
 
     return NextResponse.json({
       ok:true,

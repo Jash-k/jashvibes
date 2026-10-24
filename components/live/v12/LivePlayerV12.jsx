@@ -42,14 +42,21 @@ export default function LivePlayerV12({ logical, variantIdx=0, onErrorNeedingFal
 
   useEffect(()=>{ resolve(); },[resolve]);
 
-  if (!variant) return <div className="rounded-xl border border-white/10 bg-zinc-950 p-6 text-zinc-400">Pick a channel</div>;
-  if (err) return (
-    <div className="rounded-xl border border-red-500/30 bg-red-950/20 p-4">
-      <p className="text-sm text-red-200">{err}</p>
-      {logical.variants.length>1 && <p className="text-xs text-zinc-400 mt-2">Trying next source…</p>}
-      <button onClick={()=>onErrorNeedingFallback?.(logical, variantIdx)} className="mt-2 rounded-full bg-white/10 px-3 py-1 text-xs">Try next variant</button>
-    </div>
-  );
+  if (!variant) return <div className="rounded-xl border border-white/10 bg-zinc-950 p-6 text-zinc-400">No stream available — this channel has no playable variant. Try another source (Jio/HJH/Jash) via the pills below.</div>;
+  if (err) {
+    const isNoStream = /no stream|not found|channel not found/i.test(err);
+    return (
+      <div className="rounded-xl border border-red-500/30 bg-red-950/20 p-4">
+        <p className="text-sm text-red-200">{isNoStream ? 'No stream available for this title on this source.' : err}</p>
+        <p className="text-xs text-zinc-400 mt-2">{logical.variants.length>1 ? `Source ${variantIdx+1}/${logical.variants.length} failed — try next variant below.` : 'Only one source for this title.'}</p>
+        <div className="flex gap-2 mt-3">
+          {logical.variants.length>1 && <button onClick={()=>onErrorNeedingFallback?.(logical, variantIdx)} className="rounded-full bg-white px-4 py-1.5 text-xs font-bold text-black">Try next source →</button>}
+          <button onClick={resolve} className="rounded-full bg-white/10 px-3 py-1 text-xs">Retry</button>
+        </div>
+        <p className="text-xs text-zinc-500 mt-2">Tip: HJH freshest (5min) → Jio → Jash Hotstar (proxy) → Pocket. Sync in Admin → TV Service if expired.</p>
+      </div>
+    );
+  }
   if (!resolved || !caps) return <div className="rounded-xl border border-white/10 bg-black p-6 text-zinc-400">Resolving {variant.sourceLabel}…</div>;
 
   // Use JashPlayer with policy + caps
