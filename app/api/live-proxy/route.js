@@ -93,7 +93,8 @@ async function proxy(request) {
        rewrite the master loads and the first child dies on CORS: the exact
        "cards show but the stream does not play" failure. */
     const contentType = upstream.headers.get('content-type') || '';
-    if (request.method !== 'HEAD' && upstream.ok && isPlaylistResponse({ url: target.href, contentType })) {
+    const isGeoSensitive = /jiotv|jiotvmblive|jiotvpllive|nw18live/i.test(target.hostname || '') || /__hdnea__/i.test(target.href);
+    if (!isGeoSensitive && request.method !== 'HEAD' && upstream.ok && isPlaylistResponse({ url: target.href, contentType })) {
       const playlistText = await readLimitedText(upstream);
       const proxyBase = `${new URL(request.url).origin}/api/live-proxy`;
       const extras = new URLSearchParams();
