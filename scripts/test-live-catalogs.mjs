@@ -16,6 +16,7 @@ import { SOURCE_REGISTRY } from '@/lib/live/registry.js';
 import { planLiveGroupingAndCatalogs } from '@/lib/liveService';
 import { cleanHttpUrl, detectManualFormat } from '@/lib/live/manualChannel';
 import { resolveHjhWorkerUrl, extractJioCookieFromText } from '@/lib/liveTv';
+import { pickLandingGroup } from '@/lib/live/landing';
 import http from 'node:http';
 
 let passed = 0;
@@ -285,6 +286,31 @@ console.log('10. full remote-key coverage in the live player');
     assert.equal(commandForKey(ev('MediaPlayPause', input)), null);
     assert.equal(commandForKey(ev('Enter', input)), null);
   });
+}
+
+console.log('11. /live landing choice (Main catalog → Star Vijay)');
+{
+  const group = (name, ids) => ({ logicalId: name, displayName: name, variants: [{ catalogIds: ids, catalogs: ids.map((id) => ({ catalogId: id, position: 100 })) }] });
+  const groups = [
+    group('Sun TV', ['main']),
+    group('Star Vijay', ['main']),
+    group('Vijay Super', ['main']),
+    group('Sun Music', ['main', 'music']),
+    group('Madurai Vision', ['local']),
+  ];
+  check('lands on Star Vijay inside Main', () => assert.equal(pickLandingGroup(groups).displayName, 'Star Vijay'));
+  check('exact Vijay TV spelling also wins', () => {
+    const alt = [group('Sun TV', ['main']), group('Vijay TV', ['main'])];
+    assert.equal(pickLandingGroup(alt).displayName, 'Vijay TV');
+  });
+  check('falls back to first Main channel when no Vijay exists', () => {
+    const noVijay = [group('KTV', ['main']), group('Sun News', ['news', 'main'])];
+    assert.equal(pickLandingGroup(noVijay).displayName, 'KTV');
+  });
+  check('falls back to any group when Main is empty', () => {
+    assert.equal(pickLandingGroup([group('Madurai Vision', ['local'])]).displayName, 'Madurai Vision');
+  });
+  check('empty catalogue yields null', () => assert.equal(pickLandingGroup([]), null));
 }
 
 console.log(`\n${passed} passed, 0 failed — live catalog/playback contracts OK.`);

@@ -7,18 +7,21 @@ import TvMode from './TvMode';
 import MobileSheet from './MobileSheet';
 import useTvMode from './useTvMode';
 import { CatalogChips, CatalogRail, ChannelCard, HomeLink, friendlySourceLabel, groupCatalogIds } from './channelBits';
+import { pickLandingGroup } from '@/lib/live/landing';
 
 const FAV_KEY = 'jash_live_v13_favs';
 const FIXED_CATALOG_IDS = new Set(LIVE_CATALOGS.map((c) => c.id));
+const DEFAULT_CATALOG = 'main';
 
 export default function LivePageV13() {
   const [groups, setGroups] = useState([]);
-  const [counts, setCounts] = useState({});
+  const [catalogs, setCatalogs] = useState([]);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  // Owner rule: /live opens on the Main catalog, not "All".
   const [activeSource, setActiveSource] = useState('all');
-  const [activeCatalog, setActiveCatalog] = useState('all'); // all | fav | fixed id
-  const [catalogs, setCatalogs] = useState([]);
+  const [activeCatalog, setActiveCatalog] = useState(DEFAULT_CATALOG); // all | fav | fixed id
   const [activeLogical, setActiveLogical] = useState(null);
   const [variantIdx, setVariantIdx] = useState(0);
   const [query, setQuery] = useState('');
@@ -28,10 +31,6 @@ export default function LivePageV13() {
   const { tvMode, setTvMode } = useTvMode();
   const searchRef = useRef(null);
   const mobileSearchRef = useRef(null);
-  const focusSearch = useCallback(() => {
-    const input = window.innerWidth < 640 ? mobileSearchRef.current : searchRef.current;
-    input?.focus?.();
-  }, []);
 
   useEffect(() => { try { setFavs(JSON.parse(localStorage.getItem(FAV_KEY) || '[]')); } catch { /* no stored favs */ } }, []);
   const toggleFav = useCallback((id) => {
@@ -42,29 +41,25 @@ export default function LivePageV13() {
     });
   }, []);
 
-  const load = useCallback(async (source = 'all', catalog = 'all') => {
+  // Single full-catalogue fetch. Catalog/source/search switches are pure
+  // client-side filtering afterwards, so tab changes feel instant and put no
+  // extra load on the server (the base response is cached server-side too).
+  const load = useCallback(async () => {
     setStatus('loading');
     setError('');
     try {
-      const params = new URLSearchParams({ tamilOnly: '1' });
-      if (source !== 'all') params.set('source', source);
-      if (FIXED_CATALOG_IDS.has(catalog)) params.set('catalog', catalog);
-      const res = await fetch(`/api/live/channels?${params.toString()}`, { cache: 'no-store' });
+      const res = await fetch('/api/live/channels?tamilOnly=1', { cache: 'no-store' });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to load');
       if (data.needSync) throw new Error(data.hint || 'No channels synced yet — open Admin → TV → Sync All Tamil');
       setCatalogs(Array.isArray(data.catalogs) ? data.catalogs : []);
       const playable = (data.logical || []).filter((g) => g.variants?.some((v) => !!v.url));
       setGroups(playable);
-      const c = { all: playable.length };
-      for (const cat of data.catalogs || []) c[cat.id] = cat.count;
-      for (const g of playable) for (const sid of g.sourceIds || []) c[sid] = (c[sid] || 0) + 1;
-      setCounts(c);
-      if (playable.length) {
-        setActiveLogical((prev) => (prev?.logicalId && playable.some((g) => g.logicalId === prev.logicalId) ? prev : playable[0]));
-      } else {
-        setError(catalog === 'all' ? 'No Tamil channels found — sync sources in Admin → TV.' : 'No channels in this catalog.');
-      }
+      setActiveLogical((prev) => {
+        if (prev?.logicalId && playable.some((g) => g.logicalId === prev.logicalId)) return prev;
+        return pickLandingGroup(playable);
+      });
+      if (!playable.length) setError('No Tamil channels found — sync sources in Admin → TV.');
       setStatus('ready');
     } catch (e) {
       setError(e.message);
@@ -72,17 +67,29 @@ export default function LivePageV13() {
     }
   }, []);
 
-  useEffect(() => { load(activeSource, activeCatalog); }, [activeSource, activeCatalog, load]);
+  useEffect(() => { load(); }, [load, reloadKey]);
 
   const favSet = useMemo(() => new Set(favs), [favs]);
+
+  // Counts derived once from the full set; catalog/source tabs never refetch.
+  const counts = useMemo(() => {
+    const c = { all: groups.length };
+    for (const cat of LIVE_CATALOGS) c[cat.id] = groups.filter((g) => groupCatalogIds(g).includes(cat.id)).length;
+    for (const g of groups) for (const sid of g.sourceIds || []) c[sid] = (c[sid] || 0) + 1;
+    return c;
+  }, [groups]);
 
   const filtered = useMemo(() => {
     let list = groups;
     if (activeCatalog === 'fav') list = list.filter((g) => favSet.has(g.logicalId));
+    else if (FIXED_CATALOG_IDS.has(activeCatalog)) list = list.filter((g) => groupCatalogIds(g).includes(activeCatalog));
+    if (activeSource !== 'all') {
+      list = list.filter((g) => (g.sourceIds || []).includes(activeSource));
+    }
     const q = query.trim().toLowerCase();
     if (q) list = list.filter((g) => `${g.displayName} ${g.category || ''}`.toLowerCase().includes(q));
     return list;
-  }, [groups, activeCatalog, favSet, query]);
+  }, [groups, activeCatalog, activeSource, favSet, query]);
 
   const pick = useCallback((group) => {
     if (!group) return;
@@ -127,6 +134,17 @@ export default function LivePageV13() {
     const ids = new Set(groups.flatMap((g) => g.sourceIds || []));
     return [...ids].sort();
   }, [groups]);
+
+  const focusSearch = useCallback(() => {
+    const input = window.innerWidth < 640 ? mobileSearchRef.current : searchRef.current;
+    input?.focus?.();
+  }, []);
+
+  const activeTitle = activeCatalog === 'fav'
+    ? '★ Favorites'
+    : activeCatalog === 'all'
+      ? 'All Tamil channels'
+      : (catalogs.find((c) => c.id === activeCatalog)?.name || 'Channels');
 
   return (
     <main className="min-h-screen bg-[#07070a] pb-24 text-white lg:pb-8">
@@ -197,17 +215,19 @@ export default function LivePageV13() {
 
           <div className="mb-3 mt-3 flex items-center gap-3 lg:mt-2">
             <h2 className="text-sm font-black">
-              {activeCatalog === 'fav' ? '★ Favorites' : activeCatalog === 'all' ? 'All Tamil channels' : (catalogs.find((c) => c.id === activeCatalog)?.name || 'Channels')}
+              {activeTitle}
               <span className="ml-2 text-[11px] font-bold text-zinc-500">{filtered.length}</span>
             </h2>
+            <button type="button" onClick={() => setReloadKey((k) => k + 1)}
+              className="ml-auto rounded-full border border-white/10 px-3 py-1 text-[11px] font-bold text-zinc-300 hover:border-red-500/60 lg:ml-0">↻ Refresh</button>
             <button type="button" onClick={() => setSheetOpen(true)}
-              className="ml-auto rounded-full border border-white/10 px-3 py-1 text-[11px] font-bold text-red-300 lg:hidden">See all ↑</button>
+              className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-bold text-red-300 lg:hidden">See all ↑</button>
           </div>
 
           {status === 'loading' ? <p className="p-6 text-sm text-zinc-400">Loading Tamil live…</p> : null}
           {error ? (
             <p className="rounded-xl border border-red-500/30 bg-red-950/25 p-4 text-sm text-red-200">
-              {error} <button type="button" onClick={() => load(activeSource, activeCatalog)} className="ml-2 underline">Retry</button>
+              {error} <button type="button" onClick={load} className="ml-2 underline">Retry</button>
             </p>
           ) : null}
           {status === 'ready' && !filtered.length ? (
@@ -215,7 +235,7 @@ export default function LivePageV13() {
           ) : null}
 
           {status === 'ready' && filtered.length ? (
-            <div className="grid grid-cols-3 gap-2 lg:grid-cols-4 lg:gap-3">
+            <div className="grid grid-cols-3 gap-2 md:grid-cols-4 lg:grid-cols-6 lg:gap-3">
               {filtered.map((group) => (
                 <ChannelCard key={group.logicalId} group={group} active={group.logicalId === activeLogical?.logicalId} onPick={pick} />
               ))}
@@ -235,7 +255,7 @@ export default function LivePageV13() {
           className="flex min-w-[60px] flex-col items-center gap-1 text-[10px] font-bold text-zinc-400"><span className="text-base">📺</span>TV</button>
       </nav>
 
-      <MobileSheet open={sheetOpen} title={activeCatalog === 'fav' ? 'Favorites' : 'Channels'} groups={filtered}
+      <MobileSheet open={sheetOpen} title={activeCatalog === 'fav' ? 'Favorites' : activeTitle} groups={filtered}
         activeId={activeLogical?.logicalId} onPick={pick} onClose={() => setSheetOpen(false)} />
 
       <TvMode
@@ -247,7 +267,6 @@ export default function LivePageV13() {
         onTune={pick}
         onZap={zap}
       />
-
     </main>
   );
 }

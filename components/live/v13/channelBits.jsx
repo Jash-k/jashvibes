@@ -2,6 +2,9 @@
 import Link from 'next/link';
 import { LIVE_CATALOGS } from '@/lib/liveCatalogs';
 import { SOURCE_REGISTRY } from '@/lib/live/registry';
+import { groupCatalogIds } from '@/lib/live/landing';
+
+export { groupCatalogIds };
 
 /** Viewer-friendly source names — internal ids and token/proxy jargon never shown. */
 export function friendlySourceLabel(sourceId = '') {
@@ -10,19 +13,6 @@ export function friendlySourceLabel(sourceId = '') {
   if (sourceId === 'manual') return 'Manual';
   if (!sourceId || sourceId === 'all') return 'All Tamil';
   return String(sourceId).replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-/** Union of catalog ids across every variant of a logical group. */
-export function groupCatalogIds(group = {}) {
-  const ids = new Set();
-  for (const variant of group.variants || []) {
-    for (const id of variant.catalogIds || []) ids.add(id);
-    for (const membership of variant.catalogs || []) {
-      if (typeof membership === 'string') ids.add(membership);
-      else if (membership?.catalogId) ids.add(membership.catalogId);
-    }
-  }
-  return [...ids];
 }
 
 /** Compact channel card. `tv` enlarges it for 10-foot viewing. */
