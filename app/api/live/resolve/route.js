@@ -34,7 +34,8 @@ export async function GET(request) {
       const base = logicalId.split('|')[0]?.replace(/-/g,' ').trim();
       doc = all.find(d=> String(d.name||'').toLowerCase().includes(base)) || null;
     }
-    if (!doc) return NextResponse.json({ ok:false, error:'Channel not found'}, {status:404});
+    if (!doc) return NextResponse.json({ ok:false, error:'No playable URL was resolved for this title.'}, {status:404});
+    if (!doc.url) return NextResponse.json({ ok:false, error:'No playable URL was resolved for this title.'}, {status:404});
 
     // Build client channel shape
     let channel = {
