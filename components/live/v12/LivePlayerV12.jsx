@@ -5,6 +5,7 @@ import { createLiveTvPolicy } from '@/lib/player/policy/liveTv';
 import { probeCapabilities } from '@/lib/player/capabilities';
 
 export default function LivePlayerV12({ logical, variantIdx=0, onErrorNeedingFallback }) {
+  const displayName = logical?.displayName || logical?.name || variant?.name || 'Live Channel';
   const variant = logical?.variants?.[variantIdx] || logical?.best;
   const [resolved, setResolved] = useState(null);
   const [caps, setCaps] = useState(null);
@@ -42,7 +43,7 @@ export default function LivePlayerV12({ logical, variantIdx=0, onErrorNeedingFal
 
   useEffect(()=>{ resolve(); },[resolve]);
 
-  if (!variant) return <div className="rounded-xl border border-white/10 bg-zinc-950 p-6 text-zinc-400">No stream available — this channel has no playable variant. Try another source (Jio/HJH/Jash) via the pills below.</div>;
+  if (!variant) return <div className="rounded-xl border border-white/10 bg-zinc-950 p-6 text-zinc-400">No playable variant for {logical?.displayName || 'this title'} — URL missing in DB. Re-sync {logical?.variants?.[0]?.sourceLabel || logical?.variants?.[0]?.sourceId || 'its source'} in Admin → TV Service → Sync.</div>;
   if (err) {
     const isNoStream = /no stream|not found|channel not found/i.test(err);
     return (

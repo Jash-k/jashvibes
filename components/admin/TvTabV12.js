@@ -20,7 +20,7 @@ export default function TvTabV12(){
   const [loadingCh,setLoadingCh]=useState(false);
   const [msg,setMsg]=useState('');
   const [showAdd,setShowAdd]=useState(false);
-  const [form,setForm]=useState({label:'', url:'', type:'m3u', priority:50});
+  const [form,setForm]=useState({label:'', url:'', type:'m3u', priority:50, trustTamil:false});
   const [jioStatus,setJioStatus]=useState('');
 
   const api = useCallback(async(path, opts={})=>{
@@ -37,12 +37,13 @@ export default function TvTabV12(){
   const loadChannels = useCallback(async()=>{
     setLoadingCh(true);
     try{
-      // Use new v12 deduplicated endpoint with tamilOnly=1 for admin preview too
       const p = new URLSearchParams();
       if(sourceFilter!=='all') p.set('source', sourceFilter);
-      p.set('tamilOnly','1');
+      // Admin preview: show raw counts without tamilOnly to verify sync produced channels (Jash/Tamil FTA would otherwise show 0)
+      // User can still see Tamil filtered count in /live
       const data = await api(`/api/live/channels?${p.toString()}`);
       setChannels(data.logical||[]);
+      if(!data.logical?.length && data.needSync) setMsg(data.hint||'No channels yet — Sync All');
     }catch(e){ setMsg(e.message); }
     finally{ setLoadingCh(false); }
   },[api, sourceFilter]);
@@ -84,10 +85,17 @@ export default function TvTabV12(){
   const addSource = async(e)=>{
     e.preventDefault();
     try{
-      await api('/api/live-service/sources', { method:'POST', body: JSON.stringify(form) });
-      setMsg(`Added ${form.label}`);
-      setShowAdd(false); setForm({label:'',url:'',type:'m3u',priority:50});
+      let u = String(form.url||'').trim();
+      if(u.includes('github.com') && u.includes('/blob/')) u = u.replace('github.com','raw.githubusercontent.com').replace('/blob/','/');
+      const payload = {...form, url:u};
+      // Auto trustTamil for known Tamil FTA sources so tamilOnly filter doesn't drop them
+      if(/iptv-org.*\/tam\.m3u|tamil.*fta/i.test(u) || /tam\.m3u/i.test(u)) payload.trustTamil = true;
+      const created = await api('/api/live-service/sources', { method:'POST', body: JSON.stringify(payload) });
+      const newId = created.source?.sourceId || created.source?.id || payload.label.toLowerCase().replace(/[^a-z0-9]+/g,'-');
+      setMsg(`Added ${form.label} — syncing ${newId}...`);
+      setShowAdd(false); setForm({label:'',url:'',type:'m3u',priority:50, trustTamil:false});
       await loadSources();
+      try{ const r = await api('/api/live-service/sync', { method:'POST', body: JSON.stringify({ sourceId: newId }) }); setMsg(`Added & synced ${newId}: ${r.results?.[0]?.stored||0} channels`); await loadSources(); await loadChannels(); }catch(e){ setMsg(`Added ${form.label} — sync failed: ${e.message} — try Sync button`); }
     }catch(err){ setMsg(err.message); }
   };
   const deleteSource = async(s)=>{
@@ -136,7 +144,7 @@ export default function TvTabV12(){
         {syncResult && (
           <div className="mt-2 flex flex-wrap gap-2 text-xs">
             {syncResult.map(r=> (
-              <span key={r.sourceId} className={`rounded-full px-2 py-1 ${r.ok?'bg-green-500/20 text-green-200':'bg-red-500/20 text-red-200'}`}>{r.sourceId}: {r.ok? `${r.added||0}+ ${r.removed||0}-` : r.error}</span>
+              <span key={r.sourceId} className={`rounded-full px-2 py-1 ${r.ok?'bg-green-500/20 text-green-200':'bg-red-500/20 text-red-200'}`}>{r.sourceId}: {r.ok? `${r.parsed||r.added||r.stored||0} parsed → ${r.stored||0} stored` : r.error}</span>
             ))}
           </div>
         )}
@@ -146,8 +154,9 @@ export default function TvTabV12(){
       {showAdd && (
         <form onSubmit={addSource} className="rounded-2xl border border-white/10 bg-zinc-950 p-4 space-y-3">
           <h3 className="font-bold text-sm">Add Live Source</h3>
-          <input required value={form.label} onChange={e=>setForm({...form,label:e.target.value})} placeholder="Label e.g. My Tamil M3U" className="w-full rounded-xl border border-white/10 bg-black px-3 py-2 text-sm" />
-          <input required value={form.url} onChange={e=>setForm({...form,url:e.target.value})} placeholder="https://... .m3u or .json" className="w-full rounded-xl border border-white/10 bg-black px-3 py-2 text-sm" />
+          <input required value={form.label} onChange={e=>setForm({...form,label:e.target.value})} placeholder="Label e.g. Jash Live or Tamil FTA" className="w-full rounded-xl border border-white/10 bg-black px-3 py-2 text-sm" />
+          <input required value={form.url} onChange={e=>setForm({...form,url:e.target.value})} placeholder="https://raw.githubusercontent.com/Jash-k/live_play/.../jash-live.m3u" className="w-full rounded-xl border border-white/10 bg-black px-3 py-2 text-sm" />
+          <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={!!form.trustTamil} onChange={e=>setForm({...form, trustTamil:e.target.checked})} /> Treat as Tamil FTA (all channels are Tamil — for iptv-org/tam.m3u)</label>
           <div className="flex gap-2">
             <select value={form.type} onChange={e=>setForm({...form,type:e.target.value})} className="rounded-xl border border-white/10 bg-black px-3 py-2 text-sm"><option value="m3u">m3u</option><option value="json">json</option></select>
             <input type="number" value={form.priority} onChange={e=>setForm({...form,priority:Number(e.target.value)})} className="w-24 rounded-xl border border-white/10 bg-black px-3 py-2 text-sm" />
@@ -194,8 +203,8 @@ export default function TvTabV12(){
       {/* Channels */}
       <div className="rounded-2xl border border-white/10 bg-zinc-950 p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="font-black text-sm">Tamil Mainstream Channels — Deduplicated</h3>
-          <span className="rounded-full bg-white/10 px-2 py-1 text-xs">{filtered.length} / {channels.length}</span>
+          <h3 className="font-black text-sm">Channels — Deduplicated (Admin shows ALL to verify sync)</h3>
+          <span className="rounded-full bg-white/10 px-2 py-1 text-xs">{filtered.length} / {channels.length} {sourceFilter!=='all'? `for ${sourceFilter}`:''}</span>
           <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search Sun TV, Vijay..." className="ml-auto min-w-[200px] rounded-full border border-white/10 bg-black px-3 py-1.5 text-xs" />
           <select value={catFilter} onChange={e=>setCatFilter(e.target.value)} className="rounded-full border border-white/10 bg-black px-3 py-1.5 text-xs">
             <option value="all">All categories</option>
@@ -211,7 +220,7 @@ export default function TvTabV12(){
           </select>
         </div>
         {loadingCh ? <p className="p-4 text-sm text-zinc-400">Loading Tamil channels…</p> : null}
-        {!loadingCh && !filtered.length ? <p className="p-4 text-sm text-zinc-400">No Tamil channels found. Sync sources above, or check if all sources filtered out non-Tamil.</p> : null}
+        {!loadingCh && !filtered.length ? <p className="p-4 text-sm text-zinc-400">No channels for {sourceFilter} — click Sync on that source card above (lastError shown under it). For iptv-org paste raw URL https://iptv-org.github.io/iptv/languages/tam.m3u and tick Tamil FTA.</p> : null}
         <div className="mt-3 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 max-h-[60vh] overflow-auto pr-1">
           {filtered.slice(0,200).map(g=>(
             <div key={g.logicalId} className="rounded-xl border border-white/10 bg-zinc-900 p-2">

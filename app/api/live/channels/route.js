@@ -60,7 +60,7 @@ export async function GET(request) {
       if (!ch.playable) return false;
       if (isDummyVariant(ch)) return false;
       if (!ch.url) return false;
-      if (tamilOnly && !isMainstreamTamilChannel(ch)) return false;
+      if (tamilOnly && !isMainstreamTamilChannel(ch, ch.sourceId)) return false;
       return true;
     });
 

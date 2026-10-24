@@ -27,15 +27,20 @@ export async function GET(request) {
     let doc = null;
     if (channelId) doc = await LiveChannel.findOne({ channelId }).lean();
     if (!doc && logicalId) {
-      // fallback: find any variant for logicalId by scanning all with same normalized name
-      // logicalId = base|categ ; fetch one
       const all = await LiveChannel.find({}).lean();
-      // naive: match displayName part of logicalId
-      const base = logicalId.split('|')[0]?.replace(/-/g,' ').trim();
-      doc = all.find(d=> String(d.name||'').toLowerCase().includes(base)) || null;
+      const rawBase = String(logicalId.split('|')[0]||'').trim().toLowerCase().replace(/-/g,' ').replace(/[^a-z0-9]+/g,' ').trim();
+      const rawCat = String(logicalId.split('|')[1]||'').trim().toLowerCase();
+      doc = all.find(d=> {
+        const nNorm = String(d.normalizedName||d.name||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+        const cNorm = String(d.category||'').toLowerCase();
+        return nNorm.includes(rawBase) || rawBase.includes(nNorm) ;
+      }) || null;
+      if (doc && rawCat && !String(doc.category||'').toLowerCase().includes(rawCat)) {
+        // category mismatch but same base still ok
+      }
     }
-    if (!doc) return NextResponse.json({ ok:false, error:'No playable URL was resolved for this title.'}, {status:404});
-    if (!doc.url) return NextResponse.json({ ok:false, error:'No playable URL was resolved for this title.'}, {status:404});
+    if (!doc) return NextResponse.json({ ok:false, error:'No playable URL was resolved for this title.', hint:'Sync the source that carries this title in Admin → TV Service → Sync (Jash Live / Tamil FTA may be empty).'}, {status:404});
+    if (!doc.url) return NextResponse.json({ ok:false, error:`No playable URL was resolved for "${doc.name}" — URL missing in DB. Re-sync ${doc.sourceId||'its source'} in Admin → TV Service.`, hint:'URL empty — source parse stored no URL'}, {status:404});
 
     // Build client channel shape
     let channel = {

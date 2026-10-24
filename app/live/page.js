@@ -31,7 +31,7 @@ export default function LiveV12Page(){
       const res = await fetch(url,{cache:'no-store'});
       const data = await res.json();
       if(!res.ok) throw new Error(data?.error||'Failed to load');
-      if (data.needSync) throw new Error(data.hint || 'No channels synced yet');
+      if (data.needSync) throw new Error(data.hint || 'No channels synced yet — open Admin → TV Service → Sync All Tamil');
       const groups = (data.logical||[]).filter(g=> g.variants?.some(v=> !!v.url));
       setLogical(groups);
       // counts: use totalVariants per source from server if provided, else derive
@@ -92,7 +92,7 @@ export default function LiveV12Page(){
             <>
               <LivePlayerV12 logical={activeLogical} variantIdx={variantIdx} onErrorNeedingFallback={onErrorFallback} />
               <div className="mt-3 flex items-center justify-between">
-                <h1 className="text-lg font-black">{activeLogical.displayName}</h1>
+                <h1 className="text-lg font-black">{activeLogical.displayName || activeLogical.baseName || 'Unknown Title'}</h1>
                 <button onClick={()=>toggleFav(activeLogical.logicalId)} className={`rounded-full border px-3 py-1 text-xs ${favSet.has(activeLogical.logicalId)?'bg-yellow-500 text-black border-yellow-500':'border-white/10'}`}>{favSet.has(activeLogical.logicalId)?'★ Fav':'☆ Fav'}</button>
               </div>
               <p className="text-xs text-zinc-400">{activeLogical.category} • {activeLogical.variants.length} sources</p>
