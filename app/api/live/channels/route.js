@@ -3,9 +3,10 @@ import dbConnect from '@/lib/db';
 import LiveSource from '@/models/LiveSource';
 import LiveChannel from '@/models/LiveChannel';
 import { getDefaultLiveSources } from '@/lib/liveTv';
-import { deduplicateChannels, isDummyVariant } from '@/lib/live/pipeline/deduplicate.js';
+import { deduplicateChannels, isDummyVariant, orderVariantsByLadder } from '@/lib/live/pipeline/deduplicate.js';
 import { policyForLogicalChannel } from '@/lib/live/playback/policy.js';
 import { isMainstreamTamilChannel } from '@/lib/live/pipeline/normalize.js';
+import { isReligiousExcludedGroup } from '@/lib/live/catalogRules';
 import { LIVE_CATALOGS, isLiveCatalogId, normalizeCatalogMemberships } from '@/lib/liveCatalogs';
 
 export const runtime = 'nodejs';
@@ -83,6 +84,7 @@ export async function GET(request) {
       logicalChannelId: d.logicalChannelId || '',
       order: d.order ?? 9999,
       mappingManaged: Boolean(d.mappingManaged),
+      ladderOrder: Array.isArray(d.ladderOrder) ? d.ladderOrder : [],
     })).filter(ch => {
       if (!ch.playable) return false;
       if (isDummyVariant(ch)) return false;
@@ -91,12 +93,27 @@ export async function GET(request) {
       return true;
     });
 
-    const allLogical = deduplicateChannels(flat).map(policyForLogicalChannel);
+    const allLogical = deduplicateChannels(flat).map(policyForLogicalChannel).map((group) => {
+      // Owner-pinned source ladder wins over registry priority for this title.
+      const ladder = group.variants.find((variant) => Array.isArray(variant.ladderOrder) && variant.ladderOrder.length)?.ladderOrder;
+      if (ladder) {
+        group.variants = orderVariantsByLadder(group.variants, ladder);
+        group.best = group.variants[0] || group.best;
+      }
+      // v13: religious/devotional groups are excluded everywhere unless an
+      // owner manually mapped one of their variants (checked inside).
+      group.religious = isReligiousExcludedGroup(group);
+      return group;
+    });
+
+    // Hide auto-tagged religious groups from /live entirely. Manual mappings
+    // flip isReligiousExcludedGroup() to false, so an owner-added one stays.
+    const visibleLogical = allLogical.filter((group) => !group.religious);
 
     // Source filter: keep only groups that have at least one variant from requested source
-    let logical = allLogical;
+    let logical = visibleLogical;
     if (sourceFilter !== 'all') {
-      logical = allLogical.filter(g => g.variants.some(v => String(v.sourceId).toLowerCase() === sourceFilter));
+      logical = visibleLogical.filter(g => g.variants.some(v => String(v.sourceId).toLowerCase() === sourceFilter));
       // Trim variants to only that source for accurate card variant count when filtered
       logical = logical.map(g => {
         const variants = g.variants.filter(v => String(v.sourceId).toLowerCase() === sourceFilter);
@@ -118,10 +135,12 @@ export async function GET(request) {
       return String(a.displayName || '').localeCompare(String(b.displayName || ''));
     });
 
-    // Per-catalog group counts for the public catalog tabs.
+    // Per-catalog group counts for the public catalog tabs. Religious-excluded
+    // groups have no memberships anyway, but filter the visible set explicitly
+    // so a manually re-added religious channel is counted where it was placed.
     const catalogs = LIVE_CATALOGS.map((catalog) => ({
       ...catalog,
-      count: allLogical.filter((g) => groupHasCatalog(g, catalog.id)).length,
+      count: visibleLogical.filter((g) => groupHasCatalog(g, catalog.id)).length,
     }));
 
     return NextResponse.json({

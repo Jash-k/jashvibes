@@ -3,7 +3,18 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import JashPlayer from '@/components/player/JashPlayerLazy';
 import { createLiveTvPolicy } from '@/lib/player/policy/liveTv';
 
-export default function LivePlayerV12({ logical, variantIdx=0, onErrorNeedingFallback }) {
+/**
+ * LivePlayerV13 — the /live player shell.
+ *
+ * Adds channel navigation over the resolve flow:
+ *   onPrev/onNext  wrap-around zap within the page's current filtered list;
+ *                  wired to the player's PageUp/PageDown + media-track keys and
+ *                  to the visible edge buttons (mobile/TV discoverability).
+ *   liveBrowser    feeds JashPlayer's in-player ChannelDrawer (G key / guide
+ *                  button), which survives fullscreen and is D-pad navigable.
+ */
+export default function LivePlayerV13({ logical, variantIdx=0, onErrorNeedingFallback, onPrev, onNext, liveBrowser=null }) {
+  const hasZap = typeof onPrev === 'function' && typeof onNext === 'function';
   const variant = logical?.variants?.[variantIdx] || logical?.best;
   const displayName = logical?.displayName || logical?.name || variant?.name || 'Live Channel';
   const [resolved, setResolved] = useState(null);
@@ -54,7 +65,7 @@ export default function LivePlayerV12({ logical, variantIdx=0, onErrorNeedingFal
 
   useEffect(()=>{ resolve(); },[resolve]);
 
-  if (!variant) return <div className="rounded-xl border border-white/10 bg-zinc-950 p-6 text-zinc-400">No playable variant for {logical?.displayName || 'this title'} — URL missing in DB. Re-sync {logical?.variants?.[0]?.sourceLabel || logical?.variants?.[0]?.sourceId || 'its source'} in Admin → TV Service → Sync.</div>;
+  if (!variant) return <div className="rounded-xl border border-white/10 bg-zinc-950 p-6 text-zinc-400">No playable stream for {logical?.displayName || 'this title'} yet. Re-sync its source in Admin → TV → Sources &amp; Sync.</div>;
   if (err) {
     const isNoStream = /no stream|not found|channel not found/i.test(err);
     return (
@@ -65,7 +76,7 @@ export default function LivePlayerV12({ logical, variantIdx=0, onErrorNeedingFal
           {logical.variants.length>1 && <button onClick={()=>onErrorNeedingFallback?.(logical, variantIdx)} className="rounded-full bg-white px-4 py-1.5 text-xs font-bold text-black">Try next source →</button>}
           <button onClick={resolve} className="rounded-full bg-white/10 px-3 py-1 text-xs">Retry</button>
         </div>
-        <p className="text-xs text-zinc-500 mt-2">Tip: HJH freshest (5min) → Jio → Jash Hotstar (proxy) → Pocket. Sync in Admin → TV Service if expired.</p>
+        <p className="text-xs text-zinc-500 mt-2">The player automatically tries every available source for this channel. If all of them fail, re-sync in Admin → TV → Sources &amp; Sync.</p>
       </div>
     );
   }
@@ -79,7 +90,7 @@ export default function LivePlayerV12({ logical, variantIdx=0, onErrorNeedingFal
   // engine cleanly on every channel zap / variant-ladder switch.
   return (
     <div className="space-y-2">
-      <div className="rounded-2xl overflow-hidden border border-white/10 bg-black">
+      <div className="group/player relative rounded-2xl overflow-hidden border border-white/10 bg-black">
         <JashPlayer
           key={`${resolved.channel.channelId}:${variantIdx}`}
           source={{ url: resolved.originUrl, kind: 'auto', label: resolved.channel.name }}
@@ -87,11 +98,26 @@ export default function LivePlayerV12({ logical, variantIdx=0, onErrorNeedingFal
           live
           poster={resolved.channel.logo || ''}
           display={{ title: resolved.channel.name, poster: resolved.channel.logo || '' }}
+          onPrev={hasZap ? onPrev : undefined}
+          onNext={hasZap ? onNext : undefined}
+          liveBrowser={liveBrowser}
         />
+        {hasZap ? (
+          <>
+            <button type="button" onClick={onPrev} aria-label="Previous channel" title="Previous channel (PageUp)"
+              className="absolute left-2 top-1/2 z-[26] -translate-y-1/2 grid h-9 w-9 place-items-center rounded-full border border-white/15 bg-black/60 text-sm text-white/90 backdrop-blur transition hover:bg-black/85 hover:border-red-500/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 sm:opacity-60 sm:group-hover/player:opacity-100">
+              ⏮
+            </button>
+            <button type="button" onClick={onNext} aria-label="Next channel" title="Next channel (PageDown)"
+              className="absolute right-2 top-1/2 z-[26] -translate-y-1/2 grid h-9 w-9 place-items-center rounded-full border border-white/15 bg-black/60 text-sm text-white/90 backdrop-blur transition hover:bg-black/85 hover:border-red-500/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 sm:opacity-60 sm:group-hover/player:opacity-100">
+              ⏭
+            </button>
+          </>
+        ) : null}
       </div>
-      <div className="flex items-center justify-between text-xs text-zinc-400">
-        <span>{resolved.channel.name} • {variant.sourceLabel} • {variant.format.toUpperCase()} {resolved.freshness?`• token ${resolved.freshness}`:''}</span>
-        <span className={resolved.freshness?.includes('expired')?'text-red-400':''}>{variant.needsProxy?'via proxy':'direct'}</span>
+      <div className="flex items-center justify-between text-[11px] text-zinc-500">
+        <span>{resolved.channel.name} · {variant.sourceLabel || 'Live'}</span>
+        <span className="hidden sm:inline">{hasZap ? 'PageUp/PageDown or ⏮/⏭ changes channel · G opens the guide' : ''}</span>
       </div>
     </div>
   );

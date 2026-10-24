@@ -60,6 +60,10 @@ const LiveChannelSchema = new mongoose.Schema({
   referer: { type: String, default: '' },
   headers: { type: Object, default: {} },
   workingStatus: { type: String, enum: ['unknown', 'working', 'broken'], default: 'unknown' },
+  // v13 per-channel source ladder override: sourceIds in the owner's preferred
+  // play order. Empty = use the registry priority ladder. Stored on any one
+  // row of a logical group; the public channel route applies it to the group.
+  ladderOrder: { type: [String], default: undefined },
   // Health is independent of the desired catalogue. Never erase memberships.
   failStreak: { type: Number, default: 0 },
   autoHidden: { type: Boolean, default: false },

@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 /**
- * test-live-catalogs.mjs — v12 catalog rules, HJH self-tokenizing playback,
- * and Tamil-FTA source id alignment. Pure contracts, no database.
+ * test-live-catalogs.mjs — v13 catalog rules (religious exclusion, source
+ * ladders), HJH self-tokenizing playback, and Tamil-FTA source id alignment.
+ * Pure contracts, no database.
  *
  *   node --import ./scripts/alias-register.mjs scripts/test-live-catalogs.mjs
  */
 import assert from 'node:assert/strict';
 import { LIVE_CATALOGS, LIVE_CATALOG_IDS } from '@/lib/liveCatalogs';
-import { classifyChannelCatalogs, isLocalTamilChannel, isMainstreamFlagship, isReligiousChannel } from '@/lib/live/catalogRules';
+import { classifyChannelCatalogs, isLocalTamilChannel, isMainstreamFlagship, isReligiousChannel, isReligiousExcludedGroup } from '@/lib/live/catalogRules';
+import { orderVariantsByLadder } from '@/lib/live/pipeline/deduplicate.js';
 import { isHjhWorkerChannel } from '@/lib/jioPlayback';
 import { createLiveTvPolicy } from '@/lib/player/policy/liveTv';
 import { SOURCE_REGISTRY } from '@/lib/live/registry.js';
@@ -46,25 +48,59 @@ check('category Music -> music', () => assert.deepEqual(classifyChannelCatalogs(
 check('Pogo Tamil -> kids', () => assert.deepEqual(classifyChannelCatalogs(ch('Pogo Tamil', 'Kids')), ['kids']));
 check('Thanthi TV -> news', () => assert.deepEqual(classifyChannelCatalogs(ch('Thanthi TV', 'News')), ['news']));
 
-console.log('4. LocalCH excludes religious channels');
+console.log('4. LocalCH excludes religious; religious excluded everywhere (v13)');
 check('Aathavan TV is local', () => assert.equal(isLocalTamilChannel(ch('Aathavan TV')), true));
 check('Aaseervatham TV is religious, never local', () => {
   assert.equal(isReligiousChannel(ch('Aaseervatham TV', 'Religious')), true);
   assert.equal(isLocalTamilChannel(ch('Aaseervatham TV', 'Religious')), false);
 });
-check('Angel TV -> others', () => assert.deepEqual(classifyChannelCatalogs(ch('Angel TV America', 'Religious')), ['others']));
-check('Aaseervatham -> others', () => assert.deepEqual(classifyChannelCatalogs(ch('Aaseervatham TV', 'Religious')), ['others']));
+check('Angel TV -> excluded (empty), not others', () => assert.deepEqual(classifyChannelCatalogs(ch('Angel TV America', 'Religious')), []));
+check('Aaseervatham -> excluded (empty)', () => assert.deepEqual(classifyChannelCatalogs(ch('Aaseervatham TV', 'Religious')), []));
 check('Vasanth TV -> local', () => assert.deepEqual(classifyChannelCatalogs(ch('Vasanth TV')), ['local']));
 check('unmatched entertainment -> others', () => assert.deepEqual(classifyChannelCatalogs(ch('Aaryaa TV')), ['others']));
 
-console.log('5. every result is a valid non-empty catalog set');
-for (const sample of [ch('Sun TV'), ch('Random X'), ch('Jesus Calls', 'Religious'), ch('News7 Tamil', 'News'), ch('Nick Tamil', 'Kids')]) {
+console.log('4b. religious group exclusion with manual override');
+check('all-religious unmapped group is excluded', () => {
+  const group = { variants: [ch('Jesus Calls', 'Religious'), ch('Jesus Calls Tamil', 'Devotional')] };
+  assert.equal(isReligiousExcludedGroup(group), true);
+});
+check('one non-religious variant keeps the group visible', () => {
+  const group = { variants: [ch('Jesus Calls', 'Religious'), ch('Sun TV')] };
+  assert.equal(isReligiousExcludedGroup(group), false);
+});
+check('manual mapping on a religious variant overrides exclusion', () => {
+  const group = { variants: [{ ...ch('Angel TV', 'Religious'), mappingManaged: true, catalogIds: ['others'] }] };
+  assert.equal(isReligiousExcludedGroup(group), false);
+});
+check('unmapped religious row without mappingManaged stays excluded', () => {
+  const group = { variants: [{ ...ch('Angel TV', 'Religious'), mappingManaged: false, catalogIds: [] }] };
+  assert.equal(isReligiousExcludedGroup(group), true);
+});
+
+console.log('4c. per-channel source ladder override');
+check('ladder reorders listed sources and keeps the rest stable', () => {
+  const variants = [
+    { sourceId: 'hjh-jio' }, { sourceId: 'jio-tamil' }, { sourceId: 'jash-live' }, { sourceId: 'pocket-tamil' },
+  ];
+  const out = orderVariantsByLadder(variants, ['pocket-tamil', 'jio-tamil']).map((v) => v.sourceId);
+  assert.deepEqual(out, ['pocket-tamil', 'jio-tamil', 'hjh-jio', 'jash-live']);
+});
+check('empty ladder is a no-op', () => {
+  const variants = [{ sourceId: 'a' }, { sourceId: 'b' }];
+  assert.equal(orderVariantsByLadder(variants, []), variants);
+});
+
+console.log('5. every non-religious result is a valid non-empty catalog set');
+for (const sample of [ch('Sun TV'), ch('Random X'), ch('News7 Tamil', 'News'), ch('Nick Tamil', 'Kids')]) {
   const ids = classifyChannelCatalogs(sample);
   check(`${sample.name} -> valid ids`, () => {
     assert.ok(ids.length > 0);
     for (const id of ids) assert.ok(LIVE_CATALOG_IDS.includes(id));
   });
 }
+check('religious sample is the only empty classification', () => {
+  assert.deepEqual(classifyChannelCatalogs(ch('Jesus Calls', 'Religious')), []);
+});
 
 console.log('6. HJH worker channels: worker-redirect token + signed segments');
 check('worker URL is detected', () => {
@@ -104,6 +140,9 @@ check('worker URL is detected', () => {
   const policy = createLiveTvPolicy(channel, { origin: 'http://localhost:7860', fetchImpl });
   const resolved = await policy.resolve({});
 
+  check('live policy opts out of ambient blur (whole-page blur bug)', () => {
+    assert.equal(policy.ambient, false);
+  });
   check('HJH never calls the Render /api/live-jio sweep', () => {
     assert.equal(resolved.meta.accessSource, 'hjh-worker');
   });
@@ -169,7 +208,7 @@ const doc = (over) => ({
   check('eligible Tamil channels receive catalog ops', () => {
     const ids = plan.catalogOps.map((op) => op.channelId);
     assert.ok(ids.includes('g1'));
-    assert.ok(ids.includes('g3')); // religious -> others, but still Tamil/eligible
+    assert.ok(!ids.includes('g3')); // v13: religious excluded from every catalog
   });
   check('non-Tamil, locked, unplayable rows never auto-mapped', () => {
     const ids = plan.catalogOps.map((op) => op.channelId);
@@ -182,9 +221,13 @@ const doc = (over) => ({
     assert.equal(op.updateOne.update.$set.selected, true);
     assert.ok(op.memberships.some((m) => m.catalogId === 'main'));
   });
-  check('religious channel maps to others, never local', () => {
+  check('religious channel is never auto-mapped (owner can still add it manually)', () => {
     const op = plan.catalogOps.find((item) => item.channelId === 'g3');
-    assert.deepEqual(op.memberships.map((m) => m.catalogId), ['others']);
+    assert.equal(op, undefined);
+    // A manual mapping on the same row is untouched by the planner.
+    const manual = doc({ channelId: 'g3m', name: 'Aaseervatham TV', normalizedName: 'aaseervatham tv', category: 'Religious', mappingManaged: true, catalogs: [{ catalogId: 'others', position: 5 }] });
+    const manualPlan = planLiveGroupingAndCatalogs([manual]);
+    assert.equal(manualPlan.catalogOps.find((item) => item.channelId === 'g3m'), undefined);
   });
   check('positions are unique within a catalog', () => {
     const mainPositions = plan.catalogOps
@@ -213,5 +256,35 @@ check('detectManualFormat honors hint then extension', () => {
   assert.equal(detectManualFormat('https://a.test/c.mp4'), 'video');
   assert.equal(detectManualFormat('https://a.test/worker'), 'unknown');
 });
+
+console.log('10. full remote-key coverage in the live player');
+{
+  const { commandForKey } = await import('@/lib/player/commands');
+  const ev = (key, target) => ({ key, target: target || documentStub(), shiftKey: false, ctrlKey: false, metaKey: false });
+  function documentStub() { return { tagName: 'DIV', isContentEditable: false }; }
+  const remoteMap = [
+    ['MediaPlayPause', 'togglePlay'], ['MediaPlay', 'togglePlay'], ['MediaPause', 'togglePlay'],
+    ['MediaStop', 'togglePlay'], ['Enter', 'togglePlay'], [' ', 'togglePlay'], ['k', 'togglePlay'],
+    ['MediaTrackNext', 'nextItem'], ['PageDown', 'nextItem'],
+    ['MediaTrackPrevious', 'prevItem'], ['PageUp', 'prevItem'],
+    ['MediaFastForward', 'seekForward'], ['MediaRewind', 'seekBack'],
+    ['ArrowRight', 'seekForward'], ['ArrowLeft', 'seekBack'],
+    ['ArrowUp', 'nudgeVolumeUp'], ['ArrowDown', 'nudgeVolumeDown'],
+    ['g', 'toggleBrowser'], ['f', 'toggleFullscreen'], ['m', 'mute'],
+    ['Escape', 'closeMenus'], ['t', 'cycleCaptions'],
+  ];
+  for (const [key, command] of remoteMap) {
+    check(`remote key "${key}" -> ${command}`, () => assert.equal(commandForKey(ev(key)), command));
+  }
+  check('GoBack/BrowserBack normalize to closeMenus', () => {
+    assert.equal(commandForKey(ev('GoBack')), 'closeMenus');
+    assert.equal(commandForKey(ev('BrowserBack')), 'closeMenus');
+  });
+  check('remote keys never fire while typing in a field', () => {
+    const input = { tagName: 'INPUT', isContentEditable: false };
+    assert.equal(commandForKey(ev('MediaPlayPause', input)), null);
+    assert.equal(commandForKey(ev('Enter', input)), null);
+  });
+}
 
 console.log(`\n${passed} passed, 0 failed — live catalog/playback contracts OK.`);

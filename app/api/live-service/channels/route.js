@@ -136,7 +136,7 @@ const LIST_PROJECTION = [
   'catalogs', 'language', 'region', 'format', 'playable', 'selected', 'favorite',
   'hidden', 'order', 'profiles', 'keyId', 'key', 'licenseKey', 'licenseType',
   'cookie', 'userAgent', 'referer', 'headers', 'workingStatus', 'autoHidden',
-  'lastCheckedAt', 'lastSeenAt',
+  'lastCheckedAt', 'lastSeenAt', 'ladderOrder',
 ].join(' ');
 
 export async function GET(request) {
@@ -148,6 +148,9 @@ export async function GET(request) {
     const selected = searchParams.get('selected');
     const mapped = searchParams.get('mapped');
     const hidden = searchParams.get('hidden');
+    // v13 religious exclusion console: ?religious=1 lists only auto-tagged
+    // devotional rows (hidden from /live until an owner maps one manually).
+    const religious = searchParams.get('religious') || '';
     const q = normalizeLiveKey(searchParams.get('q') || '');
     const category = searchParams.get('category') || '';
     const requestedCatalog = String(searchParams.get('catalog') || '').toLowerCase();
@@ -204,6 +207,9 @@ export async function GET(request) {
         .lean();
       docs = docs.map(toClientChannel);
     }
+
+    if (religious === '1' || religious === 'true') docs = docs.filter((doc) => doc.religious);
+    if (religious === '0' || religious === 'false') docs = docs.filter((doc) => !doc.religious);
 
     return json({
       ok: true,
@@ -392,6 +398,12 @@ export async function PATCH(request) {
         doc.headers = (body.headers && typeof body.headers === 'object' && !Array.isArray(body.headers)) ? body.headers : {};
       }
       if (body.order !== undefined && Number.isFinite(Number(body.order))) doc.order = Math.max(0, Number(body.order));
+      // v13 per-channel source ladder: a sanitized sourceId order applied by
+      // the public channel route when sorting the group's variants.
+      if (body.ladderOrder !== undefined) {
+        const ladder = Array.isArray(body.ladderOrder) ? body.ladderOrder : [];
+        doc.ladderOrder = [...new Set(ladder.map((id) => String(id || '').trim().toLowerCase()).filter(Boolean))].slice(0, 20);
+      }
 
       await doc.save();
       modified += 1;
