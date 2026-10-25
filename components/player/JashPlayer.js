@@ -307,7 +307,10 @@ export function JashPlayer(props) {
   const { pipActive, canPip, togglePip } = usePip(videoEl);
   useWakeLock(playing);
 
-  const ambientActive = policy.ambient !== false && Boolean(prefs.ambient) && playing && !isFullscreen && !compact;
+  // Pages that own the surrounding chrome pass their policy as playbackPolicy
+  // (the bare `policy` prop is only a shallow overlay), so honor ambient:false
+  // from either one — /live must never trigger the full-viewport dim portal.
+  const ambientActive = policy.ambient !== false && playbackPolicy?.ambient !== false && Boolean(prefs.ambient) && playing && !isFullscreen && !compact;
   useEffect(() => {
     if (!ambientActive) return undefined;
     document.documentElement.classList.add('jv-theater');

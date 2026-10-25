@@ -142,7 +142,9 @@ export async function proxy(request) {
   // Admin APIs enforce their OWN realm (ADMIN_PASS, DB-backed epoch — see
   // lib/adminAuth.js). Gating them here too would demand the theatre password
   // first and make the two realms inseparable; the spec keeps them independent.
-  if (pathname.startsWith('/api/admin/') || pathname.startsWith('/api/live-service/')) return NextResponse.next();
+  // /api/live/admin is the namespaced home of the former live-service routes;
+  // the /api/live-service shims stay exempt until they are removed.
+  if (pathname.startsWith('/api/admin/') || pathname.startsWith('/api/live/admin/') || pathname.startsWith('/api/live-service/')) return NextResponse.next();
 
   if (['/api/music/playlist/tracks', '/api/title-match'].includes(pathname) && request.method !== 'GET') return NextResponse.next();
   const password = process.env.PASS || process.env.SPACE_PASSWORD || process.env.APP_PASSWORD || '';

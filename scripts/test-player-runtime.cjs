@@ -20,5 +20,6 @@ const fs=require('fs'),assert=require('assert/strict');
  assert.ok(js.includes("time, duration, model"));
  assert.ok(js.includes('data-dvp="runtime"'));
  assert.ok(js.includes('hidden text-white/40 sm:inline'),'phone form hides the total');
+ assert.ok(js.includes('playbackPolicy?.ambient !== false'),'ambient gate must honor the live playback policy opt-out (whole-page blur bug)');
  console.log('Player runtime readout: live/unknown suppression, window-relative elapsed, phone/desktop forms and wiring passed.');
 })().catch(e=>{console.error(e);process.exitCode=1});

@@ -235,6 +235,12 @@ async function importStubbed(relPath) {
     assert(shimCode.includes(`../../live/admin/${name}/route.js`), `${shim} must re-export the canonical handler`);
     assert(!shimCode.includes('recordAction('), `${shim} must stay a thin alias with no logic of its own`);
   }
+  // The edge theatre gate must leave BOTH live admin namespaces alone: the
+  // admin realm (jash_admin cookie) is independent of the theatre unlock, so
+  // an owner logged into /admin must still reach the /live session probe.
+  const proxyCode = fs.readFileSync('proxy.js', 'utf8');
+  assert(proxyCode.includes("pathname.startsWith('/api/live/admin/')"), 'proxy must exempt the namespaced /api/live/admin API from the theatre gate');
+  assert(proxyCode.includes("pathname.startsWith('/api/live-service/')"), 'proxy must keep the /api/live-service shim paths exempt');
   assert(fs.readFileSync('components/admin/MusicTab.js', 'utf8').includes("'x-jash-admin': '1'"), 'the Music tab must mark its requests as admin ones');
   // Branch-level coverage: the lyrics route handles save and delete in one handler, and a missing
   // record in one of those branches is invisible to an import check (that is exactly how it slipped

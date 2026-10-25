@@ -717,8 +717,8 @@
       "sha256": "3b298e794a1837e165e425a9501a8982c7ecf2e503734b3d1e3da60740455e50"
     },
     "components/player/JashPlayer.js": {
-      "bytes": 63261,
-      "sha256": "0b416ccb69fdbdfab92adc5ac21a3162b39fd3282540f646bf1c5aba1a3fef78"
+      "bytes": 63537,
+      "sha256": "6cb6f23841a96d39b16a43db4940a6a3db59b0c68f8bc7269d891a5006f6e346"
     },
     "components/player/JashPlayerLazy.js": {
       "bytes": 1580,
@@ -1401,8 +1401,8 @@
       "sha256": "fa650b380adfabb151a0b352f7135e107e6352345f899060f1c5c231228f94bf"
     },
     "proxy.js": {
-      "bytes": 8041,
-      "sha256": "c1ee6a3971f2d8fd5b85a24e60887740989ec9b65638bfbba8f9070a1e630846"
+      "bytes": 8232,
+      "sha256": "6a62530c8b5f93e521ef68085bc0aac03cf1602654eaaf45c94325b969d9caa1"
     },
     "public/anime-card.jpg": {
       "bytes": 464899,
@@ -1517,8 +1517,8 @@
       "sha256": "75dbe37f5fb95b515be19d6787a942a9fb16d1d06d00559c03aed37b541908e4"
     },
     "scripts/test-admin-controls.cjs": {
-      "bytes": 18053,
-      "sha256": "d9ccc31544e15ff4889471e7815eea5acd65672c91a9a5cc8d146f5be920882d"
+      "bytes": 18624,
+      "sha256": "df39760310f0a5a4251aee356013ce6f7491cdc161915224a87fb6730608a7eb"
     },
     "scripts/test-extras-covers.cjs": {
       "bytes": 2011,
@@ -1585,8 +1585,8 @@
       "sha256": "97e787c90b42db3c023a02b025d2c23769fa84116d0cdfa67670dce1ea23577e"
     },
     "scripts/test-player-runtime.cjs": {
-      "bytes": 1885,
-      "sha256": "32fce31a88082b60c25c3e5c243cdc7fb9d27ee45d368f23bdad929d9aab9559"
+      "bytes": 2028,
+      "sha256": "891e72eb2a563f7432df888a66f379ec4ebc922277efa73303f8476a921abd03"
     },
     "scripts/test-vault-admin.cjs": {
       "bytes": 2609,
