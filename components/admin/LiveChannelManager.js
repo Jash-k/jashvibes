@@ -26,7 +26,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LIVE_CATALOGS, getChannelCatalogIds, sortChannelsForCatalog } from '@/lib/liveCatalogs';
 import { SOURCE_REGISTRY } from '@/lib/live/registry';
-import { summarizeLiveCatalogue } from '@/lib/live/adminBrowse';
+import { summarizeLiveCatalogue, summarizeSourceGroups } from '@/lib/live/adminBrowse';
 import AdminLivePreview from './AdminLivePreview';
 
 const EMPTY_FORM = {
@@ -122,6 +122,7 @@ export default function LiveChannelManager() {
   const [busy, setBusy] = useState(null);
   const [q, setQ] = useState('');
   const [sourceId, setSourceId] = useState('all');
+  const [sourceGroup, setSourceGroup] = useState('all'); // source-native group-title, read-only browse
   const [catalog, setCatalog] = useState('all'); // all | fixed id | unmapped | religious
   const [mapped, setMapped] = useState('all');
   const [hidden, setHidden] = useState('0');
@@ -184,6 +185,7 @@ export default function LiveChannelManager() {
     const needle = q.trim().toLowerCase();
     let rows = allRows.filter((channel) => {
       if (sourceId !== 'all' && channel.sourceId !== sourceId) return false;
+      if (sourceGroup !== 'all' && (channel.category || 'Live') !== sourceGroup) return false;
       if (hidden === '0' && channel.hidden) return false;
       if (hidden === '1' && !channel.hidden) return false;
       if (mapped === '1' && !(catalogSets.get(channel.channelId)?.size)) return false;
@@ -202,12 +204,13 @@ export default function LiveChannelManager() {
   }, [allRows, q, sourceId, catalog, mapped, hidden, catalogSets]);
 
   // Reset the pager whenever the visible slice changes identity.
-  useEffect(() => { setRenderCap(RENDER_PAGE); }, [q, sourceId, catalog, mapped, hidden]);
+  useEffect(() => { setRenderCap(RENDER_PAGE); }, [q, sourceId, sourceGroup, catalog, mapped, hidden]);
   const visibleRows = useMemo(() => filteredRows.slice(0, renderCap), [filteredRows, renderCap]);
 
-  // Source → catalog browse: catalog chips scoped to the chosen source, with
-  // live counts (incl. the virtual Unmapped / Religious buckets). Pure
-  // in-memory work — switching source or catalog makes no network calls.
+  // Source → catalog browse: the catalog dropdown is scoped to the chosen
+  // source, with live counts (incl. the virtual Unmapped / Religious buckets)
+  // computed the same way /live counts cards. Pure in-memory work — switching
+  // source or catalog makes no network calls.
   const sourceScopedRows = useMemo(
     () => (sourceId === 'all' ? allRows : allRows.filter((row) => row.sourceId === sourceId)),
     [allRows, sourceId],
@@ -216,12 +219,16 @@ export default function LiveChannelManager() {
     () => summarizeLiveCatalogue(sourceScopedRows),
     [sourceScopedRows],
   );
-  const browseChips = useMemo(() => ([
-    { id: 'all', label: 'All', icon: '★', count: browseSummary.total },
-    ...LIVE_CATALOGS.map((item) => ({ id: item.id, label: item.name, icon: item.icon, count: browseSummary.catalogs[item.id] || 0 })),
-    { id: 'unmapped', label: 'Unmapped', icon: '⚪', count: browseSummary.unmapped },
-    { id: 'religious', label: 'Religious', icon: '🛡️', count: browseSummary.religious },
+  const catalogOptions = useMemo(() => ([
+    { id: 'all', label: `All catalogs (${browseSummary.total})` },
+    ...LIVE_CATALOGS.map((item) => ({ id: item.id, label: `${item.icon} ${item.name} (${browseSummary.catalogs[item.id] || 0})` })),
+    { id: 'unmapped', label: `⚪ Unmapped (${browseSummary.unmapped})` },
+    { id: 'religious', label: `🛡️ Religious (${browseSummary.religious})` },
   ]), [browseSummary]);
+  // The selected source's OWN feed groups (Pocket Tamil → Local Channels,
+  // Tamil FM Radio, Overseas…). Read-only: sync owns these labels; they are a
+  // browse dimension, our fixed catalogs remain the publish target.
+  const sourceGroupOptions = useMemo(() => summarizeSourceGroups(sourceScopedRows), [sourceScopedRows]);
 
   const patch = useCallback(async (channel, action, extra = {}) => {
     setBusy(channel.channelId);
@@ -401,8 +408,18 @@ export default function LiveChannelManager() {
       <div className="space-y-2 rounded-2xl border border-white/10 bg-zinc-950 p-3">
         <div className="flex flex-wrap items-center gap-2">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search Sun TV, Vijay… (instant)" className="min-w-[170px] flex-1 rounded-full border border-white/10 bg-black px-3 py-1.5 text-xs outline-none focus:border-red-500" />
-          <select value={sourceId} onChange={(e) => setSourceId(e.target.value)} className="rounded-full border border-white/10 bg-black px-3 py-1.5 text-xs">
+          <select value={sourceId} onChange={(e) => { setSourceId(e.target.value); setSourceGroup('all'); }} title="Source" className="rounded-full border border-white/10 bg-black px-3 py-1.5 text-xs">
             {sourceOptions.map((item) => <option key={item.sourceId} value={item.sourceId}>{item.label}</option>)}
+          </select>
+          {/* The selected source's OWN feed groups (its native group-title
+              taxonomy). Read-only browse filter — sync owns these labels. */}
+          <select value={sourceGroup} onChange={(e) => setSourceGroup(e.target.value)} title="Source's own groups (read-only)" className="rounded-full border border-white/10 bg-black px-3 py-1.5 text-xs">
+            {sourceGroupOptions.map((item) => <option key={item.id} value={item.id}>{item.label} ({item.count})</option>)}
+          </select>
+          {/* Catalogs of the selected source — counts are /live cards
+              (duplicates merged, hidden/religious excluded). */}
+          <select value={catalog} onChange={(e) => setCatalog(e.target.value)} title="Catalogs of the selected source" className="rounded-full border border-white/10 bg-black px-3 py-1.5 text-xs">
+            {catalogOptions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
           </select>
           <select value={mapped} onChange={(e) => setMapped(e.target.value)} className="rounded-full border border-white/10 bg-black px-3 py-1.5 text-xs">
             <option value="all">Mapped + unmapped</option><option value="1">Mapped only</option><option value="0">Unmapped only</option>
@@ -414,24 +431,10 @@ export default function LiveChannelManager() {
           <button type="button" onClick={load} disabled={loading} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-bold disabled:opacity-50">⟳ Refresh</button>
           <button type="button" onClick={openCreate} className="rounded-full bg-red-600 px-4 py-1.5 text-xs font-black text-white">+ Add channel</button>
         </div>
-        {/* Source → catalog browse chips: pick a source above, then a catalog
-            here. Counts are /live cards (duplicates merged, hidden/religious
-            excluded), so they match the public page exactly. */}
-        <div className="flex flex-wrap gap-1.5">
-          {browseChips.map((chip) => (
-            <button key={chip.id} type="button" onClick={() => setCatalog(chip.id)}
-              className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
-                catalog === chip.id ? 'border-red-500 bg-red-600/20 text-red-100' : 'border-white/10 bg-black/40 text-zinc-400 hover:border-white/30'
-              }`}>
-              <span>{chip.icon}</span>{chip.label}
-              <span className={`rounded-full px-1.5 text-[9.5px] ${catalog === chip.id ? 'bg-red-500/30' : 'bg-white/10'}`}>{chip.count}</span>
-            </button>
-          ))}
-        </div>
         <div className="flex items-center justify-between text-[11px] text-zinc-400">
           <span>
             {loading ? 'Loading…' : `${filteredRows.length} shown · ${allRows.length} loaded${totalOnServer > allRows.length ? ` · ${totalOnServer} in database` : ''}`}
-            {reorderEnabled ? ' · drag rows or use ↑/↓ to reorder this catalog' : ' · chip counts are /live cards (duplicates merged)'}
+            {reorderEnabled ? ' · drag rows or use ↑/↓ to reorder this catalog' : ' · source groups are the feed’s own labels (read-only); catalog counts are /live cards'}
           </span>
           {msg ? <span className="font-bold text-amber-200">{msg}</span> : null}
         </div>

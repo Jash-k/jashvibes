@@ -5,8 +5,9 @@ import { getDefaultLiveSources } from '@/lib/liveTv';
 import { deduplicateChannels, isDummyVariant, orderVariantsByLadder } from '@/lib/live/pipeline/deduplicate.js';
 import { policyForLogicalChannel } from '@/lib/live/playback/policy.js';
 import { isMainstreamTamilChannel } from '@/lib/live/pipeline/normalize.js';
-import { isReligiousExcludedGroup, liveFamilyRank } from '@/lib/live/catalogRules';
-import { LIVE_CATALOGS, isLiveCatalogId, normalizeCatalogMemberships } from '@/lib/liveCatalogs';
+import { isReligiousExcludedGroup } from '@/lib/live/catalogRules';
+import { sortLogicalGroups } from '@/lib/live/catalogOrder';
+import { LIVE_CATALOGS, isLiveCatalogId } from '@/lib/liveCatalogs';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -32,20 +33,7 @@ const PUBLIC_PROJECTION = [
  */
 const BASE_TTL_MS = Number(process.env.LIVE_CHANNELS_CACHE_TTL_MS || 15_000);
 const cacheStore = globalThis.__jashLiveCatalogCache || (globalThis.__jashLiveCatalogCache = { entries: new Map(), version: 0 });
-const BASE_KEY = 'public-channels-base-v3';
-
-/** Lowest catalog position any variant of this group holds (999999 if unmapped). */
-function groupCatalogPosition(group, catalogId = 'all') {
-  let lowest = 999999;
-  for (const variant of group.variants || []) {
-    const memberships = normalizeCatalogMemberships(variant.catalogs || []);
-    for (const membership of memberships) {
-      if (catalogId !== 'all' && membership.catalogId !== catalogId) continue;
-      lowest = Math.min(lowest, membership.position);
-    }
-  }
-  return lowest;
-}
+const BASE_KEY = 'public-channels-base-v4';
 
 function groupHasCatalog(group, catalogId) {
   return (group.variants || []).some((variant) => (variant.catalogIds || []).includes(catalogId));
@@ -179,15 +167,10 @@ export async function GET(request) {
       logical = logical.filter((g) => groupHasCatalog(g, catalogFilter));
     }
 
-    // Broadcaster families first (Vijay → Sun+sisters → Jaya → other
-    // mainstream → rest), then the owner's per-catalog position, then name.
-    logical = [...logical].sort((a, b) => {
-      const rankDiff = liveFamilyRank(a.displayName) - liveFamilyRank(b.displayName);
-      if (rankDiff) return rankDiff;
-      const positionDiff = groupCatalogPosition(a, catalogFilter) - groupCatalogPosition(b, catalogFilter);
-      if (positionDiff) return positionDiff;
-      return String(a.displayName || '').localeCompare(String(b.displayName || ''));
-    });
+    // Inside a fixed catalog the owner's Admin reorder is authoritative
+    // (exact same order as Admin → TV); the virtual "All Tamil" view keeps
+    // family-first ordering. Comparator shared and tested in catalogOrder.js.
+    logical = sortLogicalGroups(logical, catalogFilter);
 
     return NextResponse.json({
       ok: true,

@@ -19,8 +19,9 @@ import { resolveHjhWorkerUrl, extractJioCookieFromText } from '@/lib/liveTv';
 import { pickLandingGroup } from '@/lib/live/landing';
 import { channelDocToLogicalGroup } from '@/lib/live/preview';
 import { canonicalChannelName, displayNameForChannel, deduplicateChannels, logicalIdForChannel } from '@/lib/live/pipeline/deduplicate.js';
-import { summarizeLiveCatalogue } from '@/lib/live/adminBrowse';
+import { summarizeLiveCatalogue, summarizeSourceGroups } from '@/lib/live/adminBrowse';
 import { liveFamilyRank } from '@/lib/live/catalogRules';
+import { sortLogicalGroups, groupCatalogPosition } from '@/lib/live/catalogOrder';
 import http from 'node:http';
 
 let passed = 0;
@@ -500,6 +501,86 @@ console.log('15. /live family ranking — Vijay, Sun+sisters, Jaya, then other m
       return rank || a.localeCompare(b);
     });
     assert.deepEqual(ordered, ['Star Vijay', 'Vijay Takkar', 'Adithya TV', 'Jaya TV', 'Zee Tamil', 'Madurai Vision']);
+  });
+}
+
+console.log('16. source-native group browse (feed group-title, read-only)');
+{
+  const rows = [
+    { channelId: 'p1', category: 'Local Channels' },
+    { channelId: 'p2', category: 'Local Channels' },
+    { channelId: 'p3', category: 'Overseas' },
+    { channelId: 'p4' }, // missing category defaults to Live
+    { channelId: 'p5', category: '   ' },
+    { channelId: 'p6', category: 'Tamil FM Radio' },
+  ];
+  const groups = summarizeSourceGroups(rows);
+  check('"all" leads with the total row count', () => {
+    assert.equal(groups[0].id, 'all');
+    assert.equal(groups[0].count, 6);
+  });
+  check('distinct feed groups counted as stored rows, biggest first then A–Z', () => {
+    const rest = groups.slice(1);
+    assert.deepEqual(rest.map((g) => g.id), ['Live', 'Local Channels', 'Overseas', 'Tamil FM Radio']);
+    assert.deepEqual(rest.map((g) => g.count), [2, 2, 1, 1]);
+  });
+  check('blank/missing categories fold into "Live", never throw', () => {
+    const live = groups.find((g) => g.id === 'Live');
+    assert.equal(live.count, 2);
+    assert.deepEqual(summarizeSourceGroups([]), [{ id: 'all', label: 'All source groups', count: 0 }]);
+  });
+}
+
+console.log('17. /live order mirrors Admin reorder inside every fixed catalog');
+{
+  // Hand-built groups shaped like deduplicateChannels output.
+  const group = (id, name, mainPosition, extra = []) => ({
+    logicalId: id,
+    displayName: name,
+    variants: [
+      { channelId: `${id}-v1`, catalogs: mainPosition == null ? [...extra] : [{ catalogId: 'main', position: mainPosition }, ...extra] },
+    ],
+  });
+  // Admin put a long-tail channel first in Main, Sun second, Vijay third —
+  // the opposite of the family-first ranking.
+  const groups = [
+    group('vijay', 'Star Vijay', 300),
+    group('sun', 'Sun TV', 200),
+    group('madurai', 'Madurai Vision', 100, [{ catalogId: 'local', position: 100 }]),
+  ];
+  check('fixed-catalog order follows stored positions, not family rank', () => {
+    const ordered = sortLogicalGroups(groups, 'main').map((g) => g.logicalId);
+    assert.deepEqual(ordered, ['madurai', 'sun', 'vijay']);
+  });
+  check('groupCatalogPosition reads the lowest variant membership position', () => {
+    const multi = {
+      variants: [
+        { catalogs: [{ catalogId: 'main', position: 400 }, { catalogId: 'news', position: 50 }] },
+        { catalogs: [{ catalogId: 'main', position: 250 }] },
+      ],
+    };
+    assert.equal(groupCatalogPosition(multi, 'main'), 250);
+    assert.equal(groupCatalogPosition(multi, 'news'), 50);
+    assert.equal(groupCatalogPosition({ variants: [] }, 'main'), 999999);
+  });
+  check('other catalogs also follow their own admin positions', () => {
+    const localOnly = [
+      group('a', 'Vasanth TV', null, [{ catalogId: 'local', position: 300 }]),
+      group('b', 'Murasu TV', null, [{ catalogId: 'local', position: 100 }]),
+    ];
+    assert.deepEqual(sortLogicalGroups(localOnly, 'local').map((g) => g.logicalId), ['b', 'a']);
+  });
+  check('All Tamil view stays family-first regardless of positions', () => {
+    const ordered = sortLogicalGroups(groups, 'all').map((g) => g.logicalId);
+    assert.deepEqual(ordered, ['vijay', 'sun', 'madurai']);
+  });
+  check('equal positions fall back to family rank then name', () => {
+    const tied = [
+      group('z', 'Zee Tamil', 100),
+      group('j', 'Jaya TV', 100),
+      group('v2', 'Vijay Takkar', 100),
+    ];
+    assert.deepEqual(sortLogicalGroups(tied, 'main').map((g) => g.logicalId), ['v2', 'j', 'z']);
   });
 }
 
