@@ -321,13 +321,40 @@ export function JashPlayer(props) {
   // viewer comes back, close the floating window so inline playback resumes.
   const pipOnHideRef = useRef(pipOnHide);
   pipOnHideRef.current = pipOnHide;
+
+  // A manual requestPictureInPicture() inside visibilitychange is rejected
+  // with NotAllowedError because no user gesture is active — the browser then
+  // suspends the hidden tab and the stream dies. The autoPictureInPicture
+  // content attribute is the gesture-free path: the UA itself opens PiP when
+  // the document is hidden and closes it again when it returns. Set the
+  // reflected IDL property imperatively so it is attached as soon as the
+  // video element exists, independent of render timing.
+  useEffect(() => {
+    if (!videoEl || !pipOnHide) return undefined;
+    try {
+      videoEl.autoPictureInPicture = true;
+      return () => { try { videoEl.autoPictureInPicture = false; } catch {} };
+    } catch {}
+    return undefined;
+  }, [pipOnHide, videoEl]);
+
   useEffect(() => {
     const onVisibility = () => {
       if (!pipOnHideRef.current) return;
       if (document.visibilityState === 'hidden') {
         if (!videoEl || videoEl.paused || !canPip) return;
+        // The autoPictureInPicture attribute handles Chrome/Android; this is
+        // the fallback for engines that still honor a programmatic request,
+        // plus iPad Safari's presentation-mode PiP.
+        if (!document.pictureInPictureElement) {
+          try {
+            videoEl.requestPictureInPicture?.().catch?.(() => {});
+          } catch {}
+        }
         try {
-          videoEl.requestPictureInPicture?.().catch?.(() => {});
+          if (typeof videoEl.webkitSetPresentationMode === 'function' && videoEl.webkitSupportsPresentationMode?.('picture-in-picture')) {
+            videoEl.webkitSetPresentationMode('picture-in-picture');
+          }
         } catch {}
         return;
       }
@@ -336,6 +363,11 @@ export function JashPlayer(props) {
           document.exitPictureInPicture?.().catch?.(() => {});
         } catch {}
       }
+      try {
+        if (typeof videoEl?.webkitSetPresentationMode === 'function' && videoEl.webkitPresentationMode === 'picture-in-picture') {
+          videoEl.webkitSetPresentationMode('inline');
+        }
+      } catch {}
     };
     document.addEventListener?.('visibilitychange', onVisibility);
     return () => document.removeEventListener?.('visibilitychange', onVisibility);

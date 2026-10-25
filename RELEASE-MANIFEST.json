@@ -709,8 +709,8 @@
       "sha256": "3b298e794a1837e165e425a9501a8982c7ecf2e503734b3d1e3da60740455e50"
     },
     "components/player/JashPlayer.js": {
-      "bytes": 63863,
-      "sha256": "9e7ee917c1cefa143120d397267d24608e6db8c424807f100241434eaafff6e6"
+      "bytes": 65397,
+      "sha256": "64ca8429d7f15cd2d5d7dc2bc243c9a6582e36b28063bf9c75d4dd34925b3364"
     },
     "components/player/JashPlayerLazy.js": {
       "bytes": 1580,
@@ -1581,8 +1581,8 @@
       "sha256": "97e787c90b42db3c023a02b025d2c23769fa84116d0cdfa67670dce1ea23577e"
     },
     "scripts/test-player-runtime.cjs": {
-      "bytes": 4082,
-      "sha256": "ca90a5c06e77982f3d432fb52a1f1513011f7cba6e4c1bf113efc4625c9f3b80"
+      "bytes": 4364,
+      "sha256": "4aee1d586676ff2fba6e8f8b564e5f84c00fefac09295db23e0640438115a2fc"
     },
     "scripts/test-unlock-decision.mjs": {
       "bytes": 2476,
