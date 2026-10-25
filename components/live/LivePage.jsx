@@ -3,8 +3,6 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { LIVE_CATALOGS } from '@/lib/liveCatalogs';
 import LivePlayer from './Player';
-import TvMode from './TvMode/TvMode';
-import useTvMode from './hooks/useTvMode';
 import useIsDesktop from './hooks/useIsDesktop';
 import useFavourites from './hooks/useFavourites';
 import useAdminSession from './hooks/useAdminSession';
@@ -30,7 +28,6 @@ export default function LivePage() {
   const [variantIdx, setVariantIdx] = useState(0);
   const [query, setQuery] = useState('');
   const [drawerCategory, setDrawerCategory] = useState('all');
-  const { tvMode, setTvMode } = useTvMode();
   const isDesktop = useIsDesktop();
   const isAdmin = useAdminSession();
   const { favs, toggleFav } = useFavourites();
@@ -123,10 +120,6 @@ export default function LivePage() {
             <option value="all">All sources</option>
             {sourceOptions.map((id) => <option key={id} value={id}>{friendlySourceLabel(id)}</option>)}
           </select>
-          <button type="button" onClick={() => setTvMode(!tvMode)}
-            className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11.5px] font-bold text-zinc-300 hover:border-red-500/60">
-            📺 <span className="hidden sm:inline">TV Mode</span>{tvMode ? ' · on' : ''}
-          </button>
           <HomeLink className="h-8 w-8 shrink-0 text-sm" />
           <Link href="/admin?tab=tv" title="Admin"
             className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-sm text-zinc-300 hover:border-red-500/60">⚙</Link>
@@ -250,16 +243,6 @@ export default function LivePage() {
           <button type="button" onClick={() => setHideError('')} aria-label="Dismiss" className="grid h-5 w-5 place-items-center rounded-full border border-white/20">✕</button>
         </div>
       ) : null}
-
-      <TvMode
-        open={tvMode}
-        onClose={() => setTvMode(false)}
-        groups={groups}
-        favIds={favs}
-        activeId={activeLogical?.logicalId}
-        onTune={pick}
-        onZap={zap}
-      />
     </main>
   );
 }

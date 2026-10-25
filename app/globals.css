@@ -215,6 +215,26 @@ html.day-mode [class*="border-white/10"] {
   max-height: 100dvh !important;
 }
 
+/* JashPlayer fullscreens its own [data-dvp="root"] wrapper. Without this rule
+   the wrapper kept its aspect-video box and floated as a small rectangle in a
+   black fullscreen viewport (the "square" bug). The video inside stays
+   object-contain, so the whole picture is visible with bars only when ratios
+   differ — no crop, no stretch. */
+[data-dvp="root"]:fullscreen,
+[data-dvp="root"]:-webkit-full-screen {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100dvw !important;
+  height: 100dvh !important;
+  max-width: 100dvw !important;
+  max-height: 100dvh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #000 !important;
+}
+
 /* Shaka's built-in fullscreen button fullscreens the data-shaka-player-container,
    not our outer shell. Keep that path viewport-correct too, especially in Android WebView/Median. */
 [data-shaka-player-container]:fullscreen,

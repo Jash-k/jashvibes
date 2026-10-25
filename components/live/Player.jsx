@@ -98,7 +98,6 @@ export default function LivePlayer({ logical, variantIdx=0, onErrorNeedingFallba
           key={`${resolved.channel.channelId}:${variantIdx}`}
           source={{ url: resolved.originUrl, kind: 'auto', label: resolved.channel.name }}
           playbackPolicy={resolved.policy}
-          aspect={fill ? 'fill' : undefined}
           live
           poster={resolved.channel.logo || ''}
           display={{ title: resolved.channel.name, poster: resolved.channel.logo || '' }}
@@ -106,22 +105,10 @@ export default function LivePlayer({ logical, variantIdx=0, onErrorNeedingFallba
           onNext={hasZap ? onNext : undefined}
           liveBrowser={liveBrowser}
         />
-        {hasZap ? (
-          <>
-            <button type="button" onClick={onPrev} aria-label="Previous channel" title="Previous channel (PageUp)"
-              className="absolute left-2 top-1/2 z-[26] -translate-y-1/2 grid h-9 w-9 place-items-center rounded-full border border-white/15 bg-black/60 text-sm text-white/90 backdrop-blur transition hover:bg-black/85 hover:border-red-500/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 sm:opacity-60 sm:group-hover/player:opacity-100">
-              ⏮
-            </button>
-            <button type="button" onClick={onNext} aria-label="Next channel" title="Next channel (PageDown)"
-              className="absolute right-2 top-1/2 z-[26] -translate-y-1/2 grid h-9 w-9 place-items-center rounded-full border border-white/15 bg-black/60 text-sm text-white/90 backdrop-blur transition hover:bg-black/85 hover:border-red-500/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 sm:opacity-60 sm:group-hover/player:opacity-100">
-              ⏭
-            </button>
-          </>
-        ) : null}
       </div>
       <div className="flex items-center justify-between text-[11px] text-zinc-500">
         <span>{resolved.channel.name} · {variant.sourceLabel || 'Live'}</span>
-        <span className="hidden sm:inline">{hasZap ? 'PageUp/PageDown or ⏮/⏭ changes channel · G opens the guide' : ''}</span>
+        <span className="hidden sm:inline">{hasZap ? 'PageUp/PageDown changes channel · G opens the guide' : ''}</span>
       </div>
     </div>
   );

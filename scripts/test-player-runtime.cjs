@@ -21,5 +21,22 @@ const fs=require('fs'),assert=require('assert/strict');
  assert.ok(js.includes('data-dvp="runtime"'));
  assert.ok(js.includes('hidden text-white/40 sm:inline'),'phone form hides the total');
  assert.ok(js.includes('playbackPolicy?.ambient !== false'),'ambient gate must honor the live playback policy opt-out (whole-page blur bug)');
+ // /live shell: TV Mode is gone, the mid-height circular zap buttons are gone,
+ // but the white TopBar chevrons + keyboard zap (onPrev/onNext) must survive.
+ const livePage=fs.readFileSync('components/live/LivePage.jsx','utf8');
+ assert.ok(!/TvMode|TV Mode|useTvMode/.test(livePage),'TV Mode must be removed completely');
+ assert.ok(!fs.existsSync('components/live/TvMode'),'TvMode overlay directory must be deleted');
+ assert.ok(!fs.existsSync('components/live/hooks/useTvMode.js'),'useTvMode hook must be deleted');
+ const liveShell=fs.readFileSync('components/live/Player.jsx','utf8');
+ assert.ok(!liveShell.includes('aria-label="Previous channel"'),'mid-height previous button must be removed');
+ assert.ok(!liveShell.includes('aria-label="Next channel"'),'mid-height next button must be removed');
+ assert.ok(liveShell.includes('onPrev={hasZap ? onPrev : undefined}'),'white TopBar previous chevron must keep working');
+ assert.ok(liveShell.includes('onNext={hasZap ? onNext : undefined}'),'white TopBar next chevron must keep working');
+ assert.ok(!/\baspect=/.test(liveShell),'dead aspect prop on JashPlayer must stay removed (box sizing uses display.aspect)');
+ // Fullscreen: the JashPlayer root wrapper needs an explicit viewport-fill rule
+ // or it keeps its aspect-video box inside the fullscreen viewport (square bug).
+ const css=fs.readFileSync('app/globals.css','utf8');
+ assert.ok(css.includes('[data-dvp="root"]:fullscreen'),'fullscreen CSS must size the JashPlayer root to the viewport');
+ assert.ok(/\[data-dvp="root"\]:fullscreen[\s\S]*?100dvw[\s\S]*?100dvh/.test(css),'fullscreen rule must force 100dvw/100dvh');
  console.log('Player runtime readout: live/unknown suppression, window-relative elapsed, phone/desktop forms and wiring passed.');
 })().catch(e=>{console.error(e);process.exitCode=1});
