@@ -12,13 +12,27 @@ const FAV_KEY = 'jash_live_v13_favs';
 const FIXED_CATALOG_IDS = new Set(LIVE_CATALOGS.map((c) => c.id));
 const DEFAULT_CATALOG = 'main';
 
+/** True at/above the lg breakpoint (matches the Tailwind grid switch below). */
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const apply = () => setIsDesktop(mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+  return isDesktop;
+}
+
 /**
- * LivePageV13 — Design A "Cinema Split", one locked viewport.
+ * LivePageV13 — one locked viewport, right-rail cinema layout.
  *
- * The shell is exactly 100dvh with overflow hidden: header, catalog rail and
- * the hero/channel panel all fit the screen. The ONLY scrolling region is the
- * channel panel itself (and the horizontal rail on phones). On mobile the
- * rail becomes catalog chips and the info card collapses away.
+ * Desktop: catalog rail (left) · big fill-height player (center) · right
+ * panel whose channel list scrolls on top while the Now Watching details +
+ * source ladder stay pinned at the bottom. Phones keep the stacked design:
+ * chips, aspect-video player, then the channel list as the only scroll area.
+ * The shell is exactly 100dvh with overflow hidden — nothing else scrolls.
  */
 export default function LivePageV13() {
   const [groups, setGroups] = useState([]);
@@ -34,6 +48,7 @@ export default function LivePageV13() {
   const [favs, setFavs] = useState([]);
   const [drawerCategory, setDrawerCategory] = useState('all');
   const { tvMode, setTvMode } = useTvMode();
+  const isDesktop = useIsDesktop();
   const searchRef = useRef(null);
   const mobileSearchRef = useRef(null);
 
@@ -171,81 +186,86 @@ export default function LivePageV13() {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[158px_minmax(0,1fr)]">
+      {/* Rail | player | right panel. Phones stack: auto player row, then the
+          panel fills the remaining height and owns the only scroll. */}
+      <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[158px_minmax(0,1fr)_minmax(300px,360px)] lg:grid-rows-1">
         <aside className="hidden min-h-0 overflow-y-auto border-r border-white/10 p-2.5 [scrollbar-width:none] lg:block [&::-webkit-scrollbar]:hidden">
           <CatalogRail active={activeCatalog} onSelect={setActiveCatalog} counts={counts} favCount={favs.length} />
         </aside>
 
-        <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2.5 p-3 sm:gap-3.5 sm:p-4">
-          {/* Hero: player + compact info card */}
-          <div className="grid min-h-0 grid-cols-1 gap-2.5 md:grid-cols-[minmax(0,1.7fr)_minmax(230px,.78fr)] sm:gap-3.5">
-            <div className="min-h-0">
-              {activeLogical ? (
-                <LivePlayerV13
-                  logical={activeLogical}
-                  variantIdx={variantIdx}
-                  onErrorNeedingFallback={onErrorFallback}
-                  onPrev={() => zap(-1)}
-                  onNext={() => zap(1)}
-                  liveBrowser={liveBrowser}
-                />
-              ) : (
-                <div className="grid aspect-video place-items-center rounded-2xl border border-white/10 bg-zinc-950 text-sm text-zinc-400">Pick a channel below</div>
-              )}
-            </div>
-
+        {/* Center: the player fills the available height on desktop */}
+        <section className="flex min-h-0 flex-col p-3 sm:p-4">
+          <div className="min-h-0 flex-1">
             {activeLogical ? (
-              <aside className="hidden min-h-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.045] p-3.5 md:flex">
-                <h2 className="text-[15px] font-black leading-tight">{activeLogical.displayName}</h2>
-                <p className="mt-1 text-[11px] text-zinc-400">
-                  {groupCatalogIds(activeLogical).map((id) => catalogs.find((c) => c.id === id)?.name).filter(Boolean).join(' · ') || 'Live'} · Tamil
-                </p>
-                <button type="button" onClick={() => toggleFav(activeLogical.logicalId)}
-                  className={`mt-2 self-start rounded-full border px-3 py-1 text-[11px] font-bold ${activeIsFav ? 'border-yellow-400/60 bg-yellow-400/10 text-yellow-300' : 'border-white/10 text-zinc-400'}`}>
-                  {activeIsFav ? '★ Favourite' : '☆ Favourite'}
-                </button>
-                <p className="mt-auto pt-2 text-[9.5px] font-extrabold uppercase tracking-[0.16em] text-zinc-500">Source ladder · automatic</p>
-                <div className="mt-1.5 flex flex-col gap-1.5">
-                  {(activeLogical.variants || []).slice(0, 4).map((v, i) => (
-                    <div key={`${v.channelId}-${i}`} className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11.5px] ${i === variantIdx ? 'border-red-500/55 bg-red-500/10 font-bold' : 'border-white/10 text-zinc-400'}`}>
-                      <span className={`h-2 w-2 rounded-full ${i === variantIdx ? 'bg-red-400 shadow-[0_0_8px_rgba(255,59,77,.9)]' : 'bg-zinc-600'}`} />
-                      {v.sourceLabel || friendlySourceLabel(v.sourceId)}
-                      <em className="ml-auto not-italic text-[10px] text-zinc-500">{i === variantIdx ? 'playing · auto' : 'fallback'}</em>
-                    </div>
-                  ))}
-                </div>
-              </aside>
+              <LivePlayerV13
+                logical={activeLogical}
+                variantIdx={variantIdx}
+                onErrorNeedingFallback={onErrorFallback}
+                onPrev={() => zap(-1)}
+                onNext={() => zap(1)}
+                liveBrowser={liveBrowser}
+                fill={isDesktop}
+              />
+            ) : (
+              <div className="grid h-full place-items-center rounded-2xl border border-white/10 bg-zinc-950 text-sm text-zinc-400">Pick a channel from the right</div>
+            )}
+          </div>
+        </section>
+
+        {/* Right panel: channel list scrolls, details pinned at its bottom */}
+        <aside className="flex min-h-0 flex-col border-t border-white/10 bg-white/[0.025] lg:border-l lg:border-t-0">
+          <div className="flex shrink-0 items-center gap-2.5 border-b border-white/10 px-3.5 py-2.5">
+            <h3 className="text-[13px] font-black">{activeTitle}</h3>
+            <span className="text-[11px] text-zinc-500">{filtered.length}</span>
+            <button type="button" onClick={() => setReloadKey((k) => k + 1)}
+              className="ml-auto rounded-full border border-white/10 px-2.5 py-1 text-[10.5px] font-bold text-zinc-300 hover:border-red-500/60">↻ Refresh</button>
+          </div>
+
+          <div className="order-2 min-h-0 flex-1 overflow-y-auto p-2.5 [scrollbar-width:thin] lg:order-1 lg:p-3">
+            {status === 'loading' ? <p className="p-6 text-center text-[12.5px] text-zinc-400">Loading Tamil live…</p> : null}
+            {error ? (
+              <p className="m-3 rounded-xl border border-red-500/30 bg-red-950/25 p-3.5 text-[12.5px] text-red-200">
+                {error} <button type="button" onClick={load} className="ml-2 underline">Retry</button>
+              </p>
+            ) : null}
+            {status === 'ready' && !filtered.length ? (
+              <p className="p-6 text-center text-[12.5px] text-zinc-400">No channels match this view.</p>
+            ) : null}
+            {status === 'ready' && filtered.length ? (
+              <div className="grid grid-cols-3 gap-2 md:grid-cols-4 lg:grid-cols-2 lg:gap-2.5">
+                {filtered.map((group) => (
+                  <ChannelCard key={group.logicalId} group={group} active={group.logicalId === activeLogical?.logicalId} onPick={pick} />
+                ))}
+              </div>
             ) : null}
           </div>
 
-          {/* Channel panel — the page's only scrolling region */}
-          <div className="flex min-h-0 flex-col rounded-2xl border border-white/10 bg-white/[0.025]">
-            <div className="flex shrink-0 items-center gap-2.5 border-b border-white/10 px-3.5 py-2.5">
-              <h3 className="text-[13px] font-black">{activeTitle}</h3>
-              <span className="text-[11px] text-zinc-500">{filtered.length}</span>
-              <button type="button" onClick={() => setReloadKey((k) => k + 1)}
-                className="ml-auto rounded-full border border-white/10 px-2.5 py-1 text-[10.5px] font-bold text-zinc-300 hover:border-red-500/60">↻ Refresh</button>
+          {/* Now Watching — bottom of the right panel. Hidden on phones (the
+              stacked mobile design has no room), above the list on tablets
+              where the panel stacks under the player. */}
+          {activeLogical ? (
+            <div className="order-1 hidden max-h-[42%] shrink-0 flex-col overflow-y-auto border-t border-white/10 bg-white/[0.045] p-3.5 md:flex lg:order-2 lg:max-h-[45%]">
+              <h2 className="text-[14.5px] font-black leading-tight">{activeLogical.displayName}</h2>
+              <p className="mt-0.5 text-[11px] text-zinc-400">
+                {groupCatalogIds(activeLogical).map((id) => catalogs.find((c) => c.id === id)?.name).filter(Boolean).join(' · ') || 'Live'} · Tamil
+              </p>
+              <button type="button" onClick={() => toggleFav(activeLogical.logicalId)}
+                className={`mt-2 self-start rounded-full border px-3 py-1 text-[11px] font-bold ${activeIsFav ? 'border-yellow-400/60 bg-yellow-400/10 text-yellow-300' : 'border-white/10 text-zinc-400'}`}>
+                {activeIsFav ? '★ Favourite' : '☆ Favourite'}
+              </button>
+              <p className="mt-2 text-[9.5px] font-extrabold uppercase tracking-[0.16em] text-zinc-500">Source ladder · automatic</p>
+              <div className="mt-1.5 flex flex-col gap-1.5">
+                {(activeLogical.variants || []).slice(0, 4).map((v, i) => (
+                  <div key={`${v.channelId}-${i}`} className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11.5px] ${i === variantIdx ? 'border-red-500/55 bg-red-500/10 font-bold' : 'border-white/10 text-zinc-400'}`}>
+                    <span className={`h-2 w-2 rounded-full ${i === variantIdx ? 'bg-red-400 shadow-[0_0_8px_rgba(255,59,77,.9)]' : 'bg-zinc-600'}`} />
+                    {v.sourceLabel || friendlySourceLabel(v.sourceId)}
+                    <em className="ml-auto not-italic text-[10px] text-zinc-500">{i === variantIdx ? 'playing · auto' : 'fallback'}</em>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-3 [scrollbar-width:thin]">
-              {status === 'loading' ? <p className="p-6 text-center text-[12.5px] text-zinc-400">Loading Tamil live…</p> : null}
-              {error ? (
-                <p className="m-3 rounded-xl border border-red-500/30 bg-red-950/25 p-3.5 text-[12.5px] text-red-200">
-                  {error} <button type="button" onClick={load} className="ml-2 underline">Retry</button>
-                </p>
-              ) : null}
-              {status === 'ready' && !filtered.length ? (
-                <p className="p-6 text-center text-[12.5px] text-zinc-400">No channels match this view.</p>
-              ) : null}
-              {status === 'ready' && filtered.length ? (
-                <div className="grid grid-cols-3 gap-2 md:grid-cols-4 lg:grid-cols-6 lg:gap-2.5">
-                  {filtered.map((group) => (
-                    <ChannelCard key={group.logicalId} group={group} active={group.logicalId === activeLogical?.logicalId} onPick={pick} />
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </section>
+          ) : null}
+        </aside>
       </div>
 
       <TvMode

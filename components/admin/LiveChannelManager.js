@@ -12,11 +12,19 @@
  *   • religious console: auto-tagged devotional channels stay hidden from
  *     /live until an owner manually maps one — manual mapping always wins
  *
+ * Performance model (owner feedback: "admin TV service very laggy"):
+ * the whole visible collection is fetched ONCE on mount (projected lean
+ * docs). Search and every dropdown filter are pure in-memory useMemo work,
+ * so typing and tab switching make ZERO network calls and update instantly.
+ * Rows are React.memo components and the DOM is capped with a Show-more
+ * pager, so even a 3k-row catalogue stays smooth. Only deliberate writes
+ * (and the manual Refresh button) trigger a refetch.
+ *
  * Authentication is the jash_admin cookie set at admin login; same-origin
  * fetch carries it, so no token plumbing is needed here.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LIVE_CATALOGS } from '@/lib/liveCatalogs';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { LIVE_CATALOGS, getChannelCatalogIds, sortChannelsForCatalog } from '@/lib/liveCatalogs';
 import { SOURCE_REGISTRY } from '@/lib/live/registry';
 import AdminLivePreview from './AdminLivePreview';
 
@@ -25,6 +33,8 @@ const EMPTY_FORM = {
   keyId: '', key: '', licenseKey: '', licenseType: '', cookie: '', userAgent: '',
   referer: '', headersText: '', catalogIds: ['main'],
 };
+const FETCH_LIMIT = 3000;
+const RENDER_PAGE = 120;
 
 function Logo({ channel }) {
   const src = channel.customLogo || channel.logo;
@@ -40,9 +50,71 @@ function Logo({ channel }) {
 
 const isLiveCatalog = (value) => LIVE_CATALOGS.some((item) => item.id === value);
 
+/**
+ * One catalogue row. memo'd: parent state changes (search text, selection of
+ * another row) never re-render rows whose props are unchanged.
+ */
+const ChannelRow = memo(function ChannelRow({
+  channel, checked, reorderEnabled, busy, ladderOpen, previewOpen,
+  catalogIdSet, knownSourceIds, onToggleSelect, onDragStart, onDragOver, onDrop,
+  onMove, onPreview, onLadder, onEdit, onHideToggle, onDelete, onToggleCatalog,
+  onSaveLadder, onCancelLadder,
+}) {
+  return (
+    <div draggable={reorderEnabled}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      className={`rounded-2xl border p-2.5 ${checked ? 'border-red-500/60 bg-red-950/15' : 'border-white/10 bg-zinc-900/70'}`}>
+      <div className="flex items-center gap-2.5">
+        <input type="checkbox" checked={checked} onChange={onToggleSelect} className="h-4 w-4 shrink-0 accent-red-600" aria-label="Select channel" />
+        {reorderEnabled ? <span title="Drag to reorder" className="cursor-grab select-none text-zinc-500">⠿</span> : null}
+        <Logo channel={channel} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[13px] font-bold">
+            {channel.customName || channel.name}
+            {channel.hidden ? <span className="ml-2 rounded-full bg-zinc-700 px-2 py-0.5 text-[9px]">hidden</span> : null}
+            {channel.religious ? <span className="ml-2 rounded-full border border-amber-400/40 px-2 py-0.5 text-[9px] font-black text-amber-300">religious · hidden from /live</span> : null}
+          </p>
+          <p className="truncate text-[11px] text-zinc-400">{channel.source} · {String(channel.format || 'unknown').toUpperCase()} · {channel.category}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {reorderEnabled ? (
+            <>
+              <button type="button" onClick={() => onMove(-1)} title="Move up" className="rounded-full border border-white/10 px-2 py-1 text-xs">↑</button>
+              <button type="button" onClick={() => onMove(1)} title="Move down" className="rounded-full border border-white/10 px-2 py-1 text-xs">↓</button>
+            </>
+          ) : null}
+          <button type="button" onClick={onPreview} title="Preview with the real /live player" className="rounded-full border border-red-500/40 px-2.5 py-1 text-xs font-bold text-red-200" aria-current={previewOpen}>▶ Preview</button>
+          <button type="button" onClick={onLadder} title="Source ladder" className="rounded-full border border-white/10 px-2.5 py-1 text-xs" aria-current={ladderOpen}>🪜</button>
+          <button type="button" onClick={onEdit} className="rounded-full border border-white/10 px-2.5 py-1 text-xs">Edit</button>
+          <button type="button" onClick={onHideToggle} disabled={busy} className="rounded-full border border-white/10 px-2.5 py-1 text-xs disabled:opacity-40">{channel.hidden ? 'Unhide' : 'Hide'}</button>
+          <button type="button" onClick={onDelete} className="rounded-full border border-red-500/40 px-2.5 py-1 text-xs text-red-200">Delete</button>
+        </div>
+      </div>
+
+      {ladderOpen ? (
+        <LadderEditor channel={channel} knownSourceIds={knownSourceIds} onSave={onSaveLadder} onCancel={onCancelLadder} />
+      ) : null}
+
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {LIVE_CATALOGS.map((item) => {
+          const active = catalogIdSet.has(item.id);
+          return (
+            <button key={item.id} type="button" onClick={() => onToggleCatalog(item.id)} disabled={busy}
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${active ? 'border-red-500 bg-red-600/20 text-red-100' : 'border-white/10 bg-black/40 text-zinc-400'}`}>
+              {item.icon} {item.name}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
 export default function LiveChannelManager() {
-  const [rows, setRows] = useState([]);
-  const [total, setTotal] = useState(0);
+  const [allRows, setAllRows] = useState([]);
+  const [totalOnServer, setTotalOnServer] = useState(0);
   const [sources, setSources] = useState([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
@@ -58,6 +130,7 @@ export default function LiveChannelManager() {
   const [selected, setSelected] = useState(() => new Set());
   const [ladderFor, setLadderFor] = useState(null); // channel doc being edited
   const [previewChannel, setPreviewChannel] = useState(null); // real-player modal
+  const [renderCap, setRenderCap] = useState(RENDER_PAGE);
   const dragId = useRef('');
 
   const api = useCallback(async (path, opts = {}) => {
@@ -67,23 +140,18 @@ export default function LiveChannelManager() {
     return data;
   }, []);
 
+  // One fetch for the whole (projected) collection + one fetch for sources.
+  // Deliberately sends NO filter parameters: the lean sorted Mongo branch is
+  // cheap and every filter afterwards is client-side.
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ limit: '500' });
-      if (sourceId !== 'all') params.set('sourceId', sourceId);
-      if (isLiveCatalog(catalog)) params.set('catalog', catalog);
-      if (mapped !== 'all') params.set('mapped', mapped);
-      if (catalog === 'unmapped') params.set('mapped', '0');
-      if (catalog === 'religious') params.set('religious', '1');
-      params.set('hidden', hidden);
-      if (q.trim()) params.set('q', q.trim());
       const [channelData, sourceData] = await Promise.all([
-        api(`/api/live-service/channels?${params.toString()}`),
+        api(`/api/live-service/channels?limit=${FETCH_LIMIT}&hidden=all`),
         api('/api/live-service/sources').catch(() => ({ sources: [] })),
       ]);
-      setRows(channelData.channels || []);
-      setTotal(channelData.total || 0);
+      setAllRows(channelData.channels || []);
+      setTotalOnServer(channelData.total || 0);
       setSources(sourceData.sources || []);
       setSelected(new Set());
     } catch (error) {
@@ -91,19 +159,50 @@ export default function LiveChannelManager() {
     } finally {
       setLoading(false);
     }
-  }, [api, q, sourceId, catalog, mapped, hidden]);
+  }, [api]);
 
-  useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   // Keep the open preview in step with hide/catalog writes made inside it.
   useEffect(() => {
     if (!previewChannel) return;
-    const fresh = rows.find((row) => row.channelId === previewChannel.channelId);
+    const fresh = allRows.find((row) => row.channelId === previewChannel.channelId);
     if (fresh) setPreviewChannel(fresh);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows]);
+  }, [allRows]);
 
-  const channelCatalogIds = useCallback((channel) => new Set((channel.catalogs || []).map((item) => item.catalogId)), []);
+  // channelId -> Set<catalogId>, built once per data load instead of per row.
+  const catalogSets = useMemo(() => {
+    const map = new Map();
+    for (const channel of allRows) map.set(channel.channelId, new Set(getChannelCatalogIds(channel)));
+    return map;
+  }, [allRows]);
+
+  // Pure in-memory filtering — zero network on keystroke or tab change.
+  const filteredRows = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    let rows = allRows.filter((channel) => {
+      if (sourceId !== 'all' && channel.sourceId !== sourceId) return false;
+      if (hidden === '0' && channel.hidden) return false;
+      if (hidden === '1' && !channel.hidden) return false;
+      if (mapped === '1' && !(catalogSets.get(channel.channelId)?.size)) return false;
+      if (mapped === '0' && catalogSets.get(channel.channelId)?.size) return false;
+      if (catalog === 'unmapped' && catalogSets.get(channel.channelId)?.size) return false;
+      if (catalog === 'religious' && !channel.religious) return false;
+      if (isLiveCatalog(catalog) && !catalogSets.get(channel.channelId)?.has(catalog)) return false;
+      if (needle) {
+        const hay = `${channel.customName || ''} ${channel.name || ''} ${channel.channelId || ''}`.toLowerCase();
+        if (!hay.includes(needle)) return false;
+      }
+      return true;
+    });
+    if (isLiveCatalog(catalog)) rows = sortChannelsForCatalog(rows, catalog);
+    return rows;
+  }, [allRows, q, sourceId, catalog, mapped, hidden, catalogSets]);
+
+  // Reset the pager whenever the visible slice changes identity.
+  useEffect(() => { setRenderCap(RENDER_PAGE); }, [q, sourceId, catalog, mapped, hidden]);
+  const visibleRows = useMemo(() => filteredRows.slice(0, renderCap), [filteredRows, renderCap]);
 
   const patch = useCallback(async (channel, action, extra = {}) => {
     setBusy(channel.channelId);
@@ -147,15 +246,15 @@ export default function LiveChannelManager() {
     }
   };
 
-  const toggleCatalog = (channel, catalogId) => {
-    const enabled = !channelCatalogIds(channel).has(catalogId);
+  const toggleCatalog = useCallback((channel, catalogId) => {
+    const enabled = !catalogSets.get(channel.channelId)?.has(catalogId);
     return patch(channel, 'setCatalog', { catalogId, enabled });
-  };
+  }, [patch, catalogSets]);
 
   const move = (channel, direction) => {
     if (!isLiveCatalog(catalog)) return;
-    const index = rows.findIndex((item) => item.channelId === channel.channelId);
-    const neighbor = rows[index + direction];
+    const index = filteredRows.findIndex((item) => item.channelId === channel.channelId);
+    const neighbor = filteredRows[index + direction];
     if (!neighbor) return;
     return patch(channel, 'swapCatalogPosition', { catalogId: catalog, otherChannelId: neighbor.channelId, direction });
   };
@@ -164,7 +263,7 @@ export default function LiveChannelManager() {
     const from = dragId.current;
     dragId.current = '';
     if (!from || from === targetId || !isLiveCatalog(catalog)) return;
-    const orderedIds = rows.map((item) => item.channelId);
+    const orderedIds = filteredRows.map((item) => item.channelId);
     const fromIndex = orderedIds.indexOf(from);
     const toIndex = orderedIds.indexOf(targetId);
     if (fromIndex < 0 || toIndex < 0) return;
@@ -208,7 +307,7 @@ export default function LiveChannelManager() {
       category: channel.category || 'Live', format: channel.format || 'unknown', language: channel.language || 'Tamil',
       keyId: channel.keyId || '', key: channel.key || '', licenseKey: channel.licenseKey || '', licenseType: channel.licenseType || '',
       cookie: channel.cookie || '', userAgent: channel.userAgent || '', referer: channel.referer || '', headersText,
-      catalogIds: (channel.catalogs || []).map((item) => item.catalogId),
+      catalogIds: getChannelCatalogIds(channel),
     });
     setShowForm(true);
   };
@@ -267,14 +366,22 @@ export default function LiveChannelManager() {
 
   const sourceOptions = useMemo(() => [{ sourceId: 'all', label: 'All sources' }, ...sources.map((item) => ({ sourceId: item.sourceId, label: item.label }))], [sources]);
   const reorderEnabled = isLiveCatalog(catalog);
-  const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.channelId));
   const knownSourceIds = useMemo(() => [...new Set([...Object.keys(SOURCE_REGISTRY), ...sources.map((s) => s.sourceId), 'manual'])], [sources]);
+
+  // Stable row callbacks (same references across renders) so memo holds.
+  const onToggleSelect = useCallback((channel) => setSelected((prev) => {
+    const next = new Set(prev);
+    next.has(channel.channelId) ? next.delete(channel.channelId) : next.add(channel.channelId);
+    return next;
+  }), []);
+  const rowDragStart = useCallback((channel) => { dragId.current = channel.channelId; }, []);
+  const rowDragOver = useCallback((event) => { if (reorderEnabled) event.preventDefault(); }, [reorderEnabled]);
 
   return (
     <div className="space-y-3">
       <div className="space-y-2 rounded-2xl border border-white/10 bg-zinc-950 p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search Sun TV, Vijay…" className="min-w-[170px] flex-1 rounded-full border border-white/10 bg-black px-3 py-1.5 text-xs outline-none focus:border-red-500" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search Sun TV, Vijay… (instant)" className="min-w-[170px] flex-1 rounded-full border border-white/10 bg-black px-3 py-1.5 text-xs outline-none focus:border-red-500" />
           <select value={catalog} onChange={(e) => setCatalog(e.target.value)} className="rounded-full border border-white/10 bg-black px-3 py-1.5 text-xs">
             <option value="all">All catalogs</option>
             {LIVE_CATALOGS.map((item) => <option key={item.id} value={item.id}>{item.icon} {item.name}</option>)}
@@ -291,10 +398,14 @@ export default function LiveChannelManager() {
             <option value="0">Visible</option><option value="1">Hidden</option><option value="all">Visible + hidden</option>
           </select>
           <button type="button" onClick={rebuild} disabled={busy === 'rebuild'} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-bold disabled:opacity-50">↻ Rebuild grouping</button>
+          <button type="button" onClick={load} disabled={loading} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-bold disabled:opacity-50">⟳ Refresh</button>
           <button type="button" onClick={openCreate} className="rounded-full bg-red-600 px-4 py-1.5 text-xs font-black text-white">+ Add channel</button>
         </div>
         <div className="flex items-center justify-between text-[11px] text-zinc-400">
-          <span>{loading ? 'Loading…' : `${rows.length} of ${total} rows`}{reorderEnabled ? ' · drag rows or use ↑/↓ to reorder this catalog' : ''}</span>
+          <span>
+            {loading ? 'Loading…' : `${filteredRows.length} shown · ${allRows.length} loaded${totalOnServer > allRows.length ? ` · ${totalOnServer} in database` : ''}`}
+            {reorderEnabled ? ' · drag rows or use ↑/↓ to reorder this catalog' : ' · filters run instantly on this device'}
+          </span>
           {msg ? <span className="font-bold text-amber-200">{msg}</span> : null}
         </div>
       </div>
@@ -360,61 +471,39 @@ export default function LiveChannelManager() {
       ) : null}
 
       <div className="max-h-[65vh] space-y-2 overflow-auto pr-1">
-        {!loading && !rows.length ? <p className="rounded-2xl border border-white/10 bg-zinc-950 p-6 text-center text-sm text-zinc-400">No channels match these filters.</p> : null}
-        {rows.map((channel) => {
-          const ids = channelCatalogIds(channel);
-          const checked = selected.has(channel.channelId);
-          return (
-            <div key={channel.channelId} draggable={reorderEnabled}
-              onDragStart={() => { dragId.current = channel.channelId; }}
-              onDragOver={(e) => { if (reorderEnabled) e.preventDefault(); }}
-              onDrop={() => onDropReorder(channel.channelId)}
-              className={`rounded-2xl border p-2.5 ${checked ? 'border-red-500/60 bg-red-950/15' : 'border-white/10 bg-zinc-900/70'}`}>
-              <div className="flex items-center gap-2.5">
-                <input type="checkbox" checked={checked} onChange={() => setSelected((prev) => { const next = new Set(prev); next.has(channel.channelId) ? next.delete(channel.channelId) : next.add(channel.channelId); return next; })} className="h-4 w-4 shrink-0 accent-red-600" aria-label="Select channel" />
-                {reorderEnabled ? <span title="Drag to reorder" className="cursor-grab select-none text-zinc-500">⠿</span> : null}
-                <Logo channel={channel} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-bold">
-                    {channel.customName || channel.name}
-                    {channel.hidden ? <span className="ml-2 rounded-full bg-zinc-700 px-2 py-0.5 text-[9px]">hidden</span> : null}
-                    {channel.religious ? <span className="ml-2 rounded-full border border-amber-400/40 px-2 py-0.5 text-[9px] font-black text-amber-300">religious · hidden from /live</span> : null}
-                  </p>
-                  <p className="truncate text-[11px] text-zinc-400">{channel.source} · {String(channel.format || 'unknown').toUpperCase()} · {channel.category}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  {reorderEnabled ? (
-                    <>
-                      <button type="button" onClick={() => move(channel, -1)} title="Move up" className="rounded-full border border-white/10 px-2 py-1 text-xs">↑</button>
-                      <button type="button" onClick={() => move(channel, 1)} title="Move down" className="rounded-full border border-white/10 px-2 py-1 text-xs">↓</button>
-                    </>
-                  ) : null}
-                  <button type="button" onClick={() => setPreviewChannel(channel)} title="Preview with the real /live player" className="rounded-full border border-red-500/40 px-2.5 py-1 text-xs font-bold text-red-200">▶ Preview</button>
-                  <button type="button" onClick={() => setLadderFor(ladderFor?.channelId === channel.channelId ? null : channel)} title="Source ladder" className="rounded-full border border-white/10 px-2.5 py-1 text-xs">🪜</button>
-                  <button type="button" onClick={() => openEdit(channel)} className="rounded-full border border-white/10 px-2.5 py-1 text-xs">Edit</button>
-                  <button type="button" onClick={() => patch(channel, channel.hidden ? 'unhide' : 'hide')} disabled={busy === channel.channelId} className="rounded-full border border-white/10 px-2.5 py-1 text-xs disabled:opacity-40">{channel.hidden ? 'Unhide' : 'Hide'}</button>
-                  <button type="button" onClick={() => removeChannel(channel)} className="rounded-full border border-red-500/40 px-2.5 py-1 text-xs text-red-200">Delete</button>
-                </div>
-              </div>
-
-              {ladderFor?.channelId === channel.channelId ? (
-                <LadderEditor channel={channel} knownSourceIds={knownSourceIds} onSave={(ladder) => saveLadder(channel, ladder)} onCancel={() => setLadderFor(null)} />
-              ) : null}
-
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {LIVE_CATALOGS.map((item) => {
-                  const active = ids.has(item.id);
-                  return (
-                    <button key={item.id} type="button" onClick={() => toggleCatalog(channel, item.id)} disabled={busy === channel.channelId}
-                      className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${active ? 'border-red-500 bg-red-600/20 text-red-100' : 'border-white/10 bg-black/40 text-zinc-400'}`}>
-                      {item.icon} {item.name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
+        {!loading && !visibleRows.length ? <p className="rounded-2xl border border-white/10 bg-zinc-950 p-6 text-center text-sm text-zinc-400">No channels match these filters.</p> : null}
+        {visibleRows.map((channel) => (
+          <ChannelRow
+            key={channel.channelId}
+            channel={channel}
+            checked={selected.has(channel.channelId)}
+            reorderEnabled={reorderEnabled}
+            busy={busy === channel.channelId}
+            ladderOpen={ladderFor?.channelId === channel.channelId}
+            previewOpen={previewChannel?.channelId === channel.channelId}
+            catalogIdSet={catalogSets.get(channel.channelId) || EMPTY_SET}
+            onToggleSelect={() => onToggleSelect(channel)}
+            onDragStart={() => rowDragStart(channel)}
+            onDragOver={rowDragOver}
+            onDrop={() => onDropReorder(channel.channelId)}
+            onMove={(dir) => move(channel, dir)}
+            onPreview={() => setPreviewChannel(channel)}
+            onLadder={() => setLadderFor(ladderFor?.channelId === channel.channelId ? null : channel)}
+            onEdit={() => openEdit(channel)}
+            onHideToggle={() => patch(channel, channel.hidden ? 'unhide' : 'hide')}
+            onDelete={() => removeChannel(channel)}
+            onToggleCatalog={(catalogId) => toggleCatalog(channel, catalogId)}
+            knownSourceIds={knownSourceIds}
+            onSaveLadder={(ladder) => saveLadder(channel, ladder)}
+            onCancelLadder={() => setLadderFor(null)}
+          />
+        ))}
+        {filteredRows.length > visibleRows.length ? (
+          <button type="button" onClick={() => setRenderCap((n) => n + RENDER_PAGE)}
+            className="w-full rounded-2xl border border-white/10 bg-zinc-950 py-2.5 text-xs font-bold text-zinc-300 hover:border-red-500/60">
+            Show more — {filteredRows.length - visibleRows.length} remaining
+          </button>
+        ) : null}
       </div>
 
       {previewChannel ? (
@@ -423,6 +512,8 @@ export default function LiveChannelManager() {
     </div>
   );
 }
+
+const EMPTY_SET = new Set();
 
 function LadderEditor({ channel, knownSourceIds, onSave, onCancel }) {
   const [ladder, setLadder] = useState(Array.isArray(channel.ladderOrder) ? channel.ladderOrder : []);
@@ -438,10 +529,10 @@ function LadderEditor({ channel, knownSourceIds, onSave, onCancel }) {
     setLadder([...ladder, sourceId]);
   };
   const labelOf = (id) => SOURCE_REGISTRY[id]?.label || (id === 'manual' ? 'Manual' : id);
-  const available = knownSourceIds.filter((id) => !ladder.includes(id));
+  const available = (knownSourceIds || []).filter((id) => !ladder.includes(id));
 
   return (
-    <div className="mt-2 rounded-xl border border-white/10 bg-black/40 p-2.5">
+    <div className="rounded-2xl border border-white/10 bg-zinc-950 p-3">
       <p className="mb-1.5 text-[11px] font-black text-zinc-300">Source ladder for “{channel.name}” — listed sources play first in this order; the rest keep their default priority</p>
       <div className="flex flex-wrap items-center gap-1.5">
         {ladder.map((id, index) => (
@@ -455,7 +546,7 @@ function LadderEditor({ channel, knownSourceIds, onSave, onCancel }) {
         {!ladder.length ? <span className="text-[11px] text-zinc-500">Default order (source priority) — add sources to pin this channel&apos;s ladder</span> : null}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <select value="" onChange={(e) => addSource(e.target.value)} className="rounded-full border border-white/10 bg-black px-2.5 py-1 text-[11px]">
+        <select value="" onChange={(e) => addSource(e.target.value)} className="rounded-full border border-white/10 bg-black px-3 py-1 text-[11px]">
           <option value="">Add source…</option>
           {available.map((id) => <option key={id} value={id}>{labelOf(id)}</option>)}
         </select>

@@ -32,7 +32,7 @@ const PUBLIC_PROJECTION = [
  */
 const BASE_TTL_MS = Number(process.env.LIVE_CHANNELS_CACHE_TTL_MS || 15_000);
 const cacheStore = globalThis.__jashLiveCatalogCache || (globalThis.__jashLiveCatalogCache = { entries: new Map(), version: 0 });
-const BASE_KEY = 'public-channels-base-v1';
+const BASE_KEY = 'public-channels-base-v2';
 
 /** Lowest catalog position any variant of this group holds (999999 if unmapped). */
 function groupCatalogPosition(group, catalogId = 'all') {

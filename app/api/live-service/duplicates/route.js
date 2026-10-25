@@ -3,6 +3,7 @@ import { requireServiceAuth } from '@/lib/serverAuth';
 import dbConnect from '@/lib/db';
 import LiveChannel from '@/models/LiveChannel';
 import { normalizeLiveKey, toClientChannel, recalcSourceCounts } from '@/lib/liveService';
+import { canonicalChannelName } from '@/lib/live/pipeline/deduplicate.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,9 @@ export async function GET(request) {
     const docs = await LiveChannel.find(filter).lean();
     const map = new Map();
     for (const doc of docs) {
-      const key = normalizeLiveKey(doc.name).replace(/\b(hd|sd|fhd|tv|channel)\b/g, '').replace(/\s+/g, ' ').trim() || normalizeLiveKey(doc.name);
+      // Same canonical identity rule as the public /live dedup, so this
+      // console reports exactly the rows that would merge into one card.
+      const key = canonicalChannelName(doc.name) || normalizeLiveKey(doc.name);
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(doc);
     }

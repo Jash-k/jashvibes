@@ -18,6 +18,7 @@ import { cleanHttpUrl, detectManualFormat } from '@/lib/live/manualChannel';
 import { resolveHjhWorkerUrl, extractJioCookieFromText } from '@/lib/liveTv';
 import { pickLandingGroup } from '@/lib/live/landing';
 import { channelDocToLogicalGroup } from '@/lib/live/preview';
+import { canonicalChannelName, displayNameForChannel, deduplicateChannels, logicalIdForChannel } from '@/lib/live/pipeline/deduplicate.js';
 import http from 'node:http';
 
 let passed = 0;
@@ -348,6 +349,70 @@ console.log('12. admin preview adapter (same shape the live player consumes)');
     assert.equal(empty.variants.length, 1);
     assert.equal(empty.variants[0].playable, true);
     assert.equal(empty.displayName, 'Channel preview');
+  });
+}
+
+console.log('13. canonical duplicate arrest (HD / DASH / ClearKey variants merge)');
+{
+  check('canonicalChannelName strips every delivery/quality/DRM token', () => {
+    const cases = [
+      ['Star Vijay', 'star vijay'],
+      ['Star Vijay HD', 'star vijay'],
+      ['Star Vijay DASH', 'star vijay'],
+      ['Star Vijay ClearKey', 'star vijay'],
+      ['Star Vijay_ClearKey [HLS · JioTV proxy]', 'star vijay'],
+      ['STAR VIJAY (DASH)', 'star vijay'],
+      ['Sun TV 4K', 'sun'],
+      ['KTV HD', 'ktv'],
+      ['J Movies MOB 720p', 'j movies mob'],
+      [' Polimer   TV  HLS ', 'polimer'],
+    ];
+    for (const [input, want] of cases) assert.equal(canonicalChannelName(input), want, input);
+  });
+  check('brand differentiators survive — sister channels never merge', () => {
+    assert.notEqual(canonicalChannelName('Star Vijay'), canonicalChannelName('Star Vijay Super'));
+    assert.notEqual(canonicalChannelName('Star Vijay'), canonicalChannelName('Vijay Takkar'));
+    assert.notEqual(canonicalChannelName('Sun TV HD'), canonicalChannelName('Sun Music HD'));
+    assert.notEqual(canonicalChannelName('Star Sports 1 HD'), canonicalChannelName('Star Sports 2 HD'));
+    assert.notEqual(canonicalChannelName('KTV HD'), canonicalChannelName('K TV'));
+  });
+  check('displayNameForChannel keeps friendly words and original casing', () => {
+    assert.equal(displayNameForChannel('Star Vijay HD (DASH)'), 'Star Vijay');
+    assert.equal(displayNameForChannel('Sun TV HD'), 'Sun TV'); // "TV" stays for humans
+    assert.equal(displayNameForChannel('Madurai Vision [HLS proxy]'), 'Madurai Vision');
+    assert.equal(displayNameForChannel(''), 'Channel');
+  });
+  check('logicalIdForChannel never returns an empty id', () => {
+    assert.ok(logicalIdForChannel({ name: '   ' }).length > 0);
+    assert.equal(logicalIdForChannel({ name: 'Star Vijay HD' }), 'star vijay');
+  });
+
+  const flat = (over) => ({
+    channelId: `c${Math.random().toString(36).slice(2, 8)}`, sourceId: 'iptv-org-tamil',
+    source: 'Test', name: 'X', category: 'Entertainment', url: 'https://e.test/a.m3u8',
+    format: 'hls', playable: true, headers: {}, catalogs: [], ...over,
+  });
+  const merged = deduplicateChannels([
+    flat({ channelId: 'a1', name: 'Star Vijay', format: 'hls' }),
+    flat({ channelId: 'a2', sourceId: 'hjh-jio', name: 'Star Vijay HD', format: 'dash', licenseType: 'clearkey' }),
+    flat({ channelId: 'a3', sourceId: 'jash', name: 'Star Vijay DASH', format: 'dash' }),
+    flat({ channelId: 'a4', sourceId: 'jash', name: 'Star Vijay_ClearKey [HLS · proxy]', format: 'hls' }),
+    flat({ channelId: 'b1', name: 'Star Vijay Super', format: 'hls' }),
+    flat({ channelId: 'b2', name: 'Star Vijay Super HD', format: 'dash' }),
+    flat({ channelId: 'c1', sourceId: 'jash', name: 'Dead Key', licenseKey: 'null:null', url: 'https://e.test/d.m3u8' }),
+  ]);
+  check('one card per broadcaster with all delivery rows as its ladder', () => {
+    assert.equal(merged.length, 2); // Star Vijay family + Star Vijay Super; dummy row dropped
+    const vijay = merged.find((g) => g.logicalId === 'star vijay');
+    assert.ok(vijay);
+    assert.equal(vijay.variantCount, 4);
+    assert.equal(vijay.displayName, 'Star Vijay');
+    assert.deepEqual(vijay.sourceIds.sort(), ['hjh-jio', 'iptv-org-tamil', 'jash'].sort());
+  });
+  check('sister channel stays its own card even with an HD twin', () => {
+    const superG = merged.find((g) => g.logicalId === 'star vijay super');
+    assert.ok(superG);
+    assert.equal(superG.variantCount, 2);
   });
 }
 

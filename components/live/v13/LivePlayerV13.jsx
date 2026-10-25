@@ -13,7 +13,7 @@ import { createLiveTvPolicy } from '@/lib/player/policy/liveTv';
  *   liveBrowser    feeds JashPlayer's in-player ChannelDrawer (G key / guide
  *                  button), which survives fullscreen and is D-pad navigable.
  */
-export default function LivePlayerV13({ logical, variantIdx=0, onErrorNeedingFallback, onPrev, onNext, liveBrowser=null }) {
+export default function LivePlayerV13({ logical, variantIdx=0, onErrorNeedingFallback, onPrev, onNext, liveBrowser=null, fill=false }) {
   const hasZap = typeof onPrev === 'function' && typeof onNext === 'function';
   const variant = logical?.variants?.[variantIdx] || logical?.best;
   const displayName = logical?.displayName || logical?.name || variant?.name || 'Live Channel';
@@ -89,12 +89,13 @@ export default function LivePlayerV13({ logical, variantIdx=0, onErrorNeedingFal
   // when the variant needs server-side headers. A per-channel key remounts the
   // engine cleanly on every channel zap / variant-ladder switch.
   return (
-    <div className="space-y-2">
-      <div className="group/player relative rounded-2xl overflow-hidden border border-white/10 bg-black">
+    <div className={fill ? 'flex h-full min-h-0 flex-col gap-2' : 'space-y-2'}>
+      <div className={`group/player relative rounded-2xl overflow-hidden border border-white/10 bg-black ${fill ? 'min-h-0 flex-1' : ''}`}>
         <JashPlayer
           key={`${resolved.channel.channelId}:${variantIdx}`}
           source={{ url: resolved.originUrl, kind: 'auto', label: resolved.channel.name }}
           playbackPolicy={resolved.policy}
+          aspect={fill ? 'fill' : undefined}
           live
           poster={resolved.channel.logo || ''}
           display={{ title: resolved.channel.name, poster: resolved.channel.logo || '' }}
