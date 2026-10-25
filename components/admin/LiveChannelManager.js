@@ -26,6 +26,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LIVE_CATALOGS, getChannelCatalogIds, sortChannelsForCatalog } from '@/lib/liveCatalogs';
 import { SOURCE_REGISTRY } from '@/lib/live/registry';
+import { summarizeSourceCatalogs } from '@/lib/live/adminBrowse';
 import AdminLivePreview from './AdminLivePreview';
 
 const EMPTY_FORM = {
@@ -203,6 +204,24 @@ export default function LiveChannelManager() {
   // Reset the pager whenever the visible slice changes identity.
   useEffect(() => { setRenderCap(RENDER_PAGE); }, [q, sourceId, catalog, mapped, hidden]);
   const visibleRows = useMemo(() => filteredRows.slice(0, renderCap), [filteredRows, renderCap]);
+
+  // Source → catalog browse: catalog chips scoped to the chosen source, with
+  // live counts (incl. the virtual Unmapped / Religious buckets). Pure
+  // in-memory work — switching source or catalog makes no network calls.
+  const sourceScopedRows = useMemo(
+    () => (sourceId === 'all' ? allRows : allRows.filter((row) => row.sourceId === sourceId)),
+    [allRows, sourceId],
+  );
+  const browseSummary = useMemo(
+    () => summarizeSourceCatalogs(sourceScopedRows, (row) => getChannelCatalogIds(row)),
+    [sourceScopedRows],
+  );
+  const browseChips = useMemo(() => ([
+    { id: 'all', label: 'All', icon: '★', count: browseSummary.total },
+    ...LIVE_CATALOGS.map((item) => ({ id: item.id, label: item.name, icon: item.icon, count: browseSummary.catalogs[item.id] || 0 })),
+    { id: 'unmapped', label: 'Unmapped', icon: '⚪', count: browseSummary.unmapped },
+    { id: 'religious', label: 'Religious', icon: '🛡️', count: browseSummary.religious },
+  ]), [browseSummary]);
 
   const patch = useCallback(async (channel, action, extra = {}) => {
     setBusy(channel.channelId);
@@ -382,12 +401,6 @@ export default function LiveChannelManager() {
       <div className="space-y-2 rounded-2xl border border-white/10 bg-zinc-950 p-3">
         <div className="flex flex-wrap items-center gap-2">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search Sun TV, Vijay… (instant)" className="min-w-[170px] flex-1 rounded-full border border-white/10 bg-black px-3 py-1.5 text-xs outline-none focus:border-red-500" />
-          <select value={catalog} onChange={(e) => setCatalog(e.target.value)} className="rounded-full border border-white/10 bg-black px-3 py-1.5 text-xs">
-            <option value="all">All catalogs</option>
-            {LIVE_CATALOGS.map((item) => <option key={item.id} value={item.id}>{item.icon} {item.name}</option>)}
-            <option value="unmapped">Unmapped</option>
-            <option value="religious">🛡️ Religious (excluded)</option>
-          </select>
           <select value={sourceId} onChange={(e) => setSourceId(e.target.value)} className="rounded-full border border-white/10 bg-black px-3 py-1.5 text-xs">
             {sourceOptions.map((item) => <option key={item.sourceId} value={item.sourceId}>{item.label}</option>)}
           </select>
@@ -400,6 +413,19 @@ export default function LiveChannelManager() {
           <button type="button" onClick={rebuild} disabled={busy === 'rebuild'} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-bold disabled:opacity-50">↻ Rebuild grouping</button>
           <button type="button" onClick={load} disabled={loading} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-bold disabled:opacity-50">⟳ Refresh</button>
           <button type="button" onClick={openCreate} className="rounded-full bg-red-600 px-4 py-1.5 text-xs font-black text-white">+ Add channel</button>
+        </div>
+        {/* Source → catalog browse chips: pick a source above, then a catalog
+            here; counts reflect the chosen source instantly. */}
+        <div className="flex flex-wrap gap-1.5">
+          {browseChips.map((chip) => (
+            <button key={chip.id} type="button" onClick={() => setCatalog(chip.id)}
+              className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
+                catalog === chip.id ? 'border-red-500 bg-red-600/20 text-red-100' : 'border-white/10 bg-black/40 text-zinc-400 hover:border-white/30'
+              }`}>
+              <span>{chip.icon}</span>{chip.label}
+              <span className={`rounded-full px-1.5 text-[9.5px] ${catalog === chip.id ? 'bg-red-500/30' : 'bg-white/10'}`}>{chip.count}</span>
+            </button>
+          ))}
         </div>
         <div className="flex items-center justify-between text-[11px] text-zinc-400">
           <span>
@@ -507,7 +533,13 @@ export default function LiveChannelManager() {
       </div>
 
       {previewChannel ? (
-        <AdminLivePreview channel={previewChannel} onClose={() => setPreviewChannel(null)} onChanged={load} />
+        <AdminLivePreview
+          channels={filteredRows}
+          channel={previewChannel}
+          onNavigate={setPreviewChannel}
+          onClose={() => setPreviewChannel(null)}
+          onChanged={load}
+        />
       ) : null}
     </div>
   );

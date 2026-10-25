@@ -188,12 +188,13 @@ export default function LivePageV13() {
 
       {/* Rail | player | right panel. Phones stack: auto player row, then the
           panel fills the remaining height and owns the only scroll. */}
-      <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[158px_minmax(0,1fr)_minmax(300px,360px)] lg:grid-rows-1">
+      <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[158px_minmax(0,1fr)_minmax(340px,440px)] lg:grid-rows-1">
         <aside className="hidden min-h-0 overflow-y-auto border-r border-white/10 p-2.5 [scrollbar-width:none] lg:block [&::-webkit-scrollbar]:hidden">
           <CatalogRail active={activeCatalog} onSelect={setActiveCatalog} counts={counts} favCount={favs.length} />
         </aside>
 
-        {/* Center: the player fills the available height on desktop */}
+        {/* Center: the player fills the available height on desktop, with the
+            manually switchable source ladder pinned underneath it. */}
         <section className="flex min-h-0 flex-col p-3 sm:p-4">
           <div className="min-h-0 flex-1">
             {activeLogical ? (
@@ -210,6 +211,32 @@ export default function LivePageV13() {
               <div className="grid h-full place-items-center rounded-2xl border border-white/10 bg-zinc-950 text-sm text-zinc-400">Pick a channel from the right</div>
             )}
           </div>
+
+          {activeLogical && (activeLogical.variants || []).length > 1 ? (
+            <div className="mt-2.5 shrink-0 rounded-2xl border border-white/10 bg-white/[0.045] p-2.5 sm:p-3">
+              <p className="mb-1.5 text-[9.5px] font-extrabold uppercase tracking-[0.16em] text-zinc-500">
+                Source ladder · tap to switch · fallback stays automatic
+              </p>
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:thin]">
+                {activeLogical.variants.map((v, i) => (
+                  <button
+                    key={`${v.channelId}-${i}`}
+                    type="button"
+                    onClick={() => setVariantIdx(i)}
+                    title={`Play ${v.sourceLabel || friendlySourceLabel(v.sourceId)}`}
+                    className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-[11.5px] font-bold transition ${
+                      i === variantIdx
+                        ? 'border-red-500/70 bg-red-500/15 text-white'
+                        : 'border-white/10 bg-black/30 text-zinc-400 hover:border-white/30 hover:text-white'
+                    }`}
+                  >
+                    <span className={`h-2 w-2 rounded-full ${i === variantIdx ? 'bg-red-400 shadow-[0_0_8px_rgba(255,59,77,.9)]' : 'bg-zinc-600'}`} />
+                    {v.sourceLabel || friendlySourceLabel(v.sourceId)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </section>
 
         {/* Right panel: channel list scrolls, details pinned at its bottom */}
@@ -232,7 +259,7 @@ export default function LivePageV13() {
               <p className="p-6 text-center text-[12.5px] text-zinc-400">No channels match this view.</p>
             ) : null}
             {status === 'ready' && filtered.length ? (
-              <div className="grid grid-cols-3 gap-2 md:grid-cols-4 lg:grid-cols-2 lg:gap-2.5">
+              <div className="grid grid-cols-3 gap-2 md:grid-cols-4 lg:grid-cols-4 lg:gap-2">
                 {filtered.map((group) => (
                   <ChannelCard key={group.logicalId} group={group} active={group.logicalId === activeLogical?.logicalId} onPick={pick} />
                 ))}
@@ -240,29 +267,21 @@ export default function LivePageV13() {
             ) : null}
           </div>
 
-          {/* Now Watching — bottom of the right panel. Hidden on phones (the
-              stacked mobile design has no room), above the list on tablets
-              where the panel stacks under the player. */}
+          {/* Now Watching — compact details pinned at the panel bottom. The
+              source ladder itself lives under the player, not here. Hidden on
+              phones where the stacked layout has no room. */}
           {activeLogical ? (
-            <div className="order-1 hidden max-h-[42%] shrink-0 flex-col overflow-y-auto border-t border-white/10 bg-white/[0.045] p-3.5 md:flex lg:order-2 lg:max-h-[45%]">
-              <h2 className="text-[14.5px] font-black leading-tight">{activeLogical.displayName}</h2>
-              <p className="mt-0.5 text-[11px] text-zinc-400">
-                {groupCatalogIds(activeLogical).map((id) => catalogs.find((c) => c.id === id)?.name).filter(Boolean).join(' · ') || 'Live'} · Tamil
-              </p>
+            <div className="order-1 shrink-0 border-t border-white/10 bg-white/[0.045] p-3.5 md:flex lg:order-2">
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-[14px] font-black leading-tight">{activeLogical.displayName}</h2>
+                <p className="mt-0.5 truncate text-[11px] text-zinc-400">
+                  {groupCatalogIds(activeLogical).map((id) => catalogs.find((c) => c.id === id)?.name).filter(Boolean).join(' · ') || 'Live'} · Tamil
+                </p>
+              </div>
               <button type="button" onClick={() => toggleFav(activeLogical.logicalId)}
                 className={`mt-2 self-start rounded-full border px-3 py-1 text-[11px] font-bold ${activeIsFav ? 'border-yellow-400/60 bg-yellow-400/10 text-yellow-300' : 'border-white/10 text-zinc-400'}`}>
                 {activeIsFav ? '★ Favourite' : '☆ Favourite'}
               </button>
-              <p className="mt-2 text-[9.5px] font-extrabold uppercase tracking-[0.16em] text-zinc-500">Source ladder · automatic</p>
-              <div className="mt-1.5 flex flex-col gap-1.5">
-                {(activeLogical.variants || []).slice(0, 4).map((v, i) => (
-                  <div key={`${v.channelId}-${i}`} className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11.5px] ${i === variantIdx ? 'border-red-500/55 bg-red-500/10 font-bold' : 'border-white/10 text-zinc-400'}`}>
-                    <span className={`h-2 w-2 rounded-full ${i === variantIdx ? 'bg-red-400 shadow-[0_0_8px_rgba(255,59,77,.9)]' : 'bg-zinc-600'}`} />
-                    {v.sourceLabel || friendlySourceLabel(v.sourceId)}
-                    <em className="ml-auto not-italic text-[10px] text-zinc-500">{i === variantIdx ? 'playing · auto' : 'fallback'}</em>
-                  </div>
-                ))}
-              </div>
             </div>
           ) : null}
         </aside>

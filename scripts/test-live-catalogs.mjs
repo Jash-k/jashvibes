@@ -19,6 +19,7 @@ import { resolveHjhWorkerUrl, extractJioCookieFromText } from '@/lib/liveTv';
 import { pickLandingGroup } from '@/lib/live/landing';
 import { channelDocToLogicalGroup } from '@/lib/live/preview';
 import { canonicalChannelName, displayNameForChannel, deduplicateChannels, logicalIdForChannel } from '@/lib/live/pipeline/deduplicate.js';
+import { summarizeSourceCatalogs } from '@/lib/live/adminBrowse';
 import http from 'node:http';
 
 let passed = 0;
@@ -413,6 +414,38 @@ console.log('13. canonical duplicate arrest (HD / DASH / ClearKey variants merge
     const superG = merged.find((g) => g.logicalId === 'star vijay super');
     assert.ok(superG);
     assert.equal(superG.variantCount, 2);
+  });
+}
+
+console.log('14. admin source → catalog browse summary (in-memory, no network)');
+{
+  const idsOf = (row) => (row.catalogs || []).map((item) => (typeof item === 'string' ? item : item.catalogId));
+  const rows = [
+    { channelId: 'r1', catalogs: [{ catalogId: 'main' }, { catalogId: 'news' }] },
+    { channelId: 'r2', catalogs: [{ catalogId: 'main' }] },
+    { channelId: 'r3', catalogs: [{ catalogId: 'music' }] },
+    { channelId: 'r4', catalogs: [] },
+    { channelId: 'r5', catalogs: [], religious: true },
+    { channelId: 'r6', catalogs: [{ catalogId: 'bogus' }, { catalogId: 'sports' }, { catalogId: 'sports' }] },
+  ];
+  const summary = summarizeSourceCatalogs(rows, idsOf);
+  check('counts every fixed catalog once per channel with deduped memberships', () => {
+    assert.equal(summary.catalogs.main, 2);
+    assert.equal(summary.catalogs.news, 1);
+    assert.equal(summary.catalogs.music, 1);
+    assert.equal(summary.catalogs.sports, 1); // repeated id counts once
+    assert.equal(summary.catalogs.kids, 0);
+  });
+  check('unmapped covers rows without a valid catalog, religious is separate', () => {
+    assert.equal(summary.unmapped, 2); // r4 and the religious r5
+    assert.equal(summary.religious, 1);
+    assert.equal(summary.total, 6);
+  });
+  check('empty scope is a zeroed summary, never a throw', () => {
+    const empty = summarizeSourceCatalogs([], idsOf);
+    assert.equal(empty.total, 0);
+    assert.equal(empty.unmapped, 0);
+    assert.equal(empty.catalogs.main, 0);
   });
 }
 
