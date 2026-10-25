@@ -36,7 +36,6 @@ export function useLandscapePhone() {
   return landscape;
 }
 
-
 /**
  * `navigator.connection` — used for data-saver defaults and the "480p to avoid
  * buffering" chip. Also reports the file size warning for big remuxes.
@@ -150,19 +149,6 @@ export function usePip(videoEl) {
   return { pipActive, canPip: supported, togglePip: toggle };
 }
 
-export function useAirPlay(videoEl) {
-  const available = useMemo(
-    () => typeof videoEl?.webkitShowPlaybackTargetPicker === 'function' && Boolean(videoEl?.playbackTargetPickerShowing !== undefined),
-    [videoEl],
-  );
-  const show = useCallback(() => {
-    try {
-      videoEl?.webkitShowPlaybackTargetPicker?.();
-    } catch {}
-  }, [videoEl]);
-  return { canAirPlay: available, showAirPlay: show };
-}
-
 /** Screen wake lock so a phone does not sleep mid-episode. */
 export function useWakeLock(active) {
   const lockRef = useMemo(() => ({ current: null }), []);
@@ -203,9 +189,4 @@ export function useVibrate(prefs) {
     },
     [prefs?.haptics],
   );
-}
-
-/** "2.9 GB · HEVC" warnings for a source before the user commits to it. */
-export function describeSize(bytes) {
-  return fmtSize(bytes);
 }

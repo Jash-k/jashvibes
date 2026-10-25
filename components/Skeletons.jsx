@@ -78,5 +78,3 @@ export default function SectionSkeleton({ variant = 'posters', count, rows, item
   const Variant = VARIANTS[variant] || Posters;
   return <Variant count={count} rows={rows} items={items} className={className} />;
 }
-
-export { Posters as SkeletonPosters, Channels as SkeletonChannels, Cards as SkeletonCards, Shelf as SkeletonShelf, Player as SkeletonPlayer };

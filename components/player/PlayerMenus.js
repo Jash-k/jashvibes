@@ -19,7 +19,7 @@ import { fmtSize, fmtTime } from '@/lib/player/labels';
 import { ASPECT_MODES, aspectLabel } from '@/lib/player/aspect';
 import { tieredCandidates, hostOf } from '@/lib/watch/policy';
 
-export const Menu = memo(function Menu({ title, subtitle, onClose, children, wide = false, coarse = false, footer }) {
+const Menu = memo(function Menu({ title, subtitle, onClose, children, wide = false, coarse = false, footer }) {
   const panelRef = useRef(null);
   // JashPlayer passes an inline onClose, so without this ref the effect below
   // re-runs — and re-steals focus — on every player render while open.
@@ -98,7 +98,7 @@ export const Menu = memo(function Menu({ title, subtitle, onClose, children, wid
  * TV the `jv-menu-row` rule in globals.css raises that to 52 px for the
  * 10-foot interface.
  */
-export const MenuItem = memo(function MenuItem({ active, onClick, children, hint, icon, disabled, role, command }) {
+const MenuItem = memo(function MenuItem({ active, onClick, children, hint, icon, disabled, role, command }) {
   return (
     <button
       type="button"

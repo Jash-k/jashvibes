@@ -298,7 +298,7 @@ export const LockedOverlay = memo(function LockedOverlay({ onUnlock }) {
   );
 });
 
-export const CastHint = memo(function CastHint({ visible }) {
+const CastHint = memo(function CastHint({ visible }) {
   if (!visible) return null;
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center pb-2">
