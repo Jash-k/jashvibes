@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LIVE_CATALOGS } from '@/lib/liveCatalogs';
 import { SOURCE_REGISTRY } from '@/lib/live/registry';
+import AdminLivePreview from './AdminLivePreview';
 
 const EMPTY_FORM = {
   name: '', url: '', logo: '', category: 'Live', format: 'hls', language: 'Tamil',
@@ -56,6 +57,7 @@ export default function LiveChannelManager() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [selected, setSelected] = useState(() => new Set());
   const [ladderFor, setLadderFor] = useState(null); // channel doc being edited
+  const [previewChannel, setPreviewChannel] = useState(null); // real-player modal
   const dragId = useRef('');
 
   const api = useCallback(async (path, opts = {}) => {
@@ -92,6 +94,14 @@ export default function LiveChannelManager() {
   }, [api, q, sourceId, catalog, mapped, hidden]);
 
   useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
+
+  // Keep the open preview in step with hide/catalog writes made inside it.
+  useEffect(() => {
+    if (!previewChannel) return;
+    const fresh = rows.find((row) => row.channelId === previewChannel.channelId);
+    if (fresh) setPreviewChannel(fresh);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
 
   const channelCatalogIds = useCallback((channel) => new Set((channel.catalogs || []).map((item) => item.catalogId)), []);
 
@@ -379,6 +389,7 @@ export default function LiveChannelManager() {
                       <button type="button" onClick={() => move(channel, 1)} title="Move down" className="rounded-full border border-white/10 px-2 py-1 text-xs">↓</button>
                     </>
                   ) : null}
+                  <button type="button" onClick={() => setPreviewChannel(channel)} title="Preview with the real /live player" className="rounded-full border border-red-500/40 px-2.5 py-1 text-xs font-bold text-red-200">▶ Preview</button>
                   <button type="button" onClick={() => setLadderFor(ladderFor?.channelId === channel.channelId ? null : channel)} title="Source ladder" className="rounded-full border border-white/10 px-2.5 py-1 text-xs">🪜</button>
                   <button type="button" onClick={() => openEdit(channel)} className="rounded-full border border-white/10 px-2.5 py-1 text-xs">Edit</button>
                   <button type="button" onClick={() => patch(channel, channel.hidden ? 'unhide' : 'hide')} disabled={busy === channel.channelId} className="rounded-full border border-white/10 px-2.5 py-1 text-xs disabled:opacity-40">{channel.hidden ? 'Unhide' : 'Hide'}</button>
@@ -405,6 +416,10 @@ export default function LiveChannelManager() {
           );
         })}
       </div>
+
+      {previewChannel ? (
+        <AdminLivePreview channel={previewChannel} onClose={() => setPreviewChannel(null)} onChanged={load} />
+      ) : null}
     </div>
   );
 }

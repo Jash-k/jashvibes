@@ -17,6 +17,7 @@ import { planLiveGroupingAndCatalogs } from '@/lib/liveService';
 import { cleanHttpUrl, detectManualFormat } from '@/lib/live/manualChannel';
 import { resolveHjhWorkerUrl, extractJioCookieFromText } from '@/lib/liveTv';
 import { pickLandingGroup } from '@/lib/live/landing';
+import { channelDocToLogicalGroup } from '@/lib/live/preview';
 import http from 'node:http';
 
 let passed = 0;
@@ -311,6 +312,43 @@ console.log('11. /live landing choice (Main catalog → Star Vijay)');
     assert.equal(pickLandingGroup([group('Madurai Vision', ['local'])]).displayName, 'Madurai Vision');
   });
   check('empty catalogue yields null', () => assert.equal(pickLandingGroup([]), null));
+}
+
+console.log('12. admin preview adapter (same shape the live player consumes)');
+{
+  const doc = {
+    channelId: 'manual-ab12', sourceId: 'manual', source: 'Manual', name: 'Madurai Vision',
+    customName: 'Madurai Vision TV', logo: 'https://img.test/m.png', category: 'Local',
+    url: 'https://feed.test/live.m3u8', format: 'HLS', playable: true,
+    keyId: 'kid1', licenseKey: 'kid1:key1', cookie: 'c=1', referer: 'https://ref.test',
+    userAgent: 'ua', headers: { 'X-Test': 'yes' }, tvgId: 'tvg-9', order: 300,
+    catalogs: [{ catalogId: 'local', position: 200 }],
+  };
+  const group = channelDocToLogicalGroup(doc);
+  check('becomes a one-variant logical group with the stored channelId', () => {
+    assert.equal(group.logicalId, 'manual-ab12');
+    assert.equal(group.variants.length, 1);
+    assert.equal(group.variants[0].channelId, 'manual-ab12');
+    assert.equal(group.best.channelId, 'manual-ab12');
+  });
+  check('carries every DRM/header field the resolve/policy path reads', () => {
+    const v = group.variants[0];
+    assert.equal(v.keyId, 'kid1');
+    assert.equal(v.licenseKey, 'kid1:key1');
+    assert.equal(v.cookie, 'c=1');
+    assert.equal(v.referer, 'https://ref.test');
+    assert.deepEqual(v.headers, { 'X-Test': 'yes' });
+    assert.equal(v.format, 'hls'); // normalized to lowercase
+  });
+  check('exposes catalog ids for the modal chips', () => {
+    assert.deepEqual(group.variants[0].catalogIds, ['local']);
+  });
+  check('never throws on an empty/partial row', () => {
+    const empty = channelDocToLogicalGroup({});
+    assert.equal(empty.variants.length, 1);
+    assert.equal(empty.variants[0].playable, true);
+    assert.equal(empty.displayName, 'Channel preview');
+  });
 }
 
 console.log(`\n${passed} passed, 0 failed — live catalog/playback contracts OK.`);
