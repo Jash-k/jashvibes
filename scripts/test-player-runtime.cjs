@@ -33,6 +33,9 @@ const fs=require('fs'),assert=require('assert/strict');
  assert.ok(liveShell.includes('onPrev={hasZap ? onPrev : undefined}'),'white TopBar previous chevron must keep working');
  assert.ok(liveShell.includes('onNext={hasZap ? onNext : undefined}'),'white TopBar next chevron must keep working');
  assert.ok(!/\baspect=/.test(liveShell),'dead aspect prop on JashPlayer must stay removed (box sizing uses display.aspect)');
+ assert.ok(liveShell.includes("aspect: fill ? 'fill' : undefined"),'live shell must fill the whole frame so no black strip survives below the video');
+ assert.ok(liveShell.includes('pipOnHide'),'minimizing/hiding must auto-enter Picture-in-Picture so live playback continues');
+ assert.ok(js.includes('document.exitPictureInPicture'),'returning to the page must close the auto-PiP window and resume inline playback');
  // Fullscreen: the JashPlayer root wrapper needs an explicit viewport-fill rule
  // or it keeps its aspect-video box inside the fullscreen viewport (square bug).
  const css=fs.readFileSync('app/globals.css','utf8');

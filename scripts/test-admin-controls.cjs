@@ -242,6 +242,18 @@ async function importStubbed(relPath) {
   assert(proxyCode.includes("pathname.startsWith('/api/live/admin/')"), 'proxy must exempt the namespaced /api/live/admin API from the theatre gate');
   assert(proxyCode.includes("pathname.startsWith('/api/live-service/')"), 'proxy must keep the /api/live-service shim paths exempt');
   assert(fs.readFileSync('components/admin/MusicTab.js', 'utf8').includes("'x-jash-admin': '1'"), 'the Music tab must mark its requests as admin ones');
+
+  // Front-door admin recognition: the unlock route must classify via the pure
+  // helper, mint a jash_admin cookie on an admin-password unlock, and Lock
+  // must revoke both realms.
+  const authRoute = fs.readFileSync('app/api/auth/route.js', 'utf8');
+  assert(authRoute.includes("from '@/lib/unlockDecision'"), 'unlock route must use classifyUnlock');
+  assert(authRoute.includes('response.cookies.set(ADMIN_COOKIE, await createAdminToken()'), 'admin password at the front door must mint the jash_admin cookie');
+  assert(authRoute.includes('decision.admin'), 'the admin cookie must be conditional on the classification');
+  const logoutBlock = authRoute.slice(authRoute.indexOf('export async function DELETE'));
+  assert(logoutBlock.includes('clearSessionCookie('), 'Lock must run the shared cookie-clearing helper');
+  const clearBlock = authRoute.slice(authRoute.indexOf('function clearSessionCookie'), authRoute.indexOf('function clearSessionCookie') + 700);
+  assert(clearBlock.includes("ADMIN_COOKIE, ''"), 'the shared helper must clear the jash_admin cookie alongside the theatre cookie');
   // Branch-level coverage: the lyrics route handles save and delete in one handler, and a missing
   // record in one of those branches is invisible to an import check (that is exactly how it slipped
   // through once). Every action name the handler can emit must appear.

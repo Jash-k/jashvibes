@@ -4,7 +4,7 @@
   "baselineCommit": "c6653cc1732448cd2ea295762b4bdf9ef38a8e5b",
   "verifiedOn": "2026-10-25",
   "verification": {
-    "sourceModules": 317,
+    "sourceModules": 319,
     "productionBuild": "passed",
     "standaloneStartupAndHealth": "passed",
     "fixtureBrowserViewports": [
@@ -137,8 +137,8 @@
       "sha256": "487cfb020033f0c0a0820b9b5537850af18a36ebfc131cd9e7cba2051d189484"
     },
     "app/api/auth/route.js": {
-      "bytes": 4176,
-      "sha256": "efe78ed7ef5d1c32b584de5428a227b119b961f03bdfcdbed79f825c2cef54e0"
+      "bytes": 5351,
+      "sha256": "1aad5174af6431c0800f12f7c8f83d08d7cbf721c42f4194af290d75da4d973b"
     },
     "app/api/cron/tamilmv/route.js": {
       "bytes": 2468,
@@ -653,8 +653,8 @@
       "sha256": "d1795e0cbffe4d3e442d47046d026d500e9b754a7765d00df0d125e21cfddda6"
     },
     "components/live/Player.jsx": {
-      "bytes": 7017,
-      "sha256": "bc2a5298353ae4e670c2ee031c5544fe1a9410ceaef647e2c177bf4652d2c0bb"
+      "bytes": 7379,
+      "sha256": "64b57410a7db2503ce4137480280ce0d8c79e388a6b8462fbb713d50ec3d1d2d"
     },
     "components/LoadVeil.jsx": {
       "bytes": 1529,
@@ -709,8 +709,8 @@
       "sha256": "3b298e794a1837e165e425a9501a8982c7ecf2e503734b3d1e3da60740455e50"
     },
     "components/player/JashPlayer.js": {
-      "bytes": 63537,
-      "sha256": "6cb6f23841a96d39b16a43db4940a6a3db59b0c68f8bc7269d891a5006f6e346"
+      "bytes": 63863,
+      "sha256": "9e7ee917c1cefa143120d397267d24608e6db8c424807f100241434eaafff6e6"
     },
     "components/player/JashPlayerLazy.js": {
       "bytes": 1580,
@@ -1260,6 +1260,10 @@
       "bytes": 3237,
       "sha256": "a076627e19cbe65fea268f41675a7fd75a432ff97c178eb7ec886c8d3d968790"
     },
+    "lib/unlockDecision.js": {
+      "bytes": 1225,
+      "sha256": "dac8a1d6fc77d049b97cfcca95de44de10e1014d962b06e5fd48cc3049f4177f"
+    },
     "lib/useParallax.js": {
       "bytes": 3906,
       "sha256": "707269432f542af72de15d9d9926cd835274e77d4c58cc85188fb780f0cdfddc"
@@ -1385,8 +1389,8 @@
       "sha256": "132109521ab348930ac2e83216aa4bef638314fe1442b21f31b04669e30d48d0"
     },
     "package.json": {
-      "bytes": 1841,
-      "sha256": "5e3b568b2d4eef4a9f13884fb73c729a2ab3b75ae17ff64bcf410d1aabfdd0da"
+      "bytes": 1920,
+      "sha256": "acea4c31964079ffb07f106732ee9bb2b2f9d07e5055cd3394c2dfa787bd320b"
     },
     "postcss.config.js": {
       "bytes": 83,
@@ -1509,8 +1513,8 @@
       "sha256": "75dbe37f5fb95b515be19d6787a942a9fb16d1d06d00559c03aed37b541908e4"
     },
     "scripts/test-admin-controls.cjs": {
-      "bytes": 18624,
-      "sha256": "df39760310f0a5a4251aee356013ce6f7491cdc161915224a87fb6730608a7eb"
+      "bytes": 19726,
+      "sha256": "ef26accf05a05f06aceb7e344877aa0bfa17bc04c021c4ce8f166c8817a558f9"
     },
     "scripts/test-extras-covers.cjs": {
       "bytes": 2011,
@@ -1577,8 +1581,12 @@
       "sha256": "97e787c90b42db3c023a02b025d2c23769fa84116d0cdfa67670dce1ea23577e"
     },
     "scripts/test-player-runtime.cjs": {
-      "bytes": 3664,
-      "sha256": "879edd5de16705462ba9880c5afaca3ce3cd5c805ae7889b429bb059b626f931"
+      "bytes": 4082,
+      "sha256": "ca90a5c06e77982f3d432fb52a1f1513011f7cba6e4c1bf113efc4625c9f3b80"
+    },
+    "scripts/test-unlock-decision.mjs": {
+      "bytes": 2476,
+      "sha256": "96f0a3260b36dab110d652f43e1b965cd05b19c71021a206087d95dff1baa3a1"
     },
     "scripts/test-vault-admin.cjs": {
       "bytes": 2609,

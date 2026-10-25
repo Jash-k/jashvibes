@@ -317,16 +317,25 @@ export function JashPlayer(props) {
     return () => document.documentElement.classList.remove('jv-theater');
   }, [ambientActive]);
 
-  // PiP when the tab goes away, so a radio-ish stream keeps playing.
+  // PiP when the tab goes away, so a radio-ish stream keeps playing. When the
+  // viewer comes back, close the floating window so inline playback resumes.
   const pipOnHideRef = useRef(pipOnHide);
   pipOnHideRef.current = pipOnHide;
   useEffect(() => {
     const onVisibility = () => {
-      if (!pipOnHideRef.current || document.visibilityState !== 'hidden') return;
-      if (!videoEl || videoEl.paused || !canPip) return;
-      try {
-        videoEl.requestPictureInPicture?.().catch?.(() => {});
-      } catch {}
+      if (!pipOnHideRef.current) return;
+      if (document.visibilityState === 'hidden') {
+        if (!videoEl || videoEl.paused || !canPip) return;
+        try {
+          videoEl.requestPictureInPicture?.().catch?.(() => {});
+        } catch {}
+        return;
+      }
+      if (typeof document !== 'undefined' && document.pictureInPictureElement === videoEl) {
+        try {
+          document.exitPictureInPicture?.().catch?.(() => {});
+        } catch {}
+      }
     };
     document.addEventListener?.('visibilitychange', onVisibility);
     return () => document.removeEventListener?.('visibilitychange', onVisibility);

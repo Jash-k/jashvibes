@@ -5,6 +5,13 @@ import {
   createAccessToken,
   isValidAccessToken,
 } from '@/lib/serverAuth';
+import {
+  ADMIN_COOKIE,
+  ADMIN_TTL_SECONDS,
+  createAdminToken,
+  isAdminConfigured,
+} from '@/lib/adminAuth';
+import { classifyUnlock } from '@/lib/unlockDecision';
 import crypto from 'crypto';
 
 export const runtime = 'nodejs';
@@ -43,6 +50,15 @@ function withSessionCookie(response, token) {
 function clearSessionCookie(response) {
   const isProd = process.env.NODE_ENV === 'production';
   response.cookies.set(SESSION_COOKIE, '', {
+    httpOnly: true,
+    sameSite: isProd ? 'none' : 'lax',
+    secure: isProd,
+    path: '/',
+    maxAge: 0,
+  });
+  // Lock is a full sign-out: drop the owner realm too, so the /live quick-hide
+  // controls stay hidden until the admin password is entered again.
+  response.cookies.set(ADMIN_COOKIE, '', {
     httpOnly: true,
     sameSite: isProd ? 'none' : 'lax',
     secure: isProd,
@@ -98,18 +114,41 @@ export async function POST(request) {
       return withSessionCookie(NextResponse.json({ success: true, token }), token);
     }
 
-    // One front door: only PASS unlocks the app. The old panel-password path
-    // (LIVE_TV_PASS) was retired when admin moved to /admin with ADMIN_PASS.
-    const passwordOk = Boolean(password) && safeEqual(password, configuredPassword);
+    // One front door, two realms: PASS unlocks the theatre; ADMIN_PASS unlocks
+    // the theatre AND the owner realm in the same step, so the /live quick-hide
+    // controls appear without a separate trip to /admin. The constant-time
+    // compare still guards the theatre password; the admin realm keeps its own
+    // signed token and DB-epoch revocation.
+    const decision = classifyUnlock(password, {
+      pass: configuredPassword,
+      adminPass: isAdminConfigured() ? process.env.ADMIN_PASS || '' : '',
+      compare: safeEqual,
+    });
 
-    if (!passwordOk) {
+    if (!decision.ok) {
       return NextResponse.json(
         { success: false, error: 'Invalid password' },
         { status: 401 }
       );
     }
 
-    return withSessionCookie(NextResponse.json({ success: true, token: expectedToken }), expectedToken);
+    const response = withSessionCookie(
+      NextResponse.json({ success: true, token: expectedToken, admin: decision.admin }),
+      expectedToken
+    );
+
+    if (decision.admin) {
+      const isProd = process.env.NODE_ENV === 'production';
+      response.cookies.set(ADMIN_COOKIE, await createAdminToken(), {
+        httpOnly: true,
+        sameSite: isProd ? 'none' : 'lax',
+        secure: isProd,
+        path: '/',
+        maxAge: ADMIN_TTL_SECONDS,
+      });
+    }
+
+    return response;
   } catch (error) {
     console.error('[api/auth] Error:', error);
     return NextResponse.json(

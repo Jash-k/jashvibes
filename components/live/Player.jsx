@@ -100,7 +100,12 @@ export default function LivePlayer({ logical, variantIdx=0, onErrorNeedingFallba
           playbackPolicy={resolved.policy}
           live
           poster={resolved.channel.logo || ''}
-          display={{ title: resolved.channel.name, poster: resolved.channel.logo || '' }}
+          // 'fill' makes the root h-full/w-full so it occupies the whole black
+          // frame instead of leaving a dead 16:9 strip underneath the video.
+          display={{ title: resolved.channel.name, poster: resolved.channel.logo || '', aspect: fill ? 'fill' : undefined }}
+          // Minimizing/hiding Chrome pops the stream into Picture-in-Picture
+          // so the live channel keeps playing in the floating window.
+          pipOnHide
           onPrev={hasZap ? onPrev : undefined}
           onNext={hasZap ? onNext : undefined}
           liveBrowser={liveBrowser}
