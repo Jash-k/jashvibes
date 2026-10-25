@@ -1,6 +1,6 @@
 'use client';
 /**
- * LiveSourceManager — Admin → TV → Sources & Sync (v13).
+ * LiveSourceManager — Admin → TV → Sources & Sync.
  *
  * Full CRUD over every LiveSource field the API accepts: label, feed URL,
  * type, priority (with drag-to-reorder), enabled, trustTamil, autoPurge,
@@ -41,7 +41,7 @@ export default function LiveSourceManager() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api('/api/live-service/sources');
+      const data = await api('/api/live/admin/sources');
       setSources(data.sources || []);
     } catch (error) {
       setMsg(error.message);
@@ -56,7 +56,7 @@ export default function LiveSourceManager() {
     setBusy('health');
     setMsg('Probing feeds…');
     try {
-      const data = await api('/api/live-service/sources?health=1');
+      const data = await api('/api/live/admin/sources?health=1');
       const map = {};
       for (const s of data.sources || []) map[s.sourceId] = s.health;
       setHealthMap(map);
@@ -75,7 +75,7 @@ export default function LiveSourceManager() {
     setSyncResult(null);
     setMsg('Syncing all sources — HJH can take ~30s…');
     try {
-      const data = await api('/api/live-service/sync', { method: 'POST', body: JSON.stringify({}) });
+      const data = await api('/api/live/admin/sync', { method: 'POST', body: JSON.stringify({}) });
       setSyncResult(data.results || []);
       setMsg(`Synced ${data.results?.length || 0} source(s)`);
       await load();
@@ -89,7 +89,7 @@ export default function LiveSourceManager() {
   const syncOne = useCallback(async (sourceId) => {
     setBusy(sourceId);
     try {
-      const data = await api('/api/live-service/sync', { method: 'POST', body: JSON.stringify({ sourceId }) });
+      const data = await api('/api/live/admin/sync', { method: 'POST', body: JSON.stringify({ sourceId }) });
       const r = data.results?.[0];
       setMsg(r?.ok ? `Synced ${sourceId}: ${r.added ?? r.stored ?? 0} channel(s)` : `Sync failed: ${r?.error || 'unknown'}`);
       await load();
@@ -123,7 +123,7 @@ export default function LiveSourceManager() {
     delete payload.headersText;
     setBusy('form');
     try {
-      await api('/api/live-service/sources', { method: 'POST', body: JSON.stringify(payload) });
+      await api('/api/live/admin/sources', { method: 'POST', body: JSON.stringify(payload) });
       setMsg(editing === 'new' ? `Source “${form.label}” saved` : `Source “${form.label}” updated`);
       setEditing(null);
       await load();
@@ -137,7 +137,7 @@ export default function LiveSourceManager() {
   const patchSource = useCallback(async (sourceId, fields) => {
     setBusy(sourceId);
     try {
-      await api('/api/live-service/sources', { method: 'PATCH', body: JSON.stringify({ sourceId, ...fields }) });
+      await api('/api/live/admin/sources', { method: 'PATCH', body: JSON.stringify({ sourceId, ...fields }) });
       await load();
     } catch (error) {
       setMsg(error.message);
@@ -150,7 +150,7 @@ export default function LiveSourceManager() {
     if (!confirm(`Delete source “${source.label}” and its unmapped channels? Mapped/manual channels are kept.`)) return;
     setBusy(source.sourceId);
     try {
-      await api(`/api/live-service/sources?sourceId=${encodeURIComponent(source.sourceId)}&channels=1`, { method: 'DELETE' });
+      await api(`/api/live/admin/sources?sourceId=${encodeURIComponent(source.sourceId)}&channels=1`, { method: 'DELETE' });
       setMsg(`Deleted ${source.label}`);
       await load();
     } catch (error) {
@@ -174,7 +174,7 @@ export default function LiveSourceManager() {
     const next = ordered.map((s, i) => ({ ...s, priority: (i + 1) * 10 }));
     setSources(next); // optimistic
     try {
-      await Promise.all(next.map((s) => api('/api/live-service/sources', { method: 'PATCH', body: JSON.stringify({ sourceId: s.sourceId, priority: s.priority }) })));
+      await Promise.all(next.map((s) => api('/api/live/admin/sources', { method: 'PATCH', body: JSON.stringify({ sourceId: s.sourceId, priority: s.priority }) })));
       setMsg('Source priority (and the viewer fallback ladder) updated');
     } catch (error) {
       setMsg(error.message);

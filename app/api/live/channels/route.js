@@ -2,12 +2,9 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import LiveChannel from '@/models/LiveChannel';
 import { getDefaultLiveSources } from '@/lib/liveTv';
-import { deduplicateChannels, isDummyVariant, orderVariantsByLadder } from '@/lib/live/pipeline/deduplicate.js';
-import { policyForLogicalChannel } from '@/lib/live/playback/policy.js';
-import { isMainstreamTamilChannel } from '@/lib/live/pipeline/normalize.js';
-import { isReligiousExcludedGroup } from '@/lib/live/catalogRules';
 import { sortLogicalGroups } from '@/lib/live/catalogOrder';
-import { LIVE_CATALOGS, isLiveCatalogId } from '@/lib/liveCatalogs';
+import { isLiveCatalogId } from '@/lib/liveCatalogs';
+import { buildCatalogueView, groupHasCatalog } from '@/lib/live/read/viewBuilder.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,10 +32,6 @@ const BASE_TTL_MS = Number(process.env.LIVE_CHANNELS_CACHE_TTL_MS || 15_000);
 const cacheStore = globalThis.__jashLiveCatalogCache || (globalThis.__jashLiveCatalogCache = { entries: new Map(), version: 0 });
 const BASE_KEY = 'public-channels-base-v4';
 
-function groupHasCatalog(group, catalogId) {
-  return (group.variants || []).some((variant) => (variant.catalogIds || []).includes(catalogId));
-}
-
 /**
  * Build (or return cached) base result: every visible, deduplicated logical
  * group BEFORE source/catalog filtering, plus the catalog tab counts. Filter
@@ -63,67 +56,18 @@ async function loadBaseCatalogue({ tamilOnly }) {
     return empty;
   }
 
-  const flat = docs.map((d) => ({
-    channelId: d.channelId || d._id?.toString(),
-    id: d.channelId,
-    name: d.customName || d.name,
-    originalName: d.name,
-    logo: d.customLogo || d.logo,
-    category: d.category || 'Live',
-    language: d.language || '',
-    url: d.url,
-    format: d.format || 'unknown',
-    playable: d.playable !== false,
-    hidden: Boolean(d.hidden),
-    keyId: d.keyId || '',
-    key: d.key || '',
-    licenseKey: d.licenseKey || '',
-    licenseType: d.licenseType || '',
-    cookie: d.cookie || '',
-    userAgent: d.userAgent || '',
-    referer: d.referer || '',
-    headers: d.headers || {},
-    sourceId: d.sourceId,
-    source: d.source,
-    tvgId: d.tvgId || '',
-    priority: d.priority ?? 99,
-    catalogs: Array.isArray(d.catalogs) ? d.catalogs : [],
-    catalogIds: (d.catalogs || []).map((item) => (typeof item === 'string' ? item : item?.catalogId)).filter(Boolean),
-    logicalChannelId: d.logicalChannelId || '',
-    order: d.order ?? 9999,
-    mappingManaged: Boolean(d.mappingManaged),
-    ladderOrder: Array.isArray(d.ladderOrder) ? d.ladderOrder : [],
-  })).filter((ch) => {
-    if (!ch.playable) return false;
-    if (isDummyVariant(ch)) return false;
-    if (!ch.url) return false;
-    // Admin "Hide from /live" must actually remove the row from the public
-    // catalogue. Hidden variants are dropped before dedup, so a group whose
-    // every variant is hidden disappears; a group with other live variants
-    // simply loses this fallback entry.
-    if (ch.hidden) return false;
-    if (tamilOnly && !isMainstreamTamilChannel(ch, ch.sourceId)) return false;
-    return true;
-  });
+  // Single shared doc → view-model pipeline (lib/live/read/viewBuilder.js):
+  // the admin manager runs the exact same builder, so its chip counts match
+  // these /live cards by construction.
+  const view = buildCatalogueView(docs, { tamilOnly });
 
-  const visibleLogical = deduplicateChannels(flat).map(policyForLogicalChannel).map((group) => {
-    const ladder = group.variants.find((variant) => Array.isArray(variant.ladderOrder) && variant.ladderOrder.length)?.ladderOrder;
-    if (ladder) {
-      group.variants = orderVariantsByLadder(group.variants, ladder);
-      group.best = group.variants[0] || group.best;
-    }
-    // Religious/devotional groups are excluded everywhere unless an owner
-    // manually mapped one of their variants (checked inside).
-    group.religious = isReligiousExcludedGroup(group);
-    return group;
-  }).filter((group) => !group.religious);
-
-  const catalogs = LIVE_CATALOGS.map((catalog) => ({
-    ...catalog,
-    count: visibleLogical.filter((g) => groupHasCatalog(g, catalog.id)).length,
-  }));
-
-  const value = { empty: false, visibleLogical, catalogs, totalVariants: flat.length, sources: defaults };
+  const value = {
+    empty: false,
+    visibleLogical: view.visibleLogical,
+    catalogs: view.catalogs,
+    totalVariants: view.totalVariants,
+    sources: defaults,
+  };
   cacheStore.entries.set(BASE_KEY, { at: Date.now(), version: cacheStore.version, tamilOnly, value });
   return value;
 }

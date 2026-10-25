@@ -82,7 +82,7 @@ async function loadLib(files) {
   assert.equal(load.veilVisible({ active: true, elapsedMs: 200 }), true);
 
   // Request tracking: section data yes, streams and the auth handshake no.
-  for (const url of ['/api/vault', '/api/tamilmv?page=1', '/api/live-service/channels', '/api/stream?id=x']) {
+  for (const url of ['/api/vault', '/api/tamilmv?page=1', '/api/live/admin/channels', '/api/live-service/channels', '/api/stream?id=x']) {
     assert.equal(load.shouldTrack(url), true, `${url} is section data`);
   }
   for (const url of ['/api/health', '/api/auth', '/api/live-proxy?u=x', '/api/live-pocket/proxy?u=x', '/api/cron/tamilmv', '/brand/logo.png', 'https://lrclib.net/api/get/1']) {

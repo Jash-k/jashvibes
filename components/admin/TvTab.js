@@ -4,7 +4,7 @@ import LiveChannelManager from './LiveChannelManager';
 import LiveSourceManager from './LiveSourceManager';
 
 /**
- * TvTab — Admin → TV (v13).
+ * TvTab — Admin → TV.
  * Two surfaces only: Sources & Sync (full feed CRUD) and Channels · Catalogs ·
  * Reorder (full channel CRUD). The old read-only duplicate preview grid was
  * removed: the channel manager is now the single place channels are managed.

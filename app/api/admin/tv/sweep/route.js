@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/admin/tv/sweep — health-check a batch of channels through the
- * existing /api/live-service/check endpoint (same probe, same writes to
+ * existing /api/live/admin/check endpoint (same probe, same writes to
  * workingStatus). Returns the dead ones for the admin's "Dead only" view.
  */
 export async function POST(request) {
@@ -16,7 +16,7 @@ export async function POST(request) {
   if (deny) return deny;
   try {
     const body = await request.json().catch(() => ({}));
-    const result = await selfApi(request, '/api/live-service/check', {
+    const result = await selfApi(request, '/api/live/admin/check', {
       method: 'POST',
       body: { sourceId: body?.sourceId || '', limit: Math.min(Number(body?.limit) || 120, 400) },
     });

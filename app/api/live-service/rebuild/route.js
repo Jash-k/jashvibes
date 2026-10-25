@@ -1,34 +1,8 @@
-import { NextResponse } from 'next/server';
-import { requireServiceAuth } from '@/lib/serverAuth';
-import { recordAction } from '@/lib/adminAudit';
-import { rebuildLiveGroupingAndCatalogs } from '@/lib/liveService';
-
+// Compatibility shim — the canonical handler now lives at
+// /api/live/admin/rebuild. Kept for one release so in-flight clients and old
+// tabs keep working; delete once deploy traffic has settled (phase 5).
+// Route config is declared literally: Next.js does not follow re-exports for
+// segment config, only for the handler functions below.
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-function json(data, status = 200) {
-  return NextResponse.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
-}
-
-/**
- * POST /api/live-service/rebuild
- * Re-runs the background pass: persists logical channel ids and auto-maps
- * eligible unmapped Tamil channels into the fixed catalogs. Manual mappings
- * (mappingManaged) and existing positions are never touched.
- */
-export async function POST(request) {
-  try {
-    await requireServiceAuth(request);
-    const stats = await rebuildLiveGroupingAndCatalogs();
-    await recordAction({
-      area: 'live',
-      action: 'live.grouping.rebuild',
-      reversible: false,
-      summary: `Rebuilt live grouping (${stats.grouped} groups refreshed, ${stats.mapped} channels auto-mapped)`,
-      target: { kind: 'live-sources', key: 'grouping', label: 'Live grouping' },
-    });
-    return json({ ok: true, ...stats });
-  } catch (error) {
-    return json({ ok: false, error: error.message }, error.status || 500);
-  }
-}
+export { POST } from '../../live/admin/rebuild/route.js';

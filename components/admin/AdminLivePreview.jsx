@@ -3,7 +3,7 @@
  * AdminLivePreview — Admin → TV → Channels → Preview workspace.
  *
  * A full mapping workstation built on the REAL live player
- * (LivePlayerV13 → /api/live/resolve → live policy, ClearKey/Widevine and
+ * (LivePlayer → /api/live/resolve → live policy, ClearKey/Widevine and
  * the source fallback ladder). The owner verifies a stream, maps it to
  * catalogs, hides it or favourites it, then zaps to the NEXT channel of the
  * current filtered list WITHOUT closing the modal — no open/close cycle per
@@ -11,7 +11,7 @@
  * player's own ⏮/⏭ buttons (PageUp/PageDown).
  */
 import { useEffect, useMemo, useState } from 'react';
-import LivePlayerV13 from '@/components/live/v13/LivePlayerV13';
+import LivePlayer from '@/components/live/Player';
 import { channelDocToLogicalGroup } from '@/lib/live/preview';
 import { LIVE_CATALOGS, getChannelCatalogIds } from '@/lib/liveCatalogs';
 
@@ -52,7 +52,7 @@ export default function AdminLivePreview({ channels = [], channel, onNavigate, o
     setBusy(action);
     setMsg('');
     try {
-      const res = await fetch('/api/live-service/channels', {
+      const res = await fetch('/api/live/admin/channels', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ channelId: channel.channelId, action, ...extra }),
@@ -89,7 +89,7 @@ export default function AdminLivePreview({ channels = [], channel, onNavigate, o
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {/* key remounts the engine per channel, exactly like /live zapping */}
-          <LivePlayerV13
+          <LivePlayer
             key={channel.channelId}
             logical={logical}
             variantIdx={0}

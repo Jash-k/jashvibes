@@ -211,11 +211,9 @@ async function importStubbed(relPath) {
     'app/api/admin/vod/items/route.js',
     'app/api/admin/vod/items/rematch/route.js',
     'app/api/admin/vod/sources/route.js',
-    'app/api/live-service/sources/route.js',
-    'app/api/live-service/channels/route.js',
-    'app/api/live-service/import/route.js',
-    'app/api/live-service/purge/route.js',
-    'app/api/live-service/sync/route.js',
+    'app/api/live/admin/sources/route.js',
+    'app/api/live/admin/channels/route.js',
+    'app/api/live/admin/sync/route.js',
     'app/api/admin/tv/sweep/route.js',
     'app/api/admin/tv/auto-sync/route.js',
     // The Music tab talks to the app's own playlist endpoint; the panel marks its requests so the
@@ -226,6 +224,16 @@ async function importStubbed(relPath) {
     const code = fs.readFileSync(file, 'utf8');
     assert(code.includes('recordAction('), `${file} mutates without recording an action`);
     assert(code.includes("from '@/lib/adminAudit'"), `${file} does not import the audit helper`);
+  }
+  // Phase 5: the live admin API lives under /api/live/admin now; the old
+  // /api/live-service paths stay as thin re-export shims for one release.
+  for (const name of ['channels', 'sources', 'sync', 'rebuild', 'check', 'session']) {
+    const canonical = `app/api/live/admin/${name}/route.js`;
+    const shim = `app/api/live-service/${name}/route.js`;
+    assert(fs.existsSync(canonical), `missing canonical live admin route ${canonical}`);
+    const shimCode = fs.readFileSync(shim, 'utf8');
+    assert(shimCode.includes(`../../live/admin/${name}/route.js`), `${shim} must re-export the canonical handler`);
+    assert(!shimCode.includes('recordAction('), `${shim} must stay a thin alias with no logic of its own`);
   }
   assert(fs.readFileSync('components/admin/MusicTab.js', 'utf8').includes("'x-jash-admin': '1'"), 'the Music tab must mark its requests as admin ones');
   // Branch-level coverage: the lyrics route handles save and delete in one handler, and a missing
@@ -251,8 +259,6 @@ async function importStubbed(relPath) {
   // ── 5. Honesty: the destructive paths declare themselves ───────────────────
   for (const [file, action] of [
     ['app/api/admin/catalog/sync/route.js', 'catalog.sync'],
-    ['app/api/live-service/purge/route.js', 'live.purge'],
-    ['app/api/live-service/import/route.js', 'live.import'],
     ['app/api/admin/tv/sweep/route.js', 'live.sweep'],
   ]) {
     const code = fs.readFileSync(file, 'utf8');

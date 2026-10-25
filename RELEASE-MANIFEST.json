@@ -4,7 +4,7 @@
   "baselineCommit": "c6653cc1732448cd2ea295762b4bdf9ef38a8e5b",
   "verifiedOn": "2026-10-25",
   "verification": {
-    "sourceModules": 305,
+    "sourceModules": 319,
     "productionBuild": "passed",
     "standaloneStartupAndHealth": "passed",
     "fixtureBrowserViewports": [
@@ -109,8 +109,8 @@
       "sha256": "813f54a293025bc9229cb86fa222816f629bfc8df0bdd8c13ac7099574c8ca48"
     },
     "app/api/admin/tv/sweep/route.js": {
-      "bytes": 2088,
-      "sha256": "ebb96342d9de38b77fa212f88c0b88b94193e3d4a464cc6c77a736834f501e88"
+      "bytes": 2084,
+      "sha256": "8a9283e99a71ff4f7a54b31b79dd713d5d646c50fb1f205bb623403ca53d9ce1"
     },
     "app/api/admin/vault/route.js": {
       "bytes": 3227,
@@ -152,9 +152,33 @@
       "bytes": 1455,
       "sha256": "7dc6b65fa63b0f5b3864e0065fc708c6bb6f7ad6455ba5e05e7d79607aa8cdcc"
     },
+    "app/api/live/admin/channels/route.js": {
+      "bytes": 22320,
+      "sha256": "15314cc97187c6fe2cb667a1e124cd228a2ada6a9a984530b2abb9963cb33f50"
+    },
+    "app/api/live/admin/check/route.js": {
+      "bytes": 1474,
+      "sha256": "ddd2e3a7b715581608758e823ec8a7d1a5f3ea747bff1a244eee8775c49ae498"
+    },
+    "app/api/live/admin/rebuild/route.js": {
+      "bytes": 1269,
+      "sha256": "65ec53decd3cec47d0f60b795a7f7d873287b3fce6991b353214c4636d21f4c9"
+    },
+    "app/api/live/admin/session/route.js": {
+      "bytes": 824,
+      "sha256": "f8726fc68b2ff5cbba1993ea28ac360cce796f2fef9f0beaa93d64032a0a1f48"
+    },
+    "app/api/live/admin/sources/route.js": {
+      "bytes": 7267,
+      "sha256": "78850ea70311c75ca4b7daff406aa7943e063c536b791c2a70d5dcccbd3c1ad9"
+    },
+    "app/api/live/admin/sync/route.js": {
+      "bytes": 1244,
+      "sha256": "d03c7f0c0a2d18c9a921fef1243bee5481dafd6cb5d6347ccad2a7cd96df5027"
+    },
     "app/api/live/channels/route.js": {
-      "bytes": 8519,
-      "sha256": "1a7c6426bc7251bacaf7fa6b393635232825366b63c8e4533ad853430f5ced47"
+      "bytes": 6004,
+      "sha256": "3fc2d35de12e868073db6b83557e613c2b0b753485d6cc70196e0527c6bee8e2"
     },
     "app/api/live/resolve/route.js": {
       "bytes": 6812,
@@ -163,10 +187,6 @@
     "app/api/live-cert/route.js": {
       "bytes": 2136,
       "sha256": "d6624de084a568007665c82c0daa0b4b18557323bf9a82af54d92debaaa0cd93"
-    },
-    "app/api/live-epg/guide/route.js": {
-      "bytes": 5557,
-      "sha256": "528b21f2263547b375727d1d3157aee3e16a9110d8fd2578165c5e0813fb27b3"
     },
     "app/api/live-jio/route.js": {
       "bytes": 5188,
@@ -189,48 +209,28 @@
       "sha256": "afd128d4c8e4c2bcc69bb0e97f5952298d103db10cb6a7d726ec9f8c91125396"
     },
     "app/api/live-service/channels/route.js": {
-      "bytes": 22535,
-      "sha256": "6baacdcd55700605d4b026be1e63a1dde405869aa8427b74625373623fbe6064"
+      "bytes": 499,
+      "sha256": "afd4dc9a86a4200566a0fde1957de0b0b2b0adc1c3646263e8cf629d07a997f2"
     },
     "app/api/live-service/check/route.js": {
-      "bytes": 1474,
-      "sha256": "ddd2e3a7b715581608758e823ec8a7d1a5f3ea747bff1a244eee8775c49ae498"
-    },
-    "app/api/live-service/duplicates/route.js": {
-      "bytes": 2823,
-      "sha256": "9085e18c3b7740cd6ae74ad98c7e87a3173355282e853c95fc425ce81022f636"
-    },
-    "app/api/live-service/export/route.js": {
-      "bytes": 1218,
-      "sha256": "f002a48d65328c918a9780f8c30c56d74181b43c59526896d2339722da635237"
-    },
-    "app/api/live-service/import/route.js": {
-      "bytes": 3430,
-      "sha256": "6f9268d6ef4abe9de0906f3f7e8df06873234c81da94ab774eb1bda142c287b5"
-    },
-    "app/api/live-service/profiles/route.js": {
-      "bytes": 2791,
-      "sha256": "aa034aa45a4011d58b67441f295e196d5e084108d0902cf8aba5bddf9741dba1"
-    },
-    "app/api/live-service/purge/route.js": {
-      "bytes": 2126,
-      "sha256": "19781f1d233893b77a2468bc4bda94f3c5759e2fc5e7557df0c93db4de3d8bfb"
+      "bytes": 473,
+      "sha256": "5c092994deb2611251830053d9d81548f5c841db17506f71f8ba50a554e2eb32"
     },
     "app/api/live-service/rebuild/route.js": {
-      "bytes": 1271,
-      "sha256": "a9fccdbda296794ff36d511b674b64173753e0cd73f271ce8aecdb49157322c6"
+      "bytes": 477,
+      "sha256": "f5211bd0fc92e834169e4f29af0a99d805aabd7eb421badf8152ed1aa09e64aa"
+    },
+    "app/api/live-service/session/route.js": {
+      "bytes": 476,
+      "sha256": "2970f00208a22248d1e65f38daaf4604cd5449829c999bc68661aa230b7688f9"
     },
     "app/api/live-service/sources/route.js": {
-      "bytes": 7267,
-      "sha256": "78850ea70311c75ca4b7daff406aa7943e063c536b791c2a70d5dcccbd3c1ad9"
+      "bytes": 497,
+      "sha256": "37cbec65de32938b057c3b957f0247b60fa918e8e021dddfe613c7453d2d8d44"
     },
     "app/api/live-service/sync/route.js": {
-      "bytes": 1244,
-      "sha256": "d03c7f0c0a2d18c9a921fef1243bee5481dafd6cb5d6347ccad2a7cd96df5027"
-    },
-    "app/api/live-tv/route.js": {
-      "bytes": 5175,
-      "sha256": "0182a4507e7d6857c6add78a35757b00406c9d0bd9a4ae2add529f8fd617acd8"
+      "bytes": 471,
+      "sha256": "609f4a715c90ea85ffb5c8580d7e066744486e9f874d4da5da20d620ebe6b962"
     },
     "app/api/moviesda/match/route.js": {
       "bytes": 2090,
@@ -437,8 +437,8 @@
       "sha256": "04e47570ec5785256bf6bef512fe1c6a623baeb954250f67ffb0023f00e65cb9"
     },
     "app/live/page.js": {
-      "bytes": 141,
-      "sha256": "53ad4836a0113b133a6c3db2a0070882c0479d992ce97e27076c622fbc1774a5"
+      "bytes": 133,
+      "sha256": "df4ec67f90d6ae2123752cf1c54b9500444ffb44c933fb3a8cfd40f90353e048"
     },
     "app/loading.js": {
       "bytes": 260,
@@ -509,8 +509,8 @@
       "sha256": "cb0b538d2bd4dc05ae42b7398763ad0d16c13810f0e7dc2c97794ed731d5a0c2"
     },
     "components/admin/AdminLivePreview.jsx": {
-      "bytes": 6922,
-      "sha256": "020b321df4eb36409ce7dd59c8b92e3f543c7346498cd951caeb8e67a30947b1"
+      "bytes": 6900,
+      "sha256": "c62dcdd57d76865306797a4370cf11730a4afe1a8676ac0995dddd5f4b7fe80e"
     },
     "components/admin/BulkBar.js": {
       "bytes": 7968,
@@ -536,13 +536,17 @@
       "bytes": 23934,
       "sha256": "87348f8ad21543b01ae80902ebdd150f0b81c1d40293ab8a4e0aa1331804b243"
     },
+    "components/admin/live/bits/ChannelRow.jsx": {
+      "bytes": 7325,
+      "sha256": "8f50ed1a1ffd06f163411635b01d9d2c160fb1ced06a854c2a30fae3463cd62b"
+    },
     "components/admin/LiveChannelManager.js": {
-      "bytes": 34957,
-      "sha256": "41e1624d8e06b3f0876969e93b7d5ff5dd65674b617f9ab5ecf98f543acc2024"
+      "bytes": 28067,
+      "sha256": "43fc47da49d16d37d095899038369d7d870f75aeaa5404ee3612ee2ad75c8258"
     },
     "components/admin/LiveSourceManager.js": {
-      "bytes": 17194,
-      "sha256": "be1974ede7122cafa9f505486097264e36bf906ca4157fa546db08b43dc7c8d8"
+      "bytes": 17172,
+      "sha256": "a61f8da36b0836bd00b57453272ff49fed67e8408df5012c23e78a4a51876da1"
     },
     "components/admin/LyricsTab.js": {
       "bytes": 9628,
@@ -569,8 +573,8 @@
       "sha256": "993a388784b76efce5579415c1b94243f2b09d94f56199998cfa82d23bb66561"
     },
     "components/admin/TvTab.js": {
-      "bytes": 2415,
-      "sha256": "1028869cc8ed413d7bcd594ae3378044acac19fff09f3d3b18c809123f410969"
+      "bytes": 2409,
+      "sha256": "5b4338da4bf6530222a6d2156e4489453eedac1380db3fd144815d0aec8bc208"
     },
     "components/admin/VaultTab.js": {
       "bytes": 14117,
@@ -620,25 +624,45 @@
       "bytes": 2989,
       "sha256": "e049dae38798de29ea2c443901b2aa0ffd41cb6bd9a6bdf88960342c8c04eb62"
     },
-    "components/live/v13/channelBits.jsx": {
-      "bytes": 5228,
-      "sha256": "cb542bc17b675c698eaa4e003306c21076ee213b4e3f4aaa4060a117fa6baeec"
+    "components/live/bits/channelBits.jsx": {
+      "bytes": 5937,
+      "sha256": "c4281459c9769efe9f58a9bbfffceed9839a03bf8112787d46174ade53b0e875"
     },
-    "components/live/v13/LivePageV13.jsx": {
-      "bytes": 15506,
-      "sha256": "ffe238ac2f1d4062b31232fb53a86a6180bafc7e728fbd4aced5659e9894d83c"
+    "components/live/hooks/useAdminSession.js": {
+      "bytes": 623,
+      "sha256": "bccd4af20abbac48f32e5243f7c5f9bc673459c4f5f822532e08e16a3af84993"
     },
-    "components/live/v13/LivePlayerV13.jsx": {
-      "bytes": 7893,
-      "sha256": "7a848b0487b9c019b3f0d97c204a6a424fb15bc44a63f6ebad910b4e5b133d65"
+    "components/live/hooks/useFavourites.js": {
+      "bytes": 1014,
+      "sha256": "9eb831cd19afeca4d7e98ff49e470c9dc2a4ce9eedfafec705954beaa407bfc1"
     },
-    "components/live/v13/TvMode.jsx": {
-      "bytes": 9663,
-      "sha256": "1e03700860f396d1906ea324bbc8ca8ee56e9809519a38953e9a439a6ee06cfb"
+    "components/live/hooks/useIsDesktop.js": {
+      "bytes": 501,
+      "sha256": "7a876a28ebeee4019f0b351ae6574e0c2e201a06fad3f4e4a9db029ce91eb0cc"
     },
-    "components/live/v13/useTvMode.js": {
+    "components/live/hooks/useLiveCatalogue.js": {
+      "bytes": 1958,
+      "sha256": "1deb42ce9a42fd0e344a40b3b9946c9376343501493d48525d742f8eeb554781"
+    },
+    "components/live/hooks/useQuickHide.js": {
+      "bytes": 2474,
+      "sha256": "2905000e13426442a59b3d20ff53028ac5554e4a44d591a68df91e2e7c9990f8"
+    },
+    "components/live/hooks/useTvMode.js": {
       "bytes": 1822,
       "sha256": "278581a7aea0fbd0515e603c35b5d21ab9ef680295c88d3c7cf73c8c57cba1d8"
+    },
+    "components/live/LivePage.jsx": {
+      "bytes": 14258,
+      "sha256": "807865047620f96a75ef38a88c4c9cddabde5f1141eb3e6170ed975172e4aa29"
+    },
+    "components/live/Player.jsx": {
+      "bytes": 8161,
+      "sha256": "467fc7d0347dcf9f2efefd8c50e5563e7447ebe4d8f1b381099c4113bd6f9799"
+    },
+    "components/live/TvMode/TvMode.jsx": {
+      "bytes": 9669,
+      "sha256": "fc385f0df12a0c6df5ecc9907b12200c542d13b17c030b8a36f091cc5f300dee"
     },
     "components/LoadVeil.jsx": {
       "bytes": 1529,
@@ -796,6 +820,10 @@
       "bytes": 4777,
       "sha256": "abd541496aa1564f675db3479686bdc53a3fee5c82f38019ae84541444f45e8e"
     },
+    "docs/LIVE-ARCHITECTURE-PROPOSAL.md": {
+      "bytes": 10153,
+      "sha256": "4e874452f920a2db0c232049b3f520f81fe072c31933af95e34df23ac24936d4"
+    },
     "docs/LIVE-COMPATIBILITY.md": {
       "bytes": 8083,
       "sha256": "dfc570c0dbb23aff5e02ee8836462a5a6f5f16b7a191e61a1dc5c4fde7c885f3"
@@ -925,8 +953,8 @@
       "sha256": "8dddb650e37f4fc2ac9f091e0dc2fc4bad1862914592d851f0f8213ff237e3cb"
     },
     "lib/dbMaintenance.cjs": {
-      "bytes": 32348,
-      "sha256": "307f188bc725aa4753a15c05a41a4581909fe7f199a4368b2cc31e210a008237"
+      "bytes": 32280,
+      "sha256": "fe8686e57e9d8c1bea75ad77ea457f6e24a082757c730b5b9d2b22f25636cd42"
     },
     "lib/embedSites.js": {
       "bytes": 2914,
@@ -957,16 +985,28 @@
       "sha256": "f6aee6193b2a422b189538af09aa942850b1bed2d093f7a10af9fbf4c2dc055c"
     },
     "lib/live/adminBrowse.js": {
-      "bytes": 4303,
-      "sha256": "a85a4932fb703ebca65d3203e7f47271e3d4e0f6947194728fa919a1cc07e7df"
+      "bytes": 2702,
+      "sha256": "26d22fc82601f7ae6ac612c81789df90e09e660e67b79c6afa56f47dc3d368d5"
     },
     "lib/live/catalogOrder.js": {
       "bytes": 2545,
       "sha256": "43f053f4289dc319727f3b592990053aca7eba4625f5ee87ca5561fdc846ad6a"
     },
     "lib/live/catalogRules.js": {
-      "bytes": 10245,
-      "sha256": "af256bb5ca98f79efc8cd0faf17be3edfa1470903d6b0be908db213125450bec"
+      "bytes": 10235,
+      "sha256": "d35751076acd25324c25c60d73d0bdc48b56df5447c4ef3ae1277995d645d336"
+    },
+    "lib/live/ingest/classify.js": {
+      "bytes": 10458,
+      "sha256": "0c73ba4c7a3cb654949335b300e839ea671163726766bd9193524727d6949ace"
+    },
+    "lib/live/ingest/registry.js": {
+      "bytes": 7168,
+      "sha256": "9dff6b3ce03773b7ec403108c190e1caf3101dcc73c524a244142d59bb956da8"
+    },
+    "lib/live/ingest/text.js": {
+      "bytes": 2453,
+      "sha256": "66ffa41f1c356aa637f340f57be53dce57946a8d97c1c718bc3c1b3777db62e3"
     },
     "lib/live/landing.js": {
       "bytes": 1699,
@@ -977,20 +1017,28 @@
       "sha256": "a5b54485d74151a69f8309242a2032da380ead8a16febb04824ef330fef55b7b"
     },
     "lib/live/pipeline/deduplicate.js": {
-      "bytes": 8742,
-      "sha256": "f07d09c9af473346c3aeb4bdf915306e7ad3820f0bbb505efb7b12fc1dcd0a8f"
+      "bytes": 8738,
+      "sha256": "22d76d5bd2e56cc9aef27a04ddf725d7ddae063b46df128edbde23e2a4d65462"
     },
     "lib/live/pipeline/normalize.js": {
       "bytes": 3453,
       "sha256": "0e21f820c67431e8ea95150c9ead168935e7397d5600569343f2ac147d752659"
+    },
+    "lib/live/playback/headers.js": {
+      "bytes": 2096,
+      "sha256": "c5b061a09f01e56ecaad43d0fab2d131e24ba5ff3a1459140b31c9b2e8bff1a3"
     },
     "lib/live/playback/policy.js": {
       "bytes": 2103,
       "sha256": "f2dd4b8dac52f73b9d61ac10b8687f85e1d275ac295c521c40e79a8c9878a0bd"
     },
     "lib/live/preview.js": {
-      "bytes": 2165,
-      "sha256": "6dc39063ede6dd0c9352a2f3c2f2f3916bfe31577bcd082ff7c9e792c135896b"
+      "bytes": 2162,
+      "sha256": "833650ea33361b91185cad15aaa9042b0b651b4508decc3af4eaba0715a7c57a"
+    },
+    "lib/live/read/viewBuilder.js": {
+      "bytes": 5334,
+      "sha256": "fc51962d3c65bad2766d9836bbaa156748a9f1d11c48186891ff32515c84fe28"
     },
     "lib/live/registry.js": {
       "bytes": 3419,
@@ -1005,20 +1053,16 @@
       "sha256": "d9e2d835ceb2aa3a6cbc94c54b6d6817ca6653378c96cda41d477ab43031a760"
     },
     "lib/liveCatalogs.js": {
-      "bytes": 4122,
-      "sha256": "14c0ee1b9c949f80eeb5630461946a2ce700dffe0a840e2eef13ab2acfcfe0a3"
-    },
-    "lib/liveEpg.js": {
-      "bytes": 20480,
-      "sha256": "2222aeb706d263176e40e3435b8ff34605d81ee4a7e14906429ef8d621d77607"
+      "bytes": 3892,
+      "sha256": "992318cd7586365f03ba6d040d0e2b3bb98eb0ff4f7bb4f40f254c9b26b775bb"
     },
     "lib/liveService.js": {
-      "bytes": 28330,
-      "sha256": "bfcc194b2865f103218cd708ae4e12a829888c5ac1c0ea5e27a59185ec993f1d"
+      "bytes": 25464,
+      "sha256": "fbcc6f7f1ff2b3e4dc189fbd2c55b0044cb2f03245437b61dc382c1d9a478395"
     },
     "lib/liveTv.js": {
-      "bytes": 60190,
-      "sha256": "b1fa8c9b6d35b624fafe1b6df39e2084264d969301d310779486a1345b01d394"
+      "bytes": 40853,
+      "sha256": "1eef7c1b85f9559d9f026bea768af9007484ecce3fb94ee48b1484da2a5e7845"
     },
     "lib/loadProgress.js": {
       "bytes": 9632,
@@ -1293,12 +1337,8 @@
       "sha256": "8fea76b5ea0a8727f26a199bd6e7adb7773d9884d4d061a55be44db72c48de9d"
     },
     "models/LiveChannel.js": {
-      "bytes": 4775,
-      "sha256": "c45c6552ceeb68f648647e0ad9e351f1ee1d85d1abf5de35ca8aa418143f0ad1"
-    },
-    "models/LiveProfile.js": {
-      "bytes": 421,
-      "sha256": "005f07171e1f21c761e408cfb2dd13b343d159678f8fed9477c68549fa182245"
+      "bytes": 4679,
+      "sha256": "6abf897b6d722d51326cd4b942a927122f88147165634c81a5e10b87312fd300"
     },
     "models/LiveSource.js": {
       "bytes": 2031,
@@ -1353,8 +1393,8 @@
       "sha256": "132109521ab348930ac2e83216aa4bef638314fe1442b21f31b04669e30d48d0"
     },
     "package.json": {
-      "bytes": 1587,
-      "sha256": "5395d3aab1a63ba15e7c611597c9e069d9cd262bb76f9bc42bddef8189a56ffb"
+      "bytes": 1841,
+      "sha256": "5e3b568b2d4eef4a9f13884fb73c729a2ab3b75ae17ff64bcf410d1aabfdd0da"
     },
     "postcss.config.js": {
       "bytes": 83,
@@ -1440,6 +1480,30 @@
       "bytes": 10983,
       "sha256": "54aba3d788b555d6c254d11ebf44aba628869021b2f13b6a0a19d785d784b4c3"
     },
+    "scripts/live/fixtures.mjs": {
+      "bytes": 492,
+      "sha256": "186aa492ff505aa3ed67b0d58579122de726b80d0c78b8923e2b6521dc7a0bad"
+    },
+    "scripts/live/harness.mjs": {
+      "bytes": 457,
+      "sha256": "b6d1248914056c287836c301ee4dfaba87a8af298d01f995c47eb4b7d3c254f3"
+    },
+    "scripts/live/test-admin-browse.mjs": {
+      "bytes": 7532,
+      "sha256": "ca2e16e2eb8ba30142755c52893dd81006f1267ae3f9e6a2acd1c60ee9bfc9cf"
+    },
+    "scripts/live/test-catalog-rules.mjs": {
+      "bytes": 11146,
+      "sha256": "9ef4b715fdc826ba4d8596eaa9bf9df70f1f61c7d11b380a174d7f78656cdff0"
+    },
+    "scripts/live/test-ingest-dedup.mjs": {
+      "bytes": 9553,
+      "sha256": "e25ece3c2def9d113fa5c491d71d90019a4de500e2fc63f6f18690139ee555f4"
+    },
+    "scripts/live/test-playback-contracts.mjs": {
+      "bytes": 10567,
+      "sha256": "7d49054888391ad59b488371ff536d5b81d8c3b0b3e4476fee1894a9b5ab4b61"
+    },
     "scripts/live-doctor.mjs": {
       "bytes": 12877,
       "sha256": "669382842558c170e07d6bac2ec2cf8a218e0df18deaddd2f66438ceb7f66c60"
@@ -1453,8 +1517,8 @@
       "sha256": "75dbe37f5fb95b515be19d6787a942a9fb16d1d06d00559c03aed37b541908e4"
     },
     "scripts/test-admin-controls.cjs": {
-      "bytes": 17542,
-      "sha256": "aa9ad58c2b04395a637816fb4b6a8b911efefd9fa9dd6b39f713d9b696b4a199"
+      "bytes": 18053,
+      "sha256": "d9ccc31544e15ff4889471e7815eea5acd65672c91a9a5cc8d146f5be920882d"
     },
     "scripts/test-extras-covers.cjs": {
       "bytes": 2011,
@@ -1464,29 +1528,13 @@
       "bytes": 2325,
       "sha256": "98f78f825cbeec33f5bddc74cfa327f3c30a83d5f9450179541f2f4a41745ce7"
     },
-    "scripts/test-live-browser.cjs": {
-      "bytes": 2232,
-      "sha256": "e59a97b268b9ba2ffad30a2db7b65a03812e592fc581ed15d102f80722b2a9b3"
-    },
-    "scripts/test-live-catalogs.mjs": {
-      "bytes": 31756,
-      "sha256": "97d63a9780cbf440c925dfd7ce6045207834593b66fc9eec8b467981e939f1d0"
-    },
-    "scripts/test-live-guide-browser.cjs": {
-      "bytes": 7495,
-      "sha256": "549cb194752d69cc5e4e57764239d2032ed3836cf62eed3c202c1b3029ec4d1e"
-    },
     "scripts/test-live-sources.mjs": {
       "bytes": 11716,
       "sha256": "b78457c66dfdd1abf66a9687f31e9b6e6acba0738aac85e75d1a831f77acd322"
     },
-    "scripts/test-live-startup.cjs": {
-      "bytes": 3339,
-      "sha256": "d1544142c67e3802e602eff0b103efe55ae3aa9de43617a1deee215e2a772a27"
-    },
     "scripts/test-loading-system.cjs": {
-      "bytes": 18442,
-      "sha256": "0ce113dd67815e83a7f09eb09bf48a5a9810b627793e9a12c04d22b5467a9f47"
+      "bytes": 18470,
+      "sha256": "217c677649671048db831473c16410164e7f62751c222b13cf62e58f712b3971"
     },
     "scripts/test-lyrics-controller.cjs": {
       "bytes": 5465,

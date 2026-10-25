@@ -1,6 +1,6 @@
 'use client';
-import LivePageV13 from '@/components/live/v13/LivePageV13';
+import LivePage from '@/components/live/LivePage';
 
-export default function LivePage() {
-  return <LivePageV13 />;
+export default function LivePageRoute() {
+  return <LivePage />;
 }

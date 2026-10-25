@@ -18,7 +18,7 @@ const LiveCatalogMembershipSchema = new mongoose.Schema({
  *
  * Kept, because a real query needs them:
  *   channelId (unique upsert key), sourceId, name + normalizedName (the Admin `q`
- *   regex search), category (Admin distinct + filter), profiles (the Live TV read).
+ *   regex search), category (Admin distinct + filter).
  */
 
 const LiveChannelSchema = new mongoose.Schema({
@@ -50,7 +50,6 @@ const LiveChannelSchema = new mongoose.Schema({
   favorite: { type: Boolean, default: false },
   hidden: { type: Boolean, default: false },
   order: { type: Number, default: 9999 },
-  profiles: { type: [String], default: ['default'], index: true },
   keyId: { type: String, default: '' },
   key: { type: String, default: '' },
   licenseKey: { type: String, default: '' },
