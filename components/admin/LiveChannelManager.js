@@ -26,7 +26,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LIVE_CATALOGS, getChannelCatalogIds, sortChannelsForCatalog } from '@/lib/liveCatalogs';
 import { SOURCE_REGISTRY } from '@/lib/live/registry';
-import { summarizeSourceCatalogs } from '@/lib/live/adminBrowse';
+import { summarizeLiveCatalogue } from '@/lib/live/adminBrowse';
 import AdminLivePreview from './AdminLivePreview';
 
 const EMPTY_FORM = {
@@ -213,7 +213,7 @@ export default function LiveChannelManager() {
     [allRows, sourceId],
   );
   const browseSummary = useMemo(
-    () => summarizeSourceCatalogs(sourceScopedRows, (row) => getChannelCatalogIds(row)),
+    () => summarizeLiveCatalogue(sourceScopedRows),
     [sourceScopedRows],
   );
   const browseChips = useMemo(() => ([
@@ -415,7 +415,8 @@ export default function LiveChannelManager() {
           <button type="button" onClick={openCreate} className="rounded-full bg-red-600 px-4 py-1.5 text-xs font-black text-white">+ Add channel</button>
         </div>
         {/* Source → catalog browse chips: pick a source above, then a catalog
-            here; counts reflect the chosen source instantly. */}
+            here. Counts are /live cards (duplicates merged, hidden/religious
+            excluded), so they match the public page exactly. */}
         <div className="flex flex-wrap gap-1.5">
           {browseChips.map((chip) => (
             <button key={chip.id} type="button" onClick={() => setCatalog(chip.id)}
@@ -430,7 +431,7 @@ export default function LiveChannelManager() {
         <div className="flex items-center justify-between text-[11px] text-zinc-400">
           <span>
             {loading ? 'Loading…' : `${filteredRows.length} shown · ${allRows.length} loaded${totalOnServer > allRows.length ? ` · ${totalOnServer} in database` : ''}`}
-            {reorderEnabled ? ' · drag rows or use ↑/↓ to reorder this catalog' : ' · filters run instantly on this device'}
+            {reorderEnabled ? ' · drag rows or use ↑/↓ to reorder this catalog' : ' · chip counts are /live cards (duplicates merged)'}
           </span>
           {msg ? <span className="font-bold text-amber-200">{msg}</span> : null}
         </div>

@@ -19,7 +19,8 @@ import { resolveHjhWorkerUrl, extractJioCookieFromText } from '@/lib/liveTv';
 import { pickLandingGroup } from '@/lib/live/landing';
 import { channelDocToLogicalGroup } from '@/lib/live/preview';
 import { canonicalChannelName, displayNameForChannel, deduplicateChannels, logicalIdForChannel } from '@/lib/live/pipeline/deduplicate.js';
-import { summarizeSourceCatalogs } from '@/lib/live/adminBrowse';
+import { summarizeLiveCatalogue } from '@/lib/live/adminBrowse';
+import { liveFamilyRank } from '@/lib/live/catalogRules';
 import http from 'node:http';
 
 let passed = 0;
@@ -417,35 +418,88 @@ console.log('13. canonical duplicate arrest (HD / DASH / ClearKey variants merge
   });
 }
 
-console.log('14. admin source → catalog browse summary (in-memory, no network)');
+console.log('14. admin browse summary mirrors /live exactly (cards, not rows)');
 {
-  const idsOf = (row) => (row.catalogs || []).map((item) => (typeof item === 'string' ? item : item.catalogId));
-  const rows = [
-    { channelId: 'r1', catalogs: [{ catalogId: 'main' }, { catalogId: 'news' }] },
-    { channelId: 'r2', catalogs: [{ catalogId: 'main' }] },
-    { channelId: 'r3', catalogs: [{ catalogId: 'music' }] },
-    { channelId: 'r4', catalogs: [] },
-    { channelId: 'r5', catalogs: [], religious: true },
-    { channelId: 'r6', catalogs: [{ catalogId: 'bogus' }, { catalogId: 'sports' }, { catalogId: 'sports' }] },
-  ];
-  const summary = summarizeSourceCatalogs(rows, idsOf);
-  check('counts every fixed catalog once per channel with deduped memberships', () => {
-    assert.equal(summary.catalogs.main, 2);
-    assert.equal(summary.catalogs.news, 1);
-    assert.equal(summary.catalogs.music, 1);
-    assert.equal(summary.catalogs.sports, 1); // repeated id counts once
-    assert.equal(summary.catalogs.kids, 0);
+  const tamilRow = (over) => ({
+    channelId: `x${Math.random().toString(36).slice(2, 8)}`, sourceId: 'iptv-org-tamil',
+    name: 'X', category: 'Entertainment', url: 'https://e.test/a.m3u8', format: 'hls',
+    playable: true, hidden: false, catalogs: [], headers: {}, ...over,
   });
-  check('unmapped covers rows without a valid catalog, religious is separate', () => {
-    assert.equal(summary.unmapped, 2); // r4 and the religious r5
+  const rows = [
+    // One broadcaster, three delivery rows — must count as ONE /live card.
+    tamilRow({ channelId: 'v1', name: 'Star Vijay', catalogs: [{ catalogId: 'main' }] }),
+    tamilRow({ channelId: 'v2', sourceId: 'hjh-jio', name: 'Star Vijay HD', format: 'dash', catalogs: [{ catalogId: 'main' }] }),
+    tamilRow({ channelId: 'v3', sourceId: 'jash', name: 'Star Vijay DASH', catalogs: [{ catalogId: 'main' }, { catalogId: 'music' }] }),
+    // A second, unmapped card.
+    tamilRow({ channelId: 'v4', name: 'Polimer TV', catalogs: [] }),
+    // Hidden duplicate of an existing card — dropped, must not inflate counts.
+    tamilRow({ channelId: 'v5', name: 'Star Vijay ClearKey', hidden: true, catalogs: [{ catalogId: 'main' }] }),
+    // Unplayable / URL-less / dummy licence rows never reach /live.
+    tamilRow({ channelId: 'v6', name: 'Dead Feed', playable: false }),
+    tamilRow({ channelId: 'v7', name: 'No URL Feed', url: '' }),
+    tamilRow({ channelId: 'v8', name: 'Dummy Licence', licenseKey: 'null:null' }),
+    // Religious group — excluded from every catalog, counted separately.
+    tamilRow({ channelId: 'v9', name: 'Aaseervatham TV', category: 'Devotional', catalogs: [] }),
+    // Non-Tamil source/name — filtered out exactly like tamilOnly=1.
+    { channelId: 'v10', sourceId: 'hjh-jio', name: 'Star Plus HD', category: 'Entertainment', url: 'https://e.test/s.m3u8', playable: true, catalogs: [{ catalogId: 'main' }] },
+  ];
+  const summary = summarizeLiveCatalogue(rows);
+  check('delivery variants merge: one Star Vijay card in main, not three', () => {
+    assert.equal(summary.catalogs.main, 1);
+    assert.equal(summary.catalogs.music, 1); // union of the merged group's memberships
+  });
+  check('total counts visible cards incl. unmapped; hidden/dead/dummy/non-Tamil excluded', () => {
+    assert.equal(summary.total, 2); // Star Vijay + Polimer
+    assert.equal(summary.unmapped, 1); // Polimer
+  });
+  check('religious group is excluded and reported in its own bucket', () => {
     assert.equal(summary.religious, 1);
-    assert.equal(summary.total, 6);
+    assert.equal(summary.catalogs.others, 0);
   });
   check('empty scope is a zeroed summary, never a throw', () => {
-    const empty = summarizeSourceCatalogs([], idsOf);
+    const empty = summarizeLiveCatalogue([]);
     assert.equal(empty.total, 0);
     assert.equal(empty.unmapped, 0);
     assert.equal(empty.catalogs.main, 0);
+  });
+}
+
+console.log('15. /live family ranking — Vijay, Sun+sisters, Jaya, then other mainstream');
+{
+  check('Vijay family is tier 0', () => {
+    assert.equal(liveFamilyRank('Star Vijay'), 0);
+    assert.equal(liveFamilyRank('Star Vijay HD'), 0);
+    assert.equal(liveFamilyRank('Vijay TV'), 0);
+    assert.equal(liveFamilyRank('Vijay Super'), 0);
+    assert.equal(liveFamilyRank('Vijay Takkar'), 0);
+  });
+  check('Sun family incl. KTV/Adithya/Chutti sisters is tier 1', () => {
+    assert.equal(liveFamilyRank('Sun TV'), 1);
+    assert.equal(liveFamilyRank('Sun Music'), 1);
+    assert.equal(liveFamilyRank('Sun News'), 1);
+    assert.equal(liveFamilyRank('KTV'), 1);
+    assert.equal(liveFamilyRank('Adithya TV'), 1);
+    assert.equal(liveFamilyRank('Chutti TV'), 1);
+  });
+  check('Jaya family is tier 2', () => {
+    assert.equal(liveFamilyRank('Jaya TV'), 2);
+    assert.equal(liveFamilyRank('Jaya Max'), 2);
+    assert.equal(liveFamilyRank('Jaya Movies'), 2);
+  });
+  check('other mainstream flagships are tier 3, long tail tier 4', () => {
+    assert.equal(liveFamilyRank('Zee Tamil'), 3);
+    assert.equal(liveFamilyRank('Kalaignar TV'), 3);
+    assert.equal(liveFamilyRank('Colors Tamil'), 3);
+    assert.equal(liveFamilyRank('Madurai Vision'), 4);
+    assert.equal(liveFamilyRank(''), 4);
+  });
+  check('family order beats alphabetical order', () => {
+    const names = ['Zee Tamil', 'Jaya TV', 'Adithya TV', 'Vijay Takkar', 'Madurai Vision', 'Star Vijay'];
+    const ordered = [...names].sort((a, b) => {
+      const rank = liveFamilyRank(a) - liveFamilyRank(b);
+      return rank || a.localeCompare(b);
+    });
+    assert.deepEqual(ordered, ['Star Vijay', 'Vijay Takkar', 'Adithya TV', 'Jaya TV', 'Zee Tamil', 'Madurai Vision']);
   });
 }
 

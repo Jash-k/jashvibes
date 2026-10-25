@@ -5,7 +5,7 @@ import { getDefaultLiveSources } from '@/lib/liveTv';
 import { deduplicateChannels, isDummyVariant, orderVariantsByLadder } from '@/lib/live/pipeline/deduplicate.js';
 import { policyForLogicalChannel } from '@/lib/live/playback/policy.js';
 import { isMainstreamTamilChannel } from '@/lib/live/pipeline/normalize.js';
-import { isReligiousExcludedGroup } from '@/lib/live/catalogRules';
+import { isReligiousExcludedGroup, liveFamilyRank } from '@/lib/live/catalogRules';
 import { LIVE_CATALOGS, isLiveCatalogId, normalizeCatalogMemberships } from '@/lib/liveCatalogs';
 
 export const runtime = 'nodejs';
@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
  */
 const PUBLIC_PROJECTION = [
   'channelId', 'sourceId', 'source', 'tvgId', 'name', 'customName', 'logo', 'customLogo',
-  'category', 'language', 'url', 'format', 'playable', 'keyId', 'key', 'licenseKey',
+  'category', 'language', 'url', 'format', 'playable', 'hidden', 'keyId', 'key', 'licenseKey',
   'licenseType', 'cookie', 'userAgent', 'referer', 'headers', 'catalogs', 'logicalChannelId',
   'order', 'mappingManaged', 'ladderOrder',
 ].join(' ');
@@ -32,7 +32,7 @@ const PUBLIC_PROJECTION = [
  */
 const BASE_TTL_MS = Number(process.env.LIVE_CHANNELS_CACHE_TTL_MS || 15_000);
 const cacheStore = globalThis.__jashLiveCatalogCache || (globalThis.__jashLiveCatalogCache = { entries: new Map(), version: 0 });
-const BASE_KEY = 'public-channels-base-v2';
+const BASE_KEY = 'public-channels-base-v3';
 
 /** Lowest catalog position any variant of this group holds (999999 if unmapped). */
 function groupCatalogPosition(group, catalogId = 'all') {
@@ -86,6 +86,7 @@ async function loadBaseCatalogue({ tamilOnly }) {
     url: d.url,
     format: d.format || 'unknown',
     playable: d.playable !== false,
+    hidden: Boolean(d.hidden),
     keyId: d.keyId || '',
     key: d.key || '',
     licenseKey: d.licenseKey || '',
@@ -108,6 +109,11 @@ async function loadBaseCatalogue({ tamilOnly }) {
     if (!ch.playable) return false;
     if (isDummyVariant(ch)) return false;
     if (!ch.url) return false;
+    // Admin "Hide from /live" must actually remove the row from the public
+    // catalogue. Hidden variants are dropped before dedup, so a group whose
+    // every variant is hidden disappears; a group with other live variants
+    // simply loses this fallback entry.
+    if (ch.hidden) return false;
     if (tamilOnly && !isMainstreamTamilChannel(ch, ch.sourceId)) return false;
     return true;
   });
@@ -173,8 +179,11 @@ export async function GET(request) {
       logical = logical.filter((g) => groupHasCatalog(g, catalogFilter));
     }
 
-    // Owner order first (per-catalog positions), name as the stable tiebreak.
+    // Broadcaster families first (Vijay → Sun+sisters → Jaya → other
+    // mainstream → rest), then the owner's per-catalog position, then name.
     logical = [...logical].sort((a, b) => {
+      const rankDiff = liveFamilyRank(a.displayName) - liveFamilyRank(b.displayName);
+      if (rankDiff) return rankDiff;
       const positionDiff = groupCatalogPosition(a, catalogFilter) - groupCatalogPosition(b, catalogFilter);
       if (positionDiff) return positionDiff;
       return String(a.displayName || '').localeCompare(String(b.displayName || ''));
