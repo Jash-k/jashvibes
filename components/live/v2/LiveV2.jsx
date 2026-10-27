@@ -85,7 +85,7 @@ export default function LiveV2() {
   }
 
   const chips = (
-    <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:thin]">
+    <div className="flex min-w-0 gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:thin]">
       {chipDefs.map((chip) => (
         <button
           key={chip.id}
@@ -136,7 +136,7 @@ export default function LiveV2() {
   );
 
   return (
-    <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[158px_minmax(0,1fr)_minmax(340px,440px)] lg:grid-rows-1">
+    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[158px_minmax(0,1fr)_minmax(340px,440px)] lg:grid-rows-1">
       {/* Desktop category rail */}
       <aside className="hidden min-h-0 overflow-y-auto border-r border-white/10 p-2.5 [scrollbar-width:none] lg:block [&::-webkit-scrollbar]:hidden">
         {chipDefs.map((chip) => (
@@ -155,8 +155,8 @@ export default function LiveV2() {
       </aside>
 
       {/* Center: player */}
-      <section className="flex min-h-0 flex-col gap-2 p-3 sm:p-4">
-        <div className="sm:hidden">{chips}</div>
+      <section className="flex min-h-0 min-w-0 flex-col gap-2 p-3 sm:p-4">
+        <div className="min-w-0 sm:hidden">{chips}</div>
         <div className="min-h-0 flex-1">
           {active ? (
             <V2Player
@@ -177,7 +177,7 @@ export default function LiveV2() {
       </section>
 
       {/* Right: channel list (the only scrolling surface on phones) */}
-      <aside className="flex min-h-0 flex-col border-t border-white/10 bg-white/[0.025] lg:border-l lg:border-t-0">
+      <aside className="flex min-h-0 min-w-0 flex-col border-t border-white/10 bg-white/[0.025] lg:border-l lg:border-t-0">
         <div className="flex shrink-0 items-center justify-between gap-2.5 border-b border-white/10 px-3.5 py-2.5">
           <div className="min-w-0">
             <p className="truncate text-[13px] font-black">{activeCat === FAV ? 'Favourites' : activeCat === ALL ? 'All V2 channels' : chipDefs.find((c) => c.id === activeCat)?.label}</p>

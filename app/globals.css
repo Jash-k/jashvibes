@@ -943,12 +943,40 @@ html.day-mode .jv-glowcursor { display: none; } /* light theme keeps the reticle
    separate hardware surface whose rectangle can desync from the element after
    a PiP handoff, fullscreen exit, or device rotation: the stale surface keeps
    painting the old frame while the new one shows up as an offset gray box that
-   ignores overflow:hidden. Promoting the frame to its own compositing layer
-   makes the rounded clip apply to the video surface itself, so a desynced
-   surface can never paint outside the 16:9 frame. The paired aspect-video on
-   the same element keeps the box width-derived even if an inner ratio class
-   is ever lost during a transition. */
-.jvp-live-frame { transform: translateZ(0); }
+   ignores overflow:hidden — and on some Chrome builds the surface paints OVER
+   the frame border and sibling content, making a 16:9 box look like a
+   full-height "desktop style" player. Four layered defenses:
+   1. translateZ promotes the frame to its own compositing layer.
+   2. clip-path is enforced at the compositor, so a runaway video surface is
+      clipped to this box even when overflow:hidden is ignored by it.
+   3. contain:paint adds an independent clip for the non-composited path.
+   4. max-height is a hard ceiling equal to the width-derived 16:9 height, so
+      the box itself can never stretch tall even if an aspect class is lost.
+   The paired aspect-video class on the same element keeps the normal box
+   width-derived. Section padding is p-3 (12px) below sm and p-4 (16px) at sm+. */
+.jvp-live-frame {
+  transform: translateZ(0);
+  clip-path: inset(0 round 1rem);
+  contain: layout paint;
+  max-height: calc((100vw - 1.5rem) * 9 / 16);
+}
+@media (min-width: 640px) {
+  .jvp-live-frame { max-height: calc((100vw - 2rem) * 9 / 16); }
+}
+/* Landscape phones deliberately drop rounding (see .jv-landscape-phone):
+   mirror that on the compositor clip so no corner radius reappears. */
+.jvp-live-frame:has(.jv-landscape-phone) { clip-path: inset(0); }
+
+/* Persistent layer promotion on the <video> itself. A transformed video makes
+   Android Chrome choose the clippable texture-compositing path instead of a
+   direct-presentation surface that ignores ancestor clips. JashPlayer's
+   surface-resync effect still toggles an inline translateZ after
+   PiP/visibility/rotation events; this rule keeps the promotion once that
+   inline style is cleared. */
+.jvp-live-frame video {
+  transform: translateZ(0);
+  will-change: transform;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .jv-tilt-inner { transform: none !important; }

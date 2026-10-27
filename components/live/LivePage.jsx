@@ -175,14 +175,14 @@ export default function LivePage() {
       <>
       {/* Rail | player | right panel. Phones stack: auto player row, then the
           panel fills the remaining height and owns the only scroll. */}
-      <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[158px_minmax(0,1fr)_minmax(340px,440px)] lg:grid-rows-1">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[158px_minmax(0,1fr)_minmax(340px,440px)] lg:grid-rows-1">
         <aside className="hidden min-h-0 overflow-y-auto border-r border-white/10 p-2.5 [scrollbar-width:none] lg:block [&::-webkit-scrollbar]:hidden">
           <CatalogRail active={activeCatalog} onSelect={setActiveCatalog} counts={counts} favCount={favs.length} />
         </aside>
 
         {/* Center: the player fills the available height on desktop, with the
             manually switchable source ladder pinned underneath it. */}
-        <section className="flex min-h-0 flex-col p-3 sm:p-4">
+        <section className="flex min-h-0 min-w-0 flex-col p-3 sm:p-4">
           <div className="min-h-0 flex-1">
             {activeLogical ? (
               <LivePlayer
@@ -236,7 +236,7 @@ export default function LivePage() {
               className="ml-auto rounded-full border border-white/10 px-2.5 py-1 text-[10.5px] font-bold text-zinc-300 hover:border-red-500/60">↻ Refresh</button>
           </div>
 
-          <div className="order-2 min-h-0 flex-1 overflow-y-auto p-2.5 [scrollbar-width:thin] lg:order-1 lg:p-3">
+          <div className="order-2 min-h-0 min-w-0 flex-1 overflow-y-auto p-2.5 [scrollbar-width:thin] lg:order-1 lg:p-3">
             {status === 'loading' ? <p className="p-6 text-center text-[12.5px] text-zinc-400">Loading Tamil live…</p> : null}
             {error ? (
               <p className="m-3 rounded-xl border border-red-500/30 bg-red-950/25 p-3.5 text-[12.5px] text-red-200">
