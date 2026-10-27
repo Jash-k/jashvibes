@@ -939,6 +939,17 @@ html.day-mode .jv-glowcursor { display: none; } /* light theme keeps the reticle
    the host page adds around the player is pure lost picture. */
 .jv-landscape-phone { border-radius: 0 !important; }
 
+/* /live mobile/tablet player frame. Android Chrome composites <video> on a
+   separate hardware surface whose rectangle can desync from the element after
+   a PiP handoff, fullscreen exit, or device rotation: the stale surface keeps
+   painting the old frame while the new one shows up as an offset gray box that
+   ignores overflow:hidden. Promoting the frame to its own compositing layer
+   makes the rounded clip apply to the video surface itself, so a desynced
+   surface can never paint outside the 16:9 frame. The paired aspect-video on
+   the same element keeps the box width-derived even if an inner ratio class
+   is ever lost during a transition. */
+.jvp-live-frame { transform: translateZ(0); }
+
 @media (prefers-reduced-motion: reduce) {
   .jv-tilt-inner { transform: none !important; }
   .jv-card-glare { display: none; }

@@ -93,7 +93,17 @@ export default function LivePlayer({ logical, variantIdx=0, onErrorNeedingFallba
   // engine cleanly on every channel zap / variant-ladder switch.
   return (
     <div className={fill ? 'flex h-full min-h-0 flex-col gap-2' : 'space-y-2'}>
-      <div className={`group/player relative rounded-2xl overflow-hidden border border-white/10 bg-black ${fill ? 'min-h-0 flex-1' : ''}`}>
+      {/*
+        Mobile/tablet (fill=false): the frame itself owns the 16:9 box instead
+        of trusting the player root's aspect class alone. With a definite,
+        width-derived height the grid/flex auto row can never stretch the frame
+        tall, and overflow:hidden clips any hardware video surface that desyncs
+        from its element after a PiP/fullscreen/rotation transition (the Android
+        Chrome gray-offset-rectangle glitch). jvp-live-frame promotes the frame
+        to its own compositing layer so the clipping actually applies to the
+        video surface. Desktop keeps the fill-height chain untouched.
+      */}
+      <div className={`group/player relative overflow-hidden rounded-2xl border border-white/10 bg-black ${fill ? 'min-h-0 flex-1' : 'aspect-video w-full jvp-live-frame'}`}>
         <JashPlayer
           key={`${resolved.channel.channelId}:${variantIdx}`}
           source={{ url: resolved.originUrl, kind: 'auto', label: resolved.channel.name }}

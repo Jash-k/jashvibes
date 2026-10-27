@@ -41,9 +41,17 @@ const fs=require('fs'),assert=require('assert/strict');
  assert.ok(js.includes('videoEl.autoPictureInPicture = true'),'video must carry autoPictureInPicture: a gesture-less requestPiP is rejected on visibilitychange');
  assert.ok(js.includes('webkitSetPresentationMode'),'iPad Safari presentation-mode PiP must be used as the fallback');
  assert.ok(js.includes('document.exitPictureInPicture'),'returning to the page must close the auto-PiP window and resume inline playback');
+ // Mobile framing: the frame (not just the player root) must own the 16:9 box so
+ // an Android hardware-surface desync can never stretch the player tall or paint
+ // an offset gray video rectangle outside the frame.
+ assert.ok(liveShell.includes("'aspect-video w-full jvp-live-frame'"),'mobile frame must own an explicit 16:9 box plus the compositing-layer class');
+ assert.ok(liveShell.includes("'min-h-0 flex-1'"),'desktop fill-height frame chain must stay intact');
+ assert.ok(js.includes('leavepictureinpicture') && js.includes('orientationchange'),'player must re-sync the video surface when PiP exits or the device rotates');
+ assert.ok(/resyncSurface[\s\S]*?translateZ\(0\)/.test(js),'surface resync must nudge the video element through a compositing layer without touching playback');
  // Fullscreen: the JashPlayer root wrapper needs an explicit viewport-fill rule
  // or it keeps its aspect-video box inside the fullscreen viewport (square bug).
  const css=fs.readFileSync('app/globals.css','utf8');
+ assert.ok(css.includes('.jvp-live-frame') && /\.jvp-live-frame\s*\{[^}]*translateZ\(0\)/.test(css),'live frame must promote to its own compositing layer so overflow clipping covers the video surface');
  assert.ok(css.includes('[data-dvp="root"]:fullscreen'),'fullscreen CSS must size the JashPlayer root to the viewport');
  assert.ok(/\[data-dvp="root"\]:fullscreen[\s\S]*?100dvw[\s\S]*?100dvh/.test(css),'fullscreen rule must force 100dvw/100dvh');
  console.log('Player runtime readout: live/unknown suppression, window-relative elapsed, phone/desktop forms and wiring passed.');

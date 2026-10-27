@@ -338,6 +338,42 @@ export function JashPlayer(props) {
     return undefined;
   }, [pipOnHide, videoEl]);
 
+  // Hardware-surface resync. On Android Chrome the <video> paints on a separate
+  // compositing surface whose rectangle can stay stale after a PiP handoff,
+  // fullscreen exit, rotation, or hide/show cycle — it then renders as an offset
+  // gray box while the previous frame stays painted behind it. A two-frame
+  // translateZ nudge forces the compositor to re-attach the surface to the
+  // element's current layout box. React never writes inline `transform` on this
+  // node (picture styles use object-fit/aspect-ratio only), so clearing it on the
+  // next frame cannot fight a render-driven style, and playback is untouched.
+  useEffect(() => {
+    if (!videoEl) return undefined;
+    let raf1 = 0;
+    let raf2 = 0;
+    const resyncSurface = () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      raf1 = requestAnimationFrame(() => {
+        try { videoEl.style.transform = 'translateZ(0)'; } catch {}
+        raf2 = requestAnimationFrame(() => { try { videoEl.style.transform = ''; } catch {} });
+      });
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') resyncSurface(); };
+    const onLeavePip = () => resyncSurface();
+    document.addEventListener?.('visibilitychange', onVisible);
+    window.addEventListener?.('orientationchange', resyncSurface);
+    videoEl.addEventListener?.('leavepictureinpicture', onLeavePip);
+    videoEl.addEventListener?.('webkitleavepictureinpicture', onLeavePip);
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      document.removeEventListener?.('visibilitychange', onVisible);
+      window.removeEventListener?.('orientationchange', resyncSurface);
+      videoEl.removeEventListener?.('leavepictureinpicture', onLeavePip);
+      videoEl.removeEventListener?.('webkitleavepictureinpicture', onLeavePip);
+    };
+  }, [videoEl]);
+
   useEffect(() => {
     const onVisibility = () => {
       if (!pipOnHideRef.current) return;
