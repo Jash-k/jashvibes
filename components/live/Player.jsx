@@ -102,7 +102,21 @@ export default function LivePlayer({ logical, variantIdx=0, onErrorNeedingFallba
           poster={resolved.channel.logo || ''}
           // 'fill' makes the root h-full/w-full so it occupies the whole black
           // frame instead of leaving a dead 16:9 strip underneath the video.
-          display={{ title: resolved.channel.name, poster: resolved.channel.logo || '', aspect: fill ? 'fill' : undefined }}
+          // mediaSession makes Android register an active media notification,
+          // which keeps audio alive when the tab is minimized and makes the
+          // auto-PiP handoff reliable (onPrev/onNext feed the system controls).
+          display={{
+            title: resolved.channel.name,
+            poster: resolved.channel.logo || '',
+            aspect: fill ? 'fill' : undefined,
+            mediaSession: {
+              title: resolved.channel.name,
+              artist: 'JaSH Vibes Live',
+              artwork: resolved.channel.logo ? [{ src: resolved.channel.logo, sizes: '512x512' }] : [],
+              onPrev: hasZap ? () => onPrev() : undefined,
+              onNext: hasZap ? () => onNext() : undefined,
+            },
+          }}
           // Minimizing/hiding Chrome pops the stream into Picture-in-Picture
           // so the live channel keeps playing in the floating window.
           pipOnHide

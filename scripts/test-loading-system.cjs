@@ -165,7 +165,7 @@ async function loadLib(files) {
   assert(gate.indexOf('useLoadVeil(pathname)') < gate.indexOf("if (pathname.startsWith('/admin')) {"),
     'the veil hook must run before the early returns — a conditional hook unwinds the tree');
   assert(/const RAIL_SECTIONS = \['\/', '\/vault', '\/extras', '\/stremio', '\/classics'\]/.test(gate));
-  assert(/ownsOwnChrome[\s\S]{0,160}'\/music'[\s\S]{0,200}'\/admin'[\s\S]{0,200}'\/watch'[\s\S]{0,200}'\/embed-browser'/.test(gate));
+  assert(/ownsOwnChrome[\s\S]{0,160}'\/music'[\s\S]{0,200}'\/admin'[\s\S]{0,200}'\/watch'[\s\S]{0,200}'\/live'[\s\S]{0,200}'\/embed-browser'/.test(gate));
   assert(gate.includes('BootSplash'), 'the checking state must render the splash, not a bare spinner');
   // Admin returns before the shell branch, so it carries its own copy of the veil.
   const adminBranch = gate.slice(gate.indexOf("if (pathname.startsWith('/admin')) {"), gate.indexOf("if (pathname.startsWith('/admin')) {") + 700);

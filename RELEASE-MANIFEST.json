@@ -2,7 +2,7 @@
   "version": "11.0.0",
   "release": "loading-and-switching",
   "baselineCommit": "c6653cc1732448cd2ea295762b4bdf9ef38a8e5b",
-  "verifiedOn": "2026-10-25",
+  "verifiedOn": "2026-10-27",
   "verification": {
     "sourceModules": 319,
     "productionBuild": "passed",
@@ -581,8 +581,8 @@
       "sha256": "2cfb0cabecadaf8a2aee816e2ae74655fbee6a0fdb0a0d2e4d3aba8cd60f6393"
     },
     "components/AuthGate.js": {
-      "bytes": 14229,
-      "sha256": "d84296bc735135bff46bf20c639e0e920fdce1c6542dca39512c1dab2f3edd10"
+      "bytes": 14429,
+      "sha256": "5f9b469be54251373bd0c39a81b8469409f256844699f45a88a03414816982c8"
     },
     "components/BootSplash.js": {
       "bytes": 2631,
@@ -649,12 +649,12 @@
       "sha256": "2905000e13426442a59b3d20ff53028ac5554e4a44d591a68df91e2e7c9990f8"
     },
     "components/live/LivePage.jsx": {
-      "bytes": 13573,
-      "sha256": "d1795e0cbffe4d3e442d47046d026d500e9b754a7765d00df0d125e21cfddda6"
+      "bytes": 13576,
+      "sha256": "3a4597a6cbe6db919a8d5f59d1d31687cb8ed137d6764339cc65f0a23b0089fa"
     },
     "components/live/Player.jsx": {
-      "bytes": 7379,
-      "sha256": "64b57410a7db2503ce4137480280ce0d8c79e388a6b8462fbb713d50ec3d1d2d"
+      "bytes": 8013,
+      "sha256": "7d1652fb8d53fe065501d467a59be85dfda3acf27c184055389ba7f17d989f91"
     },
     "components/LoadVeil.jsx": {
       "bytes": 1529,
@@ -1529,8 +1529,8 @@
       "sha256": "b78457c66dfdd1abf66a9687f31e9b6e6acba0738aac85e75d1a831f77acd322"
     },
     "scripts/test-loading-system.cjs": {
-      "bytes": 18470,
-      "sha256": "217c677649671048db831473c16410164e7f62751c222b13cf62e58f712b3971"
+      "bytes": 18491,
+      "sha256": "11af4738cde522fc33290d21cec2e9e65ed1ce2e48d7d68b822abf1d2d93c31b"
     },
     "scripts/test-lyrics-controller.cjs": {
       "bytes": 5465,
@@ -1581,8 +1581,8 @@
       "sha256": "97e787c90b42db3c023a02b025d2c23769fa84116d0cdfa67670dce1ea23577e"
     },
     "scripts/test-player-runtime.cjs": {
-      "bytes": 4364,
-      "sha256": "4aee1d586676ff2fba6e8f8b564e5f84c00fefac09295db23e0640438115a2fc"
+      "bytes": 4745,
+      "sha256": "243db920034df426c3b56849499c08666ede63f2b726b5e9758c0dbda5aa4239"
     },
     "scripts/test-unlock-decision.mjs": {
       "bytes": 2476,

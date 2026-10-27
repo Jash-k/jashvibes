@@ -16,10 +16,12 @@ import { installFetchTracker } from '@/lib/loadProgress';
 const CommandPalette = dynamic(() => import('@/components/CommandPalette'), { ssr: false });
 
 /* Routes that draw their own chrome. Music is a fixed canvas with its own rail and
-   dock; Admin owns its whole screen; Watch and the embed browser are full-bleed. */
+   dock; Admin owns its whole screen; Watch, Live and the embed browser are full-bleed.
+   /live is a locked 100dvh shell with its own header, rail and channel list — the shell
+   MobileDock/day-night toggle would overlap it, especially on phones. */
 const RAIL_SECTIONS = ['/', '/vault', '/extras', '/stremio', '/classics'];
 const ownsOwnChrome = (pathname = '') => pathname.startsWith('/music') || pathname.startsWith('/admin')
-  || pathname.startsWith('/watch') || pathname.startsWith('/embed-browser');
+  || pathname.startsWith('/watch') || pathname.startsWith('/live') || pathname.startsWith('/embed-browser');
 const wantsRail = (pathname = '') => RAIL_SECTIONS.includes(pathname) || RAIL_SECTIONS.includes(`/${pathname.split('/')[1] || ''}`);
 
 // Installed at module scope, not in an effect: a page's own effects run before the shell's,

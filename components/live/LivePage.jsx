@@ -158,7 +158,7 @@ export default function LivePage() {
                 onRemoveChannel={isAdmin ? removeChannel : null}
               />
             ) : (
-              <div className="grid h-full place-items-center rounded-2xl border border-white/10 bg-zinc-950 text-sm text-zinc-400">Pick a channel from the right</div>
+              <div className="grid h-full place-items-center rounded-2xl border border-white/10 bg-zinc-950 text-sm text-zinc-400">Pick a channel to start watching</div>
             )}
           </div>
 
