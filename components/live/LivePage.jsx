@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { LIVE_CATALOGS } from '@/lib/liveCatalogs';
 import LivePlayer from './Player';
 import useIsDesktop from './hooks/useIsDesktop';
@@ -8,7 +9,19 @@ import useFavourites from './hooks/useFavourites';
 import useAdminSession from './hooks/useAdminSession';
 import useLiveCatalogue from './hooks/useLiveCatalogue';
 import useQuickHide from './hooks/useQuickHide';
+import useV2Mode from './hooks/useV2Mode';
 import { CatalogChips, CatalogRail, ChannelCard, HomeLink, friendlySourceLabel, groupCatalogIds } from './bits/channelBits';
+
+// V2 is an entirely separate data path (its own API routes and policy), so it
+// loads on demand and never adds weight to the default V1 experience.
+const LiveV2 = dynamic(() => import('./v2/LiveV2'), {
+  ssr: false,
+  loading: () => (
+    <div className="grid min-h-0 flex-1 place-items-center">
+      <div className="h-9 w-9 animate-spin rounded-full border-4 border-zinc-700 border-t-red-600" />
+    </div>
+  ),
+});
 
 const FIXED_CATALOG_IDS = new Set(LIVE_CATALOGS.map((c) => c.id));
 const DEFAULT_CATALOG = 'main';
@@ -30,6 +43,7 @@ export default function LivePage() {
   const [drawerCategory, setDrawerCategory] = useState('all');
   const isDesktop = useIsDesktop();
   const isAdmin = useAdminSession();
+  const [v2Mode, setV2Mode] = useV2Mode();
   const { favs, toggleFav } = useFavourites();
   const {
     groups, catalogs, status, error, setReloadKey, load,
@@ -110,31 +124,55 @@ export default function LivePage() {
       <header className="z-30 shrink-0 border-b border-white/10 bg-[#07070a]/90 backdrop-blur-md">
         <div className="flex items-center gap-2 px-3 py-2 sm:gap-3 sm:px-4">
           <Link href="/" className="shrink-0 text-[14px] font-black tracking-[0.14em]">JASH VIBES <span className="text-red-600">LIVE</span></Link>
-          <div className="ml-1 hidden min-w-0 flex-1 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-zinc-400 sm:flex sm:max-w-md">
-            🔍
-            <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search Tamil channels…"
-              className="w-full bg-transparent text-[12.5px] outline-none placeholder:text-zinc-500" />
-          </div>
-          <select value={activeSource} onChange={(e) => setActiveSource(e.target.value)}
-            className="ml-auto rounded-full border border-white/10 bg-black px-2.5 py-1.5 text-[11.5px] font-bold text-zinc-300 outline-none sm:ml-0">
-            <option value="all">All sources</option>
-            {sourceOptions.map((id) => <option key={id} value={id}>{friendlySourceLabel(id)}</option>)}
-          </select>
+          {!v2Mode ? (
+            <div className="ml-1 hidden min-w-0 flex-1 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-zinc-400 sm:flex sm:max-w-md">
+              🔍
+              <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search Tamil channels…"
+                className="w-full bg-transparent text-[12.5px] outline-none placeholder:text-zinc-500" />
+            </div>
+          ) : <div className="ml-1 hidden min-w-0 flex-1 sm:block" />}
+          {!v2Mode ? (
+            <select value={activeSource} onChange={(e) => setActiveSource(e.target.value)}
+              className="ml-auto rounded-full border border-white/10 bg-black px-2.5 py-1.5 text-[11.5px] font-bold text-zinc-300 outline-none sm:ml-0">
+              <option value="all">All sources</option>
+              {sourceOptions.map((id) => <option key={id} value={id}>{friendlySourceLabel(id)}</option>)}
+            </select>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setV2Mode(!v2Mode)}
+            aria-pressed={v2Mode}
+            title={v2Mode ? 'Switch back to the classic live source (V1)' : 'Switch to the fast Jio V2 source'}
+            className={`grid h-8 w-11 shrink-0 place-items-center rounded-full border text-[11px] font-black tracking-wider transition ${
+              v2Mode
+                ? 'border-red-500 bg-red-600 text-white'
+                : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-red-500/60 hover:text-white'
+            }`}
+          >
+            V2
+          </button>
           <HomeLink className="h-8 w-8 shrink-0 text-sm" />
           <Link href="/admin?tab=tv" title="Admin"
             className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-sm text-zinc-300 hover:border-red-500/60">⚙</Link>
         </div>
-        {/* Mobile search + catalog chips — horizontal only, never scrolls the page */}
-        <div className="px-3 pb-2 sm:hidden">
-          <div className="mb-1.5 flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-zinc-400">
-            🔍
-            <input ref={mobileSearchRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search channels…"
-              className="w-full bg-transparent text-[12.5px] outline-none placeholder:text-zinc-500" />
+        {/* Mobile search + catalog chips — V1 only. In V2 the LiveV2 panel
+            owns its own chips/search, so the header stays brand + mode switch. */}
+        {!v2Mode ? (
+          <div className="px-3 pb-2 sm:hidden">
+            <div className="mb-1.5 flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-zinc-400">
+              🔍
+              <input ref={mobileSearchRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search channels…"
+                className="w-full bg-transparent text-[12.5px] outline-none placeholder:text-zinc-500" />
+            </div>
+            <CatalogChips active={activeCatalog} onSelect={setActiveCatalog} counts={counts} favCount={favs.length} />
           </div>
-          <CatalogChips active={activeCatalog} onSelect={setActiveCatalog} counts={counts} favCount={favs.length} />
-        </div>
+        ) : null}
       </header>
 
+      {/* V2 replaces the whole grid with its own parallel data path; the
+          header above (including this toggle) stays shared. */}
+      {v2Mode ? <LiveV2 /> : (
+      <>
       {/* Rail | player | right panel. Phones stack: auto player row, then the
           panel fills the remaining height and owns the only scroll. */}
       <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[158px_minmax(0,1fr)_minmax(340px,440px)] lg:grid-rows-1">
@@ -236,6 +274,8 @@ export default function LivePage() {
           ) : null}
         </aside>
       </div>
+      </>
+      )}
 
       {hideError ? (
         <div className="fixed bottom-4 left-1/2 z-[120] flex -translate-x-1/2 items-center gap-3 rounded-full border border-red-500/50 bg-red-950/90 px-4 py-2 text-[12px] font-bold text-red-100 shadow-xl backdrop-blur">

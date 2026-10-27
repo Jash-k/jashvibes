@@ -27,7 +27,7 @@ import { NextResponse } from 'next/server';
 const SESSION_COOKIE = 'jash_access';
 
 const PUBLIC_PATHS = new Set(['/api/auth', '/api/health']);
-const SELF_TOKENIZED_PREFIXES = ['/api/cron/tamilmv'];
+const SELF_TOKENIZED_PREFIXES = ['/api/cron/tamilmv', '/api/live/v2/harvest'];
 
 const RATE_RULES = [
   // Brute-force protection for the password endpoint.
