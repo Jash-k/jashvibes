@@ -1,12 +1,15 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 
-const MODE_KEY = 'jash_live_v2_mode';
-
 /**
- * V1/V2 mode for /live. Persisted in localStorage and mirrored to ?v2=1 so a
- * reload or shared link keeps the mode; the V1 experience is the default and
- * stays untouched while the flag is off.
+ * V1/V2 mode for /live.
+ *
+ * V1 is ALWAYS the default when the Live section is opened. V2 is only entered
+ * by an explicit choice: pressing the header V2 toggle (which mirrors ?v2=1 in
+ * the URL so a reload or a shared link keeps V2 for that session). Closing the
+ * tab or navigating back to /live without the param returns to V1 — mode is no
+ * longer restored from localStorage, so a V2 session can never hijack the
+ * default Live landing on a later visit.
  */
 export default function useV2Mode() {
   const [v2, setV2State] = useState(false);
@@ -14,16 +17,13 @@ export default function useV2Mode() {
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      const urlOn = params.get('v2') === '1';
-      const storedOn = localStorage.getItem(MODE_KEY) === '1';
-      setV2State(urlOn || storedOn);
-    } catch { /* private mode etc. — default V1 */ }
+      setV2State(params.get('v2') === '1');
+    } catch { /* default V1 */ }
   }, []);
 
   const setV2 = useCallback((on) => {
     const next = Boolean(on);
     setV2State(next);
-    try { localStorage.setItem(MODE_KEY, next ? '1' : '0'); } catch { /* ignore */ }
     try {
       const url = new URL(window.location.href);
       if (next) url.searchParams.set('v2', '1');

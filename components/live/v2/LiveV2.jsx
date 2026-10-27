@@ -7,6 +7,10 @@ import V2Player from './V2Player';
 
 const ALL = 'all';
 const FAV = 'fav';
+// Owner rule: V2 opens inside the Tamil category (the pinned head group),
+// never the unfiltered All view. Fall back to All only if a feed ever lacks
+// a Tamil group.
+const TAMIL = 'v2-cat-tamil';
 
 /**
  * LiveV2 — the PlugX-style fast source rendered inside the SAME locked
@@ -18,11 +22,18 @@ export default function LiveV2() {
   const isDesktop = useIsDesktop();
   const { groups, flat, tokenState, status, error, reload } = useV2Catalogue();
   const { favs, toggleFav } = useFavourites();
-  const [activeCat, setActiveCat] = useState(ALL);
+  const [activeCat, setActiveCat] = useState(TAMIL);
   const [activeId, setActiveId] = useState('');
   const [query, setQuery] = useState('');
 
   const favSet = useMemo(() => new Set(favs), [favs]);
+
+  // Defensive: if a feed ever ships without a Tamil group, the default chip
+  // would filter to an empty list — drop back to All once the groups arrive.
+  useEffect(() => {
+    if (!groups.length) return;
+    if (activeCat === TAMIL && !groups.some((g) => g.id === TAMIL)) setActiveCat(ALL);
+  }, [groups, activeCat]);
 
   // Land on the first channel of the first owner-ordered category (Tamil when present).
   useEffect(() => {
