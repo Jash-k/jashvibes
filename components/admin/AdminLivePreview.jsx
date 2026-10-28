@@ -124,6 +124,10 @@ export default function AdminLivePreview({ channels = [], channel, onNavigate, o
               className="rounded-full border border-white/15 px-4 py-2 text-xs font-bold text-zinc-200 disabled:opacity-40">
               {channel.favorite ? '★ Favourited' : '☆ Favourite'}
             </button>
+            <button type="button" onClick={() => api(channel.heroBanner ? 'unhero' : 'hero')} disabled={busy !== null}
+              className="rounded-full border border-red-500/50 px-4 py-2 text-xs font-bold text-red-100 disabled:opacity-40">
+              {channel.heroBanner ? '↩ Restore movie hero' : '🏠 Replace home hero'}
+            </button>
             {msg ? <span className="text-[11.5px] font-bold text-amber-200">{msg}</span> : null}
             <span className="ml-auto hidden text-[10.5px] text-zinc-500 sm:block">← / → zaps channels · Esc closes</span>
           </div>

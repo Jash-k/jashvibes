@@ -66,6 +66,15 @@ const LiveChannelSchema = new mongoose.Schema({
   // Health is independent of the desired catalogue. Never erase memberships.
   failStreak: { type: Number, default: 0 },
   autoHidden: { type: Boolean, default: false },
+  // Owner-forced server relay: every variant URL (playlists + segments) is
+  // rewritten through /api/live-proxy even when registry/geo policy would play
+  // it direct. Used for CDNs that are open to the server but ISP-blocked on
+  // Indian home networks.
+  forceProxy: { type: Boolean, default: false },
+  // When true this channel replaces the homepage movie hero with a live banner
+  // that deep-links into /live and auto-plays. Only one channel carries this
+  // flag at a time — the admin PATCH 'hero' action clears the others.
+  heroBanner: { type: Boolean, default: false },
   lastCheckedAt: { type: Date, default: null },
   lastSeenAt: { type: Date, default: Date.now },
   importHash: { type: String, default: '' },
@@ -75,6 +84,7 @@ LiveChannelSchema.index({ sourceId: 1, normalizedName: 1 });
 LiveChannelSchema.index({ selected: 1, hidden: 1, order: 1 });
 LiveChannelSchema.index({ 'catalogs.catalogId': 1, 'catalogs.position': 1 });
 LiveChannelSchema.index({ sourceId: 1, 'catalogs.catalogId': 1 });
+LiveChannelSchema.index({ heroBanner: 1 }, { sparse: true });
 
 
 /* A3 — invalidate the cached Live catalogue on any write to this collection.

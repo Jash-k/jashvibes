@@ -33,7 +33,7 @@ import ChannelRow, { EMPTY_SET, isLiveCatalog } from './live/bits/ChannelRow';
 const EMPTY_FORM = {
   name: '', url: '', logo: '', category: 'Live', format: 'hls', language: 'Tamil',
   keyId: '', key: '', licenseKey: '', licenseType: '', cookie: '', userAgent: '',
-  referer: '', headersText: '', catalogIds: ['main'],
+  referer: '', headersText: '', catalogIds: ['main'], forceProxy: false,
 };
 const FETCH_LIMIT = 3000;
 const RENDER_PAGE = 120;
@@ -258,7 +258,7 @@ export default function LiveChannelManager() {
       category: channel.category || 'Live', format: channel.format || 'unknown', language: channel.language || 'Tamil',
       keyId: channel.keyId || '', key: channel.key || '', licenseKey: channel.licenseKey || '', licenseType: channel.licenseType || '',
       cookie: channel.cookie || '', userAgent: channel.userAgent || '', referer: channel.referer || '', headersText,
-      catalogIds: getChannelCatalogIds(channel),
+      catalogIds: getChannelCatalogIds(channel), forceProxy: Boolean(channel.forceProxy),
     });
     setShowForm(true);
   };
@@ -269,7 +269,7 @@ export default function LiveChannelManager() {
     if (form.headersText.trim()) {
       try { headers = JSON.parse(form.headersText); } catch { setMsg('Headers must be valid JSON, e.g. { "X-Key": "value" }'); return; }
     }
-    const payload = { name: form.name.trim(), url: form.url.trim(), logo: form.logo.trim(), category: form.category.trim() || 'Live', format: form.format, language: form.language.trim(), keyId: form.keyId.trim(), key: form.key.trim(), licenseKey: form.licenseKey.trim(), licenseType: form.licenseType.trim(), cookie: form.cookie.trim(), userAgent: form.userAgent.trim(), referer: form.referer.trim(), headers };
+    const payload = { name: form.name.trim(), url: form.url.trim(), logo: form.logo.trim(), category: form.category.trim() || 'Live', format: form.format, language: form.language.trim(), keyId: form.keyId.trim(), key: form.key.trim(), licenseKey: form.licenseKey.trim(), licenseType: form.licenseType.trim(), cookie: form.cookie.trim(), userAgent: form.userAgent.trim(), referer: form.referer.trim(), headers, forceProxy: form.forceProxy === true };
     setBusy('form');
     try {
       if (editing) {
@@ -407,6 +407,13 @@ export default function LiveChannelManager() {
             <label className="text-[11px] font-bold text-zinc-400">User-Agent<input value={form.userAgent} onChange={(e) => setForm({ ...form, userAgent: e.target.value })} className="mt-1 w-full rounded-xl border border-white/10 bg-black px-3 py-2 text-[13px]" /></label>
             <label className="text-[11px] font-bold text-zinc-400 md:col-span-2">Headers JSON<textarea rows={2} value={form.headersText} onChange={(e) => setForm({ ...form, headersText: e.target.value })} placeholder='{ "X-Key": "value" }' className="mt-1 w-full rounded-xl border border-white/10 bg-black px-3 py-2 font-mono text-[12px]" /></label>
           </div>
+          <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-[11.5px] font-bold text-zinc-300">
+            <input type="checkbox" checked={form.forceProxy === true} onChange={(e) => setForm({ ...form, forceProxy: e.target.checked })} className="mt-0.5 h-4 w-4 accent-red-600" />
+            <span>
+              Route all traffic through the server proxy (/api/live-proxy)
+              <span className="block font-normal text-zinc-500">Enable when the CDN is open to the server but ISP-blocked on Indian home networks. Playlists and segments both relay via Render.</span>
+            </span>
+          </label>
           {!editing ? (
             <div>
               <p className="mb-1 text-[11px] font-bold text-zinc-400">Catalogs</p>

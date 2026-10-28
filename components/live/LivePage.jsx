@@ -1,6 +1,7 @@
 'use client';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { LIVE_CATALOGS } from '@/lib/liveCatalogs';
 import LivePlayer from './Player';
@@ -51,6 +52,11 @@ export default function LivePage() {
   } = useLiveCatalogue();
   const searchRef = useRef(null);
   const mobileSearchRef = useRef(null);
+  const searchParams = useSearchParams();
+  const deepChannelId = searchParams.get('channel');
+  // Marks the deep-link id already auto-selected, so catalogue refetches and
+  // re-renders never yank the user off the channel they zapped to afterwards.
+  const deepLinkHandledRef = useRef(null);
 
   const favSet = useMemo(() => new Set(favs), [favs]);
 
@@ -75,6 +81,18 @@ export default function LivePage() {
     setActiveLogical(group || null);
     setVariantIdx(0);
   }, [setActiveLogical]);
+
+  // Homepage live-hero deep link (/live?channel=<channelId>): once the
+  // catalogue has loaded, auto-select the logical group owning that variant
+  // and start it on its first source.
+  useEffect(() => {
+    if (!deepChannelId || deepLinkHandledRef.current === deepChannelId) return;
+    const target = groups.find((group) => group.variants?.some((variant) => variant.channelId === deepChannelId));
+    if (target) {
+      deepLinkHandledRef.current = deepChannelId;
+      pick(target);
+    }
+  }, [deepChannelId, groups, pick]);
 
   // Wrap-around zap inside the currently visible (filtered) list.
   const zap = useCallback((direction) => {

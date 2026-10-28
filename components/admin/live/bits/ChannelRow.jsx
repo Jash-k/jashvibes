@@ -90,6 +90,8 @@ const ChannelRow = memo(function ChannelRow({
           <p className="truncate text-[13px] font-bold">
             {channel.customName || channel.name}
             {channel.hidden ? <span className="ml-2 rounded-full bg-zinc-700 px-2 py-0.5 text-[9px]">hidden</span> : null}
+            {channel.heroBanner ? <span className="ml-2 rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-black text-white">home hero</span> : null}
+            {channel.forceProxy ? <span className="ml-2 rounded-full border border-sky-400/40 px-2 py-0.5 text-[9px] font-bold text-sky-300">proxy relay</span> : null}
             {channel.religious ? <span className="ml-2 rounded-full border border-amber-400/40 px-2 py-0.5 text-[9px] font-black text-amber-300">religious · hidden from /live</span> : null}
           </p>
           <p className="truncate text-[11px] text-zinc-400">{channel.source} · {String(channel.format || 'unknown').toUpperCase()} · {channel.category}</p>

@@ -45,6 +45,7 @@ export default function LivePlayer({ logical, variantIdx=0, onErrorNeedingFallba
         cookie: data.cookie || variant.cookie || '',
         userAgent: variant.userAgent, referer: variant.referer, headers: variant.headers||{},
         workerUrl: variant.url,
+        forceProxy: Boolean(variant.forceProxy),
       };
       const policy = createLiveTvPolicy(channel, { origin: typeof window!=='undefined'?window.location.origin:'', allowNativeHls:true });
       // JashPlayer runs this policy itself: its resolve() owns Jio token

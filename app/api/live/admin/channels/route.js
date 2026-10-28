@@ -89,6 +89,7 @@ export async function POST(request) {
       userAgent: String(body.userAgent || '').trim(),
       referer: String(body.referer || '').trim(),
       headers: (body.headers && typeof body.headers === 'object' && !Array.isArray(body.headers)) ? body.headers : {},
+      forceProxy: body.forceProxy === true,
       workingStatus: 'unknown',
       lastSeenAt: new Date(),
     });
@@ -135,7 +136,7 @@ const LIST_PROJECTION = [
   'catalogs', 'language', 'region', 'format', 'playable', 'selected', 'favorite',
   'hidden', 'order', 'keyId', 'key', 'licenseKey', 'licenseType',
   'cookie', 'userAgent', 'referer', 'headers', 'workingStatus', 'autoHidden',
-  'lastCheckedAt', 'lastSeenAt', 'ladderOrder',
+  'lastCheckedAt', 'lastSeenAt', 'ladderOrder', 'forceProxy', 'heroBanner',
 ].join(' ');
 
 export async function GET(request) {
@@ -369,6 +370,16 @@ export async function PATCH(request) {
       if (action === 'unhide') doc.hidden = false;
       if (action === 'favorite') doc.favorite = true;
       if (action === 'unfavorite') doc.favorite = false;
+      // Homepage hero takeover. Only one channel may own the banner, so the
+      // 'hero' action clears every other row before claiming it; 'unhero'
+      // restores the normal scraped-movie hero.
+      if (action === 'hero' || action === 'unhero') {
+        if (docs.length !== 1) return json({ ok: false, error: 'hero actions target a single channelId' }, 400);
+        if (action === 'hero') {
+          await LiveChannel.updateMany({ channelId: { $ne: docs[0].channelId } }, { $set: { heroBanner: false } });
+        }
+        doc.heroBanner = action === 'hero';
+      }
 
       ['customName', 'category', 'workingStatus', 'logicalChannelId'].forEach((key) => {
         if (body[key] !== undefined) doc[key] = body[key];
@@ -395,6 +406,7 @@ export async function PATCH(request) {
         doc.headers = (body.headers && typeof body.headers === 'object' && !Array.isArray(body.headers)) ? body.headers : {};
       }
       if (body.order !== undefined && Number.isFinite(Number(body.order))) doc.order = Math.max(0, Number(body.order));
+      if (body.forceProxy !== undefined) doc.forceProxy = body.forceProxy === true;
       // Per-channel source ladder: a sanitized sourceId order applied by
       // the public channel route when sorting the group's variants.
       if (body.ladderOrder !== undefined) {

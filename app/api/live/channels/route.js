@@ -18,7 +18,7 @@ const PUBLIC_PROJECTION = [
   'channelId', 'sourceId', 'source', 'tvgId', 'name', 'customName', 'logo', 'customLogo',
   'category', 'language', 'url', 'format', 'playable', 'hidden', 'keyId', 'key', 'licenseKey',
   'licenseType', 'cookie', 'userAgent', 'referer', 'headers', 'catalogs', 'logicalChannelId',
-  'order', 'mappingManaged', 'ladderOrder',
+  'order', 'mappingManaged', 'ladderOrder', 'forceProxy',
 ].join(' ');
 
 /**

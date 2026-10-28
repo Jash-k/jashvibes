@@ -34,7 +34,8 @@ export default function RailFocus({ slide = null, eyebrow = 'Now on your shelf',
   if (!slide) return null;
 
   const art = slide.backdropUrl || slide.posterUrl;
-  const meta = [slide.year, slide.type === 'series' ? 'Series' : 'Movie', ...(slide.chips || [])].filter(Boolean).join('  ·  ');
+  const typeLabel = slide.type === 'series' ? 'Series' : slide.type === 'live' ? null : 'Movie';
+  const meta = [slide.year, typeLabel, ...(slide.chips || [])].filter(Boolean).join('  ·  ');
 
   const handleWatch = (event) => {
     if (!onWatchOpen || !slide.href) return;

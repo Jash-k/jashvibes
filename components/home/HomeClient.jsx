@@ -419,6 +419,12 @@ export default function HomeClient({ initialHero = null }) {
   const [series, setSeries] = useState([]);
   const router = useRouter();
   const openTitle = useCallback(async (itemOrSlide) => {
+    // Owner live-hero takeover: the slide is a deep link into /live, never a
+    // scraped title, so skip the movie/series href resolver entirely.
+    if (itemOrSlide?.live && itemOrSlide?.href) {
+      router.push(itemOrSlide.href);
+      return;
+    }
     const item = itemOrSlide?.title
       ? {
           tmdbId: itemOrSlide.tmdbId,
@@ -442,6 +448,10 @@ export default function HomeClient({ initialHero = null }) {
 
   const [scrapeStatus, setScrapeStatus] = useState('loading');
   const [scrapeError, setScrapeError] = useState('');
+  // Owner live-hero takeover: when an admin flags a live channel as the home
+  // hero, /api/live/hero returns its slide and it wins over the movie banner.
+  // Null until the fetch settles so the SSR hero stays put in the meantime.
+  const [liveHeroSlide, setLiveHeroSlide] = useState(null);
   const [paging, setPaging] = useState({
     movies: { page: 1, hasMore: false, loading: false, total: 0 },
     series: { page: 1, hasMore: false, loading: false, total: 0 },
@@ -455,7 +465,19 @@ export default function HomeClient({ initialHero = null }) {
   // after a cache clear anyway.
   // Selection + shape come from lib/heroSlide.js, which the server reader uses too —
   // two copies of this is exactly how the banner would swap a moment after hydration.
-  const focusSlide = useMemo(() => buildHeroSlide(pickHeroItem(featuredItems)), [featuredItems]);
+  const focusSlide = useMemo(
+    () => liveHeroSlide || buildHeroSlide(pickHeroItem(featuredItems)),
+    [liveHeroSlide, featuredItems],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/live/hero')
+      .then((res) => (res.ok ? res.json() : { active: false }))
+      .then((data) => { if (!cancelled && data?.active && data.slide) setLiveHeroSlide(data.slide); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
