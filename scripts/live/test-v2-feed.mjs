@@ -5,6 +5,7 @@
  *   node --import ./scripts/alias-register.mjs scripts/live/test-v2-feed.mjs
  */
 import assert from 'node:assert/strict';
+import { createV2Policy } from '@/lib/live/v2/policy';
 import {
   V2_SOURCE_ID,
   detectFormat,
@@ -57,6 +58,23 @@ ok(appendHdnea('https://jiotvmblive.cdn.jio.com/a.mpd?' + token, token).includes
    appendHdnea('https://jiotvmblive.cdn.jio.com/a.mpd?' + token, token).split(token).length === 2, 'never double-append');
 ok(appendHdnea('https://jiotvmblive.cdn.jio.com/a.mpd', '') === 'https://jiotvmblive.cdn.jio.com/a.mpd', 'empty token is a no-op');
 ok(isJioHost('https://d1g8wgjurz8via.cloudfront.net/x.mpd') && isJioHost('https://times-ott-live.akamaized.net/y.mpd'), 'CDN aliases count as Jio-family hosts');
+
+// ---- V2 DASH auth on manifest-relative media requests ----------------------
+const v2Token = '__hdnea__=st=123~exp=456~acl=/*~hmac=abc';
+const v2Resolved = await createV2Policy(
+  { id: '709', name: 'Adithya TV', url: 'https://jiotvmblive.cdn.jio.com/bpk-tv/Adithya/WDVLive/index.mpd' },
+  { originUrl: 'https://jiotvmblive.cdn.jio.com/bpk-tv/Adithya/WDVLive/index.mpd', cookie: v2Token, clearKeys: {} },
+).resolve();
+const relativeReq = { uris: ['tracks/video/segment-1.m4s'] };
+v2Resolved.http.requestFilter(1, relativeReq);
+ok(relativeReq.uris[0].startsWith('https://jiotvmblive.cdn.jio.com/bpk-tv/Adithya/WDVLive/tracks/video/segment-1.m4s?'), 'relative DASH media request resolves against Jio manifest');
+ok(relativeReq.uris[0].includes(v2Token), 'relative DASH media request gets the auth token');
+const absoluteReq = { uris: ['https://jiotvmblive.cdn.jio.com/bpk-tv/Adithya/WDVLive/segment-2.m4s'] };
+v2Resolved.http.requestFilter(1, absoluteReq);
+ok(absoluteReq.uris[0].includes(v2Token), 'absolute Jio media request keeps token behavior');
+const externalReq = { uris: ['https://cdn.other.example/segment.m4s'] };
+v2Resolved.http.requestFilter(1, externalReq);
+ok(externalReq.uris[0] === 'https://cdn.other.example/segment.m4s', 'non-Jio segment host remains unchanged');
 
 // ---- reference HTML parsing -----------------------------------------------
 const fixture = `

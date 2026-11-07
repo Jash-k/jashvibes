@@ -196,4 +196,27 @@ console.log('12. admin preview adapter (same shape the live player consumes)');
   });
 }
 
+// Jio DASH manifests can contain relative media references. Resolve against
+// playbackUrl before attaching __hdnea__, rather than against the app origin.
+{
+  const exp = Math.floor(Date.now() / 1000) + 3600;
+  const cookie = `__hdnea__=st=1~exp=${exp}~acl=/*~hmac=${'a'.repeat(64)}`;
+  const policy = createLiveTvPolicy({
+    id: 'jio-relative-test', name: 'Jio Tamil test', sourceId: 'jio-tamil',
+    url: 'https://jiotvmblive.cdn.jio.com/bpk-tv/Tamil_Test/WDVLive/index.mpd',
+    cookie, headers: {}, category: 'Tamil',
+  }, {
+    origin: 'https://app.example',
+    fetchImpl: async () => ({ ok: false, json: async () => ({}) }),
+  });
+  const resolved = await policy.resolve({});
+  const req = { uris: ['tracks/segment-001.m4s'], headers: {} };
+  resolved.http.requestFilter(1, req, {});
+  check('relative Jio DASH segments resolve against the playback manifest and receive __hdnea__', () => {
+    assert.ok(req.uris[0].startsWith('https://jiotvmblive.cdn.jio.com/bpk-tv/Tamil_Test/WDVLive/tracks/segment-001.m4s'));
+    assert.equal((req.uris[0].match(/__hdnea__=/g) || []).length, 1);
+    assert.match(req.uris[0], /~exp=/);
+  });
+}
+
 finish();
