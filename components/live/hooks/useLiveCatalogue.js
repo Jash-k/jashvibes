@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
+import { sourceBrowseGroups } from '@/lib/live/sourceBrowse';
 import { pickLandingGroup } from '@/lib/live/landing';
 
 /**
@@ -11,6 +12,7 @@ import { pickLandingGroup } from '@/lib/live/landing';
 export default function useLiveCatalogue() {
   const [groups, setGroups] = useState([]);
   const [catalogs, setCatalogs] = useState([]);
+  const [sources, setSources] = useState([]);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -20,18 +22,19 @@ export default function useLiveCatalogue() {
     setStatus('loading');
     setError('');
     try {
-      const res = await fetch('/api/live/channels?tamilOnly=1', { cache: 'no-store' });
+      const res = await fetch('/api/live/channels', { cache: 'no-store' });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to load');
-      if (data.needSync) throw new Error(data.hint || 'No channels synced yet — open Admin → TV → Sync All Tamil');
       setCatalogs(Array.isArray(data.catalogs) ? data.catalogs : []);
-      const playable = (data.logical || []).filter((g) => g.variants?.some((v) => !!v.url));
+      const registry = Array.isArray(data.sources) ? data.sources : [];
+      setSources(registry);
+      const playable = sourceBrowseGroups(data.logical || [], registry).filter((g) => g.variants?.some((v) => !!v.url));
       setGroups(playable);
       setActiveLogical((prev) => {
-        if (prev?.logicalId && playable.some((g) => g.logicalId === prev.logicalId)) return prev;
+        if (prev?.logicalId && playable.some((g) => g.logicalId === prev.logicalId)) return playable.find(g => g.logicalId === prev.logicalId);
         return pickLandingGroup(playable);
       });
-      if (!playable.length) setError('No Tamil channels found — sync sources in Admin → TV.');
+      if (!playable.length) setError('No visible channels in enabled sources — sync sources in Admin → TV.');
       setStatus('ready');
     } catch (e) {
       setError(e.message);
@@ -44,6 +47,7 @@ export default function useLiveCatalogue() {
   return {
     groups,
     catalogs,
+    sources,
     status,
     error,
     setReloadKey,

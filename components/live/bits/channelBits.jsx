@@ -52,7 +52,7 @@ export function ChannelCard({ group, active = false, onPick, tv = false, tabInde
       <div className="px-1.5 py-1.5">
         <p className={`truncate font-bold text-white ${tv ? 'text-sm' : 'text-[11.5px]'}`}>{group.displayName}</p>
         <p className={`truncate text-zinc-400 ${tv ? 'text-xs' : 'text-[9.5px]'}`}>
-          {group.variantCount > 1 ? `${group.variantCount} sources` : friendlySourceLabel(group.best?.sourceId)}
+          {group.sourceLabel || friendlySourceLabel(group.best?.sourceId)}
         </p>
       </div>
     </button>
@@ -77,7 +77,7 @@ function NavButton({ active, onClick, children, tv = false }) {
 /** Desktop/TV vertical catalog rail (Favorites is a virtual, client-only catalog). */
 export function CatalogRail({ active, onSelect, counts = {}, favCount = 0, tv = false }) {
   const items = [
-    { id: 'all', name: 'All Tamil', icon: '★' },
+    { id: 'all', name: 'All channels', icon: '★' },
     { id: 'fav', name: 'Favorites', icon: '♥' },
     ...LIVE_CATALOGS.map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
   ];
@@ -99,7 +99,7 @@ export function CatalogRail({ active, onSelect, counts = {}, favCount = 0, tv = 
 /** Horizontal swipeable chips for phones. */
 export function CatalogChips({ active, onSelect, counts = {}, favCount = 0 }) {
   const items = [
-    { id: 'all', name: 'All Tamil', icon: '★' },
+    { id: 'all', name: 'All channels', icon: '★' },
     { id: 'fav', name: 'Favs', icon: '♥' },
     ...LIVE_CATALOGS.map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
   ];

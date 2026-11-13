@@ -25,7 +25,7 @@ const LiveV2 = dynamic(() => import('./v2/LiveV2'), {
 });
 
 const FIXED_CATALOG_IDS = new Set(LIVE_CATALOGS.map((c) => c.id));
-const DEFAULT_CATALOG = 'main';
+
 
 /**
  * LivePage — one locked viewport, right-rail cinema layout.
@@ -38,7 +38,7 @@ const DEFAULT_CATALOG = 'main';
  */
 export default function LivePage() {
   const [activeSource, setActiveSource] = useState('all');
-  const [activeCatalog, setActiveCatalog] = useState(DEFAULT_CATALOG); // all | fav | fixed id
+  const [activeCatalog, setActiveCatalog] = useState('all'); // all | fav | fixed id
   const [variantIdx, setVariantIdx] = useState(0);
   const [query, setQuery] = useState('');
   const [drawerCategory, setDrawerCategory] = useState('all');
@@ -47,7 +47,7 @@ export default function LivePage() {
   const [v2Mode, setV2Mode] = useV2Mode();
   const { favs, toggleFav } = useFavourites();
   const {
-    groups, catalogs, status, error, setReloadKey, load,
+    groups, catalogs, sources, status, error, setReloadKey, load,
     activeLogical, setActiveLogical,
   } = useLiveCatalogue();
   const searchRef = useRef(null);
@@ -62,14 +62,16 @@ export default function LivePage() {
 
   const counts = useMemo(() => {
     const c = { all: groups.length };
-    for (const cat of LIVE_CATALOGS) c[cat.id] = groups.filter((g) => groupCatalogIds(g).includes(cat.id)).length;
+    const scoped = activeSource === 'all' ? groups : groups.filter(g => g.sourceIds.includes(activeSource));
+    c.all = scoped.length;
+    for (const cat of LIVE_CATALOGS) c[cat.id] = scoped.filter((g) => groupCatalogIds(g).includes(cat.id)).length;
     for (const g of groups) for (const sid of g.sourceIds || []) c[sid] = (c[sid] || 0) + 1;
     return c;
-  }, [groups]);
+  }, [groups, activeSource]);
 
   const filtered = useMemo(() => {
     let list = groups;
-    if (activeCatalog === 'fav') list = list.filter((g) => favSet.has(g.logicalId));
+    if (activeCatalog === 'fav') list = list.filter((g) => (favSet.has(g.logicalId) || favSet.has(g.parentLogicalId)));
     else if (FIXED_CATALOG_IDS.has(activeCatalog)) list = list.filter((g) => groupCatalogIds(g).includes(activeCatalog));
     if (activeSource !== 'all') list = list.filter((g) => (g.sourceIds || []).includes(activeSource));
     const q = query.trim().toLowerCase();
@@ -111,12 +113,12 @@ export default function LivePage() {
     if (next < (logical.variants?.length || 0)) setVariantIdx(next);
   }, []);
 
-  const browserItems = useMemo(() => groups.map((g) => ({
+  const browserItems = useMemo(() => filtered.map((g) => ({
     id: g.logicalId,
     name: g.displayName,
     logo: g.logo || '',
     catalogs: groupCatalogIds(g),
-  })), [groups]);
+  })), [filtered]);
   const liveBrowser = useMemo(() => ({
     items: browserItems,
     catalogs: LIVE_CATALOGS.map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
@@ -124,36 +126,54 @@ export default function LivePage() {
     onCategory: setDrawerCategory,
     activeId: activeLogical?.logicalId || '',
     onPick: (item) => {
-      const group = groups.find((g) => g.logicalId === item.id);
+      const group = filtered.find((g) => g.logicalId === item.id);
       if (group) pick(group);
     },
-  }), [browserItems, drawerCategory, activeLogical, groups, pick]);
+  }), [browserItems, drawerCategory, activeLogical, filtered, pick]);
 
-  const sourceOptions = useMemo(() => [...new Set(groups.flatMap((g) => g.sourceIds || []))].sort(), [groups]);
+  const sourceOptions = sources;
+  const selectSource = (id) => {
+    setActiveSource(id);
+    setActiveCatalog('all');
+    setDrawerCategory('all');
+    setQuery('');
+    const next = groups.find(g => id === 'all' || g.sourceIds.includes(id));
+    pick(next || null);
+  };
+  useEffect(() => {
+    if (activeSource !== 'all' && !sources.some(s => s.id === activeSource)) {
+      setActiveSource('all'); setActiveLogical(null); setVariantIdx(0);
+    }
+  }, [sources, activeSource, setActiveLogical]);
+  useEffect(() => {
+    if (activeSource !== 'all' && activeLogical && !activeLogical.sourceIds.includes(activeSource)) {
+      pick(groups.find(g => g.sourceIds.includes(activeSource)) || null);
+    }
+  }, [groups, activeSource, activeLogical, pick]);
   const activeTitle = activeCatalog === 'fav'
     ? '★ Favorites'
     : activeCatalog === 'all'
-      ? 'All Tamil channels'
+      ? (sources.find(s => s.id === activeSource)?.label || 'All channels')
       : (catalogs.find((c) => c.id === activeCatalog)?.name || 'Channels');
-  const activeIsFav = activeLogical ? favSet.has(activeLogical.logicalId) : false;
+  const activeIsFav = activeLogical ? (favSet.has(activeLogical.logicalId) || favSet.has(activeLogical.parentLogicalId)) : false;
 
   return (
     <main className="flex h-[100dvh] flex-col overflow-hidden bg-[#07070a] text-white">
       <header className="z-30 shrink-0 border-b border-white/10 bg-[#07070a]/90 backdrop-blur-md">
-        <div className="flex items-center gap-2 px-3 py-2 sm:gap-3 sm:px-4">
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2 sm:gap-3 sm:px-4">
           <Link href="/" className="shrink-0 text-[14px] font-black tracking-[0.14em]">JASH VIBES <span className="text-red-600">LIVE</span></Link>
           {!v2Mode ? (
             <div className="ml-1 hidden min-w-0 flex-1 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-zinc-400 sm:flex sm:max-w-md">
               🔍
-              <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search Tamil channels…"
+              <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search this source…"
                 className="w-full bg-transparent text-[12.5px] outline-none placeholder:text-zinc-500" />
             </div>
           ) : <div className="ml-1 hidden min-w-0 flex-1 sm:block" />}
           {!v2Mode ? (
-            <select value={activeSource} onChange={(e) => setActiveSource(e.target.value)}
-              className="ml-auto rounded-full border border-white/10 bg-black px-2.5 py-1.5 text-[11.5px] font-bold text-zinc-300 outline-none sm:ml-0">
+            <select value={activeSource} aria-label="Live TV source" onChange={(e) => selectSource(e.target.value)}
+              className="order-last w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-[12px] font-bold text-zinc-200 outline-none focus-visible:ring-2 focus-visible:ring-red-500 sm:order-none sm:ml-0 sm:w-auto sm:rounded-full">
               <option value="all">All sources</option>
-              {sourceOptions.map((id) => <option key={id} value={id}>{friendlySourceLabel(id)}</option>)}
+              {sourceOptions.map((source) => <option key={source.id} value={source.id}>{source.label}{source.lastError ? ' · sync issue' : ''}</option>)}
             </select>
           ) : null}
           <button
@@ -221,7 +241,7 @@ export default function LivePage() {
           {activeLogical && (activeLogical.variants || []).length > 1 ? (
             <div className="mt-2.5 shrink-0 rounded-2xl border border-white/10 bg-white/[0.045] p-2.5 sm:p-3">
               <p className="mb-1.5 text-[9.5px] font-extrabold uppercase tracking-[0.16em] text-zinc-500">
-                Source ladder · tap to switch · fallback stays automatic
+                Stream variants within this source
               </p>
               <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:thin]">
                 {activeLogical.variants.map((v, i) => (
@@ -255,7 +275,7 @@ export default function LivePage() {
           </div>
 
           <div className="order-2 min-h-0 min-w-0 flex-1 overflow-y-auto p-2.5 [scrollbar-width:thin] lg:order-1 lg:p-3">
-            {status === 'loading' ? <p className="p-6 text-center text-[12.5px] text-zinc-400">Loading Tamil live…</p> : null}
+            {status === 'loading' ? <p className="p-6 text-center text-[12.5px] text-zinc-400">Loading live sources…</p> : null}
             {error ? (
               <p className="m-3 rounded-xl border border-red-500/30 bg-red-950/25 p-3.5 text-[12.5px] text-red-200">
                 {error} <button type="button" onClick={load} className="ml-2 underline">Retry</button>
@@ -281,10 +301,10 @@ export default function LivePage() {
               <div className="min-w-0 flex-1">
                 <h2 className="truncate text-[14px] font-black leading-tight">{activeLogical.displayName}</h2>
                 <p className="mt-0.5 truncate text-[11px] text-zinc-400">
-                  {groupCatalogIds(activeLogical).map((id) => catalogs.find((c) => c.id === id)?.name).filter(Boolean).join(' · ') || 'Live'} · Tamil
+                  {groupCatalogIds(activeLogical).map((id) => catalogs.find((c) => c.id === id)?.name).filter(Boolean).join(' · ') || activeLogical.sourceLabel || 'Live'}
                 </p>
               </div>
-              <button type="button" onClick={() => toggleFav(activeLogical.logicalId)}
+              <button type="button" onClick={() => toggleFav(favSet.has(activeLogical.parentLogicalId) ? activeLogical.parentLogicalId : activeLogical.logicalId)}
                 className={`mt-2 self-start rounded-full border px-3 py-1 text-[11px] font-bold ${activeIsFav ? 'border-yellow-400/60 bg-yellow-400/10 text-yellow-300' : 'border-white/10 text-zinc-400'}`}>
                 {activeIsFav ? '★ Favourite' : '☆ Favourite'}
               </button>

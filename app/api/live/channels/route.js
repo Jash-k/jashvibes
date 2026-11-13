@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import LiveChannel from '@/models/LiveChannel';
-import { getDefaultLiveSources } from '@/lib/liveTv';
+import LiveSource from '@/models/LiveSource';
 import { sortLogicalGroups } from '@/lib/live/catalogOrder';
 import { isLiveCatalogId } from '@/lib/liveCatalogs';
 import { buildCatalogueView, groupHasCatalog } from '@/lib/live/read/viewBuilder.js';
@@ -30,7 +30,7 @@ const PUBLIC_PROJECTION = [
  */
 const BASE_TTL_MS = Number(process.env.LIVE_CHANNELS_CACHE_TTL_MS || 15_000);
 const cacheStore = globalThis.__jashLiveCatalogCache || (globalThis.__jashLiveCatalogCache = { entries: new Map(), version: 0 });
-const BASE_KEY = 'public-channels-base-v4';
+const BASE_KEY = 'public-channels-base-v5';
 
 /**
  * Build (or return cached) base result: every visible, deduplicated logical
@@ -44,8 +44,9 @@ async function loadBaseCatalogue({ tamilOnly }) {
   }
 
   await dbConnect();
-  const docs = await LiveChannel.find({}).select(PUBLIC_PROJECTION).lean().catch(() => []);
-  const defaults = getDefaultLiveSources({ includePocket: true });
+  const sourceDocs = await LiveSource.find({ enabled: { $ne: false }, deleted: { $ne: true } }).sort({ priority: 1, label: 1 }).lean();
+  const defaults = sourceDocs.map(s => ({ id: s.sourceId, label: s.label, type: s.type, lastError: s.lastError || '', lastSyncedAt: s.lastSyncedAt }));
+  const docs = await LiveChannel.find({ sourceId: { $in: defaults.map(s => s.id) } }).select(PUBLIC_PROJECTION).lean();
 
   if (!docs.length) {
     const empty = {
