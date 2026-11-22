@@ -2,9 +2,14 @@ const fs = require('node:fs');
 const assert = require('node:assert/strict');
 (async () => {
   const source = fs.readFileSync('components/navItems.js', 'utf8');
-  const { NAV_ITEMS, isNavItemActive } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+  const { NAV_ITEMS, isNavItemActive, visibleNavItems } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
   assert.deepEqual(NAV_ITEMS.map(i => i.label), ['Home', 'Live Tv', 'Music', 'ExTRaS', 'Vault', 'Stremio']);
   assert.deepEqual(NAV_ITEMS.map(i => i.href), ['/', '/live', '/music', '/extras', '/vault', '/stremio?home=1']);
+  assert(!visibleNavItems().some(i => i.label === 'Stremio'));
+  assert(!visibleNavItems(false).some(i => i.label === 'Stremio'));
+  assert(!visibleNavItems('true').some(i => i.label === 'Stremio'));
+  assert(visibleNavItems(true).some(i => i.label === 'Stremio'));
+  assert.equal(visibleNavItems(false).length, NAV_ITEMS.length - 1);
   assert.equal(NAV_ITEMS[1].icon, 'tv');
   assert.equal(NAV_ITEMS[4].icon, 'reel');
   assert.equal(NAV_ITEMS[5].hard, undefined);
@@ -20,9 +25,12 @@ const assert = require('node:assert/strict');
     const code = fs.readFileSync(file, 'utf8');
     assert(code.includes("from '@/components/navItems'"));
     assert(code.includes('item.icon'));
+    assert(code.includes('useVisibleNavItems'));
+    assert(code.includes('navItems.map('));
     assert(code.includes('SectionLink'));
     assert(!code.includes('window.location.assign(item.href)'));
   }
+  assert(fs.readFileSync('components/MobileDock.jsx', 'utf8').includes('${navItems.length}'));
   const icons = fs.readFileSync('components/Icons.jsx', 'utf8');
   assert(/tv:\s*\[/.test(icons)); assert(/reel:\s*\[/.test(icons));
   assert(fs.readFileSync('components/rail/RailNav.jsx','utf8').includes('href="/admin"'));

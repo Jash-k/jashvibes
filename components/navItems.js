@@ -34,3 +34,8 @@ export function isNavItemActive(item, pathname = '/', items = NAV_ITEMS) {
   // The deepest matching entry wins, so a child route highlights its own tab.
   return !items.some((other) => other !== item && owns(other?.href) && String(other?.href || '').length > target.length);
 }
+
+/** Only an explicit enabled response may reveal the Stremio destination. */
+export function visibleNavItems(stremioEnabled = false) {
+  return NAV_ITEMS.filter(item => item.href.split('?')[0] !== '/stremio' || stremioEnabled === true);
+}

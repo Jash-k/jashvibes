@@ -3,14 +3,16 @@
 import SectionLink from '@/components/SectionLink';
 import { usePathname } from 'next/navigation';
 import Icon from '@/components/Icons';
-import { NAV_ITEMS, isNavItemActive } from '@/components/navItems';
+import { isNavItemActive } from '@/components/navItems';
+import useVisibleNavItems from '@/hooks/useVisibleNavItems';
 
 // The list lives in `components/navItems.js`, shared with the homepage `RailNav`: two hardcoded copies
 // is how a section ends up reachable on the TV and missing from the phone.
-const DOCK_ITEMS = NAV_ITEMS;
+
 
 export default function MobileDock() {
   const pathname = usePathname() || '/';
+  const navItems = useVisibleNavItems();
 
   return (
     <nav
@@ -19,9 +21,9 @@ export default function MobileDock() {
     >
       {/* Seven labels in a 6-column grid was the obvious trap when the list grew: the last one wraps
           off-screen. The template is derived from the list, so adding a destination cannot break a row. */}
-      <div className="mx-auto grid max-w-2xl" style={{ gridTemplateColumns: `repeat(${NAV_ITEMS.length}, minmax(0, 1fr))` }}>
-        {DOCK_ITEMS.map((item) => {
-          const active = isNavItemActive(item, pathname);
+      <div className="mx-auto grid max-w-2xl" style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}>
+        {navItems.map((item) => {
+          const active = isNavItemActive(item, pathname, navItems);
           const NavLink = SectionLink;
           return (
             <NavLink

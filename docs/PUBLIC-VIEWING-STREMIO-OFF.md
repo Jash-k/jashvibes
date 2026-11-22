@@ -31,3 +31,9 @@ If old Stremio menus/pages/bookmarks remain, they may display empty/error states
 - `npm run verify`: passed (existing suite).
 - `node --import ./scripts/alias-register.mjs scripts/test-public-stremio-off.mjs`: passed. Covers disabled Stremio helper calls with zero fetches, public GETs, protected mutations and admin denial without auth.
 - No live Mongo/admin-browser test, production deployment or Telegram channel action was performed.
+
+## Navigation follows the switch
+
+Desktop/TV rail and mobile dock now use the same filtered navigation store. Stremio is hidden until `/api/providers` explicitly reports it enabled; a failed settings read hides it. The mobile grid uses the visible item count, so OFF leaves no empty slot. An admin toggle updates the current browser store immediately. Other open tabs/devices refresh on navigation, window focus, visibility changes or a 30-second visible-tab check. This UI filtering does not replace the server source gate.
+
+Validated the updated navigation regression test and a fresh production build. No deployed-browser test was run.

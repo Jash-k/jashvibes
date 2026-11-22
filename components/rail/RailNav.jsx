@@ -4,7 +4,8 @@ import Link from 'next/link';
 import SectionLink from '@/components/SectionLink';
 import { usePathname } from 'next/navigation';
 import Icon from '@/components/Icons';
-import { NAV_ITEMS, isNavItemActive } from '@/components/navItems';
+import { isNavItemActive } from '@/components/navItems';
+import useVisibleNavItems from '@/hooks/useVisibleNavItems';
 
 /**
  * RailNav — the desktop/TV half of the homepage navigation.
@@ -17,6 +18,7 @@ import { NAV_ITEMS, isNavItemActive } from '@/components/navItems';
  */
 export default function RailNav({ onOpenSearch }) {
   const pathname = usePathname() || '/';
+  const navItems = useVisibleNavItems();
 
   return (
     <nav
@@ -39,8 +41,8 @@ export default function RailNav({ onOpenSearch }) {
       </div>
 
       <ul className="jv-rail-list flex flex-1 flex-col gap-1.5 px-2 xl:gap-2 xl:px-2.5">
-        {NAV_ITEMS.map((item) => {
-          const active = isNavItemActive(item, pathname);
+        {navItems.map((item) => {
+          const active = isNavItemActive(item, pathname, navItems);
           const NavLink = SectionLink;
           return (
             <li key={item.href}>

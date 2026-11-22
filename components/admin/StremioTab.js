@@ -51,6 +51,7 @@ export default function StremioTab() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Save failed');
       setSourceEnabled(data.enabled === true);
+      window.dispatchEvent(new CustomEvent('jash:stremio-access', { detail: { enabled: data.enabled === true } }));
     } catch (error) { setNote({ kind: 'bad', text: error.message }); }
     finally { setBusy(''); }
   }
