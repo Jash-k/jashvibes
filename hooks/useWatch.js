@@ -71,10 +71,14 @@ export function useWatchContext(routeType, routeId, queryString) {
 
 export function useWatchSources(context, season, episode) {
   const [selection, setSelection] = useState('auto');
+  const [stremioEnabled, setStremioEnabled] = useState(false);
+  useEffect(() => {
+    fetch('/api/providers', { cache: 'no-store' }).then(r => r.json()).then(data => setStremioEnabled(data.providers?.some(p => p.id === 'stremio' && p.enabled === true) || false)).catch(() => setStremioEnabled(false));
+  }, []);
   const [retry, setRetry] = useState(0);
   const [state, setState] = useState({ status: 'idle', provider: '', candidates: [], index: 0, error: '', attempts: [], needsIdentity: false, note: '' });
   const generation = useRef(0), resolver = useRef(null), quality = useRef(''), startAt = useRef(0), tried = useRef(new Set());
-  const order = providerOrder(context?.origin);
+  const order = providerOrder(context?.origin).filter(id => id !== 'stremio' || stremioEnabled);
   useEffect(() => {
     if (!context) return undefined;
     const controller = new AbortController(), token = ++generation.current;
@@ -126,7 +130,7 @@ export function useWatchSources(context, season, episode) {
     return () => { controller.abort(); ++generation.current; };
     // entry order is deterministic; quality selection must not restart discovery.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context, season, episode, selection, retry]);
+  }, [context, season, episode, selection, retry, stremioEnabled]);
   const chooseProvider = useCallback((value) => { startAt.current = 0; setSelection(value); setRetry((v) => v + 1); }, []);
   const next = () => {
     const nextIndex = order.indexOf(state.provider) + 1;
@@ -143,5 +147,5 @@ export function useWatchSources(context, season, episode) {
   };
   const chooseQuality = (value) => { quality.current = value; const index = chooseCandidate(state.candidates, value); tried.current = new Set([state.candidates[index]?.url]); setState((s) => ({ ...s, index, error: '' })); };
   const chooseMirror = (index) => { tried.current = new Set([state.candidates[index]?.url]); setState((s) => ({ ...s, index, error: '' })); };
-  return { ...state, selection, active: state.candidates[state.index] || null, chooseProvider, chooseQuality, chooseMirror, next, fatal, retry: () => { startAt.current = order.indexOf(state.provider); setRetry((v) => v + 1); }, retryKey: retry, order };
+  return { ...state, selection, stremioEnabled, active: state.candidates[state.index] || null, chooseProvider, chooseQuality, chooseMirror, next, fatal, retry: () => { startAt.current = order.indexOf(state.provider); setRetry((v) => v + 1); }, retryKey: retry, order };
 }

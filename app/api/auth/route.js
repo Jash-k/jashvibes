@@ -74,12 +74,8 @@ function clearSessionCookie(response) {
  * to lock the owner out of their own app for the rest of the window. No password is accepted here, so there is
  * nothing to brute force, and the answer is one boolean.
  */
-export async function GET(request) {
-  if (!getConfiguredPassword()) return NextResponse.json({ success: false, configured: false, error: 'Set PASS to configure viewer access.' }, { status: 503 });
-  const token = request.cookies.get(SESSION_COOKIE)?.value || '';
-  const valid = await isValidAccessToken(token);
-  if (!valid) return NextResponse.json({ success: false, error: 'No active session' }, { status: 401 });
-  return NextResponse.json({ success: true });
+export async function GET() {
+  return NextResponse.json({ success: true, publicViewing: true }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function POST(request) {

@@ -137,7 +137,7 @@ export default function AuthGate({ children }) {
   const pathname = usePathname();
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [status, setStatus] = useState('checking');
+  const [status, setStatus] = useState('unlocked');
   const [error, setError] = useState('');
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [splashElapsed, setSplashElapsed] = useState(0);
@@ -156,43 +156,8 @@ export default function AuthGate({ children }) {
 
   // Search intent from the rail (and anywhere else that wants it later).
 
-  useEffect(() => {
-    const savedToken = window.localStorage.getItem(STORAGE_KEY);
-
-    if (!savedToken) {
-      setStatus('locked');
-      return;
-    }
-
-    async function verifySavedAccess() {
-      try {
-        // The HttpOnly cookie is the real session, so ask about it first: one unlimited GET instead of a
-        // POST against the endpoint the brute-force limiter guards.
-        let response = await fetch('/api/auth', { method: 'GET', cache: 'no-store' });
-        let data = response.ok ? { success: true } : {};
-        if (!response.ok) {
-          ({ response, data } = await fetchJsonWithRetry('/api/auth', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: savedToken }),
-          }, 1));
-        }
-
-        if (!response.ok || !data.success) {
-          throw new Error('Saved access expired');
-        }
-
-        if (data.token) window.localStorage.setItem(STORAGE_KEY, data.token);
-        setStatus('unlocked');
-      } catch {
-        window.localStorage.removeItem(STORAGE_KEY);
-        clearSessionCaches();
-        setStatus('locked');
-      }
-    }
-
-    verifySavedAccess();
-  }, []);
+  // Public viewing: do not require or mint a theatre session.
+  // Owner access is independently enforced by /admin and admin APIs.
 
   async function unlock(event) {
     event.preventDefault();

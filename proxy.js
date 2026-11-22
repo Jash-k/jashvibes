@@ -147,6 +147,9 @@ export async function proxy(request) {
   if (pathname.startsWith('/api/admin/') || pathname.startsWith('/api/live/admin/') || pathname.startsWith('/api/live-service/')) return NextResponse.next();
 
   if (['/api/music/playlist/tracks', '/api/title-match'].includes(pathname) && request.method !== 'GET') return NextResponse.next();
+  // Public viewing is read-only; owner/service mutation guards stay intact.
+  if (request.method === 'GET' || request.method === 'HEAD') return NextResponse.next();
+
   const password = process.env.PASS || process.env.SPACE_PASSWORD || process.env.APP_PASSWORD || '';
   // When no password is configured the app is intentionally open (dev mode).
   if (!password) return NextResponse.json({ error: 'Password protection is not configured. Set PASS before deployment.' }, { status: 503 });

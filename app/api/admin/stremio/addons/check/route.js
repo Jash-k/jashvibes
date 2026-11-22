@@ -1,3 +1,4 @@
+import { isStremioEnabled } from '@/lib/stremioAccess';
 import { NextResponse } from 'next/server';
 import { adminDeny } from '@/lib/adminAuth';
 import StremioAddon from '@/models/StremioAddon';
@@ -11,6 +12,7 @@ const TIMEOUT_MS = 12000;
 export async function POST(request) {
   const deny = await adminDeny(request);
   if (deny) return deny;
+  if (!await isStremioEnabled()) return NextResponse.json({ ok: false, error: "Enable the Stremio master switch before checking upstreams." }, { status: 503 });
   try {
     const body = await request.json().catch(() => ({}));
     const query = body?.id ? { _id: body.id } : {};

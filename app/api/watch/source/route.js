@@ -1,3 +1,4 @@
+import { isStremioEnabled } from '@/lib/stremioAccess';
 import { NextResponse } from 'next/server';
 import { browserScore } from '@/lib/providers/stremioProvider';
 import { getStremioStreams } from '@/lib/stremioAddon';
@@ -20,6 +21,7 @@ export async function GET(request) {
     let candidates = [];
     let note = '';
     if (provider === 'stremio') {
+      if (!await isStremioEnabled()) return NextResponse.json({ candidates: [], disabled: true }, { status: 503 });
       await warmStremioRegistry();
       const reference = p.get('reference') || imdbId || (tmdbId ? `tmdb:${tmdbId}` : '');
       if (!reference) return NextResponse.json({ candidates: [], needsIdentity: true }, { status: 422 });

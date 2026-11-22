@@ -411,7 +411,7 @@ export default function UnifiedWatchPage() {
                   >
                     <span>Auto — best available, follows the order below</span>
                   </button>
-                  {WATCH_PROVIDERS.filter((p) => p.id !== 'retro' || context?.retroStreams?.length).map((p) => (
+                  {WATCH_PROVIDERS.filter((p) => (p.id !== 'stremio' || sources.stremioEnabled) && (p.id !== 'retro' || context?.retroStreams?.length)).map((p) => (
                     <button
                       key={p.id}
                       type="button"

@@ -8,6 +8,8 @@ import { useCallback, useEffect, useState } from 'react';
  */
 export default function StremioTab() {
   const [addons, setAddons] = useState([]);
+  const [sourceEnabled, setSourceEnabled] = useState(false);
+  const [hardOff, setHardOff] = useState(false);
   const [pins, setPins] = useState([]);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
@@ -27,6 +29,11 @@ export default function StremioTab() {
       if (!addonsResponse.ok || !addonsData.ok) throw new Error(addonsData.error || 'Read failed');
       setAddons(addonsData.addons || []);
       setPins(pinsData.pins || []);
+      const accessResponse = await fetch('/api/admin/stremio/access', { cache: 'no-store' });
+      const access = await accessResponse.json();
+      if (!accessResponse.ok) throw new Error('Cannot read source switch');
+      setSourceEnabled(access.enabled === true);
+      setHardOff(access.hardOff === true);
       setStatus('ready');
     } catch (err) {
       setError(err.message || 'Read failed');
@@ -35,6 +42,18 @@ export default function StremioTab() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  async function toggleSource() {
+    if (!sourceEnabled && !window.confirm('Enable Stremio upstream requests again?')) return;
+    setBusy('master');
+    try {
+      const response = await fetch('/api/admin/stremio/access', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !sourceEnabled }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Save failed');
+      setSourceEnabled(data.enabled === true);
+    } catch (error) { setNote({ kind: 'bad', text: error.message }); }
+    finally { setBusy(''); }
+  }
 
   async function addAddon(event) {
     event.preventDefault();
@@ -118,6 +137,12 @@ export default function StremioTab() {
 
   return (
     <div>
+      <section className="jv-ad-card">
+        <p className="jv-ad-card-title">Stremio source: {sourceEnabled ? 'ON' : 'OFF'}</p>
+        <p>Off blocks Stremio catalog, metadata, stream and health-check requests. Direct MP4 and other sources remain available.</p>
+        <button type="button" disabled={Boolean(busy) || hardOff || status !== 'ready'} onClick={toggleSource}>{sourceEnabled ? 'Turn Stremio OFF' : 'Turn Stremio ON'}</button>
+        {hardOff ? <p>Emergency lock: STREMIO_ENABLED=false. Remove that environment override before enabling.</p> : null}
+      </section>
       <form className="jv-ad-card" onSubmit={addAddon}>
         <p className="jv-ad-card-title">Register an addon</p>
         <p className="jv-ad-card-sub">A Stremio addon manifest URL. The catalog addon feeds /stremio; the watch addon resolves streams. Env values were seeded in on first run.</p>
