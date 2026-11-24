@@ -7,12 +7,12 @@ import Icon from '@/components/Icons';
 import { VaultTile, SkeletonGrid } from '@/components/vault/VaultCards';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 import { watchHref } from '@/lib/watch/policy';
-import { VAULT_TABS, vaultCategory, latestVaultFirst } from '@/lib/vaultBrowse';
+import { VAULT_TABS, vaultCategory, latestVaultFirst, vaultSearchMatch } from '@/lib/vaultBrowse';
 import { hasVaultQuality } from '@/lib/vaultSummary';
 import { useReveal } from '@/lib/useReveal';
 import './vault-lens.css';
 
-const CACHE_KEY = 'jash:vault:summary:v1', CACHE_TTL = 30 * 60 * 1000, STEP = 60;
+const CACHE_KEY = 'jash:vault:summary:v2', CACHE_TTL = 30 * 60 * 1000, STEP = 60;
 const EMPTY = { qualities: [], era: '', rating: '', language: '', sources: '', letter: '' };
 const LENSES = [{ id: 'quality', label: 'Quality' }, { id: 'year', label: 'Year' }, { id: 'rating', label: 'Rating' }, { id: 'more', label: 'More filters' }];
 const ERAS = ['2020s', '2010s', '2000s', '1990s', '1980s', 'Earlier'];
@@ -20,7 +20,7 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ#'.split('');
 function eraOf(year) { return year >= 2020 ? '2020s' : year >= 2010 ? '2010s' : year >= 2000 ? '2000s' : year >= 1990 ? '1990s' : year >= 1980 ? '1980s' : year > 0 ? 'Earlier' : ''; }
 function sourceBucket(count) { return count <= 1 ? '1' : count === 2 ? '2' : count <= 4 ? '3–4' : '5+'; }
 function matches(item, filters, query, skip = '') {
-  if (query && !`${item.title} ${item.year}`.toLowerCase().includes(query)) return false;
+  if (!vaultSearchMatch(item, query)) return false;
   if (skip !== 'quality' && filters.qualities.length && !filters.qualities.some((q) => hasVaultQuality(item, q))) return false;
   if (skip !== 'year' && filters.era && eraOf(item.year) !== filters.era) return false;
   if (skip !== 'rating' && filters.rating && (filters.rating === 'unrated' ? item.rating > 0 : Number(item.rating) < Number(filters.rating))) return false;
@@ -98,7 +98,7 @@ export default function VaultPage() {
   }, [lens]);
   const movies = data?.movies || [];
   const tabCounts = useMemo(() => movies.reduce((acc, movie) => { const key = vaultCategory(movie); acc[key] = (acc[key] || 0) + 1; return acc; }, {}), [movies]);
-  const collection = useMemo(() => movies.filter((movie) => vaultCategory(movie) === tab), [movies, tab]);
+  const collection = useMemo(() => query.trim() ? movies : movies.filter((movie) => vaultCategory(movie) === tab), [movies, tab, query]);
   const needle = useDeferredValue(query.trim().toLowerCase());
   const results = useMemo(() => {
     const list = collection.filter((movie) => matches(movie, filters, needle));
@@ -151,13 +151,13 @@ export default function VaultPage() {
       <div className="vl-verification-note"><button type="button" aria-pressed={tab === 'unverified'} onClick={() => { setTab('unverified'); setFilters(EMPTY); setQuery(''); }}>Unverified <small>{tabCounts.unverified || 0}</small></button></div>
       <div className="vl-lenses">{LENSES.map((item) => <button type="button" key={item.id} onClick={() => setLens(item.id)} aria-haspopup="dialog" aria-expanded={lens === item.id}>{item.label}<span>⌄</span></button>)}<label><span className="sr-only">Sort titles</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="latest">Latest updates</option><option value="added">Recently added</option><option value="year">Release year</option><option value="rating">Top rated</option><option value="az">A–Z</option><option value="sources">Most sources</option></select></label><button type="button" aria-pressed={dense} onClick={() => setDense(!dense)}>{dense ? 'Dense' : 'Cozy'}</button></div>
       {chips.length ? <div className="vl-cuts"><span>Your cut:</span>{chips.map((chip) => <button type="button" key={chip.key} onClick={chip.remove} aria-label={`Remove ${chip.label}`}>{chip.label} ×</button>)}<button type="button" onClick={() => setFilters(EMPTY)}>Clear filters</button></div> : null}
-      <div className="vl-results-head"><h2>{selected.label}</h2><span>{results.length} titles · {sort === 'latest' ? 'Latest catalogue updates' : 'Filtered catalogue'}</span></div>
+      <div className="vl-results-head"><h2>{query.trim() ? 'Search all Vault' : selected.label}</h2><span>{results.length} titles · {sort === 'latest' ? 'Latest catalogue updates' : 'Filtered catalogue'}</span></div>
       {error ? <div className="vl-error" role="alert">{error} <button type="button" onClick={() => load(true)}>Retry</button></div> : null}
       {status === 'loading' ? <SkeletonGrid/> : null}
       {status === 'ready' && !results.length ? <div className="vl-empty"><h3>No matching titles</h3><p>Try another category or clear your search and filters.</p><button type="button" onClick={() => { setFilters(EMPTY); setQuery(''); }}>Clear search and filters</button></div> : null}
       {status === 'ready' ? <div className={`vl-grid ${dense ? 'is-dense' : ''}`} ref={reveal}>{results.slice(0, visible).map((movie, index) => <VaultTile key={movie.id} movie={movie} index={index} onPlay={play}/>)}</div> : null}
       {visible < results.length ? <div className="vl-more" ref={sentinel}><button type="button" onClick={() => setVisible((v) => v + STEP)}>Show more titles</button></div> : null}
-      {tab === 'unverified' ? <p className="vl-note">These records lack original-language metadata or have conflicting classifications. Their sources and playback links are unchanged; no origin is assumed.</p> : null}
+      {tab === 'unverified' && !query.trim() ? <p className="vl-note">These records lack original-language metadata or have conflicting classifications. Their sources and playback links are unchanged; no origin is assumed.</p> : null}
     </section>
     {lens ? <FilterPanel title={LENSES.find((item) => item.id === lens)?.label || 'Filters'} close={() => setLens('')}>
       {lens === 'quality' ? <><p>Matches any available source of a title.</p>{options('quality', ['1080p', '720p', 'HD', '360p'], 'qualities')}</> : null}

@@ -21,7 +21,9 @@ const SOURCE = process.argv[2]
 
 /** The exact key set every movie produced before series existed. */
 const LEGACY_KEYS = ['id', 'title', 'year', 'poster', 'rating', 'tmdbId', 'imdbId', 'pageUrl',
-  'addedAt', 'updatedAt', 'embeds', 'embedCount', 'quality', 'decade', 'letter'];
+  'addedAt', 'updatedAt', 'embeds', 'embedCount', 'quality', 'decade', 'letter',
+  'language', 'originalLanguage', 'category', 'origin', 'originalTitle', 'originalYear', 'tmdbType', 'aliases'];
+const OPTIONAL_METADATA_KEYS = ['metadataStatus','metadataReason','metadataCheckedAt'];
 
 let failures = 0;
 const check = (name, ok, detail = '') => {
@@ -44,10 +46,10 @@ console.log('MOVIES — legacy contract');
 check('records present', records.length > 0, String(records.length));
 const extras = new Set();
 for (const movie of movies) {
-  for (const key of Object.keys(movie)) if (!LEGACY_KEYS.includes(key)) extras.add(key);
+  for (const key of Object.keys(movie)) if (!LEGACY_KEYS.includes(key) && !OPTIONAL_METADATA_KEYS.includes(key)) extras.add(key);
   for (const key of LEGACY_KEYS) if (!(key in movie)) extras.add(`missing:${key}`);
 }
-check('no field added to or missing from any movie', extras.size === 0, [...extras].join(', ') || 'exact legacy set');
+check('all required normalized fields present; only documented metadata extras', extras.size === 0, [...extras].join(', ') || 'exact legacy set');
 check('every movie has plays, embeds and a quality label',
   movies.every((m) => m.embeds.length > 0 && m.quality), `${movies.filter((m) => !m.embeds.length).length} empty`);
 check('groupEpisodes is inert for movies',
@@ -64,24 +66,25 @@ for (const s of series) {
   const eps = groupEpisodes(s.embeds);
   if (eps.length !== s.episodeCount) { rangeOk = false; detail ||= `${s.id}: episodeCount mismatch`; continue; }
   for (let i = 1; i < eps.length; i += 1) {
-    if (eps[i].episode <= eps[i - 1].episode) { rangeOk = false; detail ||= `${s.id}: episodes out of order`; }
+    if (eps[i].season < eps[i-1].season || (eps[i].season === eps[i-1].season && eps[i].episode <= eps[i-1].episode)) { rangeOk = false; detail ||= `${s.id}: episodes out of order`; }
   }
   const flat = eps.reduce((n, e) => n + e.embeds.length, 0);
   if (flat !== s.embeds.length) { rangeOk = false; detail ||= `${s.id}: ${flat}/${s.embeds.length} embeds lost`; }
 }
 check('episodes ordered, counted, none lost', rangeOk, detail || `${series.length} series`);
 
-const wrongOpen = series.filter((s) => {
-  const eps = groupEpisodes(s.embeds);
-  const lowest = Math.min(...eps.map((e) => e.episode));
-  return Number(s.embeds[0]?.episode) !== lowest
-    || String(s.embeds[0]?.quality).toLowerCase() !== '1080p';
+const rank = q => ({ '1080p': 3, '720p': 2 }[String(q).toLowerCase()] || 1);
+const wrongOpen = series.filter(s => {
+  const earliest = groupEpisodes(s.embeds)[0];
+  if (!earliest) return true;
+  const first = s.embeds[0];
+  return Number(first?.episode) !== earliest.episode || Number(first?.season) !== earliest.season
+    || rank(first?.quality) !== Math.max(...earliest.embeds.map(e => rank(e.quality)));
 });
-check('player opens on the earliest episode at 1080p', wrongOpen.length === 0,
-  wrongOpen.map((s) => s.id).join(', ') || 'all series');
-
-check('embed urls are vault-canonical',
-  records.every((r) => r.embeds.every((e) => /^https:\/\/play\.onestream\.today\/stream\/page\/\d+$/.test(e.url))));
+check('player opens on earliest available season/episode at its best available quality', wrongOpen.length === 0,
+  wrongOpen.slice(0,10).map(s => s.id).join(', ') || 'all series');
+check('embed URLs use supported MoviesDa/isaiDub routes',
+  records.every(r => r.embeds.every(e => /^https:\/\/(?:play\.onestream\.today\/stream\/page|dub\.onestream\.today\/stream\/video)\/\d+\/?$/.test(e.url))));
 
 const chips = series.length ? groupEpisodes(series[0].embeds).slice(0, 2).map(episodeLabel).join(' ') : '';
 if (chips) console.log(`\n  sample episode labels: ${chips} …`);

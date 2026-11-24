@@ -1,0 +1,24 @@
+(node:5311) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/vault.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+source: data/vault-snapshot.json
+catalogue: 7517 records (6897 movies, 620 series)
+
+MOVIES — legacy contract
+  ok    records present — 7517
+  ok    all required normalized fields present; only documented metadata extras — exact legacy set
+  ok    every movie has plays, embeds and a quality label — 0 empty
+  ok    groupEpisodes is inert for movies
+
+SERIES — episode contract
+  ok    series have episodes — 0 empty
+  ok    series expose kind/isSeries/seasonCount
+  ok    episodes ordered, counted, none lost — 620 series
+  ok    player opens on earliest available season/episode at its best available quality — all series
+  ok    embed URLs use supported MoviesDa/isaiDub routes
+
+  sample episode labels: S1 E1 S1 E2 …
+
+PASS

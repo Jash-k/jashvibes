@@ -20,6 +20,7 @@ export async function GET(request) {
       imdbId: searchParams.get('imdbId') || '',
       title: searchParams.get('title') || '',
       year: searchParams.get('year') || '',
+      season: searchParams.get('season') || '',
     };
 
     if (!query.tmdbId && !query.imdbId && !query.title) {

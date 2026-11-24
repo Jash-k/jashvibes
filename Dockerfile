@@ -18,5 +18,6 @@ ENV NODE_OPTIONS=--max-old-space-size=384
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/data ./data
 EXPOSE 7860
 CMD ["sh", "-c", "node server.js"]

@@ -50,7 +50,7 @@ export function useWatchContext(routeType, routeId, queryString) {
         }
         if (!context.vault) {
           try {
-            const q = new URLSearchParams({ type: context.type, title: context.title, year: String(context.year || ''), tmdbId: String(context.tmdbId || ''), imdbId: context.imdbId || '' });
+            const q = new URLSearchParams({ type: context.type, title: context.title, year: String(context.year || ''), tmdbId: String(context.tmdbId || ''), imdbId: context.imdbId || '', season: p.get('season') || '' });
             const m = await requestJson(`/api/vault/match?${q}`, controller.signal, 12000);
             if (m.hit?.id) context.vault = (await requestJson(`/api/vault?id=${encodeURIComponent(m.hit.id)}`, controller.signal)).movie;
           } catch (e) { if (controller.signal.aborted) throw e; }
