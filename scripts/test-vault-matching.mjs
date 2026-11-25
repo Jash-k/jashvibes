@@ -26,3 +26,5 @@ console.log('PASS canonical aliases/original year, Unicode, type/season matching
 assert.equal(vaultCategory({kind:'series',pageUrl:'https://isaidub.green/local-name/',category:'tamil-series'}),'tamil-dubbed-series');
 assert.equal(vaultCategory({kind:'movie',pageUrl:'https://moviesda36.com/local/',category:'tamil-dubbed-movie'}),'tamil-movie');
 assert.equal(vaultCategory({kind:'series',originalLanguage:'hi',pageUrl:'https://moviesda36.com/local/'}),'tamil-dubbed-series');
+// isaiDub records must never inherit an incorrect legacy Tamil bucket.
+assert.equal(vaultCategory({title:'Verity',kind:'movie',category:'tamil-movie',pageUrl:'https://isaidub.green/movie/verity-2026-tamil-dubbed-movie/'}),'tamil-dubbed-movie');

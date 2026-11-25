@@ -12,7 +12,7 @@ import { hasVaultQuality } from '@/lib/vaultSummary';
 import { useReveal } from '@/lib/useReveal';
 import './vault-lens.css';
 
-const CACHE_KEY = 'jash:vault:summary:v3', CACHE_TTL = 30 * 60 * 1000, STEP = 60;
+const CACHE_KEY = 'jash:vault:summary:v4', CACHE_TTL = 30 * 60 * 1000, STEP = 60;
 const EMPTY = { qualities: [], era: '', rating: '', language: '', sources: '', letter: '' };
 const LENSES = [{ id: 'quality', label: 'Quality' }, { id: 'year', label: 'Year' }, { id: 'rating', label: 'Rating' }, { id: 'more', label: 'More filters' }];
 const ERAS = ['2020s', '2010s', '2000s', '1990s', '1980s', 'Earlier'];

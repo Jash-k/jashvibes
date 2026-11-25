@@ -3,7 +3,6 @@ import { memo, useState } from 'react';
 import Icon from '@/components/Icons';
 import { POSTER_SIZES_ATTR, tmdbImageSrcSet } from '@/lib/tmdbPoster';
 import { revealStyle } from '@/lib/useReveal';
-import { vaultIsInferred } from '@/lib/vaultBrowse';
 function qualityChipClass(quality) {
   if (quality === '1080p') return 'jv-vault-chip jv-vault-chip-hd';
   if (quality === '720p') return 'jv-vault-chip jv-vault-chip-hq';
@@ -12,9 +11,7 @@ function qualityChipClass(quality) {
 
 export const VaultTile = memo(function VaultTile({ movie, onPlay, index = 0 }) {
   const [failedUrl, setFailedUrl] = useState('');
-  const inferred = vaultIsInferred(movie);
-  const inferenceLabel = 'Inferred catalogue — original identity or language not fully confirmed';
-  const playLabel = `Play ${movie.title}${movie.year ? ` (${movie.year})` : ''}${movie.isSeries ? ` — ${movie.episodeCount} episode${movie.episodeCount === 1 ? '' : 's'}` : ''}${inferred ? ` — ${inferenceLabel}` : ''}`;
+  const playLabel = `Play ${movie.title}${movie.year ? ` (${movie.year})` : ''}${movie.isSeries ? ` — ${movie.episodeCount} episode${movie.episodeCount === 1 ? '' : 's'}` : ''}`;
   const showPoster = Boolean(movie.poster) && failedUrl !== movie.poster;
   return (
     <button
@@ -43,12 +40,6 @@ export const VaultTile = memo(function VaultTile({ movie, onPlay, index = 0 }) {
           {String(movie.title || '??').slice(0, 2).toUpperCase()}
         </span>
       )}
-
-      {inferred ? (
-        <span className={`jv-vault-chip jv-vault-chip-inferred${movie.isSeries ? ' jv-vault-chip-inferred-series' : ''}`} title={inferenceLabel}>
-          <span aria-hidden="true">≈</span><span className="sr-only">{inferenceLabel}</span>
-        </span>
-      ) : null}
 
       {movie.quality ? <span className={qualityChipClass(movie.quality)}>{movie.quality}</span> : null}
 
