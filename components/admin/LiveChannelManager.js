@@ -23,6 +23,7 @@
  * Authentication is the jash_admin cookie set at admin login; same-origin
  * fetch carries it, so no token plumbing is needed here.
  */
+import { eligibleLiveVariant, flagshipPriority } from '@/lib/live/health';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LIVE_CATALOGS, getChannelCatalogIds, sortChannelsForCatalog } from '@/lib/liveCatalogs';
 import { SOURCE_REGISTRY } from '@/lib/live/registry';
@@ -50,6 +51,7 @@ export default function LiveChannelManager() {
   const [sourceGroup, setSourceGroup] = useState('all'); // source-native group-title, read-only browse
   const [catalog, setCatalog] = useState('all'); // all | fixed id | unmapped | religious
   const [mapped, setMapped] = useState('all');
+  const [healthFilter,setHealthFilter] = useState('all');
   const [hidden, setHidden] = useState('0');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -109,6 +111,9 @@ export default function LiveChannelManager() {
   const filteredRows = useMemo(() => {
     const needle = q.trim().toLowerCase();
     let rows = allRows.filter((channel) => {
+      if(healthFilter==='eligible'&&!eligibleLiveVariant(channel))return false;
+      if(healthFilter==='pending'&&eligibleLiveVariant(channel))return false;
+      if(healthFilter==='quarantined'&&channel.playbackHealth?.state!=='quarantined')return false;
       if (sourceId !== 'all' && channel.sourceId !== sourceId) return false;
       if (sourceGroup !== 'all' && (channel.category || 'Live') !== sourceGroup) return false;
       if (hidden === '0' && channel.hidden) return false;
@@ -125,11 +130,12 @@ export default function LiveChannelManager() {
       return true;
     });
     if (isLiveCatalog(catalog)) rows = sortChannelsForCatalog(rows, catalog);
+    else rows=[...rows].sort((a,b)=>flagshipPriority(a)-flagshipPriority(b));
     return rows;
-  }, [allRows, q, sourceId, catalog, mapped, hidden, catalogSets]);
+  }, [allRows, q, sourceId, sourceGroup, catalog, mapped, hidden, catalogSets, healthFilter]);
 
   // Reset the pager whenever the visible slice changes identity.
-  useEffect(() => { setRenderCap(RENDER_PAGE); }, [q, sourceId, sourceGroup, catalog, mapped, hidden]);
+  useEffect(() => { setRenderCap(RENDER_PAGE); }, [q, sourceId, sourceGroup, catalog, mapped, hidden, healthFilter]);
   const visibleRows = useMemo(() => filteredRows.slice(0, renderCap), [filteredRows, renderCap]);
 
   // Source → catalog browse: the catalog dropdown is scoped to the chosen
@@ -348,6 +354,9 @@ export default function LiveChannelManager() {
           </select>
           <select value={mapped} onChange={(e) => setMapped(e.target.value)} className="rounded-full border border-white/10 bg-black px-3 py-1.5 text-xs">
             <option value="all">Mapped + unmapped</option><option value="1">Mapped only</option><option value="0">Unmapped only</option>
+          </select>
+          <select aria-label="Playback health" value={healthFilter} onChange={e=>setHealthFilter(e.target.value)} className="rounded-full border border-white/10 bg-black px-3 py-1.5 text-xs">
+            <option value="all">All health states</option><option value="eligible">Public eligible</option><option value="pending">Needs validation / expired</option><option value="quarantined">Quarantined</option>
           </select>
           <select value={hidden} onChange={(e) => setHidden(e.target.value)} className="rounded-full border border-white/10 bg-black px-3 py-1.5 text-xs">
             <option value="0">Visible</option><option value="1">Hidden</option><option value="all">Visible + hidden</option>

@@ -46,6 +46,16 @@ export default function AdminLivePreview({ channels = [], channel, onNavigate, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channels, position, channel]);
 
+  const healthAction = async (action) => {
+    if(action==='confirm-browser' && !window.confirm('Have you personally watched at least 30 seconds of correct channel audio and video in this Preview? This is an owner attestation, not an automated test.')) return;
+    setBusy(action); setMsg('');
+    try {
+      const res=await fetch('/api/live/admin/health',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channelId:channel.channelId,action,confirmedAudioVideo:action==='confirm-browser'})});
+      const data=await res.json(); if(!res.ok)throw Error(data.error||'Health action failed');
+      setMsg(`Health: ${data.channel?.playbackHealth?.state || 'updated'} · ${data.channel?.playbackHealth?.code || ''}`);onChanged?.();
+    }catch(e){setMsg(e.message);}finally{setBusy(null);}
+  };
+
   if (!channel || !logical) return null;
 
   const api = async (action, extra = {}) => {
@@ -89,7 +99,14 @@ export default function AdminLivePreview({ channels = [], channel, onNavigate, o
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {/* key remounts the engine per channel, exactly like /live zapping */}
-          <LivePlayer
+          <div className="flex flex-wrap gap-2 p-2 text-xs">
+            <span>Health: {channel.playbackHealth?.state || 'discovered'} · {channel.playbackHealth?.code || 'not tested'}</span>
+            <button disabled={!!busy} onClick={()=>healthAction('probe')} className="rounded border border-white/20 px-2 py-1">Check manifest/media</button>
+            <button disabled={!!busy} onClick={()=>healthAction('confirm-browser')} className="rounded bg-green-800 px-2 py-1">I watched 30s audio/video — publish</button>
+            <button disabled={!!busy} onClick={()=>healthAction('quarantine')} className="rounded bg-red-900 px-2 py-1">Quarantine</button>
+          </div>
+
+          <LivePlayer adminPreview
             key={channel.channelId}
             logical={logical}
             variantIdx={0}

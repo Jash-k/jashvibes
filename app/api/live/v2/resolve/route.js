@@ -1,3 +1,4 @@
+import { requireServiceAuth } from '@/lib/serverAuth';
 import { NextResponse } from 'next/server';
 import { V2_FEED_URL, normalizeV2Rows, appendHdnea } from '@/lib/live/v2/feed';
 import { getV2Token, readHarvest } from '@/lib/live/v2/tokenStore';
@@ -13,6 +14,7 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(request) {
   try {
+    await requireServiceAuth(request);
     const { searchParams } = new URL(request.url);
     const id = String(searchParams.get('id') || '').trim();
     if (!id) return NextResponse.json({ ok: false, error: 'id required' }, { status: 400 });
@@ -55,6 +57,6 @@ export async function GET(request) {
       freshness: expiry ? `${Math.max(0, Math.round((expiry - Date.now()) / 60000))}m left` : 'no expiry',
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e.message }, { status: 502 });
+    return NextResponse.json({ ok: false, error: e.message }, { status: e.status || 502 });
   }
 }

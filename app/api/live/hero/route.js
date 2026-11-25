@@ -1,3 +1,4 @@
+import { eligibleLiveVariant } from '@/lib/live/health';
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import LiveChannel from '@/models/LiveChannel';
@@ -8,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 const PROJECTION = [
   'channelId', 'name', 'customName', 'logo', 'customLogo', 'hidden',
-  'category', 'language', 'format', 'forceProxy',
+  'category', 'language', 'format', 'forceProxy', 'playbackHealth', 'url', 'keyId', 'key', 'licenseKey', 'licenseType', 'referer', 'userAgent', 'headers', 'playable',
 ].join(' ');
 
 function noStore(payload, status = 200) {
@@ -27,7 +28,7 @@ export async function GET() {
     const doc = await LiveChannel.findOne({ heroBanner: true, hidden: { $ne: true } })
       .select(PROJECTION)
       .lean();
-    if (!doc) return noStore(LIVE_HERO_NONE);
+    if (!doc || !eligibleLiveVariant(doc)) return noStore(LIVE_HERO_NONE);
     return noStore(liveHeroResponse(doc));
   } catch (error) {
     console.error('[live-hero] read failed:', error?.message || error);

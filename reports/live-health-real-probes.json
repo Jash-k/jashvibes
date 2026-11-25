@@ -1,0 +1,37 @@
+{
+  "scope": "Remote server media probes; not owner browser validation and not public admission",
+  "results": [
+    {
+      "name": "News18 Tamil Nadu (1080p)",
+      "ok": true,
+      "code": "MEDIA_SAMPLE_OK",
+      "latencyMs": 750,
+      "manifest": true,
+      "mediaSample": true
+    },
+    {
+      "name": "Polimer News (576p)",
+      "ok": true,
+      "code": "MEDIA_SAMPLE_OK",
+      "latencyMs": 2171,
+      "manifest": true,
+      "mediaSample": true
+    },
+    {
+      "name": "Puthiya Thalaimurai (576p)",
+      "ok": true,
+      "code": "MEDIA_SAMPLE_OK",
+      "latencyMs": 2169,
+      "manifest": true,
+      "mediaSample": true
+    },
+    {
+      "name": "Star Vijay UK (396p)",
+      "ok": true,
+      "code": "MEDIA_SAMPLE_OK",
+      "latencyMs": 528,
+      "manifest": true,
+      "mediaSample": true
+    }
+  ]
+}

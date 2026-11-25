@@ -1,3 +1,4 @@
+import { eligibleLiveVariant } from '@/lib/live/health';
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import LiveChannel from '@/models/LiveChannel';
@@ -18,7 +19,7 @@ const PUBLIC_PROJECTION = [
   'channelId', 'sourceId', 'source', 'tvgId', 'name', 'customName', 'logo', 'customLogo',
   'category', 'language', 'url', 'format', 'playable', 'hidden', 'keyId', 'key', 'licenseKey',
   'licenseType', 'cookie', 'userAgent', 'referer', 'headers', 'catalogs', 'logicalChannelId',
-  'order', 'mappingManaged', 'ladderOrder', 'forceProxy',
+  'order', 'mappingManaged', 'ladderOrder', 'forceProxy', 'playbackHealth',
 ].join(' ');
 
 /**
@@ -30,7 +31,7 @@ const PUBLIC_PROJECTION = [
  */
 const BASE_TTL_MS = Number(process.env.LIVE_CHANNELS_CACHE_TTL_MS || 15_000);
 const cacheStore = globalThis.__jashLiveCatalogCache || (globalThis.__jashLiveCatalogCache = { entries: new Map(), version: 0 });
-const BASE_KEY = 'public-channels-base-v5';
+const BASE_KEY = 'public-channels-base-v6-health';
 
 /**
  * Build (or return cached) base result: every visible, deduplicated logical
@@ -46,6 +47,7 @@ async function loadBaseCatalogue({ tamilOnly }) {
   await dbConnect();
   const sourceDocs = await LiveSource.find({ enabled: { $ne: false }, deleted: { $ne: true } }).sort({ priority: 1, label: 1 }).lean();
   const defaults = sourceDocs.map(s => ({ id: s.sourceId, label: s.label, type: s.type, lastError: s.lastError || '', lastSyncedAt: s.lastSyncedAt }));
+  if(!defaults.some(s=>s.id==='manual')) defaults.push({id:'manual',label:'Manual',type:'manual'});
   const docs = await LiveChannel.find({ sourceId: { $in: defaults.map(s => s.id) } }).select(PUBLIC_PROJECTION).lean();
 
   if (!docs.length) {
@@ -60,14 +62,14 @@ async function loadBaseCatalogue({ tamilOnly }) {
   // Single shared doc → view-model pipeline (lib/live/read/viewBuilder.js):
   // the admin manager runs the exact same builder, so its chip counts match
   // these /live cards by construction.
-  const view = buildCatalogueView(docs, { tamilOnly });
+  const view = buildCatalogueView(docs.filter(d => eligibleLiveVariant(d)), { tamilOnly });
 
   const value = {
     empty: false,
     visibleLogical: view.visibleLogical,
     catalogs: view.catalogs,
     totalVariants: view.totalVariants,
-    sources: defaults,
+    sources: defaults.filter(s => view.visibleLogical.some(g => g.variants.some(v => v.sourceId === s.id))),
   };
   cacheStore.entries.set(BASE_KEY, { at: Date.now(), version: cacheStore.version, tamilOnly, value });
   return value;
@@ -90,7 +92,7 @@ export async function GET(request) {
     const base = await loadBaseCatalogue({ tamilOnly });
     if (base.empty) {
       return NextResponse.json(
-        { ok: true, logical: [], flat: [], groups: 0, totalVariants: 0, sources: base.sources, deduplicated: true, needSync: true, hint: 'No channels in DB yet — run Admin → TV → Sync All Tamil' },
+        { healthGated:true, ok: true, logical: [], flat: [], groups: 0, totalVariants: 0, sources: base.sources, deduplicated: true, needSync: true, hint: 'No channels in DB yet — run Admin → TV → Sync All Tamil' },
         { headers: { 'Cache-Control': 'no-store' } },
       );
     }
@@ -118,6 +120,7 @@ export async function GET(request) {
     logical = sortLogicalGroups(logical, catalogFilter);
 
     return NextResponse.json({
+      healthGated: true, healthNote: 'Only recently validated variants are published. Admin → TV → Preview to validate candidates.',
       ok: true,
       deduplicated: true,
       groups: logical.length,

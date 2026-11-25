@@ -58,6 +58,7 @@ const LiveChannelSchema = new mongoose.Schema({
   userAgent: { type: String, default: '' },
   referer: { type: String, default: '' },
   headers: { type: Object, default: {} },
+  playbackHealth: { type: Object, default: null },
   workingStatus: { type: String, enum: ['unknown', 'working', 'broken'], default: 'unknown' },
   // v13 per-channel source ladder override: sourceIds in the owner's preferred
   // play order. Empty = use the registry priority ladder. Stored on any one
@@ -81,6 +82,7 @@ const LiveChannelSchema = new mongoose.Schema({
 }, { timestamps: true, optimisticConcurrency: true });
 
 LiveChannelSchema.index({ sourceId: 1, normalizedName: 1 });
+LiveChannelSchema.index({ hidden: 1, 'playbackHealth.nextCheckAt': 1 });
 LiveChannelSchema.index({ selected: 1, hidden: 1, order: 1 });
 LiveChannelSchema.index({ 'catalogs.catalogId': 1, 'catalogs.position': 1 });
 LiveChannelSchema.index({ sourceId: 1, 'catalogs.catalogId': 1 });

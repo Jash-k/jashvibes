@@ -44,7 +44,8 @@ export default function LivePage() {
   const [drawerCategory, setDrawerCategory] = useState('all');
   const isDesktop = useIsDesktop();
   const isAdmin = useAdminSession();
-  const [v2Mode, setV2Mode] = useV2Mode();
+  const [requestedV2, setV2Mode] = useV2Mode();
+  const v2Mode = isAdmin && requestedV2;
   const { favs, toggleFav } = useFavourites();
   const {
     groups, catalogs, sources, status, error, setReloadKey, load,
@@ -176,7 +177,7 @@ export default function LivePage() {
               {sourceOptions.map((source) => <option key={source.id} value={source.id}>{source.label}{source.lastError ? ' · sync issue' : ''}</option>)}
             </select>
           ) : null}
-          <button
+          {isAdmin ? <button
             type="button"
             onClick={() => setV2Mode(!v2Mode)}
             aria-pressed={v2Mode}
@@ -187,8 +188,8 @@ export default function LivePage() {
                 : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-red-500/60 hover:text-white'
             }`}
           >
-            V2
-          </button>
+            V2 Preview
+          </button> : null}
           <HomeLink className="h-8 w-8 shrink-0 text-sm" />
           <Link href="/admin?tab=tv" title="Admin"
             className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-sm text-zinc-300 hover:border-red-500/60">⚙</Link>
@@ -282,7 +283,7 @@ export default function LivePage() {
               </p>
             ) : null}
             {status === 'ready' && !filtered.length ? (
-              <p className="p-6 text-center text-[12.5px] text-zinc-400">No channels match this view.</p>
+              <p className="p-6 text-center text-[12.5px] text-zinc-400">No recently validated channels match this view. Admin → TV → Preview can validate and publish candidates.</p>
             ) : null}
             {status === 'ready' && filtered.length ? (
                 <div className="grid grid-cols-3 gap-2 md:grid-cols-4 lg:grid-cols-4 lg:gap-2">

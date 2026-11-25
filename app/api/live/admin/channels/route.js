@@ -136,7 +136,7 @@ const LIST_PROJECTION = [
   'catalogs', 'language', 'region', 'format', 'playable', 'selected', 'favorite',
   'hidden', 'order', 'keyId', 'key', 'licenseKey', 'licenseType',
   'cookie', 'userAgent', 'referer', 'headers', 'workingStatus', 'autoHidden',
-  'lastCheckedAt', 'lastSeenAt', 'ladderOrder', 'forceProxy', 'heroBanner',
+  'playbackHealth', 'lastCheckedAt', 'lastSeenAt', 'ladderOrder', 'forceProxy', 'heroBanner',
 ].join(' ');
 
 export async function GET(request) {

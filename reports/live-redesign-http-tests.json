@@ -1,0 +1,70 @@
+[
+  {
+    "path": "/api/watch/source?provider=viduki&tmdbId=550&type=movie",
+    "http": 200,
+    "result": {
+      "provider": "viduki",
+      "candidates": [
+        {
+          "url": "https://www.viduki.net/1/movie/550?color=e01621",
+          "kind": "embed",
+          "label": "Viduki \u00b7 third-party player \u00b7 language/availability not guaranteed",
+          "id": "viduki:0",
+          "provider": "viduki",
+          "quality": ""
+        }
+      ],
+      "note": "Third-party embed; opening the iframe does not verify playback or Tamil audio."
+    }
+  },
+  {
+    "path": "/api/watch/source?provider=viduki&tmdbId=1396&type=series&season=2&episode=3",
+    "http": 200,
+    "result": {
+      "provider": "viduki",
+      "candidates": [
+        {
+          "url": "https://www.viduki.net/1/tv/1396/2/3?color=e01621",
+          "kind": "embed",
+          "label": "Viduki \u00b7 third-party player \u00b7 language/availability not guaranteed",
+          "id": "viduki:0",
+          "provider": "viduki",
+          "quality": ""
+        }
+      ],
+      "note": "Third-party embed; opening the iframe does not verify playback or Tamil audio."
+    }
+  },
+  {
+    "path": "/api/watch/source?provider=viduki&type=movie",
+    "http": 422,
+    "result": {
+      "candidates": [],
+      "needsIdentity": true
+    }
+  },
+  {
+    "path": "/api/live/admin/health",
+    "http": 401,
+    "result": {
+      "ok": false,
+      "error": "Owner authentication required for this action."
+    }
+  },
+  {
+    "path": "/api/live/v2/channels",
+    "http": 401,
+    "result": {
+      "ok": false,
+      "error": "V2 catalogue unavailable: Owner authentication required for this action."
+    }
+  },
+  {
+    "path": "/api/live/v2/resolve?id=1",
+    "http": 401,
+    "result": {
+      "ok": false,
+      "error": "Owner authentication required for this action."
+    }
+  }
+]

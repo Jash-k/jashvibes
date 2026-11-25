@@ -95,6 +95,7 @@ const ChannelRow = memo(function ChannelRow({
             {channel.religious ? <span className="ml-2 rounded-full border border-amber-400/40 px-2 py-0.5 text-[9px] font-black text-amber-300">religious · hidden from /live</span> : null}
           </p>
           <p className="truncate text-[11px] text-zinc-400">{channel.source} · {String(channel.format || 'unknown').toUpperCase()} · {channel.category}</p>
+          <p className="text-[11px] text-zinc-400">Health: {channel.playbackHealth?.state || 'discovered'} · {channel.playbackHealth?.code || 'not tested'}{channel.playbackHealth?.eligibleUntil ? ` · lease ${new Date(channel.playbackHealth.eligibleUntil).toLocaleTimeString()}` : ''}</p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {reorderEnabled ? (

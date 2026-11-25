@@ -18,8 +18,8 @@ export default function useLiveCatalogue() {
   const [reloadKey, setReloadKey] = useState(0);
   const [activeLogical, setActiveLogical] = useState(null);
 
-  const load = useCallback(async () => {
-    setStatus('loading');
+  const load = useCallback(async (silent = false) => {
+    if(!silent) setStatus('loading');
     setError('');
     try {
       const res = await fetch('/api/live/channels', { cache: 'no-store' });
@@ -34,7 +34,7 @@ export default function useLiveCatalogue() {
         if (prev?.logicalId && playable.some((g) => g.logicalId === prev.logicalId)) return playable.find(g => g.logicalId === prev.logicalId);
         return pickLandingGroup(playable);
       });
-      if (!playable.length) setError('No visible channels in enabled sources — sync sources in Admin → TV.');
+      if (!playable.length) setError('No recently validated channels. Admin → TV → Preview: check candidates and confirm working audio/video to publish.');
       setStatus('ready');
     } catch (e) {
       setError(e.message);
@@ -43,6 +43,7 @@ export default function useLiveCatalogue() {
   }, []);
 
   useEffect(() => { load(); }, [load, reloadKey]);
+  useEffect(() => { const timer=setInterval(()=>{if(document.visibilityState==='visible')void load(true);},60_000);return()=>clearInterval(timer); },[load]);
 
   return {
     groups,

@@ -1,0 +1,48 @@
+{
+  "jioPlus": {
+    "playlistHttp": 200,
+    "parsedEntries": 1209,
+    "results": [
+      {
+        "name": "Star Vijay HD",
+        "format": "dash",
+        "authorizationReady": true,
+        "drmConfigured": true,
+        "tokenExpiryPresent": true,
+        "manifestHttp": 451,
+        "dashManifest": false
+      },
+      {
+        "name": "Star Vijay",
+        "format": "dash",
+        "authorizationReady": true,
+        "drmConfigured": false,
+        "tokenExpiryPresent": true,
+        "manifestHttp": 451,
+        "dashManifest": false
+      },
+      {
+        "name": "Sony Vizha HD",
+        "format": "dash",
+        "authorizationReady": true,
+        "drmConfigured": true,
+        "tokenExpiryPresent": true,
+        "manifestHttp": 451,
+        "dashManifest": false
+      },
+      {
+        "name": "Sun TV HD",
+        "format": "dash",
+        "authorizationReady": true,
+        "drmConfigured": true,
+        "tokenExpiryPresent": true,
+        "manifestHttp": 451,
+        "dashManifest": false
+      }
+    ]
+  },
+  "hjh": {
+    "playlistHttp": 404
+  },
+  "limitations": "Remote server manifest checks only; no DRM decryption, segment playback, browser/device or Render India-network certification."
+}

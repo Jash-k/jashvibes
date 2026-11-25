@@ -1,0 +1,269 @@
+
+> jashvibes@11.0.0 verify
+> node scripts/check-source.cjs && node scripts/test-loading-system.cjs && node scripts/test-music-pocket.cjs && node scripts/test-lyrics-pipeline.cjs && node scripts/test-lyrics-controller.cjs && node scripts/test-vault-admin.cjs && node scripts/test-player-runtime.cjs && node scripts/test-nav-order.cjs && node scripts/test-performance-cache.cjs && node scripts/test-extras-registry.cjs && node scripts/test-extras-covers.cjs && node scripts/test-admin-controls.cjs && node --import ./scripts/alias-register.mjs scripts/test-unlock-decision.mjs && node --import ./scripts/alias-register.mjs scripts/test-live-sources.mjs && node --import ./scripts/alias-register.mjs scripts/live/test-catalog-rules.mjs && node --import ./scripts/alias-register.mjs scripts/live/test-playback-contracts.mjs && node --import ./scripts/alias-register.mjs scripts/live/test-ingest-dedup.mjs && node --import ./scripts/alias-register.mjs scripts/live/test-admin-browse.mjs && node --import ./scripts/alias-register.mjs scripts/live/test-v2-feed.mjs && node --import ./scripts/alias-register.mjs scripts/live/test-live-hero.mjs && node --import ./scripts/alias-register.mjs scripts/live/test-source-browse.mjs && node --import ./scripts/alias-register.mjs scripts/test-vault-matching.mjs && node --import ./scripts/alias-register.mjs scripts/live/test-resolve-health.mjs
+
+342 source modules checked
+PASS loading system: splash minimum + ring hand-off, cap-then-close arc, 200 ms rule, shell-owned chrome, one pending indicator, section blur + reveal, per-section skeleton geometry.
+PASS focus mode: the sleeve keeps its unlocked size under focus (no shrinking rule left), wake lock acquired/released/re-taken truthfully and announced by the shell when it cannot be, blur map per view, one live control above the lock, a locked screen that prints no words (lock glyph, heading, hint, labels and footer removed, no hint timer), swipe-down + slide + Esc + Back exits, no mobile exit button, old pocket prototype removed; desktop plays a row without moving any layout, and the stage is opened only by the expand glyph or the Lyrics button.
+Lyrics pipeline: tiered acceptance with the catalogue-suffix tier, decorations stripped but never M/F, Live or language markers, album-less matching, rejection reasons, retrieval variants, ranking, stable cache keys, single-source wiring, the measured question order (title, then the artist narrows, then one free-text), the merged list that covers, store, admin gate and screen recovery, plus the record list (every candidate collected, one word of chrome, rows that only mark a choice, a tick that writes it, no printed wording, and a list that renders inside the panel on every screen) all passed.
+PASS controller: metadata readiness, dedupe, A→B→C late responses, cache, retained refresh, metadata invalidation, unmount, automatic recovery, bounded failure, cooldown cancellation, and the picker reload that re-reads the saved lyrics without forcing past them.
+Vault Admin validation, overlay, playback preservation, hiding/restoring visibility, auth wiring and revision checks passed.
+Player runtime readout: live/unknown suppression, window-relative elapsed, phone/desktop forms and wiring passed.
+PASS shared desktop/mobile order, labels, TV/reel icons, active routes, Admin, Music navigation and Stremio soft navigation.
+PASS 3 Vault records: exact quality coverage/counts, no playback URLs in summaries; 1767 → 1601 bytes (9% smaller uncompressed).
+PASS memory-first restoration, coalesced persistence, pagehide flush, TTL and session invalidation.
+Extras registry validation, legacy IDs, duplicate checks, ordering, empty list and version-conflict tests passed.
+Extras cover mapping, exact-host protection, deduplication, custom fallback, no mutation, and local JPEG tests passed.
+PASS admin controls: home order/pins/sections, undo routing + honesty, orphan report and re-bind suggestions, bulk planner no-ops and pin preservation, duplicate grouping, dry-run diff + orphan forecast, audit coverage on every mutation route, History reachable and undo-aware.
+1. front-door unlock realm classification
+  PASS the normal pass unlocks the theatre only — never the admin realm
+  PASS the admin pass unlocks BOTH realms in one step
+  PASS a wrong password opens neither realm
+  PASS empty input never unlocks, even against an empty config
+  PASS when both env passwords happen to match, the single password grants both
+  PASS a custom comparator (constant-time in the route) is honored
+  PASS non-string input is coerced safely rather than throwing
+
+7 passed, 0 failed — unlock decision contracts OK.
+(node:2775) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/liveTv.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+test-live-sources.mjs — Live TV source contracts
+
+1. the feed field names the parser must understand
+  PASS  stream_url is recognised (this feed parsed to 0 before)
+  PASS  url and streamUrl still work — the chain keeps all three spellings
+  PASS  the ClearKey pair survives parsing
+  PASS  the CDN cookie survives parsing
+  PASS  Jio DASH manifests are classified as dash and playable
+
+2. the Sony source as it ships
+  PASS  the Sony source exists in the defaults
+  PASS  it does not point at the host that no longer resolves
+  PASS  it is a json source on the maintained file
+  PASS  it is filtered to sports
+  PASS  it auto-maps into a catalog that exists
+  PASS  titleFilter yields only the sports rows
+  PASS  rows named "Sony Sports …" are categorised as Sports
+  PASS  the "Sony Ten …" spelling is still kept by the filter
+
+3. a host we know is gone
+  PASS  the dead Sony host is recognised as dead
+  PASS  the live replacement is not
+  PASS  no default source points at a dead host
+
+4. auto-map must never overwrite a manual mapping
+  PASS  a source with no autoMapCatalog inserts rows unmapped
+  PASS  a source with autoMapCatalog inserts rows mapped and selected
+  PASS  position rises with the index so ordering is stable
+  PASS  a catalog that does not exist is refused, not created
+  PASS  undefined / junk autoMapCatalog is refused
+  PASS  the defaults never claim to be favourite or hidden
+
+5. the source health probe
+  PASS  probe marks a live feed reachable
+  PASS  probe reports a dead feed instead of throwing
+  PASS  probe explains an unusable URL instead of throwing
+  PASS  probe reports an unresolvable host instead of throwing
+
+26 passed, 0 failed
+Live source contracts OK
+
+(node:2787) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/liveCatalogs.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+1. fixed catalog set + order
+  PASS seven catalogs including news
+  PASS order matches owner request
+2. Main = curated flagship families
+  PASS Sun TV is flagship
+  PASS Star Vijay is flagship
+  PASS Jaya TV family is flagship
+  PASS unknown small channel is not flagship
+  PASS Sun TV lands in main only
+  PASS Sun News gets main + news
+  PASS Sun Music gets main + music
+  PASS Chutti TV gets main + kids
+  PASS Polimer News is news, not main
+  PASS Kalaignar TV is flagship
+  PASS DD Podhigai is flagship
+3. topical catalogs
+  PASS Star Sports Tamil -> sports
+  PASS category Music -> music
+  PASS Pogo Tamil -> kids
+  PASS Thanthi TV -> news
+4. LocalCH excludes religious; religious excluded everywhere
+  PASS Aathavan TV is local
+  PASS Aaseervatham TV is religious, never local
+  PASS Angel TV -> excluded (empty), not others
+  PASS Aaseervatham -> excluded (empty)
+  PASS Vasanth TV -> local
+  PASS unmatched entertainment -> others
+4b. religious group exclusion with manual override
+  PASS all-religious unmapped group is excluded
+  PASS one non-religious variant keeps the group visible
+  PASS manual mapping on a religious variant overrides exclusion
+  PASS unmapped religious row without mappingManaged stays excluded
+4c. per-channel source ladder override
+  PASS ladder reorders listed sources and keeps the rest stable
+  PASS empty ladder is a no-op
+5. every non-religious result is a valid non-empty catalog set
+  PASS Sun TV -> valid ids
+  PASS Random X -> valid ids
+  PASS News7 Tamil -> valid ids
+  PASS Nick Tamil -> valid ids
+  PASS religious sample is the only empty classification
+15. /live family ranking — Vijay, Sun+sisters, Jaya, then other mainstream
+  PASS Vijay family is tier 0
+  PASS Sun family incl. KTV/Adithya/Chutti sisters is tier 1
+  PASS Jaya family is tier 2
+  PASS other mainstream flagships are tier 3, long tail tier 4
+  PASS family order beats alphabetical order
+17. /live order mirrors Admin reorder inside every fixed catalog
+  PASS fixed-catalog order follows stored positions, not family rank
+  PASS groupCatalogPosition reads the lowest variant membership position
+  PASS other catalogs also follow their own admin positions
+  PASS All Tamil view stays family-first regardless of positions
+  PASS equal positions fall back to family rank then name
+
+44 passed, 0 failed — scripts/live/test-catalog-rules.mjs OK.
+(node:2799) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/liveCatalogs.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+6. HJH worker channels: worker-redirect token + signed segments
+  PASS worker URL is detected
+  PASS resolveHjhWorkerUrl follows the 302 and returns the signed MPD
+  PASS token extracted from inside the signed URL query
+  PASS live policy opts out of ambient blur (whole-page blur bug)
+  PASS HJH never calls the Render /api/live-jio sweep
+  PASS HJH keeps the signed CDN manifest URL
+  PASS HJH keeps its ClearKey DRM
+  PASS unsigned segment URLs get the __hdnea__ token re-attached (fixes 403)
+  PASS signed manifest URL is not double-tokenized
+  PASS first HJH recovery is a worker reload, not a proxy rung
+  PASS HJH recovery ends after one refresh (no proxy loop)
+10. full remote-key coverage in the live player
+  PASS remote key "MediaPlayPause" -> togglePlay
+  PASS remote key "MediaPlay" -> togglePlay
+  PASS remote key "MediaPause" -> togglePlay
+  PASS remote key "MediaStop" -> togglePlay
+  PASS remote key "Enter" -> togglePlay
+  PASS remote key " " -> togglePlay
+  PASS remote key "k" -> togglePlay
+  PASS remote key "MediaTrackNext" -> nextItem
+  PASS remote key "PageDown" -> nextItem
+  PASS remote key "MediaTrackPrevious" -> prevItem
+  PASS remote key "PageUp" -> prevItem
+  PASS remote key "MediaFastForward" -> seekForward
+  PASS remote key "MediaRewind" -> seekBack
+  PASS remote key "ArrowRight" -> seekForward
+  PASS remote key "ArrowLeft" -> seekBack
+  PASS remote key "ArrowUp" -> nudgeVolumeUp
+  PASS remote key "ArrowDown" -> nudgeVolumeDown
+  PASS remote key "g" -> toggleBrowser
+  PASS remote key "f" -> toggleFullscreen
+  PASS remote key "m" -> mute
+  PASS remote key "Escape" -> closeMenus
+  PASS remote key "t" -> cycleCaptions
+  PASS GoBack/BrowserBack normalize to closeMenus
+  PASS remote keys never fire while typing in a field
+11. /live landing choice (Main catalog → Star Vijay)
+  PASS lands on Star Vijay inside Main
+  PASS exact Vijay TV spelling also wins
+  PASS falls back to first Main channel when no Vijay exists
+  PASS falls back to any group when Main is empty
+  PASS empty catalogue yields null
+12. admin preview adapter (same shape the live player consumes)
+  PASS becomes a one-variant logical group with the stored channelId
+  PASS carries every DRM/header field the resolve/policy path reads
+  PASS exposes catalog ids for the modal chips
+  PASS never throws on an empty/partial row
+  PASS relative Jio DASH segments resolve against the playback manifest and receive __hdnea__
+
+45 passed, 0 failed — scripts/live/test-playback-contracts.mjs OK.
+(node:2811) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/liveCatalogs.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+7. Tamil FTA source id alignment
+  PASS registry uses the same id the sync pipeline writes
+8. background grouping planner (no database)
+  PASS same-name variants get one shared logical id
+  PASS eligible Tamil channels receive catalog ops
+  PASS non-Tamil, locked, unplayable rows never auto-mapped
+  PASS catalog op publishes (selected=true) with valid memberships
+  PASS religious channel is never auto-mapped (owner can still add it manually)
+  PASS positions are unique within a catalog
+  PASS re-planning mapped rows is idempotent
+9. manual channel helpers
+  PASS cleanHttpUrl accepts http(s) only
+  PASS detectManualFormat honors hint then extension
+13. canonical duplicate arrest (HD / DASH / ClearKey variants merge)
+  PASS canonicalChannelName strips every delivery/quality/DRM token
+  PASS brand differentiators survive — sister channels never merge
+  PASS displayNameForChannel keeps friendly words and original casing
+  PASS logicalIdForChannel never returns an empty id
+  PASS one card per broadcaster with all delivery rows as its ladder
+  PASS sister channel stays its own card even with an HD twin
+
+16 passed, 0 failed — scripts/live/test-ingest-dedup.mjs OK.
+(node:2823) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/liveCatalogs.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+14. admin browse summary mirrors /live exactly (cards, not rows)
+  PASS delivery variants merge: one Star Vijay card in main, not three
+  PASS total counts visible cards incl. unmapped; hidden/dead/dummy/non-Tamil excluded
+  PASS religious group is excluded and reported in its own bucket
+  PASS empty scope is a zeroed summary, never a throw
+  PASS admin summary and the shared view builder are count-identical on the same rows
+  PASS view builder primitives: doc mapping, visibility rule, groups and counts
+16. source-native group browse (feed group-title, read-only)
+  PASS "all" leads with the total row count
+  PASS distinct feed groups counted as stored rows, biggest first then A–Z
+  PASS blank/missing categories fold into "Live", never throw
+
+9 passed, 0 failed — scripts/live/test-admin-browse.mjs OK.
+(node:2835) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/live/v2/policy.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+V2 feed contracts: 28 assertions passed.
+(node:2847) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/live/hero.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+1. Live hero slide contract
+  PASS deep link has the /live?channel= shape
+  PASS null / hidden / id-less channels never produce a slide
+  PASS slide carries the RailFocus fields and a live deep link
+  PASS custom name/logo win over the synced originals
+  PASS response helper reports inactive vs active payloads
+2. forceProxy relay policy
+  PASS flagged manual variant is proxied even with no headers/registry rule
+  PASS unflagged plain public variant still plays direct
+  PASS geo-sensitive hosts are never proxied, flag or no flag
+  PASS client live policy rewrites segment URLs through the relay only when flagged
+3. Read pipeline propagation
+  PASS toFlatChannel exposes forceProxy to logical-group variants
+
+10 passed, 0 failed — scripts/live/test-live-hero.mjs OK.
+(node:2859) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/live/sourceBrowse.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS source-isolated browsing, admin labels, featured Tamil order, fresh resolve data and signed-URL Jio token regression.
+(node:2871) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/vaultMatch.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS canonical aliases/original year, Unicode, type/season matching, ambiguity and honest unverified classification
+(node:2883) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/live/playback/resolveHealth.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS resolver readiness: missing/expired authorization, public streams, Worker failures, signed redirects and finite fallback

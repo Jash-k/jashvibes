@@ -1,3 +1,4 @@
+import { requireServiceAuth } from '@/lib/serverAuth';
 import { NextResponse } from 'next/server';
 import { V2_FEED_URL, normalizeV2Rows, groupV2Channels } from '@/lib/live/v2/feed';
 import { readHarvest } from '@/lib/live/v2/tokenStore';
@@ -12,8 +13,9 @@ export const dynamic = 'force-dynamic';
  * any reference-only channels. Auth is the standard jash_access cookie via
  * proxy.js — the V2 routes sit under /api/live like every other live route.
  */
-export async function GET() {
+export async function GET(request) {
   try {
+    await requireServiceAuth(request);
     const feedRes = await fetch(V2_FEED_URL, { next: { revalidate: 1800 } });
     if (!feedRes.ok) throw new Error(`upstream feed responded ${feedRes.status}`);
     const rows = await feedRes.json();
@@ -48,7 +50,7 @@ export async function GET() {
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: `V2 catalogue unavailable: ${e.message}` },
-      { status: 502 },
+      { status: e.status || 502 },
     );
   }
 }

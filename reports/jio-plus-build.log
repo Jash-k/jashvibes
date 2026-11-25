@@ -1,0 +1,138 @@
+
+> jashvibes@11.0.0 build
+> next build --webpack
+
+▲ Next.js 16.3.8 (webpack)
+✓ Running next.config.mjs took 11ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 9.6s
+  Running TypeScript ...
+  Finished TypeScript in 4ms ...
+  Collecting page data using 1 worker ...
+  Generating static pages using 1 worker (0/12) ...
+  Generating static pages using 1 worker (3/12) 
+  Generating static pages using 1 worker (6/12) 
+  Generating static pages using 1 worker (9/12) 
+✓ Generating static pages using 1 worker (12/12) in 462ms
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)                              Revalidate  Expire
+┌ ○ /                                            1m      1y
+├ ○ /_not-found
+├ ○ /admin
+├ ƒ /api/admin/auth
+├ ƒ /api/admin/catalog
+├ ƒ /api/admin/catalog/bulk
+├ ƒ /api/admin/catalog/duplicates
+├ ƒ /api/admin/catalog/orphans
+├ ƒ /api/admin/catalog/override
+├ ƒ /api/admin/catalog/overrides
+├ ƒ /api/admin/catalog/overrides/export
+├ ƒ /api/admin/catalog/overrides/import
+├ ƒ /api/admin/catalog/sync
+├ ƒ /api/admin/extras
+├ ƒ /api/admin/health
+├ ƒ /api/admin/history
+├ ƒ /api/admin/lyrics
+├ ƒ /api/admin/stremio/access
+├ ƒ /api/admin/stremio/addons
+├ ƒ /api/admin/stremio/addons/check
+├ ƒ /api/admin/tv/auto-sync
+├ ƒ /api/admin/tv/dry-run
+├ ƒ /api/admin/tv/sweep
+├ ƒ /api/admin/vault
+├ ƒ /api/admin/vault/tmdb
+├ ƒ /api/admin/vod/items
+├ ƒ /api/admin/vod/items/rematch
+├ ƒ /api/admin/vod/sources
+├ ƒ /api/admin/vod/sources/sync
+├ ƒ /api/auth
+├ ƒ /api/cron/tamilmv
+├ ƒ /api/embed-sites
+├ ƒ /api/health
+├ ƒ /api/live-cert
+├ ƒ /api/live-jio
+├ ƒ /api/live-license
+├ ƒ /api/live-pocket
+├ ƒ /api/live-pocket/proxy
+├ ƒ /api/live-proxy
+├ ƒ /api/live-service/channels
+├ ƒ /api/live-service/check
+├ ƒ /api/live-service/rebuild
+├ ƒ /api/live-service/session
+├ ƒ /api/live-service/sources
+├ ƒ /api/live-service/sync
+├ ƒ /api/live/admin/channels
+├ ƒ /api/live/admin/check
+├ ƒ /api/live/admin/health
+├ ƒ /api/live/admin/rebuild
+├ ƒ /api/live/admin/session
+├ ƒ /api/live/admin/sources
+├ ƒ /api/live/admin/sync
+├ ƒ /api/live/channels
+├ ƒ /api/live/hero
+├ ƒ /api/live/resolve
+├ ƒ /api/live/v2/channels
+├ ƒ /api/live/v2/harvest
+├ ƒ /api/live/v2/resolve
+├ ƒ /api/moviesda/match
+├ ƒ /api/moviesda/resolve
+├ ƒ /api/music/album
+├ ƒ /api/music/albums
+├ ƒ /api/music/artist
+├ ƒ /api/music/artists
+├ ƒ /api/music/charts
+├ ƒ /api/music/home
+├ ƒ /api/music/lyrics
+├ ƒ /api/music/new
+├ ƒ /api/music/playlist
+├ ƒ /api/music/playlist/tracks
+├ ƒ /api/music/playlists
+├ ƒ /api/music/search
+├ ƒ /api/music/song
+├ ƒ /api/music/trending
+├ ƒ /api/providers
+├ ƒ /api/resolve
+├ ƒ /api/search
+├ ƒ /api/stream
+├ ƒ /api/stremio/catalog
+├ ƒ /api/stremio/check
+├ ƒ /api/stremio/manifest
+├ ƒ /api/stremio/meta
+├ ƒ /api/stremio/pins
+├ ƒ /api/stremio/stream
+├ ƒ /api/tamilmv
+├ ƒ /api/title-match
+├ ƒ /api/tmdb/meta
+├ ƒ /api/tmdb/series/[tmdbId]
+├ ƒ /api/tmdb/status
+├ ƒ /api/tmdb/videos
+├ ƒ /api/v2/stream/auto/[tmdbId]
+├ ƒ /api/vault
+├ ƒ /api/vault/match
+├ ƒ /api/vixsrc
+├ ƒ /api/vod
+├ ƒ /api/vod/[id]
+├ ƒ /api/vod/sync
+├ ƒ /api/watch/source
+├ ○ /classics
+├ ƒ /classics/[id]
+├ ƒ /embed-browser
+├ ○ /extras
+├ ○ /live
+├ ○ /music
+├ ○ /my-list
+├ ○ /stremio
+├ ƒ /stremio-watch/[type]/[id]
+├ ƒ /stremio/[type]/[id]
+├ ○ /vault
+└ ƒ /watch/[type]/[tmdbId]
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { trustedVidukiFailure } from '@/lib/providers/viduki';
 import JashPlayer from '@/components/player/JashPlayerLazy';
 import { createStreamPolicy } from '@/lib/player/policy/stream';
 import { detectKind } from '@/lib/player/kind';
@@ -51,6 +52,8 @@ export default function UnifiedWatchPage() {
   const [identity, setIdentity] = useState(''), [identityError, setIdentityError] = useState('');
   const [frameLoaded, setFrameLoaded] = useState(false), [popupBlocker, setPopupBlocker] = useState(true);
   const [trailer, setTrailer] = useState(null), [trailerError, setTrailerError] = useState('');
+  const vidukiFrame = useRef(null);
+  const vidukiFailedUrl = useRef('');
   const shell = useRef(null); useLibraryVersion();
   /*
    * One playback surface.
@@ -89,6 +92,17 @@ export default function UnifiedWatchPage() {
   const onQualityApi = useCallback((api) => setManifestQuality(api), []);
   const active = sources.active;
   useEffect(() => setManifestQuality(null), [active?.url]);
+
+  useEffect(() => {
+    if(sources.provider!=='viduki'||!active?.url||trailer)return;
+    const onMessage=event=>{
+      const id=context?.tmdbId||context?.imdbId;
+      if(vidukiFailedUrl.current===active.url||!trustedVidukiFailure(event,vidukiFrame.current?.contentWindow,{id,type:context?.type,season,episode}))return;
+      vidukiFailedUrl.current=active.url;
+      sources.next(); // bounded provider ladder; no iframe timeout masquerading as failure
+    };
+    window.addEventListener('message',onMessage);return()=>window.removeEventListener('message',onMessage);
+  }, [sources.provider,active?.url,context?.tmdbId,context?.imdbId,context?.type,season,episode,trailer,sources.next]);
 
   /*
    * Warm the Direct MP4 resolver while the viewer is still watching something else.
@@ -342,6 +356,7 @@ export default function UnifiedWatchPage() {
 
             {(trailer || (sources.status === 'ready' && active && embed)) ? (
               <iframe
+                ref={vidukiFrame}
                 key={`${trailer?.embedUrl || active.url}:${sources.retryKey}`}
                 title={trailer?.name || context?.title || 'Embedded player'}
                 src={trailer?.embedUrl || active.url}

@@ -1,3 +1,4 @@
+import { buildVidukiEmbed } from '@/lib/providers/viduki';
 import { isStremioEnabled } from '@/lib/stremioAccess';
 import { NextResponse } from 'next/server';
 import { browserScore } from '@/lib/providers/stremioProvider';
@@ -15,7 +16,7 @@ export async function GET(request) {
   const provider = p.get('provider');
   const tmdbId = Number(p.get('tmdbId')) || 0;
   const imdbId = /^tt\d+$/i.test(p.get('imdbId') || '') ? p.get('imdbId') : '';
-  const type = p.get('type') === 'series' ? 'series' : 'movie';
+  const type = ['series','tv'].includes(p.get('type')) ? 'series' : 'movie';
   const season = Math.max(1, Number(p.get('season')) || 1), episode = Math.max(1, Number(p.get('episode')) || 1);
   try {
     let candidates = [];
@@ -50,6 +51,11 @@ export async function GET(request) {
           note = 'The hosts for this title all refused right now — retry in a moment, or try another source.';
         }
       }
+    } else if (provider === 'viduki') {
+      const item=buildVidukiEmbed({tmdbId,imdbId,type,season,episode,mode:Number(process.env.VIDUKI_MODE)||1});
+      if(!item)return NextResponse.json({candidates:[],needsIdentity:true},{status:422});
+      candidates=normalizeCandidates([{url:item.streamUrl,kind:'embed',label:'Viduki · third-party player · language/availability not guaranteed'}],provider);
+      note='Third-party embed; opening the iframe does not verify playback or Tamil audio.';
     } else if (provider === 'mirchi') {
       if (!tmdbId) return NextResponse.json({ candidates: [], needsIdentity: true }, { status: 422 });
       const result = resolveEmbedProvider({ provider: 'mirchi', tmdbId, type, season, episode, language: 'tam' });

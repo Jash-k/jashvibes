@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import JashPlayer from '@/components/player/JashPlayerLazy';
+import { canAdvanceVariant } from '@/lib/live/playback/resolveHealth';
 import { resolvedPlaybackChannel } from '@/lib/live/sourceBrowse';
 import { createLiveTvPolicy } from '@/lib/player/policy/liveTv';
 
@@ -14,7 +15,7 @@ import { createLiveTvPolicy } from '@/lib/player/policy/liveTv';
  *   liveBrowser    feeds JashPlayer's in-player ChannelDrawer (G key / guide
  *                  button), which survives fullscreen and is D-pad navigable.
  */
-export default function LivePlayer({ logical, variantIdx=0, onErrorNeedingFallback, onPrev, onNext, liveBrowser=null, fill=false, onRemoveChannel=null }) {
+export default function LivePlayer({ logical, variantIdx=0, onErrorNeedingFallback, onPrev, onNext, liveBrowser=null, fill=false, onRemoveChannel=null, adminPreview=false }) {
   const hasZap = typeof onPrev === 'function' && typeof onNext === 'function';
   const variant = logical?.variants?.[variantIdx] || logical?.best;
   const displayName = logical?.displayName || logical?.name || variant?.name || 'Live Channel';
@@ -30,15 +31,15 @@ export default function LivePlayer({ logical, variantIdx=0, onErrorNeedingFallba
     setErr('');
     setResolved(null);
     try{
-      const res = await fetch(`/api/live/resolve?channelId=${encodeURIComponent(variant.channelId)}`, { cache:'no-store' });
+      const res = await fetch(`/api/live/resolve?channelId=${encodeURIComponent(variant.channelId)}${adminPreview ? "&preview=1" : ""}`, { cache:'no-store' });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error||'Resolve failed');
+      if (!res.ok || data?.ok !== true) throw new Error(data?.error||'Resolve failed');
       if (my!==gen.current) return;
       // Build channel shape for policy. data.cookie carries the fresh __hdnea__
       // token the resolve API captured from an HJH worker 302; workerUrl keeps
       // the original signpost so the policy can refresh an expired token
       // without any Render-side token sweep.
-      const channel = resolvedPlaybackChannel(data, variant);
+      const channel = {...resolvedPlaybackChannel(data, variant), _adminPreview:adminPreview};
       const policy = createLiveTvPolicy(channel, { origin: typeof window!=='undefined'?window.location.origin:'', allowNativeHls:true });
       // JashPlayer runs this policy itself: its resolve() owns Jio token
       // injection, ClearKey/Widevine DRM, header rewriting and the
@@ -48,13 +49,13 @@ export default function LivePlayer({ logical, variantIdx=0, onErrorNeedingFallba
     }catch(e){
       if (my!==gen.current) return;
       // Auto ladder: if this variant has no URL, try next without showing error first
-      if (/no playable url|not found/i.test(e.message) && logical?.variants?.length > variantIdx+1) {
+      if (canAdvanceVariant(variantIdx, logical?.variants?.length || 0)) {
         onErrorNeedingFallback?.(logical, variantIdx);
         return;
       }
       setErr(e.message);
     }
-  },[variant, logical, variantIdx, onErrorNeedingFallback]);
+  },[variant, logical, variantIdx, onErrorNeedingFallback, adminPreview]);
 
   useEffect(()=>{ resolve(); return () => { gen.current += 1; }; },[resolve]);
 
@@ -125,6 +126,10 @@ export default function LivePlayer({ logical, variantIdx=0, onErrorNeedingFallba
           pipOnHide
           onPrev={hasZap ? onPrev : undefined}
           onNext={hasZap ? onNext : undefined}
+          on={{ onFatal: () => {
+            if (canAdvanceVariant(variantIdx, logical?.variants?.length || 0)) onErrorNeedingFallback?.(logical, variantIdx);
+            else setErr('All available streams failed. Retry or select another channel.');
+          } }}
           liveBrowser={liveBrowser}
         />
       </div>

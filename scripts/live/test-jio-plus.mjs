@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import {createJioPlusAccess} from '../../lib/live/jioPlusAccess.js';
+import {getDefaultLiveSources} from '../../lib/liveTv.js';
+import {SOURCE_REGISTRY} from '../../lib/live/registry.js';
+import {createLiveTvPolicy} from '../../lib/player/policy/liveTv.js';
+const sources=getDefaultLiveSources();
+assert.equal(sources.find(s=>s.id==='jiotv-plus').url,'https://jiobkl.ytzinadabaad.workers.dev/');
+assert.equal(sources.find(s=>s.id==='hjh-jio').url,'https://hjh-545.pages.dev/');
+assert.equal(SOURCE_REGISTRY['jiotv-plus'].proxy,false);
+let time=1000,loads=0;
+const row={url:'https://jiotvmblive.cdn.jio.com/bpk-tv/Star_Vijay_HD_MOB/WDVLive/index.mpd?__hdnea__=fresh',key:'new-key',cookie:'fresh'};
+const refresh=createJioPlusAccess({load:async()=>{loads++;return [row];},now:()=>time});
+const old={url:row.url.replace('fresh','old'),channelId:'stable',id:'stable',sourceId:'jiotv-plus',key:'old-key'};
+let updated=await refresh(old);assert.equal(updated.channelId,'stable');assert.equal(updated.key,'new-key');
+await refresh(old);assert.equal(loads,1);time+=121000;await refresh(old);assert.equal(loads,2);
+await assert.rejects(refresh({...old,url:'https://jiotvmblive.cdn.jio.com/bpk-tv/Star_Vijay_UK/index.mpd'}),/absent/);
+const token=`__hdnea__=st=1700000000~exp=${Math.floor(Date.now()/1000)+3600}~acl=/*~hmac=abcdef0123456789`;
+let calls=0;
+const policy=createLiveTvPolicy({...old,cookie:token,url:row.url.split('?')[0],keyId:'12345678901234567890123456789012',key:'12345678901234567890123456789012'},
+ {origin:'https://example.org',fetchImpl:async url=>{assert.match(url,/^\/api\/live\/resolve\?/);calls++;return {ok:true,json:async()=>({ok:true,cookie:token,originUrl:row.url.split('?')[0],channel:{}})};}});
+const first=await policy.resolve({});assert.equal(first.meta.accessSource,'jiotv-plus-playlist');assert.equal(calls,0);
+const recovery=await policy.recover({error:{code:1002}});assert.equal(recovery.retry,'reload');
+const fresh=await policy.resolve({});assert.equal(fresh.meta.accessSource,'jiotv-plus-refresh');assert.equal(calls,1);
+assert.equal(await policy.recover({error:{code:1002}}),null,'no proxy escalation or endless refresh');
+console.log('PASS JioTV+ source registration, exact rendition refresh, bounded cache and source-specific recovery');
