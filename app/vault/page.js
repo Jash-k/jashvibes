@@ -12,7 +12,7 @@ import { hasVaultQuality } from '@/lib/vaultSummary';
 import { useReveal } from '@/lib/useReveal';
 import './vault-lens.css';
 
-const CACHE_KEY = 'jash:vault:summary:v2', CACHE_TTL = 30 * 60 * 1000, STEP = 60;
+const CACHE_KEY = 'jash:vault:summary:v3', CACHE_TTL = 30 * 60 * 1000, STEP = 60;
 const EMPTY = { qualities: [], era: '', rating: '', language: '', sources: '', letter: '' };
 const LENSES = [{ id: 'quality', label: 'Quality' }, { id: 'year', label: 'Year' }, { id: 'rating', label: 'Rating' }, { id: 'more', label: 'More filters' }];
 const ERAS = ['2020s', '2010s', '2000s', '1990s', '1980s', 'Earlier'];
@@ -75,7 +75,7 @@ export default function VaultPage() {
     if (Array.isArray(cached?.movies)) { setData(cached); setStatus('ready'); }
     const prefs = readSessionCache(CACHE_KEY + ':prefs');
     if (prefs) {
-      if (VAULT_TABS.some(t => t.id === prefs.tab) || prefs.tab === 'unverified') setTab(prefs.tab);
+      if (VAULT_TABS.some(t => t.id === prefs.tab)) setTab(prefs.tab);
       setQuery(prefs.query || ''); setSort(prefs.sort || 'latest'); setDense(!!prefs.dense);
       setFilters({ ...EMPTY, ...prefs.filters, qualities: Array.isArray(prefs.filters?.qualities) ? prefs.filters.qualities : [] });
       setVisible(Math.max(STEP, Number(prefs.visible) || STEP));
@@ -141,14 +141,13 @@ export default function VaultPage() {
   }, [lens, collection, filters, needle, data?.facets]);
   const count = (dimension, value) => counts[dimension]?.[value] || 0;
   const chips = [...filters.qualities.map((q) => ({ key: q, label: q, remove: () => patch({ qualities: filters.qualities.filter((v) => v !== q) }) })), ...Object.entries(filters).filter(([k, v]) => k !== 'qualities' && v).map(([k, v]) => ({ key: k, label: k === 'rating' ? v === 'unrated' ? 'Unrated' : `${v}+ rating` : k === 'sources' ? `${v} sources` : k === 'language' ? data?.facets?.languages?.find((x) => x.code === v)?.label || v : v, remove: () => patch({ [k]: '' }) }))];
-  const selected = tab === 'unverified' ? { label: 'Unverified' } : VAULT_TABS.find((item) => item.id === tab);
+  const selected = VAULT_TABS.find((item) => item.id === tab);
   const options = (dimension, values, key) => <div className="vl-options">{values.map((value) => { const active = key === 'qualities' ? filters.qualities.includes(value) : filters[key] === value; const total = count(dimension, value); return <button type="button" key={value} aria-pressed={active} disabled={!active && !total} onClick={() => patch({ [key]: key === 'qualities' ? active ? filters.qualities.filter((v) => v !== value) : [...filters.qualities, value] : active ? '' : value })}>{value === 'unrated' ? 'Unrated' : value}<small>{total}</small></button>; })}</div>;
   return <main className="jv-vault-page jv-rail-shift vl-page">
     <section className="vl-content" ref={content}>
       <header className="vl-header"><div><h1 className="vl-wordmark" aria-label="MoViE VaULT"><span className="vl-wordmark-movie">MoViE</span>{' '}<span className="vl-wordmark-vault">VaULT</span></h1></div><div className="vl-header-actions"><Link href="/classics" className="vl-refresh vl-retro"><Icon name="film" className="h-4 w-4"/>ReTro</Link><button type="button" className="vl-refresh vl-refresh-icon" disabled={refreshing} onClick={() => load(true)} aria-label={refreshing ? 'Refreshing Vault' : 'Refresh Vault'} title={refreshing ? 'Refreshing…' : 'Refresh Vault'} aria-busy={refreshing}><Icon name="refresh" className={`h-4 w-4${refreshing ? ' vl-refresh-spinning' : ''}`}/></button></div></header>
       <label className="vl-search"><Icon name="search" className="h-5 w-5"/><span className="sr-only">Search titles or year</span><input type="search" placeholder="Search titles or year…" value={query} onChange={(event) => setQuery(event.target.value)}/>{query ? <button type="button" aria-label="Clear search" onClick={() => setQuery('')}>×</button> : null}</label>
       <nav className="vl-tabs" aria-label="Vault categories">{VAULT_TABS.map((item) => <button type="button" key={item.id} aria-pressed={tab === item.id} onClick={() => { setTab(item.id); setFilters(EMPTY); setQuery(''); }}><span>{item.label}</span><small>{tabCounts[item.id] || 0}</small></button>)}</nav>
-      <div className="vl-verification-note"><button type="button" aria-pressed={tab === 'unverified'} onClick={() => { setTab('unverified'); setFilters(EMPTY); setQuery(''); }}>Unverified <small>{tabCounts.unverified || 0}</small></button></div>
       <div className="vl-lenses">{LENSES.map((item) => <button type="button" key={item.id} onClick={() => setLens(item.id)} aria-haspopup="dialog" aria-expanded={lens === item.id}>{item.label}<span>⌄</span></button>)}<label><span className="sr-only">Sort titles</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="latest">Latest updates</option><option value="added">Recently added</option><option value="year">Release year</option><option value="rating">Top rated</option><option value="az">A–Z</option><option value="sources">Most sources</option></select></label><button type="button" aria-pressed={dense} onClick={() => setDense(!dense)}>{dense ? 'Dense' : 'Cozy'}</button></div>
       {chips.length ? <div className="vl-cuts"><span>Your cut:</span>{chips.map((chip) => <button type="button" key={chip.key} onClick={chip.remove} aria-label={`Remove ${chip.label}`}>{chip.label} ×</button>)}<button type="button" onClick={() => setFilters(EMPTY)}>Clear filters</button></div> : null}
       <div className="vl-results-head"><h2>{query.trim() ? 'Search all Vault' : selected.label}</h2><span>{results.length} titles · {sort === 'latest' ? 'Latest catalogue updates' : 'Filtered catalogue'}</span></div>
@@ -157,7 +156,6 @@ export default function VaultPage() {
       {status === 'ready' && !results.length ? <div className="vl-empty"><h3>No matching titles</h3><p>Try another category or clear your search and filters.</p><button type="button" onClick={() => { setFilters(EMPTY); setQuery(''); }}>Clear search and filters</button></div> : null}
       {status === 'ready' ? <div className={`vl-grid ${dense ? 'is-dense' : ''}`} ref={reveal}>{results.slice(0, visible).map((movie, index) => <VaultTile key={movie.id} movie={movie} index={index} onPlay={play}/>)}</div> : null}
       {visible < results.length ? <div className="vl-more" ref={sentinel}><button type="button" onClick={() => setVisible((v) => v + STEP)}>Show more titles</button></div> : null}
-      {tab === 'unverified' && !query.trim() ? <p className="vl-note">These records lack original-language metadata or have conflicting classifications. Their sources and playback links are unchanged; no origin is assumed.</p> : null}
     </section>
     {lens ? <FilterPanel title={LENSES.find((item) => item.id === lens)?.label || 'Filters'} close={() => setLens('')}>
       {lens === 'quality' ? <><p>Matches any available source of a title.</p>{options('quality', ['1080p', '720p', 'HD', '360p'], 'qualities')}</> : null}

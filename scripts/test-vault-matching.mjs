@@ -19,6 +19,10 @@ const series=[{id:'s1',title:'Show S1',kind:'series',year:2020,tmdbId:123,embeds
 assert.equal(matchVaultMovie(series,{type:'series',tmdbId:123}).id,'s2');
 assert.equal(matchVaultMovie(series,{type:'series',tmdbId:123,season:1}).id,'s1');
 assert.equal(matchVaultMovie(series,{type:'movie',tmdbId:123}),null);
-assert.equal(vaultCategory(normalizeVaultMovie({id:'unknown',title:'Known-looking name',category:'tamil-movie',tmdbId:42,embeds:[]})),'unverified');
-assert.equal(vaultCategory({...movie,category:'tamil-movie'}),'unverified');
+assert.equal(vaultCategory(normalizeVaultMovie({id:'unknown',title:'Known-looking name',category:'tamil-movie',tmdbId:42,embeds:[]})),'tamil-movie');
+assert.equal(vaultCategory({...movie,category:'tamil-movie'}),'tamil-dubbed-movie');
 console.log('PASS canonical aliases/original year, Unicode, type/season matching, ambiguity and honest unverified classification');
+
+assert.equal(vaultCategory({kind:'series',pageUrl:'https://isaidub.green/local-name/',category:'tamil-series'}),'tamil-dubbed-series');
+assert.equal(vaultCategory({kind:'movie',pageUrl:'https://moviesda36.com/local/',category:'tamil-dubbed-movie'}),'tamil-movie');
+assert.equal(vaultCategory({kind:'series',originalLanguage:'hi',pageUrl:'https://moviesda36.com/local/'}),'tamil-dubbed-series');

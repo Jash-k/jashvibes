@@ -45,3 +45,7 @@ npm start -- --hostname 0.0.0.0
 ```
 
 Configure the application's usual authentication/admin/database variables privately as appropriate to your deployment. No live-site deployment, Docker runtime, or browser video playback was performed. No private TMDB keys are included.
+
+## Updated public placement policy
+
+All 7,517 records now browse inside the four existing catalogues. There is no public Unverified tab or badge. Confirmed original Tamil language selects Tamil; all confirmed non-Tamil originals select Dubbed, regardless of the local display title. Missing language uses MoviesDa/isaiDub source provenance, then the existing category as a fallback. Movie/series identity is retained. Metadata uncertainty remains accessible through the Admin Unverified filter; no TMDB IDs or languages were invented. The raw feed metadata remains unchanged. Client cache namespace is now v3.

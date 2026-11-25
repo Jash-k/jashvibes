@@ -3,7 +3,7 @@ import { adminDeny } from '@/lib/adminAuth';
 import { loadVaultBase } from '@/lib/vault';
 import { readVaultOverrides, mutateVault } from '@/lib/vaultAdminStore';
 import { mergeVaultRows } from '@/lib/vaultAdminCore';
-import { vaultCategory } from '@/lib/vaultBrowse';
+import { vaultCategory, vaultNeedsReview } from '@/lib/vaultBrowse';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
 const json=(data,status=200)=>NextResponse.json(data,{status,headers:{'Cache-Control':'no-store'}});
@@ -24,7 +24,7 @@ async function handle(request,mutation=false) {
     let filtered=rows;
     const q=(url.searchParams.get('q')||'').trim().toLowerCase().slice(0,300),category=url.searchParams.get('category'),state=url.searchParams.get('state')||'all';
     if(q)filtered=filtered.filter(m=>[m.title,m.id,m.originalTitle,m.tmdbTitle,m.imdbId,m.tmdbId,m.year].join(' ').toLowerCase().includes(q));
-    if(category)filtered=filtered.filter(m=>vaultCategory(m)===category);
+    if(category)filtered=filtered.filter(m=>category==='unverified'?vaultNeedsReview(m):vaultCategory(m)===category);
     if(state==='hidden')filtered=filtered.filter(m=>m._vaultAdmin?.hidden);
     if(state==='visible')filtered=filtered.filter(m=>!m._vaultAdmin?.hidden);
     if(state==='inferred')filtered=filtered.filter(m=>m.metadataVerification?.status==='inferred');

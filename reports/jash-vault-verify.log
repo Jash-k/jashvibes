@@ -25,7 +25,7 @@ PASS admin controls: home order/pins/sections, undo routing + honesty, orphan re
   PASS non-string input is coerced safely rather than throwing
 
 7 passed, 0 failed — unlock decision contracts OK.
-(node:5203) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/liveTv.js is not specified and it doesn't parse as CommonJS.
+(node:1913) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/liveTv.js is not specified and it doesn't parse as CommonJS.
 Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
 To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.json.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -71,7 +71,7 @@ test-live-sources.mjs — Live TV source contracts
 26 passed, 0 failed
 Live source contracts OK
 
-(node:5215) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/liveCatalogs.js is not specified and it doesn't parse as CommonJS.
+(node:1925) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/liveCatalogs.js is not specified and it doesn't parse as CommonJS.
 Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
 To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.json.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -130,7 +130,7 @@ To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.
   PASS equal positions fall back to family rank then name
 
 44 passed, 0 failed — scripts/live/test-catalog-rules.mjs OK.
-(node:5227) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/liveCatalogs.js is not specified and it doesn't parse as CommonJS.
+(node:1937) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/liveCatalogs.js is not specified and it doesn't parse as CommonJS.
 Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
 To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.json.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -185,7 +185,7 @@ To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.
   PASS relative Jio DASH segments resolve against the playback manifest and receive __hdnea__
 
 45 passed, 0 failed — scripts/live/test-playback-contracts.mjs OK.
-(node:5239) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/liveCatalogs.js is not specified and it doesn't parse as CommonJS.
+(node:1949) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/liveCatalogs.js is not specified and it doesn't parse as CommonJS.
 Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
 To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.json.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -211,7 +211,7 @@ To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.
   PASS sister channel stays its own card even with an HD twin
 
 16 passed, 0 failed — scripts/live/test-ingest-dedup.mjs OK.
-(node:5251) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/liveCatalogs.js is not specified and it doesn't parse as CommonJS.
+(node:1961) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/liveCatalogs.js is not specified and it doesn't parse as CommonJS.
 Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
 To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.json.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -228,12 +228,12 @@ To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.
   PASS blank/missing categories fold into "Live", never throw
 
 9 passed, 0 failed — scripts/live/test-admin-browse.mjs OK.
-(node:5263) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/live/v2/policy.js is not specified and it doesn't parse as CommonJS.
+(node:1973) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/live/v2/policy.js is not specified and it doesn't parse as CommonJS.
 Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
 To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.json.
 (Use `node --trace-warnings ...` to show where the warning was created)
 V2 feed contracts: 28 assertions passed.
-(node:5275) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/live/hero.js is not specified and it doesn't parse as CommonJS.
+(node:1985) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/live/hero.js is not specified and it doesn't parse as CommonJS.
 Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
 To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.json.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -252,12 +252,12 @@ To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.
   PASS toFlatChannel exposes forceProxy to logical-group variants
 
 10 passed, 0 failed — scripts/live/test-live-hero.mjs OK.
-(node:5287) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/live/sourceBrowse.js is not specified and it doesn't parse as CommonJS.
+(node:1997) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/live/sourceBrowse.js is not specified and it doesn't parse as CommonJS.
 Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
 To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.json.
 (Use `node --trace-warnings ...` to show where the warning was created)
 PASS source-isolated browsing, admin labels, featured Tamil order, fresh resolve data and signed-URL Jio token regression.
-(node:5299) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/vaultMatch.js is not specified and it doesn't parse as CommonJS.
+(node:2009) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/user/jashvibes/lib/vaultMatch.js is not specified and it doesn't parse as CommonJS.
 Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
 To eliminate this warning, add "type": "module" to /home/user/jashvibes/package.json.
 (Use `node --trace-warnings ...` to show where the warning was created)
