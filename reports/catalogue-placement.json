@@ -1,0 +1,11 @@
+{
+  "records": 7517,
+  "publicUnverified": 0,
+  "counts": {
+    "tamil-dubbed-movie": 5057,
+    "tamil-movie": 1813,
+    "tamil-series": 91,
+    "tamil-dubbed-series": 556
+  },
+  "policy": "Original language first; unknown language uses source provenance then existing catalogue. Metadata evidence unchanged."
+}
