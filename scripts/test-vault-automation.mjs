@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {automationConfig,dispatchInputs,createVaultActions,VAULT_WORKFLOWS} from '../lib/vaultAutomation.js';
+const config=automationConfig({VAULT_ACTIONS_TOKEN:'fixture-secret',VAULT_ACTIONS_REPOSITORY:'owner/vault',VAULT_ACTIONS_BRANCH:'main'});
+assert.equal(config.bundled,false);
+assert.throws(()=>automationConfig({VAULT_ACTIONS_REPOSITORY:'https://evil.test/repo'}),/Invalid/);
+assert.throws(()=>dispatchInputs('../../other',{}),/Unknown/);
+assert.throws(()=>dispatchInputs('hourly',{minutes:16}),/Budget/);
+assert.throws(()=>dispatchInputs('historic',{minutes:30}),/confirmation/);
+assert.deepEqual(dispatchInputs('hourly',{minutes:10,ref:'evil',inputs:{publish:false}}).inputs,{budget_min:'10',max_items:'30',publish:true});
+assert.equal(dispatchInputs('historic',{minutes:30,confirm:true}).inputs.metadata_budget_min,'10');
+const calls=[];
+const mock=async (url,opt)=>{
+ calls.push({url,opt});assert.ok(url.startsWith('https://api.github.com/repos/owner/vault/'));
+ assert.equal(opt.headers.Authorization,'Bearer fixture-secret');assert.equal(opt.redirect,'error');
+ if(url.includes('dispatches'))return new Response(null,{status:204});
+ if(url.includes('/workflows/'))return Response.json({state:'active'});
+ return Response.json({workflow_runs:[]});
+};
+const service=createVaultActions(config,{fetchImpl:mock});
+const result=await service.dispatch('hourly',{minutes:10});assert.equal(result.accepted,true);assert.equal(result.runId,undefined,'204 must not invent run IDs');
+const sent=JSON.parse(calls.at(-1).opt.body);assert.equal(sent.ref,'main');assert.equal(sent.inputs.publish,true);
+assert.ok(!JSON.stringify(result).includes('fixture-secret'));
+let dispatched=false;
+const busy=createVaultActions(config,{fetchImpl:async(url)=>{if(url.includes('dispatches'))dispatched=true;return Response.json({workflow_runs:[{path:'.github/workflows/enrich.yml',status:'queued'}]});}});
+await assert.rejects(busy.dispatch('hourly',{}),e=>e.status===409);assert.equal(dispatched,false);
+const denied=createVaultActions(config,{fetchImpl:async()=>Response.json({message:'should-not-echo-secrets'},{status:403})});
+await assert.rejects(denied.runs(),e=>!e.message.includes('should-not-echo')&&e.status===502);
+const runs=createVaultActions(config,{fetchImpl:async()=>Response.json({workflow_runs:[{id:1,path:'.github/workflows/hourly-new-entries.yml',status:'in_progress',html_url:'https://github.com/owner/vault/actions/runs/1'},{id:2,path:'.github/workflows/other.yml',status:'queued'}]})});
+const listed=await runs.runs();assert.equal(listed.length,1);assert.equal(listed[0].active,true);
+const route=fs.readFileSync(new URL('../app/api/admin/vault/automation/route.js',import.meta.url),'utf8');
+assert.equal((route.match(/await requireServiceAuth\(request\)/g)||[]).length,2);
+assert.match(route,/Setting.updateOne/);assert.match(route,/e.code===11000/);assert.match(route,/config.bundled/);assert.match(route,/loadVaultBase\(\{force:true\}\)/);
+const ui=fs.readFileSync(new URL('../components/admin/VaultAutomation.jsx',import.meta.url),'utf8');
+assert.match(ui,/window.confirm/);assert.match(ui,/setInterval/);assert.doesNotMatch(ui,/VAULT_ACTIONS_TOKEN=/);
+const tab=fs.readFileSync(new URL('../components/admin/VaultTab.js',import.meta.url),'utf8');assert.match(tab,/<VaultAutomation onReload=\{reload\}/);
+// Fixed filenames must match actual shipped workflow IDs; no arbitrary workflow dispatch API.
+assert.deepEqual(VAULT_WORKFLOWS.map(w=>w.file),['hourly-new-entries.yml','new-releases.yml','isaidub.yml','enrich.yml','historic.yml']);
+console.log('PASS Vault Automation allowlist, budgets, historical confirmation, dispatch/status contracts, active-run block, sanitized errors and owner-only integration');
+
+const archiveBusy=createVaultActions(config,{fetchImpl:async()=>Response.json({workflow_runs:[{path:'.github/workflows/az-archive.yml',status:'in_progress'}]})});
+await assert.rejects(archiveBusy.dispatch('hourly',{}),e=>e.status===409);
