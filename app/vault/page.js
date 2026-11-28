@@ -7,12 +7,12 @@ import Icon from '@/components/Icons';
 import { VaultTile, SkeletonGrid } from '@/components/vault/VaultCards';
 import { readSessionCache, restoreScroll, saveScroll, writeSessionCache } from '@/lib/clientCache';
 import { watchHref } from '@/lib/watch/policy';
-import { VAULT_TABS, vaultCategory, latestVaultFirst, vaultSearchMatch } from '@/lib/vaultBrowse';
+import { VAULT_TABS, vaultCategory, sourceOrderFirst, latestVaultFirst, vaultSearchMatch } from '@/lib/vaultBrowse';
 import { hasVaultQuality } from '@/lib/vaultSummary';
 import { useReveal } from '@/lib/useReveal';
 import './vault-lens.css';
 
-const CACHE_KEY = 'jash:vault:summary:v4', CACHE_TTL = 30 * 60 * 1000, STEP = 60;
+const CACHE_KEY = 'jash:vault:summary:v5', CACHE_TTL = 30 * 60 * 1000, STEP = 60;
 const EMPTY = { qualities: [], era: '', rating: '', language: '', sources: '', letter: '' };
 const LENSES = [{ id: 'quality', label: 'Quality' }, { id: 'year', label: 'Year' }, { id: 'rating', label: 'Rating' }, { id: 'more', label: 'More filters' }];
 const ERAS = ['2020s', '2010s', '2000s', '1990s', '1980s', 'Earlier'];
@@ -51,7 +51,7 @@ function FilterPanel({ title, close, children }) {
 export default function VaultPage() {
   const [data, setData] = useState(null), [status, setStatus] = useState('loading'), [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false), [tab, setTab] = useState('tamil-movie');
-  const [query, setQuery] = useState(''), [sort, setSort] = useState('latest'), [dense, setDense] = useState(false);
+  const [query, setQuery] = useState(''), [sort, setSort] = useState('source'), [dense, setDense] = useState(false);
   const [filters, setFilters] = useState(EMPTY), [lens, setLens] = useState(''), [visible, setVisible] = useState(STEP);
   const request = useRef(null), sentinel = useRef(null), handled = useRef(false), content = useRef(null);
   const router = useRouter();
@@ -76,7 +76,7 @@ export default function VaultPage() {
     const prefs = readSessionCache(CACHE_KEY + ':prefs');
     if (prefs) {
       if (VAULT_TABS.some(t => t.id === prefs.tab)) setTab(prefs.tab);
-      setQuery(prefs.query || ''); setSort(prefs.sort || 'latest'); setDense(!!prefs.dense);
+      setQuery(prefs.query || ''); setSort(prefs.sort || 'source'); setDense(!!prefs.dense);
       setFilters({ ...EMPTY, ...prefs.filters, qualities: Array.isArray(prefs.filters?.qualities) ? prefs.filters.qualities : [] });
       setVisible(Math.max(STEP, Number(prefs.visible) || STEP));
     }
@@ -102,7 +102,8 @@ export default function VaultPage() {
   const needle = useDeferredValue(query.trim().toLowerCase());
   const results = useMemo(() => {
     const list = collection.filter((movie) => matches(movie, filters, needle));
-    if (sort === 'latest') list.sort(latestVaultFirst);
+    if (sort === 'source') list.sort(sourceOrderFirst);
+    else if (sort === 'latest') list.sort(latestVaultFirst);
     else if (sort === 'added') list.sort((a, b) => (Date.parse(b.addedAt) || 0) - (Date.parse(a.addedAt) || 0));
     else if (sort === 'year') list.sort((a, b) => b.year - a.year);
     else if (sort === 'rating') list.sort((a, b) => b.rating - a.rating);
@@ -148,7 +149,7 @@ export default function VaultPage() {
       <header className="vl-header"><div><h1 className="vl-wordmark" aria-label="MoViE VaULT"><span className="vl-wordmark-movie">MoViE</span>{' '}<span className="vl-wordmark-vault">VaULT</span></h1></div><div className="vl-header-actions"><Link href="/classics" className="vl-refresh vl-retro"><Icon name="film" className="h-4 w-4"/>ReTro</Link><button type="button" className="vl-refresh vl-refresh-icon" disabled={refreshing} onClick={() => load(true)} aria-label={refreshing ? 'Refreshing Vault' : 'Refresh Vault'} title={refreshing ? 'Refreshing…' : 'Refresh Vault'} aria-busy={refreshing}><Icon name="refresh" className={`h-4 w-4${refreshing ? ' vl-refresh-spinning' : ''}`}/></button></div></header>
       <label className="vl-search"><Icon name="search" className="h-5 w-5"/><span className="sr-only">Search titles or year</span><input type="search" placeholder="Search titles or year…" value={query} onChange={(event) => setQuery(event.target.value)}/>{query ? <button type="button" aria-label="Clear search" onClick={() => setQuery('')}>×</button> : null}</label>
       <nav className="vl-tabs" aria-label="Vault categories">{VAULT_TABS.map((item) => <button type="button" key={item.id} aria-pressed={tab === item.id} onClick={() => { setTab(item.id); setFilters(EMPTY); setQuery(''); }}><span>{item.label}</span><small>{tabCounts[item.id] || 0}</small></button>)}</nav>
-      <div className="vl-lenses">{LENSES.map((item) => <button type="button" key={item.id} onClick={() => setLens(item.id)} aria-haspopup="dialog" aria-expanded={lens === item.id}>{item.label}<span>⌄</span></button>)}<label><span className="sr-only">Sort titles</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="latest">Latest updates</option><option value="added">Recently added</option><option value="year">Release year</option><option value="rating">Top rated</option><option value="az">A–Z</option><option value="sources">Most sources</option></select></label><button type="button" aria-pressed={dense} onClick={() => setDense(!dense)}>{dense ? 'Dense' : 'Cozy'}</button></div>
+      <div className="vl-lenses">{LENSES.map((item) => <button type="button" key={item.id} onClick={() => setLens(item.id)} aria-haspopup="dialog" aria-expanded={lens === item.id}>{item.label}<span>⌄</span></button>)}<label><span className="sr-only">Sort titles</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="source">MoviesDa order</option><option value="latest">Latest updates</option><option value="added">Recently added</option><option value="year">Release year</option><option value="rating">Top rated</option><option value="az">A–Z</option><option value="sources">Most sources</option></select></label><button type="button" aria-pressed={dense} onClick={() => setDense(!dense)}>{dense ? 'Dense' : 'Cozy'}</button></div>
       {chips.length ? <div className="vl-cuts"><span>Your cut:</span>{chips.map((chip) => <button type="button" key={chip.key} onClick={chip.remove} aria-label={`Remove ${chip.label}`}>{chip.label} ×</button>)}<button type="button" onClick={() => setFilters(EMPTY)}>Clear filters</button></div> : null}
       <div className="vl-results-head"><h2>{query.trim() ? 'Search all Vault' : selected.label}</h2><span>{results.length} titles · {sort === 'latest' ? 'Latest catalogue updates' : 'Filtered catalogue'}</span></div>
       {error ? <div className="vl-error" role="alert">{error} <button type="button" onClick={() => load(true)}>Retry</button></div> : null}
